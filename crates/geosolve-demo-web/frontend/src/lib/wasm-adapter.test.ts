@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from "vitest";
+import { MockWorkbenchAdapter } from "./mock-adapter";
 import { WasmWorkbenchAdapter, type JsonWorkbenchHandle } from "./wasm-adapter";
 import { getCanvasSnapshotSequence, isCanvasOnlySnapshot, type WorkbenchSnapshot } from "./adapter";
 
@@ -128,6 +129,154 @@ describe("WasmWorkbenchAdapter", () => {
     ];
     await adapter.wheelBatch(samples);
     expect(JSON.parse(request)).toEqual({ version: 2, samples });
+  });
+
+  it("publishes selection deltas while retaining source and durable presentation references", async () => {
+    const fixture = await new MockWorkbenchAdapter().snapshot();
+    fixture.navigation = { authority: "accepted-source-scene", selectionKey: "old-selection", rows: [], sources: [], itemCount: 0, canNavigateSource: true };
+    let response = "null";
+    class SelectionHandle extends FakeHandle {
+      override snapshot() { return JSON.stringify(fixture); }
+      override dispatch() { return response; }
+      override pointer() { return response; }
+      override wheel() { return response; }
+    }
+    const adapter = new WasmWorkbenchAdapter(SelectionHandle);
+    const base = await adapter.construct({ version: 2 });
+    response = JSON.stringify({ version: 2, kind: "frame", revision: fixture.revision, frame: fixture.frame });
+    const canvasOnly = (await adapter.wheelBatch([]))!;
+    expect(isCanvasOnlySnapshot(canvasOnly)).toBe(true);
+    const delta = {
+      version: 2, kind: "selection", revision: fixture.revision,
+      frame: { ...fixture.frame, scene: { ...fixture.frame.scene, viewBox: [0, 0, 900, 800] } },
+      navigation: { ...fixture.navigation, selectionKey: "line", rows: [{ id: "line-1", state: "selected" }], sources: [{ path: "sketch.ts", from: 10, to: 20 }], itemCount: 3 },
+      selectedDeclarations: ["line-1"],
+      selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: 10, to: 20 } },
+      selectedGeometryRole: "profile",
+    };
+    response = JSON.stringify(delta);
+    const next = await adapter.dispatch({ version: 2, command: "navigation.rows.select" });
+    expect(isCanvasOnlySnapshot(next)).toBe(false);
+    expect(getCanvasSnapshotSequence(next)).toBe(getCanvasSnapshotSequence(canvasOnly)! + 1);
+    for (const key of ["source", "parameters", "project", "problems"] as const) expect(next[key]).toBe(base[key]);
+    expect(next.presentation).toEqual({ ...base.presentation, selectedGeometryRole: "profile" });
+    expect(next.explorer[0].children.find((row) => row.id === "line-1")?.selected).toBe(true);
+    expect(next.explorer[0].children.find((row) => row.id === "fillet-1")?.selected).toBe(false);
+    expect(base.explorer[0].children.find((row) => row.id === "fillet-1")?.selected).toBe(true);
+    expect(next.explorer[0].children.find((row) => row.id === "origin")).toBe(base.explorer[0].children.find((row) => row.id === "origin"));
+    expect(next.explorer[0].children[1].source).toBe(base.explorer[0].children[1].source);
+    expect(Object.isFrozen(next.frame.scene.items)).toBe(true);
+    response = JSON.stringify({ ...delta, navigation: { ...delta.navigation, selectionKey: "empty", rows: [], sources: [], itemCount: 0 }, selectedDeclarations: [], selection: null, selectedGeometryRole: null });
+    const empty = (await adapter.pointer({ version: 2, phase: "down", pointerId: 1, x: 10, y: 10, buttons: 1, modifiers: { alt: false, ctrl: false, meta: false, shift: false } }))!;
+    expect(empty.source).toBe(base.source);
+    expect(empty.selection).toBeUndefined();
+    expect(empty.presentation.selectedGeometryRole).toBeUndefined();
+    expect(empty.explorer[0].children.every((row) => !row.selected)).toBe(true);
+    expect(getCanvasSnapshotSequence(empty)).toBe(getCanvasSnapshotSequence(next)! + 1);
+    expect(isCanvasOnlySnapshot(empty)).toBe(false);
+    response = JSON.stringify({ version: 2, kind: "frame", revision: fixture.revision, frame: fixture.frame });
+    const panned = (await adapter.wheelBatch([]))!;
+    expect(isCanvasOnlySnapshot(panned)).toBe(true);
+    expect(getCanvasSnapshotSequence(panned)).toBe(getCanvasSnapshotSequence(empty)! + 1);
+    expect(panned.navigation).toBe(empty.navigation);
+    expect(panned.explorer).toBe(empty.explorer);
+    expect(panned.presentation).toBe(empty.presentation);
+  });
+
+  it("rejects stale and malformed selection deltas without replacing the accepted base", async () => {
+    const fixture = await new MockWorkbenchAdapter().snapshot();
+    fixture.navigation = { authority: "accepted-source-scene", selectionKey: "base", rows: [], sources: [], itemCount: 0, canNavigateSource: true };
+    let response = "null";
+    class SelectionHandle extends FakeHandle {
+      override snapshot() { return JSON.stringify(fixture); }
+      override dispatch() { return response; }
+    }
+    const adapter = new WasmWorkbenchAdapter(SelectionHandle);
+    const base = await adapter.construct({ version: 2 });
+    const delta = { version: 2, kind: "selection", revision: fixture.revision, frame: fixture.frame, navigation: fixture.navigation, selectedDeclarations: [], selection: null, selectedGeometryRole: null };
+    const invalid = [
+      { revision: fixture.revision + 1 },
+      { revision: fixture.revision - 1 },
+      { revision: fixture.revision + 0.5 },
+      { version: 1 },
+      { navigation: { ...fixture.navigation, authority: "old-source" } },
+      { navigation: { ...fixture.navigation, canNavigateSource: false } },
+      { navigation: { ...fixture.navigation, unavailableReason: "different source authority" } },
+      { source: { files: [] } },
+      { selectedDeclarations: [42] },
+      { selectedDeclarations: ["line-1", "line-1"] },
+      { selectedDeclarations: ["group:sketch"] },
+      { selectedGeometryRole: "invalid" },
+      { navigation: { ...fixture.navigation, rows: [{ id: "line-1", state: "mixed" }] } },
+      { navigation: { ...fixture.navigation, rows: [{ id: "absent-row", state: "selected" }] } },
+      { navigation: { ...fixture.navigation, rows: [{ id: "line-1", state: "selected" }, { id: "line-1", state: "partial" }] } },
+      { frame: { ...fixture.frame, scene: { ...fixture.frame.scene, viewBox: [0, 0, null, 800] } } },
+      { frame: { scene: fixture.frame.scene } },
+      { selectedDeclarations: ["absent-owner"] },
+      { selection: {} },
+      { selection: "line-1" },
+      { selection: [] },
+      { selection: { id: 1, label: "Line 1", kind: "Geometry" } },
+      { selection: { id: "line-1", kind: "Geometry" } },
+      { selection: { id: "line-1", label: "Line 1" } },
+      { selection: { id: "line-1", label: "Line 1", kind: "Geometry", ownership: 1 } },
+      { selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: null } },
+      { selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: 9, to: 2 } } },
+      { selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: -1, to: 2 } } },
+      { selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: 1.5, to: 2 } } },
+      { selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: 1, to: Number.MAX_SAFE_INTEGER + 1 } } },
+    ];
+    let sequence = getCanvasSnapshotSequence(base)!;
+    for (const changes of invalid) {
+      response = JSON.stringify({ ...delta, ...changes });
+      await expect(adapter.dispatch({ version: 2, command: "navigation.rows.select" }), JSON.stringify(changes)).rejects.toThrow();
+      response = JSON.stringify(delta);
+      const current = await adapter.dispatch({ version: 2, command: "navigation.rows.select" });
+      expect(current.source).toBe(base.source);
+      expect(current.revision).toBe(base.revision);
+      expect(current.navigation?.authority).toBe(base.navigation?.authority);
+      expect(getCanvasSnapshotSequence(current)).toBe(++sequence);
+    }
+    for (const key of Object.keys(delta)) {
+      // Null is the explicit transport spelling for an absent Inspector or
+      // geometry role. Missing fields must not silently clear accepted state.
+      const missing: Record<string, unknown> = { ...delta };
+      delete missing[key];
+      response = JSON.stringify(missing);
+      await expect(adapter.dispatch({ version: 2, command: "navigation.rows.select" }), `missing ${key}`).rejects.toThrow();
+      response = JSON.stringify(delta);
+      const current = await adapter.dispatch({ version: 2, command: "navigation.rows.select" });
+      expect(getCanvasSnapshotSequence(current)).toBe(++sequence);
+      for (const retained of ["source", "project", "parameters", "problems"] as const) expect(current[retained]).toBe(base[retained]);
+    }
+  });
+
+  it("stamps synchronous selection and camera responses in decode order before promises settle", async () => {
+    const fixture = await new MockWorkbenchAdapter().snapshot();
+    fixture.navigation = { authority: "accepted-order", selectionKey: "start", rows: [], sources: [], itemCount: 0, canNavigateSource: true };
+    let response = "null";
+    class OrderedHandle extends FakeHandle {
+      override snapshot() { return JSON.stringify(fixture); }
+      override dispatch() { return response; }
+      override wheel() { return response; }
+    }
+    const adapter = new WasmWorkbenchAdapter(OrderedHandle);
+    const base = await adapter.construct({ version: 2 });
+    response = JSON.stringify({ version: 2, kind: "selection", revision: fixture.revision, frame: fixture.frame,
+      navigation: { ...fixture.navigation, selectionKey: "group", rows: [{ id: "group:sketch", state: "partial" }, { id: "line-1", state: "selected" }], itemCount: 1 },
+      selectedDeclarations: ["line-1"], selection: null, selectedGeometryRole: "mixed" });
+    const selecting = adapter.dispatch({ version: 2, command: "navigation.rows.select" });
+    response = JSON.stringify({ version: 2, kind: "frame", revision: fixture.revision, frame: fixture.frame });
+    const panning = adapter.wheelBatch([]);
+    const [selected, panned] = await Promise.all([selecting, panning]);
+    expect(getCanvasSnapshotSequence(selected)).toBe(getCanvasSnapshotSequence(base)! + 1);
+    expect(getCanvasSnapshotSequence(panned!)).toBe(getCanvasSnapshotSequence(selected)! + 1);
+    expect(isCanvasOnlySnapshot(selected)).toBe(false);
+    expect(isCanvasOnlySnapshot(panned!)).toBe(true);
+    expect(panned!.navigation).toBe(selected.navigation);
+    expect(panned!.explorer).toBe(selected.explorer);
+    expect(panned!.presentation.selectedGeometryRole).toBe("mixed");
+    expect(selected.parameters).toBe(base.parameters);
   });
 
 });

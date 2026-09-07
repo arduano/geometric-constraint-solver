@@ -7350,3 +7350,24 @@ The regression corpus includes:
 These fixtures test truthful singularity/rank reporting and finite state retention. They do not demand arbitrary global branch selection. M9 makes the machine-floor numerical rank contract and distinct near-singular warning band mandatory.
 
 The detailed L3 fixture above demonstrates that geometric alignment does not itself justify an M9 warning when the selected driver makes the reported position/velocity matrices full-rank and well-conditioned. The detailed sketch fixture demonstrates actual dependent gradients and therefore does report numerical singularity.
+
+## M95 connected selection scenarios — implementation in progress
+
+- Select a visible point, curve, annotation or computed Fillet on canvas. Its exact Explorer
+  owner and accepted source statements highlight; visible source reveals without changing cursor,
+  focus or workspace layout. The independent native ownership map supplies expected outputs.
+- Select an Explorer invocation/group, toggle an exact generated vertex/span, and toggle the group
+  again. Verify full/partial ancestors, all owned outputs, no borrowed producer/consumer confusion,
+  a truthful Inspector and unchanged accepted project/history bytes.
+- Invoke Show in canvas at a statement or across several statements, including text after multibyte
+  comments. Reject partial UTF-8 characters and stale authority. Comment/import/unmatched text
+  leaves selection intact with a notice. Code cursor movement alone selects nothing.
+- Browse hidden and suppressed declarations without unhiding them. Edit source without applying,
+  retain invalid source, then Apply/Undo/Redo/delete/restore/import. Outdated decorations disappear;
+  accepted row navigation remains available; replacement rejects an old navigation request.
+- Preserve Design/Split/Code during ordinary selection. Explicit reveal opens Split only when its
+  destination is hidden. Active drafting and captured gestures reject cross-view requests without
+  cancelling the tool or partially changing selection.
+- Repeat selection in the dense robotic harness, inspect actual canvas highlight pixels and
+  preserved CodeMirror cursor/focus, and compare M94 pan/zoom/point-preview paths. Qualification
+  uses the integrated runner and frozen artifact rather than rebuilding the accepted M94 service.

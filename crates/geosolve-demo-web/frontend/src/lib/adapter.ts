@@ -122,6 +122,18 @@ export interface DeclarationRow {
   capabilities: DeclarationCapabilities;
 }
 
+export interface NavigationSnapshot {
+  /** Opaque native accepted source and scene identity. */
+  authority: string;
+  selectionKey: string;
+  rows: Array<{ id: string; state: "selected" | "partial" }>;
+  sources: Array<{ path: string; from: number; to: number }>;
+  itemCount: number;
+  canNavigateSource: boolean;
+  unavailableReason?: string;
+  notice?: string;
+}
+
 export interface WorkbenchSnapshot {
   version: typeof WORKBENCH_PROTOCOL_VERSION;
   revision: number;
@@ -130,6 +142,7 @@ export interface WorkbenchSnapshot {
   frame: { scene: DrawFrame; ariaLabel: string };
   source: { selectedPath: string; files: SourceFileSnapshot[]; dirty: boolean };
   explorer: DeclarationRow[];
+  navigation?: NavigationSnapshot;
   selection?: { id: string; label: string; kind: string; ownership?: string; source?: { path: string; from: number; to: number } };
   parameters: Array<{ id: string; label: string; value: string; unit?: string; editable: boolean }>;
   problems: WorkbenchProblem[];
@@ -196,10 +209,20 @@ export function assertWorkbenchSnapshot(value: WorkbenchSnapshot): WorkbenchSnap
   assertDrawFrame(value.frame.scene);
   const geometryRole = value.presentation?.geometryRole;
   const selectedGeometryRole = value.presentation?.selectedGeometryRole;
-  if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.constructionVisible !== "boolean" || typeof value.presentation?.visibilityRestoreAvailable !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {
+  if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.constructionVisible !== "boolean" || typeof value.presentation?.visibilityRestoreAvailable !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.navigation !== undefined && !validNavigationSnapshot(value.navigation)) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {
     throw new Error("Unsupported or malformed workbench snapshot");
   }
   return value;
+}
+
+function validNavigationSnapshot(value: unknown): value is NavigationSnapshot {
+  return record(value) && typeof value.authority === "string" && value.authority.length > 0
+    && typeof value.selectionKey === "string" && safeInteger(value.itemCount, 0)
+    && typeof value.canNavigateSource === "boolean"
+    && (value.unavailableReason === undefined || typeof value.unavailableReason === "string")
+    && (value.notice === undefined || typeof value.notice === "string")
+    && Array.isArray(value.rows) && value.rows.every((row) => record(row) && typeof row.id === "string" && (row.state === "selected" || row.state === "partial"))
+    && Array.isArray(value.sources) && value.sources.every((span) => record(span) && typeof span.path === "string" && safeInteger(span.from, 0) && safeInteger(span.to, span.from));
 }
 
 function validPreparedManagedMutation(value: unknown): value is PendingManagedMutation {

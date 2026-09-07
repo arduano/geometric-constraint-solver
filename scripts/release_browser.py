@@ -18,7 +18,7 @@ CATALOG_FRONTEND = "crates/geosolve-demo-web/frontend/src/data/samples.json"
 SAMPLE_PREFIX = "M92 visual workflow: "
 FILES = ("tests/e2e/language-service.spec.ts", "tests/e2e/workbench.spec.ts",
          "tests/e2e/m92-sample-audit.spec.ts", "tests/e2e/release-catalog.spec.ts",
-         "tests/e2e/canvas-renderer.spec.ts")
+         "tests/e2e/canvas-renderer.spec.ts", "tests/e2e/m95-navigation.spec.ts")
 
 
 def identity(row):

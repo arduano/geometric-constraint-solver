@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { diagnosticCount } from "@codemirror/lint";
 import { EditorView } from "@codemirror/view";
 import { describe, expect, it, vi } from "vitest";
-import { CodeEditor } from "./code-editor";
+import { CodeEditor, showSelectionInCanvas } from "./code-editor";
 import type { TypeScriptLanguageWorkerPort } from "../language/client";
 import {
   TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
@@ -171,5 +171,48 @@ describe("CodeEditor TypeScript language integration", () => {
     expect(retainedEditor.state.readOnly).toBe(true);
     expect(diagnosticCount(retainedEditor.state)).toBe(1);
     expect(worker.terminated).toBe(false);
+  });
+});
+
+
+describe("M95 connected source navigation", () => {
+  it("decorates all source owners and reveals without changing cursor, focus or text", () => {
+    const onChange = vi.fn();
+    const source = "const first = 1;\nconst second = 2;\n";
+    const { container, rerender } = render(<CodeEditor value={source} onChange={onChange} />);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    editor.dispatch({ selection: { anchor: 5 } });
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    rerender(<CodeEditor value={source} onChange={onChange} highlights={[{ from: 0, to: 16 }, { from: 17, to: 33 }]} navigation={{ request: 1, from: 17, to: 33, focus: false }} />);
+    expect(editor.state.selection.main.anchor).toBe(5);
+    expect(document.activeElement).toBe(outside);
+    expect(container.querySelectorAll(".cm-sketch-source-owner")).toHaveLength(2);
+    expect(onChange).not.toHaveBeenCalled();
+    rerender(<CodeEditor value={source} onChange={onChange} highlights={[]} navigation={{ request: 2, from: 17, to: 33, focus: true }} />);
+    expect(container.querySelector(".cm-sketch-source-owner")).toBeNull();
+    expect(editor.state.selection.main.from).toBe(17);
+    expect(editor.state.selection.main.to).toBe(33);
+    expect(editor.hasFocus).toBe(true);
+    outside.focus();
+    rerender(<CodeEditor value={source} onChange={onChange} highlights={[]} navigation={null} />);
+    rerender(<CodeEditor value={source} onChange={onChange} highlights={[]} navigation={{ request: 2, from: 17, to: 33, focus: true }} />);
+    expect(outside).toHaveFocus();
+    outside.remove();
+  });
+
+  it("navigates only through the explicit editor command and clears highlights on typing", () => {
+    const onShowInCanvas = vi.fn();
+    const { container, rerender } = render(<CodeEditor value="const edge = 1;" onChange={() => undefined} onShowInCanvas={onShowInCanvas} highlights={[{ from: 0, to: 15 }]} />);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    editor.dispatch({ selection: { anchor: 6, head: 10 } });
+    expect(onShowInCanvas).not.toHaveBeenCalled();
+    expect(showSelectionInCanvas(editor)).toBe(true);
+    expect(onShowInCanvas).toHaveBeenCalledWith({ from: 6, to: 10 });
+    editor.dispatch({ changes: { from: 0, insert: " " } });
+    expect(container.querySelector(".cm-sketch-source-owner")).toBeNull();
+    rerender(<CodeEditor value=" const edge = 1;" onChange={() => undefined} />);
+    expect(showSelectionInCanvas(editor)).toBe(false);
   });
 });

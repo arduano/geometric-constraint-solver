@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_SOURCE_NAVIGATION_UTF8_BYTES,
   utf8ByteSpanToUtf16Range,
+  utf8ByteSpansToUtf16Ranges,
+  utf16RangeToUtf8ByteSpan,
 } from "./source-navigation";
 
 const utf8Bytes = (value: string) => new TextEncoder().encode(value).byteLength;
@@ -92,4 +94,35 @@ describe("UTF-8 source-span navigation", () => {
       reason: "source text contains an unpaired UTF-16 surrogate",
     });
   });
+});
+
+
+describe("UTF-16 editor selection navigation", () => {
+  it("round trips exact Unicode boundaries including empty cursor ranges", () => {
+    const source = "aé😀z";
+    for (const from of [0, 1, 2, 4, 5]) {
+      for (const to of [0, 1, 2, 4, 5].filter((end) => end >= from)) {
+        const converted = utf16RangeToUtf8ByteSpan(source, from, to);
+        expect(converted).toEqual({ ok: true, range: { from: utf8Bytes(source.slice(0, from)), to: utf8Bytes(source.slice(0, to)) } });
+        if (converted.ok) expect(utf8ByteSpanToUtf16Range(source, converted.range.from, converted.range.to)).toEqual({ ok: true, range: { from, to } });
+      }
+    }
+  });
+  it.each([[3, 4], [2, 3], [-1, 0], [2, 1], [0, 6], [0.5, 1], [0, Number.NaN]])("rejects invalid UTF-16 boundaries %s, %s", (from, to) => {
+    expect(utf16RangeToUtf8ByteSpan("aé😀z", from, to)).toMatchObject({ ok: false });
+  });
+  it("validates the whole source and limits its encoded size", () => {
+    expect(utf16RangeToUtf8ByteSpan("a\ud800", 0, 1)).toMatchObject({ ok: false });
+    expect(utf16RangeToUtf8ByteSpan("é".repeat(MAX_SOURCE_NAVIGATION_UTF8_BYTES / 2 + 1), 0, 1)).toMatchObject({ ok: false });
+  });
+});
+
+
+it("converts a large multi-owner selection in source order without rounding or coalescing", () => {
+  const statement = "// é🧭\nconst edge = 1;\n";
+  const source = statement.repeat(2000);
+  const bytes = utf8Bytes(statement);
+  const spans = Array.from({ length: 2000 }, (_, index) => ({ from: index * bytes, to: (index + 1) * bytes }));
+  expect(utf8ByteSpansToUtf16Ranges(source, spans)).toEqual({ ok: true, ranges: spans.map((_, index) => ({ from: index * statement.length, to: (index + 1) * statement.length })) });
+  expect(utf8ByteSpansToUtf16Ranges(source, [{ from: 0, to: 3 }, { from: bytes + 4, to: bytes + 5 }])).toMatchObject({ ok: false });
 });

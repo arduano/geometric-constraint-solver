@@ -13,6 +13,9 @@
 
 use std::str::FromStr as _;
 
+mod navigation;
+use navigation::{NavigationSnapshot, NavigationState};
+
 use geosolve_constraint_editor::{
     ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome, AuthoringState, EditorEffect,
     EditorScene, EditorTool, FeatureAuthoringOptions, FeatureAuthoringOutcome,
@@ -328,7 +331,7 @@ struct SourceSnapshot {
     dirty: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ExplorerSnapshot {
     id: String,
@@ -363,7 +366,7 @@ enum ExplorerVisibilitySnapshot {
     Mixed,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ExplorerCapabilities {
     select: ExplorerCapability,
@@ -376,7 +379,7 @@ struct ExplorerCapabilities {
     delete: ExplorerCapability,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct ExplorerCapability {
     enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -394,7 +397,7 @@ struct SelectionSnapshot {
     source: Option<SelectionSourceSnapshot>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 struct SelectionSourceSnapshot {
     path: String,
     from: usize,
@@ -434,6 +437,7 @@ struct BridgeSnapshot {
     frame: FrameSnapshot,
     source: SourceSnapshot,
     explorer: Vec<ExplorerSnapshot>,
+    navigation: NavigationSnapshot,
     #[serde(skip_serializing_if = "Option::is_none")]
     selection: Option<SelectionSnapshot>,
     parameters: Vec<ParameterSnapshot>,
@@ -577,6 +581,7 @@ fn pending_managed_snapshot(pending: &PendingManagedMutation) -> PendingManagedM
 
 /// One presentation-toolkit instance over the existing Rust authorities.
 pub(crate) struct WorkbenchBridge {
+    navigation: NavigationState,
     authority: WorkbenchDocumentAuthority,
     code_project: Option<CodeProjectWorkbench>,
     samples: super::samples::SampleCatalogState,
@@ -777,6 +782,7 @@ impl WorkbenchBridge {
             samples,
             camera: super::scene::CanvasCamera::default(),
             retained_scene: None,
+            navigation: NavigationState::default(),
             accepted_frame: None,
             preserve_frame_once: false,
             construction_preview: None,
@@ -956,6 +962,12 @@ impl WorkbenchBridge {
         }
         self.last_error = None;
         self.dispatch(&request.command, request.payload)?;
+        if matches!(
+            request.command.as_str(),
+            "navigation.rows.select" | "navigation.source.select"
+        ) {
+            return self.navigation_update_json();
+        }
         self.snapshot_json()
     }
 
@@ -1405,8 +1417,10 @@ impl WorkbenchBridge {
             }
             "declaration.select" => {
                 let payload: SelectionPayload = decode_payload(payload)?;
-                self.select_declaration_row(&payload.id)
+                self.select_navigation_rows_legacy(&payload.id)
             }
+            "navigation.rows.select" => self.select_navigation_rows_json(payload),
+            "navigation.source.select" => self.select_navigation_source_json(payload),
             "declaration.source.open" => {
                 let payload: DeclarationSourcePayload = decode_payload(payload)?;
                 self.open_declaration_source(&payload.id, payload.from, payload.to)
@@ -3690,10 +3704,12 @@ impl WorkbenchBridge {
 
     fn snapshot(&mut self) -> Result<BridgeSnapshot, String> {
         self.reconcile_explorer_visibility();
+        self.ensure_navigation_index();
         let frame = self.frame_snapshot();
         let source = self.source_snapshot()?;
-        let explorer = self.explorer_snapshot();
-        let selection = self.selection_snapshot();
+        let navigation = self.navigation_snapshot();
+        let explorer = self.navigation_explorer_snapshot();
+        let selection = self.navigation_selection_snapshot(&navigation);
         let parameters = self.parameter_snapshot();
         let problems = self.problem_snapshot();
         let status = if !problems.is_empty() {
@@ -3741,6 +3757,7 @@ impl WorkbenchBridge {
             frame,
             source,
             explorer,
+            navigation,
             selection,
             parameters,
             problems,
@@ -3962,8 +3979,12 @@ impl WorkbenchBridge {
 
     fn selection_snapshot(&self) -> Option<SelectionSnapshot> {
         let editor = self.editor();
-        let projection = editor.workbench_projection();
-        if let Some(inspector) = editor.selected_inspector(&projection) {
+        if let Some(inspector) = editor.selected_declaration().and_then(|node| {
+            geosolve_constraint_editor::IntentInspectorProjection::from_session(
+                editor.coordinator().intent(),
+                node,
+            )
+        }) {
             let (ownership, source) = self.code_project.as_ref().map_or_else(
                 || ("Modifiable instance".into(), None),
                 |code| managed_selection_source(code, editor, &inspector),
@@ -9405,6 +9426,499 @@ export default sketch(($) => {
     radius: mm(4),
   })"#
         );
+    }
+
+    #[test]
+    fn m95_explorer_selection_paints_accepted_outputs_without_history() {
+        let mut bridge = managed_two_circles_bridge();
+        let before = bridge.persistence_contents().unwrap();
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let row = snapshot["explorer"][0]["children"][0]["id"]
+            .as_str()
+            .unwrap();
+        bridge.dispatch_json(&serde_json::json!({"version":2,"command":"declaration.select","payload":{"id":row}}).to_string()).unwrap();
+        assert!(
+            !bridge.editor().editor().selection().is_empty(),
+            "Explorer must select its accepted canvas outputs"
+        );
+        assert_eq!(bridge.persistence_contents().unwrap(), before);
+    }
+
+    #[test]
+    fn m95_navigation_multi_owner_source_and_toggle_are_transient() {
+        let mut bridge = managed_two_circles_bridge();
+        let before = bridge.persistence_contents().unwrap();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let rows = initial["explorer"][0]["children"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        let first = rows[0]["id"].as_str().unwrap();
+        let second = rows[1]["id"].as_str().unwrap();
+        let authority = initial["navigation"]["authority"].as_str().unwrap();
+        let select = |ids: &[&str], mode: &str| {
+            serde_json::json!({
+                "version":2, "command":"navigation.rows.select",
+                "payload":{"authority":authority,"ids":ids,"mode":mode}
+            })
+            .to_string()
+        };
+        let result: serde_json::Value =
+            serde_json::from_str(&bridge.dispatch_json(&select(&[first], "replace")).unwrap())
+                .unwrap();
+        assert_eq!(result["kind"], "selection");
+        assert!(result.get("source").is_none());
+        assert!(result.get("parameters").is_none());
+        assert_eq!(result["navigation"]["sources"].as_array().unwrap().len(), 1);
+        let first_items = bridge.editor().editor().selection().to_vec();
+        assert!(!first_items.is_empty());
+        let result: serde_json::Value =
+            serde_json::from_str(&bridge.dispatch_json(&select(&[second], "toggle")).unwrap())
+                .unwrap();
+        assert!(bridge.editor().editor().selection().len() > first_items.len());
+        assert_eq!(result["navigation"]["sources"].as_array().unwrap().len(), 2);
+        assert!(bridge.editor().selected_declaration().is_none());
+        assert!(result["selection"].is_null());
+        bridge.dispatch_json(&select(&[second], "toggle")).unwrap();
+        assert_eq!(bridge.editor().editor().selection(), first_items);
+
+        let source = &rows[1]["source"];
+        bridge.dispatch_json(&serde_json::json!({"version":2,"command":"navigation.source.select",
+            "payload":{"authority":authority,"path":"sketch.ts","from":source["from"],"to":source["from"]}
+        }).to_string()).unwrap();
+        assert_ne!(bridge.editor().editor().selection(), first_items);
+        let selected = bridge.editor().editor().selection().to_vec();
+        let result: serde_json::Value = serde_json::from_str(
+            &bridge
+                .dispatch_json(
+                    &serde_json::json!({
+                        "version":2,"command":"navigation.source.select",
+                        "payload":{"authority":authority,"path":"sketch.ts","from":0,"to":0}
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(result["navigation"]["notice"], "No sketch object here");
+        assert_eq!(bridge.editor().editor().selection(), selected);
+        assert!(
+            bridge
+                .dispatch_json(
+                    &serde_json::json!({"version":2,"command":"navigation.rows.select",
+                        "payload":{"authority":"stale","ids":[first],"mode":"replace"}
+                    })
+                    .to_string()
+                )
+                .is_err()
+        );
+        assert_eq!(bridge.editor().editor().selection(), selected);
+        assert_eq!(bridge.persistence_contents().unwrap(), before);
+    }
+
+    #[test]
+    fn m95_navigation_dirty_source_and_hidden_rows_retain_accepted_geometry() {
+        let mut bridge = managed_two_circles_bridge();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let row = initial["explorer"][0]["children"][0]["id"]
+            .as_str()
+            .unwrap();
+        let source = bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .managed_source()
+            .to_owned();
+        bridge
+            .change_source("sketch.ts", format!("{source}\n// unapplied"))
+            .unwrap();
+        let dirty: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(dirty["navigation"]["canNavigateSource"], false);
+        let request = |authority: &serde_json::Value| {
+            serde_json::json!({"version":2,"command":"navigation.rows.select",
+                "payload":{"authority":authority,"ids":[row],"mode":"replace"}
+            })
+            .to_string()
+        };
+        bridge
+            .dispatch_json(&request(&dirty["navigation"]["authority"]))
+            .unwrap();
+        assert!(!bridge.editor().editor().selection().is_empty());
+        assert_eq!(
+            serde_json::to_value(bridge.navigation_snapshot()).unwrap()["sources"],
+            serde_json::json!([])
+        );
+        assert!(bridge.dispatch_json(&serde_json::json!({"version":2,"command":"navigation.source.select",
+            "payload":{"authority":dirty["navigation"]["authority"],"path":"sketch.ts","from":0,"to":0}
+        }).to_string()).is_err());
+        bridge.revert_source().unwrap();
+        bridge.set_explorer_row_visible(row, false).unwrap();
+        let hidden: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        bridge
+            .dispatch_json(&request(&hidden["navigation"]["authority"]))
+            .unwrap();
+        assert!(bridge.editor().editor().selection().is_empty());
+        let after: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            after["explorer"][0]["children"][0]["effectiveVisible"],
+            false
+        );
+        assert!(
+            after["navigation"]["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|state| state["id"] == row && state["state"] == "selected")
+        );
+        assert_eq!(after["navigation"]["sources"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact member/group toggle workflow with independent native and source witnesses"
+    )]
+    fn m95_exact_polyline_members_and_group_toggles_keep_honest_owners() {
+        let compiled = CompiledManagedSource::from_json(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-polyline.json"
+        )))
+        .unwrap();
+        let (code, editor) =
+            CodeProjectWorkbench::open_managed_test_compiled("m95-exact-polyline", compiled)
+                .unwrap();
+        let mut bridge = WorkbenchBridge::from_parts(
+            WorkbenchDocumentAuthority::from_projectional_editor(*editor).unwrap(),
+            Some(code),
+            super::super::samples::SampleCatalogState::default(),
+            "Polyline".into(),
+            "Ready".into(),
+        )
+        .unwrap();
+        let before = bridge.persistence_contents().unwrap();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let index = bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .navigation_index(bridge.editor());
+        let exact = index
+            .entries
+            .iter()
+            .filter(|entry| {
+                entry
+                    .exact_bindings
+                    .as_ref()
+                    .is_some_and(|bindings| bindings.len() == 1)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(exact.len(), 5);
+        for entry in &exact {
+            bridge.select_navigation_rows_json(serde_json::json!({
+                "authority": initial["navigation"]["authority"], "ids": [entry.id], "mode":"replace"
+            })).unwrap();
+            let expected = bridge
+                .editor()
+                .navigation_selection_items_for_bindings(entry.exact_bindings.clone().unwrap());
+            assert_eq!(bridge.editor().editor().selection(), expected);
+            assert_eq!(expected.len(), 1);
+            let after: serde_json::Value =
+                serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+            let selected = after["navigation"]["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|row| row["state"] == "selected")
+                .collect::<Vec<_>>();
+            assert!(selected.iter().any(|row| row["id"] == entry.id));
+            assert!(!selected.iter().any(|row| {
+                exact
+                    .iter()
+                    .any(|sibling| sibling.id != entry.id && row["id"] == sibling.id)
+            }));
+            assert_eq!(after["navigation"]["sources"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                after["explorer"][0]["children"][0]["children"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|row| row["selected"] == true)
+                    .count(),
+                1
+            );
+        }
+        let group = initial["explorer"][0]["id"].as_str().unwrap();
+        let select = |ids: &[&str], mode: &str| {
+            serde_json::json!({
+                "authority":initial["navigation"]["authority"], "ids":ids, "mode":mode
+            })
+        };
+        bridge
+            .select_navigation_rows_json(select(&[group], "replace"))
+            .unwrap();
+        assert_eq!(bridge.editor().editor().selection().len(), 7);
+        bridge
+            .select_navigation_rows_json(select(&[&exact[0].id], "toggle"))
+            .unwrap();
+        assert_eq!(bridge.editor().editor().selection().len(), 6);
+        let partial = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert!(
+            partial["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["id"] == group && row["state"] == "partial")
+        );
+        bridge
+            .select_navigation_rows_json(select(&[group], "toggle"))
+            .unwrap();
+        assert_eq!(bridge.editor().editor().selection().len(), 7);
+        bridge
+            .select_navigation_rows_json(select(&[group], "toggle"))
+            .unwrap();
+        assert!(bridge.editor().editor().selection().is_empty());
+        assert_eq!(
+            serde_json::to_value(bridge.navigation_snapshot()).unwrap()["rows"],
+            serde_json::json!([])
+        );
+        assert_eq!(bridge.persistence_contents().unwrap(), before);
+    }
+
+    #[test]
+    fn m95_multiple_hidden_rows_keep_browsing_without_inventing_an_inspector() {
+        let mut bridge = managed_two_circles_bridge();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let first = initial["explorer"][0]["children"][0]["id"]
+            .as_str()
+            .unwrap();
+        let second = initial["explorer"][0]["children"][1]["id"]
+            .as_str()
+            .unwrap();
+        bridge.set_explorer_row_visible(first, false).unwrap();
+        bridge.set_explorer_row_visible(second, false).unwrap();
+        let before = bridge.persistence_contents().unwrap();
+        let hidden = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        let request =
+            |id, mode| serde_json::json!({"authority":hidden["authority"],"ids":[id],"mode":mode});
+        bridge
+            .select_navigation_rows_json(request(first, "replace"))
+            .unwrap();
+        assert!(bridge.editor().selected_declaration().is_some());
+        bridge
+            .select_navigation_rows_json(request(second, "toggle"))
+            .unwrap();
+        assert!(bridge.editor().editor().selection().is_empty());
+        assert!(bridge.editor().selected_declaration().is_none());
+        let both = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert_eq!(both["sources"].as_array().unwrap().len(), 2);
+        bridge
+            .select_navigation_rows_json(request(second, "toggle"))
+            .unwrap();
+        let remaining = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert_eq!(remaining["sources"].as_array().unwrap().len(), 1);
+        assert!(bridge.editor().selected_declaration().is_some());
+        assert_eq!(bridge.persistence_contents().unwrap(), before);
+    }
+
+    #[test]
+    fn m95_group_toggle_accounts_for_unselected_hidden_descendants() {
+        let mut bridge = managed_two_circles_bridge();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let group = initial["explorer"][0]["id"].as_str().unwrap();
+        let hidden = initial["explorer"][0]["children"][1]["id"]
+            .as_str()
+            .unwrap();
+        bridge.set_explorer_row_visible(hidden, false).unwrap();
+        let snapshot = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        let request = |id, mode| serde_json::json!({"authority":snapshot["authority"],"ids":[id],"mode":mode});
+        bridge
+            .select_navigation_rows_json(request(group, "replace"))
+            .unwrap();
+        let visible = bridge.editor().editor().selection().to_vec();
+        assert!(!visible.is_empty());
+        bridge
+            .select_navigation_rows_json(request(hidden, "toggle"))
+            .unwrap();
+        let partial = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert!(
+            partial["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["id"] == group && row["state"] == "partial")
+        );
+        assert_eq!(partial["sources"].as_array().unwrap().len(), 1);
+        bridge
+            .select_navigation_rows_json(request(group, "toggle"))
+            .unwrap();
+        assert_eq!(bridge.editor().editor().selection(), visible);
+        let restored = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert!(
+            restored["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["id"] == group && row["state"] == "selected")
+        );
+        assert_eq!(restored["sources"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn m95_picked_generated_fillet_is_complete_and_toggles_off() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        bridge.open_sample("typed-panel", None).unwrap();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let row = &initial["explorer"][0]["children"][1]["children"][0];
+        let index = bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .navigation_index(bridge.editor());
+        let entry = index
+            .entries
+            .iter()
+            .find(|entry| row["id"] == entry.id)
+            .unwrap();
+        let items = bridge
+            .editor()
+            .navigation_selection_items_for_bindings(entry.exact_bindings.clone().unwrap());
+        let corner = items
+            .iter()
+            .copied()
+            .find(|item| matches!(item, SelectionItem::FeatureCorner(_)))
+            .unwrap();
+        bridge.editor_mut().set_selection([corner]);
+        let picked = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert!(
+            picked["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|state| state["id"] == row["id"] && state["state"] == "selected")
+        );
+        bridge.select_navigation_rows_json(serde_json::json!({"authority":initial["navigation"]["authority"],"ids":[row["id"]],"mode":"toggle"})).unwrap();
+        assert!(bridge.editor().editor().selection().is_empty());
+        bridge.editor_mut().set_selection(items);
+        bridge.select_navigation_rows_json(serde_json::json!({"authority":initial["navigation"]["authority"],"ids":[row["id"]],"mode":"toggle"})).unwrap();
+        assert!(bridge.editor().editor().selection().is_empty());
+    }
+
+    #[test]
+    fn m95_unicode_source_offsets_reject_partial_characters_and_comments() {
+        let mut bridge = managed_bridge();
+        let before = bridge.persistence_contents().unwrap();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let source = bridge.code_project.as_ref().unwrap().managed_source();
+        let unicode = source.find('多').expect("fixture has multibyte comment");
+        let source_len = source.len();
+        let request = |from, to| {
+            serde_json::json!({
+                "authority":initial["navigation"]["authority"], "path":"sketch.ts", "from":from, "to":to
+            })
+        };
+        for (from, to) in [
+            (unicode + 1, unicode + 1),
+            (unicode, unicode + 2),
+            (5, 3),
+            (source_len, source_len + 1),
+        ] {
+            assert!(
+                bridge
+                    .select_navigation_source_json(request(from, to))
+                    .unwrap_err()
+                    .contains("UTF-8")
+            );
+        }
+        bridge
+            .select_navigation_source_json(request(unicode, unicode))
+            .unwrap();
+        let none = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert_eq!(none["notice"], "No sketch object here");
+        assert!(bridge.editor().editor().selection().is_empty());
+        assert_eq!(bridge.persistence_contents().unwrap(), before);
+    }
+
+    #[test]
+    fn m95_replacement_and_authoring_reject_navigation_without_changing_state() {
+        let mut bridge = managed_two_circles_bridge();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let request = serde_json::json!({"authority":initial["navigation"]["authority"],
+            "ids":[initial["explorer"][0]["children"][0]["id"]], "mode":"replace"});
+        bridge.select_tool("segment").unwrap();
+        let before = bridge.persistence_contents().unwrap();
+        assert!(
+            bridge
+                .select_navigation_rows_json(request.clone())
+                .unwrap_err()
+                .contains("tool or gesture")
+        );
+        assert_eq!(bridge.active_tool, "segment");
+        assert_eq!(bridge.persistence_contents().unwrap(), before);
+        bridge.select_tool("select").unwrap();
+        let same_project = bridge.persistence_contents().unwrap();
+        bridge.import_project(&same_project).unwrap();
+        assert!(
+            bridge
+                .select_navigation_rows_json(request)
+                .unwrap_err()
+                .contains("stale")
+        );
+        assert!(bridge.editor().editor().selection().is_empty());
+        assert_eq!(bridge.persistence_contents().unwrap(), same_project);
+    }
+
+    #[test]
+    fn m95_canvas_selection_and_history_reconcile_navigation() {
+        let mut bridge = managed_two_circles_bridge();
+        let initial: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let node = bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .navigation_index(bridge.editor())
+            .entries
+            .iter()
+            .find(|entry| entry.id == "managed:leftCircle")
+            .map(|entry| entry.nodes[0]);
+        let node = node.unwrap_or_else(|| {
+            bridge
+                .code_project
+                .as_ref()
+                .unwrap()
+                .navigation_index(bridge.editor())
+                .entries
+                .iter()
+                .find(|entry| entry.id.starts_with("managed:"))
+                .unwrap()
+                .nodes[0]
+        });
+        let items = bridge.editor().navigation_selection_items([node]);
+        bridge.editor_mut().set_selection([items[0]]);
+        let selected = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert_eq!(selected["itemCount"], 1);
+        assert_eq!(selected["sources"].as_array().unwrap().len(), 1);
+        let compiled = managed_two_circles_fixture(true);
+        let source = compiled.normalized_source.clone();
+        apply_compiled_source(&mut bridge, &source, compiled);
+        let edited = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert_ne!(edited["authority"], initial["navigation"]["authority"]);
+        for undo in [true, false] {
+            bridge.step_history(undo).unwrap();
+            let after = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+            assert_eq!(after["sources"], serde_json::json!([]));
+            assert_eq!(after["rows"], serde_json::json!([]));
+        }
     }
 
     #[test]

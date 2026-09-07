@@ -5461,3 +5461,20 @@ release including saving, and the pinned Pixi recovery seam are explicitly retai
 - Differential tests compare geometric validity, rank/mobility/status and branch continuity, not identical internal coordinates or iteration counts.
 - SolveSpace and PlaneGCS are references/oracles, not dependencies.
 - An external convergence flag is never accepted without local independent validation.
+
+## M95 connected selection acceptance — implementation in progress
+
+[M95_GOALS.md](docs/M95_GOALS.md) requires exact accepted canvas/Explorer/source ownership for
+ordinary declarations, constraints/dimensions, computed features, groups and generated members.
+Plain clicks replace; Shift/Ctrl/Meta toggle complete requested outputs. Multiple selected owners
+must not invent a singular Inspector target. Hidden/suppressed rows remain browsable without
+unhiding geometry or highlighting unrelated siblings.
+
+UI selection decorates every relevant accepted source statement and reveals the primary when
+visible, preserving cursor, focus and layout. Explicit Show in canvas/Show in code opens Split
+when its destination is hidden; cursor motion has no selection side effect and Fit is separate.
+Dirty/stale/unmatched source, Unicode boundaries, authoring/capture and Apply/history/replacement
+must retain truthful authority. Navigation must preserve exact saved bytes and history, perform
+no compilation/solve/checkpoint/save, and preserve M94 camera/drag paths. Owning regressions,
+real browser pixels/workflows and dense timings precede one clean integrated qualification and
+an independently byte-verified candidate. User acceptance remains required for milestone closure.

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { javascript } from "@codemirror/lang-javascript";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
+import { Decoration, type DecorationSet, EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   createTypeScriptLanguageWorker,
@@ -19,11 +19,39 @@ import {
 } from "../language/editor-extensions";
 import { TYPESCRIPT_LANGUAGE_VERSION } from "../language/protocol";
 
+import type { Utf16SourceRange } from "../lib/source-navigation";
+
+const replaceSourceOwners = StateEffect.define<readonly Utf16SourceRange[]>();
+const sourceOwners = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, transaction) {
+    // Decorations authenticate accepted source only. Never map them through unapplied edits.
+    if (transaction.docChanged) return Decoration.none;
+    for (const effect of transaction.effects) {
+      if (effect.is(replaceSourceOwners)) {
+        return Decoration.set(effect.value
+          .filter(({ from, to }) => Number.isSafeInteger(from) && Number.isSafeInteger(to) && from >= 0 && to > from && to <= transaction.state.doc.length)
+          .map(({ from, to }) => Decoration.mark({ class: "cm-sketch-source-owner" }).range(from, to)), true);
+      }
+    }
+    return value;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+const canvasNavigationCommands = new WeakMap<EditorView, () => boolean>();
+/** Explicit CodeMirror command. Cursor movement itself has no geometry side effect. */
+export function showSelectionInCanvas(editor: EditorView): boolean {
+  return canvasNavigationCommands.get(editor)?.() ?? false;
+}
+
 interface CodeEditorProps {
   value: string;
   readOnly?: boolean;
   onChange: (value: string) => void;
   navigation?: EditorNavigation | null;
+  highlights?: readonly Utf16SourceRange[];
+  onShowInCanvas?: (range: Utf16SourceRange) => void;
+  showInCanvasRequest?: number;
   languageProject?: TypeScriptLanguageProject | null;
   languageWorkerFactory?: () => TypeScriptLanguageWorkerPort | null;
 }
@@ -31,6 +59,8 @@ interface CodeEditorProps {
 export interface EditorNavigation {
   /** Changes for every deliberate navigation, even when the span is unchanged. */
   request: number;
+  /** Automatic reveal keeps the current cursor and keyboard focus. Default: explicit. */
+  focus?: boolean;
   /** Exact CodeMirror/JavaScript UTF-16 code-unit positions. */
   from: number;
   to: number;
@@ -41,6 +71,9 @@ export function CodeEditor({
   readOnly = false,
   onChange,
   navigation,
+  highlights = [],
+  onShowInCanvas,
+  showInCanvasRequest = 0,
   languageProject = null,
   languageWorkerFactory = createTypeScriptLanguageWorker,
 }: CodeEditorProps) {
@@ -51,6 +84,9 @@ export function CodeEditor({
   const languageClient = useRef<TypeScriptLanguageWorkerClient | null>(null);
   const languageProjectRef = useRef(languageProject);
   const onChangeRef = useRef(onChange);
+  const lastNavigationRequest = useRef<number | null>(null);
+  const onShowInCanvasRef = useRef(onShowInCanvas);
+  onShowInCanvasRef.current = onShowInCanvas;
   const [languageStatus, setLanguageStatus] = useState<TypeScriptLanguageStatus | null>(null);
   onChangeRef.current = onChange;
   languageProjectRef.current = languageProject;
@@ -70,7 +106,8 @@ export function CodeEditor({
         lineNumbers(),
         highlightActiveLineGutter(),
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        sourceOwners,
+        keymap.of([{ key: "Mod-Shift-Enter", run: showSelectionInCanvas }, ...defaultKeymap, ...historyKeymap]),
         javascript({ typescript: true }),
         oneDark,
         readOnlyCompartment.current.of(EditorState.readOnly.of(readOnly)),
@@ -85,14 +122,24 @@ export function CodeEditor({
           "&": { height: "100%", fontSize: "13px", backgroundColor: "hsl(var(--canvas))" },
           ".cm-scroller": { overflow: "auto", fontFamily: "var(--font-mono)" },
           ".cm-gutters": { backgroundColor: "hsl(var(--surface))", borderRight: "1px solid hsl(var(--border))" },
+          ".cm-sketch-source-owner": { backgroundColor: "rgb(251 191 36 / .17)", borderBottom: "1px solid rgb(251 191 36 / .5)" },
           ".cm-activeLine": { backgroundColor: "rgb(255 255 255 / .035)" },
         }),
       ],
     });
     view.current = new EditorView({ state, parent: host.current });
+    const editor = view.current;
+    canvasNavigationCommands.set(editor, () => {
+      const action = onShowInCanvasRef.current;
+      if (!action) return false;
+      const { from, to } = editor.state.selection.main;
+      action({ from, to });
+      return true;
+    });
     return () => {
       languageClient.current?.dispose();
       languageClient.current = null;
+      canvasNavigationCommands.delete(editor);
       view.current?.destroy();
       view.current = null;
     };
@@ -166,7 +213,8 @@ export function CodeEditor({
 
   useEffect(() => {
     const editor = view.current;
-    if (!editor || !navigation) return;
+    if (!editor || !navigation || lastNavigationRequest.current === navigation.request) return;
+    lastNavigationRequest.current = navigation.request;
     const { from, to } = navigation;
     if (
       !Number.isSafeInteger(from)
@@ -176,11 +224,19 @@ export function CodeEditor({
       || to > editor.state.doc.length
     ) return;
     editor.dispatch({
-      selection: { anchor: from, head: to },
+      ...(navigation.focus === false ? {} : { selection: { anchor: from, head: to } }),
       effects: EditorView.scrollIntoView(from, { y: "center" }),
     });
-    editor.focus();
+    if (navigation.focus !== false) editor.focus();
   }, [navigation]);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: replaceSourceOwners.of(highlights) });
+  }, [highlights]);
+
+  useEffect(() => {
+    if (showInCanvasRequest > 0 && view.current) showSelectionInCanvas(view.current);
+  }, [showInCanvasRequest]);
 
   useEffect(() => {
     const element = host.current;

@@ -8366,6 +8366,19 @@ Historical initial candidate: clean source `85c57f1` passes integrated run `2026
 `http://127.0.0.1:18096/`; 16 samples/35 states match the SVG baseline. Dense-scene and
 end-to-end 60 Hz limits remain documented. It is superseded by the accepted product above; M92 is unchanged.
 
+## M95 — connected code, Explorer and canvas selection
+
+Status: **implementation authorized and in progress**. [M95_GOALS.md](docs/M95_GOALS.md) owns
+scope; [M95_IMPLEMENTATION.md](docs/M95_IMPLEMENTATION.md) records executed evidence.
+
+- [x] Reproduce the native selection gaps and add separate accepted-output navigation APIs.
+- [x] Build authenticated multi-owner source/row mappings, including generated members and groups.
+- [x] Synchronize canvas and Explorer; highlight/reveal source without changing cursor or layout.
+- [x] Add explicit Show in canvas/Show in code and strict Unicode/stale/dirty source handling.
+- [ ] Preserve history, mutation authority, visibility and M94 navigation/drag performance.
+- [ ] Qualify focused native/frontend/browser workflows and one clean integrated candidate.
+- [ ] Freeze a separate Tailscale candidate and record supervising-user acceptance before closure.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

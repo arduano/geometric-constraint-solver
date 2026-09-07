@@ -725,8 +725,8 @@ describe("M88 workbench interaction contract", () => {
 
   it("opens an authenticated managed owner at its exact source span", async () => {
     const { user, container } = await ready();
-    await user.click(screen.getByRole("button", { name: "Open in code" }));
-    expect(screen.getByRole("button", { name: /^code$/i })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Show in code" }));
+    expect(screen.getByRole("button", { name: /^split$/i })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => expect(container.querySelector(".cm-content")).toHaveFocus());
     const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
     const expected = view.state.doc.toString().indexOf("mm(4)");
@@ -759,7 +759,7 @@ describe("M88 workbench interaction contract", () => {
     }
 
     const { user, container } = await ready(new UnicodeNavigationAdapter());
-    await user.click(screen.getByRole("button", { name: "Open in code" }));
+    await user.click(screen.getByRole("button", { name: "Show in code" }));
     await waitFor(() => expect(container.querySelector(".cm-content")).toHaveFocus());
     const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
     expect(view.state.sliceDoc(
@@ -786,7 +786,7 @@ describe("M88 workbench interaction contract", () => {
     }
 
     const { user } = await ready(new InvalidNavigationAdapter());
-    await user.click(screen.getByRole("button", { name: "Open in code" }));
+    await user.click(screen.getByRole("button", { name: "Show in code" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("source offset splits a UTF-8 code point");
     expect(screen.getByRole("button", { name: /^design$/i })).toHaveAttribute("aria-pressed", "true");
   });
@@ -1147,5 +1147,155 @@ describe("M88 workbench interaction contract", () => {
     const { container } = await ready();
     const result = await axe.run(container, { resultTypes: ["violations"], rules: { "color-contrast": { enabled: false } } });
     expect(result.violations.filter(({ impact }) => impact === "serious" || impact === "critical")).toEqual([]);
+  });
+});
+
+/** Fixed transport fixture: Rust ownership resolution is covered by native tests. */
+class NavigationFixtureAdapter extends MockWorkbenchAdapter {
+  commands: Array<{ command: string; payload?: unknown }> = [];
+  persistenceCalls = 0;
+  constructor() {
+    super();
+    const source = '// naïve 東京 🧭\nconst edge = 1;\nconst corner = 2;\n';
+    this.state.source.files[0].contents = source;
+    this.state.selection = undefined;
+    const group = this.state.explorer[0];
+    group.children = group.children.filter((row) => row.id !== "origin");
+    const [line, corner] = group.children;
+    line.source = { path: "sketch.ts", from: new TextEncoder().encode(source.slice(0, source.indexOf("const edge"))).length, to: new TextEncoder().encode(source.slice(0, source.indexOf("const corner"))).length };
+    corner.source = { path: "sketch.ts", from: line.source.to, to: new TextEncoder().encode(source).length };
+    line.selected = false;
+    corner.selected = false;
+    corner.children = [];
+    this.state.navigation = { authority: "accepted-fixture-1", selectionKey: "empty", rows: [], sources: [], itemCount: 0, canNavigateSource: true };
+  }
+  override async persistProject() {
+    this.persistenceCalls += 1;
+    return { version: 2 as const, contents: "fixed-accepted-project" };
+  }
+  override async dispatch(input: { command: string; payload?: unknown }) {
+    this.commands.push(input);
+    if (input.command === "navigation.rows.select" || input.command === "navigation.source.select") {
+      const payload = input.payload as { ids?: string[]; mode?: string; from?: number; authority: string };
+      if (payload.authority !== this.state.navigation!.authority) throw new Error("stale navigation");
+      if (input.command === "navigation.source.select" && payload.from === 0) {
+        this.state.navigation!.notice = "No sketch object here";
+        return structuredClone(this.state);
+      }
+      const group = this.state.explorer[0];
+      const id = payload.ids?.[0] ?? "line-1";
+      const selected = id === group.id ? group.children : group.children.filter((row) => row.id === id);
+      this.state.navigation = {
+        authority: "accepted-fixture-1",
+        selectionKey: selected.map((row) => row.id).join(":"),
+        rows: [{ id: group.id, state: selected.length === group.children.length ? "selected" : "partial" }, ...selected.map((row) => ({ id: row.id, state: "selected" as const }))],
+        sources: selected.map((row) => row.source!),
+        itemCount: selected.length,
+        canNavigateSource: true,
+      };
+      return structuredClone(this.state);
+    }
+    return super.dispatch(input);
+  }
+}
+
+describe("M95 connected workspaces", () => {
+  it("synchronizes Explorer selection and all source decorations without moving cursor, focus, layout or saving", async () => {
+    const adapter = new NavigationFixtureAdapter();
+    const { user, container } = await ready(adapter);
+    await user.click(screen.getByRole("button", { name: /^split$/i }));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    act(() => editor.dispatch({ selection: { anchor: 3 } }));
+    const persistenceCalls = adapter.persistenceCalls;
+    const reveal = vi.spyOn(EditorView, "scrollIntoView");
+    const line = within(screen.getByRole("complementary", { name: "Explorer" })).getByRole("button", { name: "Line 1" });
+    line.focus();
+    fireEvent.click(line);
+    await waitFor(() => expect(line).toHaveAttribute("aria-current", "true"));
+    expect(adapter.commands.at(-1)).toEqual({ command: "navigation.rows.select", payload: { authority: "accepted-fixture-1", ids: ["line-1"], mode: "replace" }, version: 2 });
+    expect(line).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: "Sketch declarations" })).toHaveAttribute("aria-pressed", "mixed");
+    expect(editor.state.selection.main.anchor).toBe(3);
+    expect(line.isConnected).toBe(true);
+    expect(screen.getByRole("button", { name: "Line 1" })).toBe(line);
+    expect(line).toHaveFocus();
+    expect(container.querySelectorAll(".cm-sketch-source-owner")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /^split$/i })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(reveal).toHaveBeenCalledTimes(1));
+    reveal.mockClear();
+    await user.click(line);
+    expect(reveal).not.toHaveBeenCalled();
+    const group = screen.getByRole("button", { name: "Sketch declarations" });
+    fireEvent.click(group, { shiftKey: true });
+    await waitFor(() => expect(container.querySelectorAll(".cm-sketch-source-owner")).toHaveLength(2));
+    expect(adapter.commands.at(-1)).toMatchObject({ payload: { ids: ["group:sketch"], mode: "toggle" } });
+    expect(group).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("2 items selected")).toBeInTheDocument();
+    expect(adapter.persistenceCalls).toBe(persistenceCalls);
+  });
+
+  it("uses an explicit toolbar action with exact UTF-8 coordinates and leaves ordinary cursor movement local", async () => {
+    const adapter = new NavigationFixtureAdapter();
+    const { user, container } = await ready(adapter);
+    await user.click(screen.getByRole("button", { name: /^code$/i }));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    const source = editor.state.doc.toString();
+    const from = source.indexOf("edge");
+    act(() => editor.dispatch({ selection: { anchor: from, head: from + 4 } }));
+    expect(adapter.commands.some((entry) => entry.command === "navigation.source.select")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Show in canvas" }));
+    expect(adapter.commands.at(-1)).toMatchObject({ command: "navigation.source.select", payload: { authority: "accepted-fixture-1", path: "sketch.ts", from: new TextEncoder().encode(source.slice(0, from)).length, to: new TextEncoder().encode(source.slice(0, from + 4)).length } });
+    expect(screen.getByRole("button", { name: /^split$/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Line 1" })).toHaveAttribute("aria-current", "true");
+    act(() => editor.dispatch({ selection: { anchor: 0 } }));
+    await user.click(screen.getByRole("button", { name: "Show in canvas" }));
+    expect(screen.getByText("No sketch object here")).toHaveAttribute("role", "status");
+    expect(screen.getByRole("button", { name: "Line 1" })).toHaveAttribute("aria-current", "true");
+  });
+
+  it("keeps Design selection in place and opens Split only for explicit source reveal", async () => {
+    const adapter = new NavigationFixtureAdapter();
+    const { user, container } = await ready(adapter);
+    await user.click(screen.getByRole("button", { name: "Line 1" }));
+    expect(screen.getByRole("button", { name: /^design$/i })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Show in code" }));
+    expect(screen.getByRole("button", { name: /^split$/i })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(container.querySelector(".cm-content")).toHaveFocus());
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    expect(editor.state.sliceDoc(editor.state.selection.main.from, editor.state.selection.main.to)).toBe("const edge = 1;\n");
+  });
+
+  it("blocks explicit navigation during captured input and enables it after release", async () => {
+    const adapter = new NavigationFixtureAdapter();
+    const { user } = await ready(adapter);
+    await user.click(screen.getByRole("button", { name: /^split$/i }));
+    await user.click(screen.getByRole("button", { name: "Line 1" }));
+    const viewport = screen.getByRole("application");
+    fireEvent.pointerDown(viewport, { pointerId: 7, button: 0, buttons: 1, clientX: 50, clientY: 50 });
+    expect(screen.getByRole("button", { name: "Show in canvas" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Show in code" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Line 1" })).toBeDisabled();
+    fireEvent.pointerUp(viewport, { pointerId: 7, button: 0, buttons: 0, clientX: 50, clientY: 50 });
+    expect(screen.getByRole("button", { name: "Show in canvas" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Line 1" })).toBeEnabled();
+  });
+
+  it("clears source highlights on an unapplied draft while Explorer browsing remains available", async () => {
+    const adapter = new NavigationFixtureAdapter();
+    const { user, container } = await ready(adapter);
+    await user.click(screen.getByRole("button", { name: /^split$/i }));
+    await user.click(screen.getByRole("button", { name: "Line 1" }));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    expect(container.querySelector(".cm-sketch-source-owner")).not.toBeNull();
+    act(() => editor.dispatch({ changes: { from: 0, insert: "// draft\n" } }));
+    expect(container.querySelector(".cm-sketch-source-owner")).toBeNull();
+    expect(screen.getByRole("button", { name: "Show in canvas" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Show in code" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Fillet 1" }));
+    expect(screen.getByRole("button", { name: "Fillet 1" })).toHaveAttribute("aria-current", "true");
+    expect(container.querySelector(".cm-sketch-source-owner")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Revert" }));
+    expect(screen.getByRole("button", { name: "Show in canvas" })).toBeEnabled();
+    expect(container.querySelector(".cm-sketch-source-owner")).not.toBeNull();
   });
 });

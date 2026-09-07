@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "M92/M93 retained obligations plus M94 four canvas lifecycle cases; exact selected WASM/performance names",
+  "source": "M92/M93 retained obligations plus M94 canvas lifecycle and M95 connected-navigation cases; exact selected WASM/performance names",
   "stages": {
     "wasm.m70_transition_parity": [
       "m70_transition_oracle_matches_the_cross_target_golden_bytes"
@@ -197,6 +197,21 @@
       "canvas-renderer.spec.ts",
       "M94 canvas lost pointer capture cancels a preview and permits the next real gesture",
       "chromium"
+    ],
+    [
+      "m95-navigation.spec.ts",
+      "M95 canvas and Explorer selection reveal exact source without stealing cursor or saving",
+      "chromium"
+    ],
+    [
+      "m95-navigation.spec.ts",
+      "M95 explicit code navigation preserves layout intent and blocks unapplied source",
+      "chromium"
+    ],
+    [
+      "m95-navigation.spec.ts",
+      "M95 scale navigation selects generated harness members and their invocation without saving",
+      "chromium-memory"
     ]
   ]
 }

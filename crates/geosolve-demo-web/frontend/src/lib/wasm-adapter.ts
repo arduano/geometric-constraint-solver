@@ -35,6 +35,35 @@ function decodeSnapshot(json: string): WorkbenchSnapshot {
   return assertWorkbenchSnapshot(value);
 }
 
+const selectionUpdateFields = ["version", "kind", "revision", "frame", "navigation", "selectedDeclarations", "selection", "selectedGeometryRole"] as const;
+
+function validSelection(value: unknown): value is WorkbenchSnapshot["selection"] | null {
+  if (value === null) return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const selection = value as Record<string, unknown>;
+  if (typeof selection.id !== "string" || typeof selection.label !== "string" || typeof selection.kind !== "string"
+    || (selection.ownership !== undefined && typeof selection.ownership !== "string")
+    || Object.keys(selection).some((key) => !["id", "label", "kind", "ownership", "source"].includes(key))) return false;
+  if (selection.source === undefined) return true;
+  if (!selection.source || typeof selection.source !== "object" || Array.isArray(selection.source)) return false;
+  const source = selection.source as Record<string, unknown>;
+  return typeof source.path === "string" && typeof source.from === "number" && typeof source.to === "number"
+    && Number.isSafeInteger(source.from) && source.from >= 0 && Number.isSafeInteger(source.to) && source.to >= source.from
+    && Object.keys(source).every((key) => ["path", "from", "to"].includes(key));
+}
+
+function explorerRows(values: WorkbenchSnapshot["explorer"]): Map<string, WorkbenchSnapshot["explorer"][number]> {
+  const rows = new Map<string, WorkbenchSnapshot["explorer"][number]>();
+  function visit(children: WorkbenchSnapshot["explorer"]) {
+    for (const row of children) {
+      rows.set(row.id, row);
+      visit(row.children);
+    }
+  }
+  visit(values);
+  return rows;
+}
+
 /** Promise-shaped browser adapter over the synchronous, instance-scoped Rust JSON boundary. */
 export class WasmWorkbenchAdapter implements WorkbenchAdapter {
   private handle: JsonWorkbenchHandle | null = null;
@@ -74,7 +103,11 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
     return this.catalog;
   }
   async snapshot() { return this.decodeFull(this.required().snapshot()); }
-  async dispatch(input: { version: 2; command: string; payload?: unknown }) { return this.decodeFull(this.required().dispatch(JSON.stringify(input))); }
+  async dispatch(input: { version: 2; command: string; payload?: unknown }) {
+    const next = this.decodeUpdate(this.required().dispatch(JSON.stringify(input)));
+    if (!next) throw new Error("Workbench command returned no snapshot");
+    return next;
+  }
   async managedCompilerContext() { return JSON.parse(this.required().managedCompilerContext()) as { version: 2; patches: Record<string, unknown> }; }
   async pointer(input: PointerSample) { return this.decodeUpdate(this.required().pointer(JSON.stringify(input))); }
   async wheel(input: WheelSample) { return this.decodeUpdate(this.required().wheel(JSON.stringify(input))); }
@@ -98,6 +131,54 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
   private decodeUpdate(json: string): WorkbenchSnapshot | null {
     if (json === "null") return null;
     const value = JSON.parse(json) as { kind?: string; version?: number; revision?: number; frame?: WorkbenchSnapshot["frame"] };
+    if (value?.kind === "selection") {
+      const update = value as typeof value & {
+        navigation: NonNullable<WorkbenchSnapshot["navigation"]>;
+        selectedDeclarations: string[];
+        selection: WorkbenchSnapshot["selection"] | null;
+        selectedGeometryRole: WorkbenchSnapshot["presentation"]["selectedGeometryRole"] | null;
+      };
+      const base = this.current;
+      if (!base?.navigation || update.version !== 2 || !Number.isSafeInteger(update.revision) || update.revision !== base.revision
+        || base.pendingManagedMutation || update.navigation?.authority !== base.navigation.authority
+        || update.navigation.canNavigateSource !== base.navigation.canNavigateSource
+        || update.navigation.unavailableReason !== base.navigation.unavailableReason
+        || !update.frame || !Array.isArray(update.selectedDeclarations)
+        || !update.selectedDeclarations.every((id) => typeof id === "string")
+        || !validSelection(update.selection)
+        || (update.selectedGeometryRole !== null && !["profile", "construction", "mixed"].includes(update.selectedGeometryRole ?? ""))
+        || selectionUpdateFields.some((key) => !Object.hasOwn(update, key))
+        || Object.keys(update).length !== selectionUpdateFields.length) {
+        throw new Error("Invalid selection update: no matching accepted workbench authority");
+      }
+      const knownRows = explorerRows(base.explorer);
+      const selected = new Set(update.selectedDeclarations);
+      if (selected.size !== update.selectedDeclarations.length || update.selectedDeclarations.some((id) => {
+        const row = knownRows.get(id);
+        return !row || row.rowKind === "group";
+      })) {
+        throw new Error("Invalid selection update: unknown or repeated declaration identity");
+      }
+      freezeDrawFrame(update.frame.scene);
+      const rows = (values: WorkbenchSnapshot["explorer"]): WorkbenchSnapshot["explorer"] => {
+        const next = values.map((row) => {
+          const children = rows(row.children);
+          const isSelected = selected.has(row.id);
+          return row.selected === isSelected && children === row.children ? row : { ...row, selected: isSelected, children };
+        });
+        return next.every((row, index) => row === values[index]) ? values : next;
+      };
+      const next = assertWorkbenchSnapshot({ ...base, frame: update.frame, navigation: update.navigation,
+        explorer: rows(base.explorer), selection: update.selection ?? undefined,
+        presentation: { ...base.presentation, selectedGeometryRole: update.selectedGeometryRole ?? undefined },
+      });
+      if (next.navigation!.rows.some((row) => !knownRows.has(row.id))
+        || new Set(next.navigation!.rows.map((row) => row.id)).size !== next.navigation!.rows.length) {
+        throw new Error("Invalid selection update: unknown or repeated navigation row");
+      }
+      this.current = stampCanvasSnapshot(next, ++this.sequence);
+      return this.current;
+    }
     if (value?.kind === "frame") {
       const base = this.current;
       if (!base || value.version !== 2 || !Number.isSafeInteger(value.revision) || value.revision !== base.revision

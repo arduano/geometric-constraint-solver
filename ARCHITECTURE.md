@@ -2823,3 +2823,22 @@ Terminal/error snapshots, native validation and exact history remain authoritati
 context restoration clears invalid upload caches and rebuilds retained paint resources once.
 [The M94 closure audit](docs/M94_CLOSURE.md) records accepted source `7727cbf`, complete
 qualification and the remaining dense-editing/context-compatibility limits.
+
+## M95 connected selection — implementation in progress
+
+Native accepted output ownership now has a navigation API separate from singular declaration
+mutation selection. The WASM bridge caches declaration/group/member mappings by Intent, code,
+source and visibility authority; an instance token rejects cross-project stale requests. Exact
+output bindings keep generated vertices and spans distinct even when they share one producer.
+Borrowed operands never become owned outputs. Source spans remain attached to their direct
+statements; selecting a partial parent does not acquire unselected helper statements.
+
+One transient navigation snapshot projects selected/partial Explorer rows and all relevant source
+ranges. Selection deltas retain source/parameters/project objects and durable revision. Rust
+validates UTF-8 boundaries and accepted source identity; TypeScript converts CodeMirror UTF-16
+positions exactly. CodeMirror decorations are separate from text selection, with automatic reveal
+only when selected identities change. Explicit reverse navigation opens Split when needed.
+Dirty/retained-invalid text disables source links while preserving accepted row browsing; active
+tools and captured gestures block explicit cross-view selection. M94 pan/zoom and point-preview
+routes retain their narrow frame transport. Persisted formats and solver behavior do not change.
+[M95_GOALS.md](docs/M95_GOALS.md) and [evidence](docs/M95_IMPLEMENTATION.md) own nomination status.

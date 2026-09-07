@@ -609,13 +609,14 @@ test("canonical Jansen sample Polyline Finish publishes inferred constraints int
   await expect(constraints).toHaveCount(constraintDeclarations.length);
 
   const openAddedSource = async (declaration: typeof geometry, semanticName: RegExp) => {
+    await page.getByRole("button", { name: "Select", exact: true }).click();
     await declaration.click();
     const declarationName = await declaration.getAttribute("aria-label") ?? await declaration.textContent();
     expect(declarationName).not.toBeNull();
     const actions = additions.getByRole("group", { name: `${declarationName} actions`, exact: true });
     await expect(actions).toBeVisible();
     await actions.getByRole("button", { name: "Open source" }).click();
-    await expect(page.getByRole("button", { name: "code", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "split", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(source).toContainText(semanticName);
     const split = page.getByRole("button", { name: "split", exact: true });
     await split.click();

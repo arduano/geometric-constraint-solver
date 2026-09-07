@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import * as Dialog from "@radix-ui/react-dialog";
 import { Panel, PanelGroup, PanelResizeHandle, type PanelGroupStorage } from "react-resizable-panels";
-import { Activity, AlertTriangle, ChevronDown, Code2, Download, FileJson, FolderOpen, Menu, PackageOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Redo2, RotateCcw, Save, Undo2, X } from "lucide-react";
+import { Activity, AlertTriangle, ChevronDown, Code2, Download, FileJson, FolderOpen, Focus, Menu, PackageOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Redo2, RotateCcw, Save, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WorkbenchAdapter, WorkbenchSnapshot, WorkspaceMode } from "./lib/adapter";
 import { assertWorkbenchSnapshot } from "./lib/adapter";
@@ -9,7 +9,7 @@ import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from ".
 import { createProjectStore, type ProjectStore } from "./lib/project-storage";
 import { readRecentSamples, rememberRecentSample } from "./lib/recent-samples";
 import { resolvePendingManagedMutationSnapshot } from "./lib/pending-managed-mutation";
-import { utf8ByteSpanToUtf16Range, type Utf16SourceRange } from "./lib/source-navigation";
+import { utf8ByteSpanToUtf16Range, utf8ByteSpansToUtf16Ranges, utf16RangeToUtf8ByteSpan, type Utf16SourceRange } from "./lib/source-navigation";
 import { MockWorkbenchAdapter } from "./lib/mock-adapter";
 import { useTransientSurface } from "./hooks/use-transient-surface";
 import { Button } from "./components/ui/button";
@@ -73,6 +73,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const snapshotRef = useRef<WorkbenchSnapshot | null>(null);
   const draftRef = useRef("");
   const navigationRequest = useRef(0);
+  const lastAutomaticReveal = useRef<string | null>(null);
   const startupRequest = useRef(0);
   const projectSaveTail = useRef<Promise<void>>(Promise.resolve());
   const projectSaveEpoch = useRef(0);
@@ -326,6 +327,28 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     return () => document.removeEventListener("keydown", onWorkspaceKey);
   }, [acceptSnapshot, activeTool, adapter, capturedGesture, chooseTool, command, reportError, reproOpen, saveBrowserProject, transient]);
 
+  useEffect(() => {
+    const navigation = snapshot?.navigation;
+    const primary = navigation?.sources[0];
+    if (!primary) lastAutomaticReveal.current = null;
+    const currentFile = snapshot?.source.files.find((file) => file.path === snapshot.source.selectedPath);
+    if (!navigation || !primary || !navigation.canNavigateSource || snapshot?.source.dirty || draft !== currentFile?.contents) return;
+    if (mode === "design" || (mode === "code" && codeSurface !== "source")) return;
+    if (lastAutomaticReveal.current === navigation.selectionKey) return;
+    lastAutomaticReveal.current = navigation.selectionKey;
+    const reveal = (next: WorkbenchSnapshot) => {
+      if (snapshotRef.current?.navigation?.authority !== navigation.authority || snapshotRef.current?.navigation?.selectionKey !== navigation.selectionKey) return;
+      const file = next.source.files.find((candidate) => candidate.path === primary.path);
+      if (!file) return;
+      const converted = utf8ByteSpanToUtf16Range(file.contents, primary.from, primary.to);
+      if (!converted.ok) { reportError(converted.reason); return; }
+      navigationRequest.current += 1;
+      setEditorNavigation({ request: navigationRequest.current, ...converted.range, focus: false });
+    };
+    if (currentFile.path === primary.path) reveal(snapshot!);
+    else void command("source.select", { path: primary.path }).then(reveal);
+  }, [snapshot, draft, mode, codeSurface, command, reportError]);
+
   if (!snapshot || !toolCatalog) return <main className="grid h-dvh place-items-center bg-canvas text-sm text-muted">{startupError ? <section role="alert" className="max-w-md rounded-lg border border-danger/50 bg-raised p-5 text-center"><p className="font-medium text-foreground">Workbench unavailable</p><p className="mt-2 text-xs leading-relaxed">{startupError}</p><Button className="mt-4" onClick={start}>Try again</Button></section> : <span role="status">Starting GeoSolve…</span>}</main>;
   const selectedFile = snapshot.source.files.find((file) => file.path === snapshot.source.selectedPath) ?? snapshot.source.files[0];
   const localDraftDirty = Boolean(selectedFile && draft !== selectedFile.contents);
@@ -351,21 +374,24 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     }).catch(reportError);
   };
   const navigateToEditor = (path: string, locate: (contents: string) => Utf16SourceRange | string) => {
-    if (localDraftDirty) { reportError("Apply or Revert the current draft before navigating to an authenticated source span."); return; }
+    if (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) { reportError("Finish the current tool or gesture before navigating between views."); return; }
+    if (localDraftDirty || snapshot.source.dirty) { reportError("Apply or Revert the current draft before navigating to an authenticated source span."); return; }
     const initialFile = snapshot.source.files.find((candidate) => candidate.path === path);
     if (!initialFile) { reportError(`Source file \`${path}\` is unavailable.`); return; }
     const initialRange = locate(initialFile.contents);
     if (typeof initialRange === "string") { reportError(initialRange); return; }
+    const authority = snapshot.navigation?.authority;
     const navigate = (next: WorkbenchSnapshot) => {
+      if (authority && next.navigation?.authority !== authority) { reportError("The accepted source changed; select the object again."); return; }
       const file = next.source.files.find((candidate) => candidate.path === path);
       if (!file) { reportError(`Source file \`${path}\` is unavailable.`); return; }
-      const range = file.contents === initialFile.contents ? initialRange : locate(file.contents);
-      if (typeof range === "string") { reportError(range); return; }
+      if (file.contents !== initialFile.contents) { reportError("The accepted source changed; select the object again."); return; }
+      const range = initialRange;
       setDraft(file.contents);
       navigationRequest.current += 1;
-      setEditorNavigation({ request: navigationRequest.current, ...range });
+      setEditorNavigation({ request: navigationRequest.current, ...range, focus: true });
       setCodeSurface("source");
-      setMode("code");
+      setMode((current) => current === "design" ? "split" : current);
     };
     if (snapshot.source.selectedPath === path) navigate(snapshot);
     else void command("source.select", { path }).then(navigate);
@@ -379,7 +405,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     });
   };
   const openSelectionInCode = () => {
-    const source = snapshot.selection?.source;
+    const source = snapshot.navigation?.sources[0] ?? snapshot.selection?.source;
     if (source) navigateToSource(source.path, source.from, source.to);
     else reportError("This selection has no exact authenticated managed-source owner.");
   };
@@ -390,10 +416,32 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       return { from: offset, to: offset };
     });
   };
+  const showSourceInCanvas = (range: Utf16SourceRange) => {
+    const navigation = snapshot.navigation;
+    if (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation) || localDraftDirty || snapshot.source.dirty || !navigation?.canNavigateSource) return;
+    const converted = utf16RangeToUtf8ByteSpan(draft, range.from, range.to);
+    if (!converted.ok) { reportError(converted.reason); return; }
+    void verifiedCommand("navigation.source.select", { authority: navigation.authority, path: selectedFile.path, ...converted.range }).then((next) => {
+      if (!next) return;
+      if (next.navigation?.notice) return;
+      setMode((current) => current === "code" ? "split" : current);
+    });
+  };
   const declarationActions: DeclarationPanelActions = {
-    onSelect: (id) => { void command("declaration.select", { id }); },
+    navigationBlockedReason: (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined,
+    onSelect: (id, mode = "replace") => {
+      if (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) return;
+      if (snapshot.navigation) void command("navigation.rows.select", { authority: snapshot.navigation.authority, ids: [id], mode });
+      else void command("declaration.select", { id });
+    },
     onNavigate: (row) => {
+      if (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) return;
       if (!row.source) { reportError("This declaration has no authenticated managed-source span."); return; }
+      if (snapshot.navigation) {
+        if (!snapshot.navigation.canNavigateSource) { reportError(snapshot.navigation.unavailableReason ?? "Source navigation is unavailable."); return; }
+        navigateToSource(row.source.path, row.source.from, row.source.to);
+        return;
+      }
       void verifiedCommand("declaration.source.open", { id: row.id, from: row.source.from, to: row.source.to }).then((next) => { if (next) navigateToSource(row.source!.path, row.source!.from, row.source!.to); });
     },
     onMove: (id, move) => { void command("declaration.move", { id, ...move }); },
@@ -433,11 +481,11 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
           {explorerOpen && mode !== "code" && <><Panel id="explorer" defaultSize={16} minSize={12} maxSize={26}><Explorer snapshot={snapshot} actions={declarationActions} blockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} /></Panel><ResizeHandle /></>}
           <Panel id="workspace" defaultSize={63} minSize={45}>
             <main className="relative flex h-full min-h-0 flex-col">
-              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={toolCatalog} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} captured={setCapturedGesture} />} code={<CodeWorkspace mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={setDraft} command={command} navigation={editorNavigation} declarationActions={declarationActions} declarationBlockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
+              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={toolCatalog} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} captured={setCapturedGesture} />} code={<CodeWorkspace mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={setDraft} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
               {transient.active === "open" && <div ref={transient.contentRef as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="false" aria-label="Open project" className="absolute inset-5 z-40 overflow-hidden rounded-xl border border-border bg-raised shadow-panel"><OpenSurface recents={recentSamples} onOpen={openSample} onNewSketch={() => replaceProject("project.new", "design")} onNewCode={() => replaceProject("project.new-code", "code")} onImport={importProject} onDismiss={() => transient.close(true)} /></div>}
             </main>
           </Panel>
-          {detailsOpen && mode !== "code" && <><ResizeHandle /><Panel id="details" defaultSize={21} minSize={18} maxSize={34}><DetailsPanel snapshot={snapshot} onOpenCode={openSelectionInCode} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} parametersBlocked={localDraftDirty} /></Panel></>}
+          {detailsOpen && mode !== "code" && <><ResizeHandle /><Panel id="details" defaultSize={21} minSize={18} maxSize={34}><DetailsPanel snapshot={snapshot} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : historyBlocked ? "Apply or Revert the source draft before navigating between views." : snapshot.navigation && !snapshot.navigation.canNavigateSource ? snapshot.navigation.unavailableReason ?? "Source navigation is unavailable." : undefined} onOpenCode={openSelectionInCode} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} parametersBlocked={localDraftDirty} /></Panel></>}
         </PanelGroup>
       </div>
 
@@ -517,8 +565,19 @@ const CODE_SURFACES: Array<{ id: CodeSurface; label: string }> = [
   { id: "artifacts", label: "Artifacts" },
 ];
 
-function CodeWorkspace({ mode, surface, setSurface, snapshot, selectedFile, draft, setDraft, command, navigation, declarationActions, declarationBlockedReason, onParameterEdit, onProblemOpen }: { mode: WorkspaceMode; surface: CodeSurface; setSurface: (surface: CodeSurface) => void; snapshot: WorkbenchSnapshot; selectedFile: WorkbenchSnapshot["source"]["files"][number]; draft: string; setDraft: (value: string) => void; command: (name: string, payload?: unknown) => Promise<WorkbenchSnapshot>; navigation: EditorNavigation | null; declarationActions: DeclarationPanelActions; declarationBlockedReason?: string; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void }) {
+function CodeWorkspace({ mode, surface, setSurface, snapshot, selectedFile, draft, setDraft, command, navigation, onShowInCanvas, navigationBlockedReason, declarationActions, declarationBlockedReason, onParameterEdit, onProblemOpen }: { mode: WorkspaceMode; surface: CodeSurface; setSurface: (surface: CodeSurface) => void; snapshot: WorkbenchSnapshot; selectedFile: WorkbenchSnapshot["source"]["files"][number]; draft: string; setDraft: (value: string) => void; command: (name: string, payload?: unknown) => Promise<WorkbenchSnapshot>; navigation: EditorNavigation | null; onShowInCanvas: (range: Utf16SourceRange) => void; navigationBlockedReason?: string; declarationActions: DeclarationPanelActions; declarationBlockedReason?: string; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void }) {
   const dirty = snapshot.source.dirty || draft !== selectedFile.contents;
+  const [showInCanvasRequest, setShowInCanvasRequest] = useState(0);
+  const sourceNavigationBlocked = navigationBlockedReason ?? (selectedFile.readOnly ? "This file has no sketch objects." : dirty ? "Apply or Revert the source draft before navigating between views." : !snapshot.navigation?.canNavigateSource ? snapshot.navigation?.unavailableReason ?? "This project has no source-linked sketch objects." : undefined);
+  const sourceSignature = JSON.stringify(snapshot.navigation?.sources ?? []);
+  const highlights = useMemo(() => {
+    if (dirty || !snapshot.navigation?.canNavigateSource) return [];
+    const spans = snapshot.navigation.sources.filter((span) => span.path === selectedFile.path);
+    const converted = utf8ByteSpansToUtf16Ranges(selectedFile.contents, spans);
+    return converted.ok ? converted.ranges : [];
+    // Equivalent snapshots retain decorations; source/group conversion scans the file once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, snapshot.navigation?.canNavigateSource, sourceSignature, selectedFile.contents, selectedFile.path]);
   const languageProject = useMemo(() => selectedFile.language === "typescript" ? {
     key: `${snapshot.project.sampleKey ?? "authored"}\0${snapshot.project.title}`,
     file: selectedFile.path,
@@ -533,11 +592,12 @@ function CodeWorkspace({ mode, surface, setSurface, snapshot, selectedFile, draf
   const selectFile = (path: string) => { if (dirty || path === selectedFile.path) return; void command("source.select", { path }).then((next) => setDraft(next.source.files.find((file) => file.path === path)?.contents ?? "")); };
   return <section aria-label="Code workspace" className="flex h-full min-h-[500px] min-w-[520px] flex-col bg-canvas">
     <div role="tablist" aria-label="Code surfaces" className={`${mode === "code" ? "flex" : "hidden"} h-9 shrink-0 items-end gap-1 border-b border-border bg-raised px-2`}>{CODE_SURFACES.map((item) => <button key={item.id} type="button" role="tab" aria-selected={surface === item.id} onClick={() => setSurface(item.id)} className="h-8 rounded-t border-b-2 border-transparent px-3 text-xs text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent aria-selected:border-accent aria-selected:bg-surface aria-selected:text-foreground">{item.label}{item.id === "problems" && snapshot.problems.length > 0 ? ` (${snapshot.problems.length})` : ""}</button>)}</div>
-    <header className="flex h-10 shrink-0 items-center border-b border-border bg-surface px-2"><div role="tablist" aria-label="Source files" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">{snapshot.source.files.map((file) => <button type="button" role="tab" aria-selected={file.path === selectedFile.path} aria-controls="source-editor" disabled={dirty && file.path !== selectedFile.path} onClick={() => { setSurface("source"); selectFile(file.path); }} key={file.path} className="h-8 max-w-48 shrink-0 truncate rounded-t border-b-2 border-transparent px-3 text-xs text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40 aria-selected:border-accent aria-selected:bg-raised aria-selected:text-foreground"><Code2 className="mr-1.5 inline size-3" />{file.path}</button>)}</div><span className={`mx-2 shrink-0 text-[10px] uppercase tracking-wider ${dirty ? "text-accent" : "text-emerald-300"}`}>{dirty ? "Unapplied changes" : "Accepted source"}</span><Button size="compact" variant="ghost" disabled={!dirty} onClick={revert}><RotateCcw className="size-3" />Revert</Button><Button size="compact" variant="default" disabled={!dirty || selectedFile.readOnly} onClick={() => void command("source.prepare", { path: selectedFile.path, contents: draft })}><Play className="size-3" />Apply</Button></header>
+    <header className="flex h-10 shrink-0 items-center border-b border-border bg-surface px-2"><div role="tablist" aria-label="Source files" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">{snapshot.source.files.map((file) => <button type="button" role="tab" aria-selected={file.path === selectedFile.path} aria-controls="source-editor" disabled={dirty && file.path !== selectedFile.path} onClick={() => { setSurface("source"); selectFile(file.path); }} key={file.path} className="h-8 max-w-48 shrink-0 truncate rounded-t border-b-2 border-transparent px-3 text-xs text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40 aria-selected:border-accent aria-selected:bg-raised aria-selected:text-foreground"><Code2 className="mr-1.5 inline size-3" />{file.path}</button>)}</div><span className={`mx-2 shrink-0 text-[10px] uppercase tracking-wider ${dirty ? "text-accent" : "text-emerald-300"}`}>{dirty ? "Unapplied changes" : "Accepted source"}</span><Button size="compact" variant="ghost" aria-label="Show in canvas" disabled={Boolean(sourceNavigationBlocked)} title={sourceNavigationBlocked ?? "Show the source selection in the canvas (Ctrl/Cmd+Shift+Enter)"} onClick={() => setShowInCanvasRequest((request) => request + 1)}><Focus className="size-3" /><span className="hidden xl:inline">Show in canvas</span></Button><Button size="compact" variant="ghost" disabled={!dirty} onClick={revert}><RotateCcw className="size-3" />Revert</Button><Button size="compact" variant="default" disabled={!dirty || selectedFile.readOnly} onClick={() => void command("source.prepare", { path: selectedFile.path, contents: draft })}><Play className="size-3" />Apply</Button></header>
+    {snapshot.navigation?.notice && <p role="status" className="shrink-0 border-b border-border px-3 py-1 text-xs text-muted">{snapshot.navigation.notice}</p>}
     <div aria-hidden={surface !== "source" && mode === "code"} inert={surface !== "source" && mode === "code" ? true : undefined} className={`${surface !== "source" && mode === "code" ? "hidden" : "flex"} min-h-0 flex-1 flex-col`}>
-      <div id="source-editor" role="tabpanel" className="flex min-h-0 flex-1"><CodeEditor value={draft} readOnly={selectedFile.readOnly} onChange={setDraft} navigation={navigation} languageProject={mode === "design" ? null : languageProject} /></div>
+      <div id="source-editor" role="tabpanel" className="flex min-h-0 flex-1"><CodeEditor value={draft} readOnly={selectedFile.readOnly} onChange={setDraft} navigation={dirty ? null : navigation} highlights={highlights} onShowInCanvas={sourceNavigationBlocked ? undefined : onShowInCanvas} showInCanvasRequest={showInCanvasRequest} languageProject={mode === "design" ? null : languageProject} /></div>
     </div>
-    {mode === "code" && surface !== "source" && <div role="tabpanel" className="min-h-0 flex-1 overflow-auto p-5">{surface === "parameters" && <ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={dirty} />}{surface === "problems" && <ProblemsView snapshot={snapshot} onOpen={onProblemOpen} />}{surface === "generated" && <DeclarationPanel rows={snapshot.explorer} actions={declarationActions} blockedReason={declarationBlockedReason} className="mx-auto w-full max-w-3xl" />}{surface === "artifacts" && (snapshot.source.files.filter((file) => file.path !== "sketch.ts").length ? <ul className="grid gap-2">{snapshot.source.files.filter((file) => file.path !== "sketch.ts").map((file) => <li key={file.path}><button className="flex w-full items-center gap-2 rounded border border-border bg-surface p-3 text-left text-sm outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent" onClick={() => { setSurface("source"); selectFile(file.path); }}><PackageOpen className="size-4 text-accent" /><span className="truncate">{file.path}</span><span className="ml-auto text-[10px] uppercase text-muted">read-only</span></button></li>)}</ul> : <CodeEmpty icon={<PackageOpen />} title="No custom artifacts" detail="Pinned data-only project artifacts appear here." />)}</div>}
+    {mode === "code" && surface !== "source" && <div role="tabpanel" className="min-h-0 flex-1 overflow-auto p-5">{surface === "parameters" && <ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={dirty} />}{surface === "problems" && <ProblemsView snapshot={snapshot} onOpen={onProblemOpen} />}{surface === "generated" && <DeclarationPanel rows={snapshot.explorer} navigation={snapshot.navigation} actions={declarationActions} blockedReason={declarationBlockedReason} className="mx-auto w-full max-w-3xl" />}{surface === "artifacts" && (snapshot.source.files.filter((file) => file.path !== "sketch.ts").length ? <ul className="grid gap-2">{snapshot.source.files.filter((file) => file.path !== "sketch.ts").map((file) => <li key={file.path}><button className="flex w-full items-center gap-2 rounded border border-border bg-surface p-3 text-left text-sm outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent" onClick={() => { setSurface("source"); selectFile(file.path); }}><PackageOpen className="size-4 text-accent" /><span className="truncate">{file.path}</span><span className="ml-auto text-[10px] uppercase text-muted">read-only</span></button></li>)}</ul> : <CodeEmpty icon={<PackageOpen />} title="No custom artifacts" detail="Pinned data-only project artifacts appear here." />)}</div>}
   </section>;
 }
 

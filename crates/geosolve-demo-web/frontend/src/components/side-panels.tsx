@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { AlertCircle, Box, Braces, ChevronDown, ChevronUp, DraftingCompass, ExternalLink, Eye, EyeOff, Focus, GripVertical, Minus, Pencil, RotateCcw, SlidersHorizontal, Trash2 } from "lucide-react";
-import { useState } from "react";
-import type { DeclarationCapability, DeclarationRow, WorkbenchSnapshot } from "../lib/adapter";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DeclarationCapability, DeclarationRow, NavigationSnapshot, WorkbenchSnapshot } from "../lib/adapter";
 import { Button } from "./ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 export type DeclarationMove = { direction: "up" | "down" } | { targetId: string; position: "before" | "after" };
 
 export interface DeclarationPanelActions {
-  onSelect: (id: string) => void;
+  onSelect: (id: string, mode?: "replace" | "toggle") => void;
+  navigationBlockedReason?: string;
   onNavigate: (row: DeclarationRow, edit: boolean) => void;
   onMove: (id: string, move: DeclarationMove) => void;
   onVisibility: (id: string, visible: boolean) => void;
@@ -28,21 +29,39 @@ export function Explorer({ snapshot, actions, blockedReason }: { snapshot: Workb
         <Button aria-label="Restore visibility before isolate" className="size-7 shrink-0" disabled={!snapshot.presentation.visibilityRestoreAvailable} onClick={actions.onRestoreVisibility} size="icon" title={snapshot.presentation.visibilityRestoreAvailable ? "Restore visibility from before group isolation" : "No isolated visibility state to restore"} variant="ghost"><RotateCcw className="size-3.5" /></Button>
       </div>
     </header>
-    <DeclarationPanel rows={snapshot.explorer} actions={actions} blockedReason={blockedReason} className="min-h-0 flex-1 overflow-auto p-2" />
+    <DeclarationPanel rows={snapshot.explorer} navigation={snapshot.navigation} actions={actions} blockedReason={blockedReason} className="min-h-0 flex-1 overflow-auto p-2" />
   </aside>;
 }
 
-export function DeclarationPanel({ rows, actions, blockedReason, className = "" }: { rows: DeclarationRow[]; actions: DeclarationPanelActions; blockedReason?: string; className?: string }) {
+export function DeclarationPanel({ rows, actions, navigation, blockedReason, className = "" }: { rows: DeclarationRow[]; actions: DeclarationPanelActions; navigation?: NavigationSnapshot; blockedReason?: string; className?: string }) {
+  const host = useRef<HTMLDivElement>(null);
+  const previousSelection = useRef(new Set<string>());
+  const selection = useMemo(() => new Map(navigation?.rows.map((row) => [row.id, row.state])), [navigation?.rows]);
+  useEffect(() => {
+    const panel = host.current;
+    const candidates = Array.from(panel?.querySelectorAll<HTMLElement>('[data-navigation-state="selected"]') ?? []);
+    const selected = candidates.find((row) => !previousSelection.current.has(row.dataset.navigationRow!)) ?? candidates[0];
+    previousSelection.current = new Set(candidates.map((row) => row.dataset.navigationRow!));
+    if (!panel || !selected) return;
+    const bounds = panel.getBoundingClientRect();
+    const item = selected.getBoundingClientRect();
+    // Scroll this panel only, by the minimum amount; never move the page or focus.
+    if (item.top < bounds.top) panel.scrollTop -= bounds.top - item.top;
+    else if (item.bottom > bounds.bottom) panel.scrollTop += item.bottom - bounds.bottom;
+  }, [navigation?.selectionKey]);
   const [dragged, setDragged] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ id: string; position: "before" | "after" } | null>(null);
   const finishDrag = () => { setDragged(null); setDrop(null); };
   if (!rows.length) return <div className={className}><Empty icon={<Braces />} title="No declarations" detail="Accepted declarations appear here in sketch.ts order." /></div>;
-  return <div className={className}>{blockedReason && <p role="status" className="mb-2 rounded border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-accent">{blockedReason}</p>}<ul aria-label="Ordered declarations" className="grid min-w-0 grid-cols-1 content-start gap-1">{rows.map((row) => <DeclarationTreeRow key={row.id} row={row} depth={0} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={setDragged} onDropTarget={setDrop} onDragEnd={finishDrag} />)}</ul></div>;
+  return <div ref={host} className={className}>{blockedReason && <p role="status" className="mb-2 rounded border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-accent">{blockedReason}</p>}<ul aria-label="Ordered declarations" className="grid min-w-0 grid-cols-1 content-start gap-1">{rows.map((row) => <DeclarationTreeRow key={row.id} row={row} depth={0} selection={navigation ? selection : undefined} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={setDragged} onDropTarget={setDrop} onDragEnd={finishDrag} />)}</ul></div>;
 }
 
-function DeclarationTreeRow({ row, depth, actions, blockedReason, dragged, drop, onDrag, onDropTarget, onDragEnd }: { row: DeclarationRow; depth: number; actions: DeclarationPanelActions; blockedReason?: string; dragged: string | null; drop: { id: string; position: "before" | "after" } | null; onDrag: (id: string | null) => void; onDropTarget: (target: { id: string; position: "before" | "after" } | null) => void; onDragEnd: () => void }) {
+function DeclarationTreeRow({ row, depth, selection, actions, blockedReason, dragged, drop, onDrag, onDropTarget, onDragEnd }: { row: DeclarationRow; depth: number; selection?: Map<string, "selected" | "partial">; actions: DeclarationPanelActions; blockedReason?: string; dragged: string | null; drop: { id: string; position: "before" | "after" } | null; onDrag: (id: string | null) => void; onDropTarget: (target: { id: string; position: "before" | "after" } | null) => void; onDragEnd: () => void }) {
+  const selected = selection ? selection.get(row.id) : row.selected ? "selected" : undefined;
+  const select = (event: React.MouseEvent) => actions.onSelect(row.id, event.shiftKey || event.ctrlKey || event.metaKey ? "toggle" : "replace");
+  const selectionAllowed = !actions.navigationBlockedReason && (selection !== undefined || row.capabilities.select.enabled);
   if (row.rowKind === "group") {
-    return <li className="min-w-0"><div className="mt-2 flex h-7 items-center gap-1 border-b border-border px-1 text-[10px] font-semibold uppercase tracking-wider text-muted first:mt-0"><Box className="size-3 shrink-0" /><span className="min-w-0 flex-1 truncate" title={row.label}>{row.label}</span><span className="shrink-0 tabular-nums">{row.children.length}</span><VisibilityButton row={row} onVisibility={actions.onVisibility} /><button type="button" aria-label={`Isolate ${row.label}`} onClick={() => actions.onIsolate(row.id)} title={`Show only ${row.label}; Restore returns the previous visibility`} className="grid size-6 shrink-0 place-items-center rounded outline-none hover:bg-raised hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent"><Focus className="size-3" /></button></div>{row.children.length > 0 && <ul className="grid min-w-0 grid-cols-1 gap-1" aria-label={row.label}>{row.children.map((child) => <DeclarationTreeRow key={child.id} row={child} depth={depth} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={onDrag} onDropTarget={onDropTarget} onDragEnd={onDragEnd} />)}</ul>}</li>;
+    return <li className="min-w-0"><div className="mt-2 flex h-7 items-center gap-1 border-b border-border px-1 text-[10px] font-semibold uppercase tracking-wider text-muted first:mt-0"><button type="button" data-navigation-row={row.id} data-navigation-state={selected} aria-pressed={selected === "partial" ? "mixed" : selected === "selected"} aria-label={row.label} disabled={!selectionAllowed} onClick={select} className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-1 text-left outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent data-[navigation-state=selected]:bg-amber-400/10 data-[navigation-state=selected]:text-accent data-[navigation-state=partial]:text-accent"><Box className="size-3 shrink-0" /><span className="min-w-0 flex-1 truncate" title={row.label}>{row.label}</span><span className="shrink-0 tabular-nums">{row.children.length}</span></button><VisibilityButton row={row} onVisibility={actions.onVisibility} /><button type="button" aria-label={`Isolate ${row.label}`} onClick={() => actions.onIsolate(row.id)} title={`Show only ${row.label}; Restore returns the previous visibility`} className="grid size-6 shrink-0 place-items-center rounded outline-none hover:bg-raised hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent"><Focus className="size-3" /></button></div>{row.children.length > 0 && <ul className="grid min-w-0 grid-cols-1 gap-1" aria-label={row.label}>{row.children.map((child) => <DeclarationTreeRow key={child.id} row={child} depth={depth} selection={selection} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={onDrag} onDropTarget={onDropTarget} onDragEnd={onDragEnd} />)}</ul>}</li>;
   }
   const blocked = blockedReason ? { enabled: false, reason: blockedReason } : undefined;
   const mutationCapability = (capability: DeclarationCapability) => blocked ?? capability;
@@ -51,7 +70,7 @@ function DeclarationTreeRow({ row, depth, actions, blockedReason, dragged, drop,
   const nested = row.rowKind === "generated" || depth > 0;
   return <li className={`min-w-0 ${nested ? "ml-4 border-l border-border pl-1" : ""} border-y ${dropClass}`}>
     <div className="group rounded" draggable={movable} onDragStart={(event) => { if (!movable) return; event.stopPropagation(); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-geosolve-declaration", row.id); onDrag(row.id); }} onDragEnd={onDragEnd} onDragOver={(event) => { if (!dragged || dragged === row.id) return; event.preventDefault(); event.stopPropagation(); const bounds = event.currentTarget.getBoundingClientRect(); onDropTarget({ id: row.id, position: event.clientY < bounds.top + bounds.height / 2 ? "before" : "after" }); }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); if (dragged && dragged !== row.id) actions.onMove(dragged, { targetId: row.id, position: drop?.id === row.id ? drop.position : "before" }); onDragEnd(); }}>
-      <div className="flex min-w-0 items-center"><button type="button" aria-current={row.selected ? "true" : undefined} disabled={!row.capabilities.select.enabled} title={row.capabilities.select.enabled ? `${row.label} · ${row.kind} declaration` : row.capabilities.select.reason} onClick={() => actions.onSelect(row.id)} className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 text-left text-sm text-foreground outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-default disabled:opacity-60 aria-current:bg-amber-400/10 aria-current:text-accent">
+      <div className="flex min-w-0 items-center"><button type="button" aria-current={selected === "selected" ? "true" : undefined} aria-pressed={selected === "partial" ? "mixed" : selected === "selected"} data-navigation-row={row.id} data-navigation-state={selected} disabled={!selectionAllowed} title={row.capabilities.select.enabled ? `${row.label} · ${row.kind} declaration` : row.capabilities.select.reason} onClick={select} className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 text-left text-sm text-foreground outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-default disabled:opacity-60 aria-current:bg-amber-400/10 aria-current:text-accent data-[navigation-state=partial]:text-accent">
         <GripVertical aria-hidden="true" className={`size-3 shrink-0 ${movable ? "cursor-grab text-muted group-active:cursor-grabbing" : "text-transparent"}`} />
         <Box className={`size-3.5 shrink-0 ${row.rowKind === "generated" ? "text-cyan-300" : "text-muted"}`} />
         <span className={`min-w-0 flex-1 truncate ${row.suppressed ? "line-through opacity-60" : ""}`}>{row.label}</span>
@@ -60,13 +79,13 @@ function DeclarationTreeRow({ row, depth, actions, blockedReason, dragged, drop,
       {(row.selected || row.suppressed === true) && <div role="group" aria-label={`${row.label} actions`} className="mb-1 ml-8 flex flex-wrap items-center gap-0.5 px-1">
         <RowAction label="Move up" capability={mutationCapability(row.capabilities.moveUp)} onClick={() => actions.onMove(row.id, { direction: "up" })}><ChevronUp /></RowAction>
         <RowAction label="Move down" capability={mutationCapability(row.capabilities.moveDown)} onClick={() => actions.onMove(row.id, { direction: "down" })}><ChevronDown /></RowAction>
-        <RowAction label="Open source" capability={mutationCapability(row.capabilities.navigate)} onClick={() => actions.onNavigate(row, false)}><ExternalLink /></RowAction>
-        <RowAction label="Edit source" capability={mutationCapability(row.capabilities.edit)} onClick={() => actions.onNavigate(row, true)}><Pencil /></RowAction>
+        <RowAction label="Open source" capability={actions.navigationBlockedReason ? { enabled: false, reason: actions.navigationBlockedReason } : mutationCapability(row.capabilities.navigate)} onClick={() => actions.onNavigate(row, false)}><ExternalLink /></RowAction>
+        <RowAction label="Edit source" capability={actions.navigationBlockedReason ? { enabled: false, reason: actions.navigationBlockedReason } : mutationCapability(row.capabilities.edit)} onClick={() => actions.onNavigate(row, true)}><Pencil /></RowAction>
         <RowAction label={row.suppressed ? "Restore" : "Suppress"} capability={mutationCapability(row.capabilities.suppress)} pressed={row.suppressed} onClick={() => actions.onSuppress(row.id, !row.suppressed)}>{row.suppressed ? <Eye /> : <EyeOff />}</RowAction>
         <RowAction label="Delete" capability={mutationCapability(row.capabilities.delete)} danger onClick={() => actions.onDelete(row.id)}><Trash2 /></RowAction>
       </div>}
     </div>
-    {row.children.length > 0 && <ul aria-label={`${row.label} generated outputs`} className="grid gap-1">{row.children.map((child) => <DeclarationTreeRow key={child.id} row={child} depth={depth + 1} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={onDrag} onDropTarget={onDropTarget} onDragEnd={onDragEnd} />)}</ul>}
+    {row.children.length > 0 && <ul aria-label={`${row.label} generated outputs`} className="grid gap-1">{row.children.map((child) => <DeclarationTreeRow key={child.id} row={child} depth={depth + 1} selection={selection} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={onDrag} onDropTarget={onDropTarget} onDragEnd={onDragEnd} />)}</ul>}
   </li>;
 }
 
@@ -85,13 +104,14 @@ function RowAction({ label, capability, pressed, danger = false, onClick, childr
   return <button type="button" aria-label={label} aria-pressed={pressed} disabled={!capability.enabled} title={capability.enabled ? label : capability.reason} onClick={onClick} className={`grid size-6 place-items-center rounded outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30 [&>svg]:size-3 ${danger ? "text-red-300 hover:bg-danger/20" : "text-muted hover:bg-raised hover:text-foreground"}`}>{children}</button>;
 }
 
-export function DetailsPanel({ snapshot, onOpenCode, onParameterEdit, onProblemOpen, parametersBlocked }: { snapshot: WorkbenchSnapshot; onOpenCode: () => void; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void; parametersBlocked: boolean }) {
-  return <Tabs defaultValue="inspector" className="flex h-full min-h-0 flex-col bg-surface"><TabsList aria-label="Details"><TabsTrigger value="inspector">Inspector</TabsTrigger><TabsTrigger value="parameters">Parameters</TabsTrigger><TabsTrigger value="problems">Problems {snapshot.problems.length > 0 && <span className="ml-1 rounded bg-danger px-1 text-[9px] text-white">{snapshot.problems.length}</span>}</TabsTrigger></TabsList><TabsContent value="inspector" className="overflow-auto p-3"><Inspector snapshot={snapshot} onOpenCode={onOpenCode} /></TabsContent><TabsContent value="parameters" className="overflow-auto p-3"><ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={parametersBlocked} /></TabsContent><TabsContent value="problems" className="overflow-auto p-3"><ProblemsView snapshot={snapshot} onOpen={onProblemOpen} /></TabsContent></Tabs>;
+export function DetailsPanel({ snapshot, onOpenCode, onParameterEdit, onProblemOpen, parametersBlocked, navigationBlockedReason }: { snapshot: WorkbenchSnapshot; onOpenCode: () => void; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void; parametersBlocked: boolean; navigationBlockedReason?: string }) {
+  return <Tabs defaultValue="inspector" className="flex h-full min-h-0 flex-col bg-surface"><TabsList aria-label="Details"><TabsTrigger value="inspector">Inspector</TabsTrigger><TabsTrigger value="parameters">Parameters</TabsTrigger><TabsTrigger value="problems">Problems {snapshot.problems.length > 0 && <span className="ml-1 rounded bg-danger px-1 text-[9px] text-white">{snapshot.problems.length}</span>}</TabsTrigger></TabsList><TabsContent value="inspector" className="overflow-auto p-3"><Inspector snapshot={snapshot} onOpenCode={onOpenCode} blockedReason={navigationBlockedReason} /></TabsContent><TabsContent value="parameters" className="overflow-auto p-3"><ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={parametersBlocked} /></TabsContent><TabsContent value="problems" className="overflow-auto p-3"><ProblemsView snapshot={snapshot} onOpen={onProblemOpen} /></TabsContent></Tabs>;
 }
 
-function Inspector({ snapshot, onOpenCode }: { snapshot: WorkbenchSnapshot; onOpenCode: () => void }) {
+function Inspector({ snapshot, onOpenCode, blockedReason }: { snapshot: WorkbenchSnapshot; onOpenCode: () => void; blockedReason?: string }) {
+  if (!snapshot.selection && snapshot.navigation && (snapshot.navigation.itemCount > 0 || snapshot.navigation.rows.length > 0)) return <div><p className="text-sm font-medium">{snapshot.navigation.itemCount > 0 ? `${snapshot.navigation.itemCount} ${snapshot.navigation.itemCount === 1 ? "item" : "items"} selected` : "Declaration selected"}</p><p className="mt-2 text-xs text-muted">Select one editable declaration to inspect its properties.</p>{snapshot.navigation.sources.length > 0 && <Button onClick={onOpenCode} disabled={Boolean(blockedReason)} title={blockedReason} className="mt-4 w-full"><ExternalLink className="size-3.5" />Show in code</Button>}</div>;
   if (!snapshot.selection) return <Empty icon={<SlidersHorizontal />} title="Nothing selected" detail="Select sketch geometry to inspect it." />;
-  return <div><div className="mb-4"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{snapshot.selection.kind}</p><h2 className="mt-1 truncate text-base font-medium text-foreground">{snapshot.selection.label}</h2></div><dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs"><dt className="text-muted">Ownership</dt><dd className="text-right text-foreground">{snapshot.selection.ownership ?? "Editable native"}</dd><dt className="text-muted">Status</dt><dd className="text-right text-emerald-300">Accepted</dd></dl>{snapshot.selection.ownership?.includes("source") && <Button onClick={onOpenCode} className="mt-4 w-full"><ExternalLink className="size-3.5" />Open in code</Button>}</div>;
+  return <div><div className="mb-4"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{snapshot.selection.kind}</p><h2 className="mt-1 truncate text-base font-medium text-foreground">{snapshot.selection.label}</h2></div><dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs"><dt className="text-muted">Ownership</dt><dd className="text-right text-foreground">{snapshot.selection.ownership ?? "Editable native"}</dd><dt className="text-muted">Status</dt><dd className="text-right text-emerald-300">Accepted</dd></dl>{(snapshot.navigation?.sources.length || snapshot.selection.ownership?.includes("source")) && <Button onClick={onOpenCode} disabled={Boolean(blockedReason)} title={blockedReason} className="mt-4 w-full"><ExternalLink className="size-3.5" />Show in code</Button>}</div>;
 }
 export function ParametersView({ snapshot, onEdit, blocked }: { snapshot: WorkbenchSnapshot; onEdit: (id: string, value: string) => void; blocked: boolean }) {
   if (!snapshot.parameters.length) return <Empty icon={<Braces />} title="No parameters" detail="Managed source parameters appear here." />;
