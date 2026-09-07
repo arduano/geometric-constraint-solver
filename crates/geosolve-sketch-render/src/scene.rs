@@ -183,8 +183,8 @@ impl CanvasCamera {
     ///
     /// # Panics
     ///
-    /// Panics only if a private camera mutation violates the finite center or
-    /// canonical scale invariants enforced by [`CanvasCamera::new`].
+    /// Panics only if a private camera mutation violates the finite center,
+    /// positive extent or positive finite scale invariants.
     pub fn viewport(self) -> Viewport {
         Viewport::new(
             self.screen_size,
@@ -218,6 +218,20 @@ impl CanvasCamera {
             .map(|extent| FIT_MARGIN_PIXELS.min(extent * 0.25))
     }
 
+    fn minimum_scale(self) -> f64 {
+        // Preserve the canonical maximum visible model span when a smaller
+        // workplane has fewer pixels available inside its fit margins. Static
+        // exports retain their exact 1000 × 700 scale interval.
+        let margins = self.fit_margins();
+        let ratio = (0..2).fold(1.0_f64, |ratio, axis| {
+            ratio.min(
+                (self.screen_size[axis] - 2.0 * margins[axis])
+                    / (SCREEN_SIZE[axis] - 2.0 * FIT_MARGIN_PIXELS),
+            )
+        });
+        (MIN_PIXELS_PER_MODEL_UNIT * ratio).max(f64::MIN_POSITIVE)
+    }
+
     pub fn center_origin(&mut self) -> bool {
         if self.model_center == [0.0, 0.0] {
             return false;
@@ -231,8 +245,11 @@ impl CanvasCamera {
             return false;
         }
         let before = self.viewport().screen_to_model(anchor);
-        let next_scale = (self.pixels_per_model_unit * factor)
-            .clamp(MIN_PIXELS_PER_MODEL_UNIT, MAX_PIXELS_PER_MODEL_UNIT);
+        // Resizing preserves zoom even when enlarging the host raises its floor.
+        // A subsequent zoom-out must never jump inward to that new floor.
+        let minimum = self.minimum_scale().min(self.pixels_per_model_unit);
+        let next_scale =
+            (self.pixels_per_model_unit * factor).clamp(minimum, MAX_PIXELS_PER_MODEL_UNIT);
         if (next_scale - self.pixels_per_model_unit).abs()
             <= f64::EPSILON * self.pixels_per_model_unit.max(1.0)
         {
@@ -286,8 +303,8 @@ impl CanvasCamera {
     /// Empty, reversed, non-finite, or uncontainable bounds are rejected
     /// without changing the camera. A successful fit guarantees that the
     /// complete bounds map finitely inside a 64 px margin (reduced to a quarter
-    /// of each extent for small canvases) while
-    /// honoring the finite 2–2000 px/model-unit scale interval.
+    /// of each extent for small canvases). The canonical 2–2000 px/model-unit
+    /// interval lowers its minimum proportionally for smaller usable extents.
     pub fn fit_model_bounds(&mut self, bounds: Option<([f64; 2], [f64; 2])>) -> bool {
         let Some((minimum, maximum)) = bounds else {
             return false;
@@ -320,7 +337,7 @@ impl CanvasCamera {
         }
         if !model_center.into_iter().all(f64::is_finite)
             || !pixels_per_model_unit.is_finite()
-            || pixels_per_model_unit < MIN_PIXELS_PER_MODEL_UNIT
+            || pixels_per_model_unit < self.minimum_scale()
         {
             return false;
         }
@@ -3898,6 +3915,36 @@ mod tests {
                 extent.map(f64::to_bits)
             );
             assert!(bounds_fit_with_margin(camera, [-5.0, -3.0], [5.0, 3.0]));
+        }
+    }
+
+    #[test]
+    fn camera_fits_scale_samples_in_narrow_canvas_and_zoom_never_reverses_direction() {
+        for extent in [[771.109_375, 1120.0], [320.0, 700.0], [120.0, 90.0]] {
+            let mut camera = CanvasCamera::default();
+            assert!(camera.resize(extent));
+            // Public fixture field/backplane extents; fitting must remain possible
+            // when their CSS-pixel scale falls below the canonical camera floor.
+            assert!(camera.fit_model_bounds(Some(([-180.0, -110.0], [180.0, 110.0]))));
+            assert!(bounds_fit_with_margin(
+                camera,
+                [-180.0, -110.0],
+                [180.0, 110.0]
+            ));
+            let fit_scale = camera.pixels_per_model_unit();
+            assert!(fit_scale < MIN_PIXELS_PER_MODEL_UNIT);
+            let anchor = ScreenPoint {
+                x: extent[0] * 0.5,
+                y: extent[1] * 0.5,
+            };
+            assert!(camera.zoom_about(anchor, 0.95));
+            assert!(camera.pixels_per_model_unit() < fit_scale);
+            let before_expand = camera.pixels_per_model_unit();
+            assert!(camera.resize(SCREEN_SIZE));
+            let _ = camera.zoom_about(anchor, 0.95);
+            assert!(camera.pixels_per_model_unit() <= before_expand);
+            assert!(camera.zoom_about(anchor, 1.05));
+            assert!(camera.pixels_per_model_unit() > before_expand);
         }
     }
 

@@ -81,6 +81,22 @@ also checks exact centred positions, fixed point radii, persisted-state retentio
 creation, picking, free-point drag/Undo, cursor-anchored zoom and exact pan displacement in both
 former-margin orientations at DPR 2. Integrated qualification and replacement delivery remain pending.
 
+The first integrated repair run, `20260907T120422-361fd1ed` on `309f401`, was intentionally
+interrupted after an additional visual check exposed another fixed-size camera assumption.
+At a 771.109375×1120 CSS canvas, fitting either 360 mm scale sample required less than the
+canonical 2 px/unit minimum. Fit rejected and reset to 50 px/unit, displaying a close-up.
+The native reproduction `camera_fits_scale_samples_in_narrow_canvas_and_zoom_never_reverses_direction`
+failed, matching the screenshots in `target/m94/aspect/dense-visual`.
+
+The minimum camera scale now follows the usable extent inside the fit margins, preserving the
+canonical maximum visible model span and the exact default static-export bounds. A retained
+zoom below a newly enlarged viewport's floor never snaps inward during zoom-out. The owner
+regression covers both scale-sample bounds at fractional narrow, split-pane and small extents;
+all 36 renderer tests pass, including unchanged native SVG/PNG and uncontainable-export checks.
+`cargo test --locked -p geosolve-sketch-render` and focused warnings-denied Clippy run through
+the Nix shell; logs are `target/m94/aspect/{red-narrow-fit,narrow-fit-checks,narrow-fit-clippy}.log`.
+The interrupted gate is incomplete; only authenticated unaffected passing stages may be reused.
+
 ## Implementation checkpoint
 
 The live bridge now emits transient protocol v2 with finite numeric `DrawFrame` primitives;
