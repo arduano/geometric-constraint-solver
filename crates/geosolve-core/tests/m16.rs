@@ -2669,6 +2669,164 @@ fn preference_cannot_worsen_two_independent_temporary_optima() {
 }
 
 #[test]
+fn m96_f006_full_rank_preferences_converge_across_projected_backend_boundary() {
+    let mut stalled = Vec::new();
+    for count in [127, 128, 161] {
+        let mut problem = Problem::new();
+        let variables = (0..count)
+            .map(|_| problem.add_variable(VariableBlock::scalar(-1.0, 1.0).unwrap()))
+            .collect::<Vec<_>>();
+        // The cyclic matrix 2 I + 0.5 P has singular values in [1.5, 2.5].
+        // Every coordinate belongs to one well-conditioned, full-rank component,
+        // and its unique hard solution is x = 2 despite the x = -1 preference.
+        for index in 0..count {
+            add_affine_target(
+                &mut problem,
+                &format!("M96-F006 coupled hard row {index}"),
+                vec![variables[index], variables[(index + 1) % count]],
+                vec![vec![2.0, 0.5]],
+                vec![5.0],
+                1.0,
+            );
+        }
+        add_secondary_affine_target(
+            &mut problem,
+            "M96-F006 conflicting design seeds",
+            ResidualCategory::Preference,
+            variables.clone(),
+            diagonal_matrix(count),
+            vec![-1.0; count],
+        );
+
+        let report = problem.solve(SolverConfig::default()).unwrap();
+        assert_eq!(report.hard_termination, SolveTermination::Converged);
+        assert_eq!(report.hard_validity, HardValidity::Valid);
+        assert!(report.hard_residuals_validated);
+        assert_eq!(report.component_solves.len(), 1);
+        let component = &report.component_solves[0];
+        assert!(component.rank_is_valid);
+        assert_eq!(component.rank, count);
+        assert_eq!(component.right_nullity, 0);
+        assert_eq!(component.bidirectional_degrees_of_freedom, 0);
+        let solved = variables
+            .iter()
+            .map(|&variable| scalar(&problem, variable))
+            .collect::<Vec<_>>();
+        for index in 0..count {
+            let value = solved[index];
+            assert!(value.is_finite() && (value - 2.0).abs() <= 1.0e-9);
+            let hard_residual = 2.0 * value + 0.5 * solved[(index + 1) % count] - 5.0;
+            assert!(hard_residual.is_finite() && hard_residual.abs() <= 1.0e-9);
+        }
+        let expected_cost = 4.5 * f64::from(u32::try_from(count).unwrap());
+        assert_eq!(report.priority_solves.len(), 1);
+        let preference = &report.priority_solves[0];
+        assert_eq!(preference.category, ResidualCategory::Preference);
+        let initial_cost = preference.initial_cost.unwrap();
+        let final_cost = preference.final_cost.unwrap();
+        assert!(initial_cost.is_finite() && (initial_cost - expected_cost).abs() <= 1.0e-7);
+        assert!(final_cost.is_finite() && (final_cost - expected_cost).abs() <= 1.0e-7);
+        if report.termination != SolveTermination::Converged
+            || report.preference_status != SecondaryStatus::Optimal
+            || preference.termination != SolveTermination::Converged
+        {
+            stalled.push((count, report.termination, report.preference_status));
+        }
+    }
+    assert!(
+        stalled.is_empty(),
+        "M96-F006 zero-dimensional hard tangents must accept conflicting preferences: {stalled:?}"
+    );
+}
+
+#[test]
+fn m96_f006_fixed_large_component_preserves_free_motion_in_a_coupled_preference() {
+    const COUNT: usize = 128;
+    for (target, expected, termination) in [
+        (2.0, 2.0, SolveTermination::Converged),
+        (5.0, 3.0, SolveTermination::Stalled),
+    ] {
+        let mut problem = Problem::new();
+        let fixed = (0..COUNT)
+            .map(|_| problem.add_variable(VariableBlock::scalar(2.0, 1.0).unwrap()))
+            .collect::<Vec<_>>();
+        for index in 0..COUNT {
+            add_affine_target(
+                &mut problem,
+                &format!("M96-F006 mixed hard row {index}"),
+                vec![fixed[index], fixed[(index + 1) % COUNT]],
+                vec![vec![2.0, 0.5]],
+                vec![5.0],
+                1.0,
+            );
+        }
+        let free = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        problem
+            .add_bound(
+                CoordinateBound::new(free, 0, Some(0.0), Some(3.0), "M96-F006 free interval")
+                    .unwrap(),
+            )
+            .unwrap();
+        let mut variables = fixed.clone();
+        variables.push(free);
+        let mut targets = vec![-1.0; COUNT];
+        targets.push(target);
+        add_secondary_affine_target(
+            &mut problem,
+            "M96-F006 mixed preference",
+            ResidualCategory::Preference,
+            variables,
+            diagonal_matrix(COUNT + 1),
+            targets,
+        );
+        let report = problem.solve(SolverConfig::default()).unwrap();
+        assert_eq!(
+            report.termination,
+            termination,
+            "{:?}; free={}",
+            report.priority_solves,
+            scalar(&problem, free)
+        );
+        if termination == SolveTermination::Converged {
+            assert!(matches!(
+                report.preference_status,
+                SecondaryStatus::Optimal | SecondaryStatus::Acceptable
+            ));
+        } else {
+            // Existing coupled curvature policy cannot certify an active one-sided
+            // cone at positive cost. Preserve this fail-closed control.
+            assert_eq!(report.preference_status, SecondaryStatus::Stalled);
+        }
+        assert_eq!(report.hard_validity, HardValidity::Valid);
+        assert!(report.hard_residuals_validated);
+        for index in 0..COUNT {
+            let value = scalar(&problem, fixed[index]);
+            let next = scalar(&problem, fixed[(index + 1) % COUNT]);
+            assert!(value.is_finite() && (value - 2.0).abs() <= 1.0e-9);
+            assert!((2.0 * value + 0.5 * next - 5.0).abs() <= 1.0e-9);
+        }
+        let moved = scalar(&problem, free);
+        assert!(moved.is_finite() && (moved - expected).abs() <= 1.0e-9);
+        let preference = &report.priority_solves[0];
+        assert_eq!(preference.component_indices.len(), 2);
+        assert!(
+            (preference.initial_cost.unwrap() - (576.0 + target * target / 2.0)).abs() <= 1.0e-9
+        );
+        assert!(
+            (preference.final_cost.unwrap() - (576.0 + (target - expected).powi(2) / 2.0)).abs()
+                <= 1.0e-9
+        );
+        let hard = report
+            .component_solves
+            .iter()
+            .find(|component| component.rank == COUNT)
+            .unwrap();
+        assert_eq!(hard.right_nullity, 0);
+        assert_eq!(hard.bidirectional_degrees_of_freedom, 0);
+    }
+}
+
+#[test]
 fn constrained_large_singleton_uses_implicit_hard_projector_without_nullspace_basis() {
     const VARIABLES: usize = 128;
     let mut problem = Problem::new();

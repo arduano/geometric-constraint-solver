@@ -1254,6 +1254,8 @@ pub(super) struct LocalNullspaceBlock {
 pub(super) enum LocalNullspaceMap {
     Explicit(DMatrix<f64>),
     Identity,
+    /// The existing numerical rank policy certifies no hard tangent freedom.
+    Fixed,
 }
 
 #[derive(Debug)]
@@ -1276,6 +1278,7 @@ impl BlockProtectedSpace {
             let local = match &block.map {
                 LocalNullspaceMap::Explicit(basis) => basis * reduced_local,
                 LocalNullspaceMap::Identity => reduced_local.into_owned(),
+                LocalNullspaceMap::Fixed => DVector::zeros(block.full_range.len()),
             };
             full.rows_mut(block.full_range.start, block.full_range.len())
                 .copy_from(&local);
@@ -1293,6 +1296,7 @@ impl BlockProtectedSpace {
             let local = match &block.map {
                 LocalNullspaceMap::Explicit(basis) => basis.transpose() * full_local,
                 LocalNullspaceMap::Identity => full_local.into_owned(),
+                LocalNullspaceMap::Fixed => DVector::zeros(0),
             };
             reduced
                 .rows_mut(block.reduced_range.start, block.reduced_range.len())
@@ -1984,6 +1988,34 @@ pub(super) fn coupled_priority_report(
     }
 }
 
+// A full-rank large component has no preference search space. Sending it
+// through I - V Vᵀ turns projection roundoff into a spurious CGLS gradient;
+// the large curvature guard cannot certify it later. Use the existing rank
+// policy without constructing a basis. Real freedom retains the operator path.
+fn hard_tangent_is_fixed(
+    jacobian: &DMatrix<f64>,
+    component_index: usize,
+    rank_tolerance: f64,
+    control: Option<&mut OperationController>,
+) -> Result<bool, CoreError> {
+    if jacobian.nrows() < jacobian.ncols() {
+        return Ok(false);
+    }
+    let rank = controlled_dense_factorization(jacobian.nrows(), jacobian.ncols(), control, || {
+        rank_diagnostics(jacobian, rank_tolerance)
+    })
+    .ok_or(CoreError::NonFiniteValue {
+        context: "priority hard tangent rank",
+        index: component_index,
+        value: f64::NAN,
+    })?;
+    Ok(rank.rank == jacobian.ncols())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "keep component tangent maps, coordinate ranges and protected priority rows adjacent"
+)]
 pub(super) fn block_protected_space(
     problem: &Problem,
     plan: &EliminationPlan,
@@ -2004,7 +2036,16 @@ pub(super) fn block_protected_space(
         let full_rows = hard.jacobian.ncols();
         let use_implicit_hard_projector =
             full_rows >= PROJECTED_CGLS_MIN_NULLITY && !component.active_residual_ids.is_empty();
-        let (reduced_columns, map) = if use_implicit_hard_projector {
+        let hard_fixed = use_implicit_hard_projector
+            && hard_tangent_is_fixed(
+                &hard.jacobian,
+                component_index,
+                config.rank_relative_tolerance,
+                control.as_deref_mut(),
+            )?;
+        let (reduced_columns, map) = if hard_fixed {
+            (0, LocalNullspaceMap::Fixed)
+        } else if use_implicit_hard_projector {
             let reduced_range = reduced_offset..reduced_offset + full_rows;
             implicit_hard_rows.push((reduced_range, hard.jacobian));
             (full_rows, LocalNullspaceMap::Identity)
