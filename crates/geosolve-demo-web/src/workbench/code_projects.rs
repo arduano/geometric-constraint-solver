@@ -8,6 +8,8 @@
 
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
+mod navigation;
+
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -3605,11 +3607,11 @@ impl CodeProjectWorkbench {
         editor: &ProjectionalEditorSession,
     ) -> ManagedDeclarationPanelProjection {
         let snapshot = self.session.snapshot();
-        let managed = &snapshot.managed;
-        let expansion = snapshot
-            .expansion
+        let managed = snapshot
+            .accepted_code_project
             .as_ref()
-            .or(snapshot.accepted_expansion.as_ref());
+            .map_or(&snapshot.managed, |project| &project.managed);
+        let expansion = snapshot.accepted_expansion.as_ref();
         let generated = if snapshot.failure.is_some() {
             snapshot
                 .accepted_generated
