@@ -2,7 +2,7 @@
 
 # M94-F003 — dense backplane dragging
 
-Status: M94-F003/F004 qualified and delivered on 2026-09-07 from `7727cbf`. M94 remains open for supervising-user acceptance.
+Status: **M94 accepted and closed on 2026-09-07**, including F003/F004 qualified and delivered from `7727cbf`. [The closure record](M94_CLOSURE.md) records supervising-user acceptance, final audit and retained performance limits.
 
 The supervising user reported dragging in the dense robotic harness taking about two seconds per
 move and authorized a correction if it fits M94. The reproduced delay is principally the release
@@ -264,7 +264,7 @@ from an incomplete recovered image and are not evidence of equal drawing work or
 The WASM and browser-action improvements are measured separately.
 
 Evidence: `target/m94/drag/{freeze.json,tailscale-final.json,comparison-final.json,final/}` and
-`target/m94/drag/release-gate.log`. M94 stays open. Remaining ordinary preview work exceeds a
+`target/m94/drag/release-gate.log`. Remaining ordinary preview work exceeds a
 16.7ms budget; release still spends roughly 0.9s publishing and 0.35s encoding persistence.
 Computed Fillet rail dragging has its separately recorded higher preview cost and is not optimized
 by the point-only path. Further reductions need broader publication/materialization or scene work;
@@ -279,5 +279,6 @@ nix-shell shell.nix --run 'DRAG_URL=http://100.94.63.83:18096/ DRAG_MANIFEST=/tm
 
 Temporary development servers on 18106 and 18107 are retired. The qualified 18096 candidate and
 accepted M92 18092 service remain available. Documentation-only closeout uses `./scripts/release-gate.sh --docs-only --since 7727cbf`
-and passes diff/link/input checks (three prose files). It does not rebuild or replace the qualified
-bytes. Log: `target/m94/drag/docs-only.log`.
+and passed diff/link/input checks for the three prose nomination files. It did not rebuild or replace the qualified
+bytes. Log: `target/m94/drag/docs-only.log`. Subsequent supervising-user acceptance and the final
+documentation-only checkpoint audit are recorded in [M94_CLOSURE.md](M94_CLOSURE.md).

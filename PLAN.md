@@ -8333,7 +8333,7 @@ historical replay. Those limitations are future work, not closure blockers. No s
 
 ## M94 — accelerated canvas viewport
 
-Status: **M94-F003/F004 dense-drag optimization and context recovery qualified and delivered on 2026-09-07**.
+Status: **accepted and closed on 2026-09-07**, including M94-F001–F004.
 [M94_GOALS.md](docs/M94_GOALS.md) owns scope; [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md)
 records commands, visual evidence and qualification.
 
@@ -8348,21 +8348,23 @@ records commands, visual evidence and qualification.
 - [x] Optimize M94-F002 dense-fixture navigation: frame-only transport, retained reprojection/GPU resources and exact batched camera input; measure and qualify before replacing the candidate.
 - [x] Audit and optimize M94-F003 dense-backplane point dragging: avoid redundant checkpoint work and unchanged preview UI; preserve exact terminal, source and history. See [the drag report](docs/M94_DRAG_OPTIMIZATION.md) for evidence and remaining costs.
 - [x] Qualify and deliver the dense-drag correction, including the context-restoration stroke failure found during its browser audit.
-- [ ] Obtain supervising-user acceptance; retain any limitations explicitly at closure.
+- [x] Obtain supervising-user acceptance; retain any limitations explicitly at closure.
 
-M94-F003/F004 product `7727cbf` passes all 241 stages in `20260907T161218-24b782dc` (69 fresh, 172 reused; 30m33s), unchanged 271 golden rows and the complete browser inventory. Its exact artifact is byte-verified at port 18096. Point-preview WASM costs fall 33–45%; release wall falls about 28% to 1.32s. [The report](docs/M94_DRAG_OPTIMIZATION.md) retains the remaining release/Fillet costs and exact evidence. Human acceptance remains open.
+The supervising user accepted the delivered result and requested final audit and closure. Independent native/frontend reviews found no checkpoint blockers; the signed gate, all 241 stage receipts, 9,876 evidence files and exact frozen/served production bytes authenticate. [M94_CLOSURE.md](docs/M94_CLOSURE.md) records acceptance and the documentation-only checkpoint. Dense editing remains above 16.7ms and release about 1.32s; computed Fillet dragging remains separately expensive. These limits are retained for future work; no next milestone is activated.
 
-Previous M94-F002 product `93fdcbf` passes all 241 stages in `20260907T143802-fee2e639` (23 fresh, 218 reused; 21m57s). Its final artifact is byte-verified at port 18096. Field pan/zoom bridge medians fall from about 220/208 ms to 18/17 ms; full figures and remaining dense-frame/editing limits are in [the optimization report](docs/M94_NAVIGATION_OPTIMIZATION.md). M94 still awaits supervising-user acceptance.
+M94-F003/F004 accepted product `7727cbf` passes all 241 stages in `20260907T161218-24b782dc` (69 fresh, 172 reused; 30m33s), unchanged 271 golden rows and the complete browser inventory. Its exact artifact is byte-verified at port 18096. Point-preview WASM costs fall 33–45%; release wall falls about 28% to 1.32s. [The report](docs/M94_DRAG_OPTIMIZATION.md) retains the remaining release/Fillet costs and exact evidence.
 
-M94-F001 replacement `2f1711b` passes all 241 stages in `20260907T131046-91e1a335` and is byte-verified at
+Previous M94-F002 product `93fdcbf` passes all 241 stages in `20260907T143802-fee2e639` (23 fresh, 218 reused; 21m57s). Its artifact was byte-verified at port 18096 before replacement. Field pan/zoom bridge medians fall from about 220/208 ms to 18/17 ms; full figures and remaining dense-frame/editing limits are in [the optimization report](docs/M94_NAVIGATION_OPTIMIZATION.md).
+
+Historical M94-F001 replacement `2f1711b` passes all 241 stages in `20260907T131046-91e1a335` and was byte-verified at
 `http://100.94.63.83:18096/`. Full CSS extent, uniform scale, mouse input and project-layout Fit
-pass; the mathematical oracle and static exports remain unchanged. Human acceptance stays open.
+pass; the mathematical oracle and static exports remain unchanged.
 
 Historical initial candidate: clean source `85c57f1` passes integrated run `20260907T101813-cd18572a`: 241/241 stages,
 25 fresh and 216 authenticated reused successes, in 21m29s. All 271 golden cases and the complete
-42-case browser inventory pass. The 12-file frozen candidate is served locally at
+42-case browser inventory pass. The 12-file frozen candidate was served locally at
 `http://127.0.0.1:18096/`; 16 samples/35 states match the SVG baseline. Dense-scene and
-end-to-end 60 Hz limits remain documented. M94 is ready for review, not closed; M92 is unchanged.
+end-to-end 60 Hz limits remain documented. It is superseded by the accepted product above; M92 is unchanged.
 
 ## Explicit non-goals
 

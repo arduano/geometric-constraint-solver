@@ -7311,7 +7311,7 @@ The runner has focused input/reuse, timeout, failure and concurrency regressions
 - Moving the exact immutable artifact repeats transport/readiness checks; changing its bytes
   invalidates artifact evidence. Neither event automatically repeats unrelated domain suites.
 
-## M94 accelerated canvas scenarios — implementation qualified
+## M94 accelerated canvas scenarios — accepted and closed on 2026-09-07
 
 [M94_GOALS.md](M94_GOALS.md) requires fitted visuals for all 16 samples, manifold edits, both
 atlases, Jansen crank/foot drag, and both dense scale labs. Exercise hover/selection, dimensions,
@@ -7326,6 +7326,18 @@ draw frame to cover the complete canvas, undistorted geometry, fixed CSS-pixel p
 correct input in the former letterbox margins, cursor-anchored zoom and pan, and unchanged
 accepted geometry/history on resize. Repeat at DPR 2 and after hide/show and project restoration.
 Fit must use the current dimensions; ordinary resizing preserves the camera centre and zoom.
+
+M94-F002 requires navigation to preserve full source/history and accepted identity, exact ordered
+wheel anchors/clamps, picking after pan/zoom, retained styles and terminal/cancellation ordering.
+M94-F003 exercises the dense backplane mount centre and power-bus source endpoint with six ordered
+`(+2,-1)` CSS-pixel moves and exact `(+12,-6)` terminals. Regressions preserve preview/full-snapshot
+equivalence, error/recovery/cancel snapshots, canonical checkpoint bytes and Undo/Redo/restoration.
+M94-F004 loses context during the first actual batch-shader compilation, restores it, and checks
+line-interior and X/Y text pixels alongside existing idle, resize/DPR and capture lifecycle cases.
+
+Final `7727cbf` qualification passes the complete native/golden/browser obligations and exact
+served-byte verification. [M94_CLOSURE.md](M94_CLOSURE.md) records supervising-user acceptance,
+final audit and the remaining dense performance limits; no additional human replay is inferred.
 
 ## Frozen near-singular fixtures
 

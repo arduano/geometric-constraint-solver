@@ -4,7 +4,7 @@
 
 The user authorized implementation of the measured pan, zoom and hover optimizations.
 The [diagnosis](M94_PERFORMANCE_DIAGNOSIS.md) and the original immutable M94-F001 candidate remain
-historical evidence. The correction is implementation-qualified and byte-verified at `http://100.94.63.83:18096/`; M94 still awaits supervising-user acceptance.
+historical evidence. The correction was qualified and byte-verified at `http://100.94.63.83:18096/`; its accepted descendant is `7727cbf`. **M94 is accepted and closed on 2026-09-07** under [the final audit and acceptance record](M94_CLOSURE.md), retaining the limits below.
 
 ## Implementation
 
@@ -104,7 +104,7 @@ camera operations safely rebuild their filtered scene. Hidden items remain absen
 and picking. This pass does not weaken that owner check. Native parameter publication remains a
 separate expensive operation, as recorded in the diagnosis. A future genuinely asynchronous
 adapter would need command-wide serialization; input queue ordering alone is not that contract.
-M94 remains open for supervising-user acceptance.
+At the F002 delivery checkpoint, M94 remained open for supervising-user acceptance; final closure is recorded above.
 
 ## Final qualification and delivery — 2026-09-07
 

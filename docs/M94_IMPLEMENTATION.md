@@ -2,10 +2,10 @@
 
 # M94 implementation and qualification
 
-Status: **M94-F001 aspect-ratio correction qualified and delivered on 2026-09-07**. [M94_GOALS.md](M94_GOALS.md) owns the approved contract. Supervising-user acceptance remains pending.
+Status: **M94 accepted and closed on 2026-09-07**, including F001–F004. [M94_GOALS.md](M94_GOALS.md) owns the approved contract; [M94_CLOSURE.md](M94_CLOSURE.md) records final product `7727cbf`, the checkpoint audit, supervising-user acceptance and retained limits. The implementation checkpoints below preserve their original chronology and qualification identities.
 
 Follow-up [dense-fixture performance diagnosis](M94_PERFORMANCE_DIAGNOSIS.md) identifies measured
-bridge/snapshot, renderer/UI and native publication costs. That diagnosis changed no implementation or served bytes. The subsequently authorized [M94-F002 navigation optimization](M94_NAVIGATION_OPTIMIZATION.md) now implements the first repair; its qualification and delivery record is maintained separately.
+bridge/snapshot, renderer/UI and native publication costs. That diagnosis changed no implementation or served bytes. The subsequently authorized [M94-F002 navigation optimization](M94_NAVIGATION_OPTIMIZATION.md) implements the first repair; [M94-F003/F004](M94_DRAG_OPTIMIZATION.md) adds point-drag optimization and GPU recovery. Their qualification and delivery records are maintained separately.
 
 Baseline source: `37e39159790094e4b4fa0e8f9dac0a1c636d38bf`. The accepted M92 service and
 immutable artifact remain unchanged. Source, browser and image evidence will be recorded under
@@ -164,7 +164,7 @@ Nomination: `target/m94/nomination.json`; original candidate record:
 nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest /tmp/geosolve-m94-f001-uat.5ch5abfw/production.json --directory /tmp/geosolve-m94-f001-uat.5ch5abfw/geosolve-production --url http://100.94.63.83:18096/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m94/aspect/tailscale-final.json'
 ```
 
-M94-F001 is corrected. Supervising-user acceptance of M94 remains pending; the previously
+At this historical F001 checkpoint, M94-F001 was corrected and supervising-user acceptance remained pending; the previously
 documented dense-scene/end-to-end performance limits remain. The accepted M92 endpoint is
 unchanged. Documentation closeout uses `./scripts/release-gate.sh --docs-only --since 2f1711b26ec8c852074b99ded98b2a94c567dfc4`,
 preserving these qualified product bytes.
@@ -435,7 +435,7 @@ endpoint attempt used Playwright's unpinned cached browser and failed to load sy
 its failed receipt remains `production-endpoint.json`. The pinned Chromium replacement and frozen
 copy verification pass without any product change.
 
-The local candidate is **ready for supervising-user acceptance**. M94 remains open. The accepted
+At this historical initial checkpoint, the local candidate was **ready for supervising-user acceptance** and M94 remained open. The accepted
 M92 service and external publications are unchanged. The documented dense-scene/end-to-end
 60 Hz limitation remains: latency measurements used the development compiler-harness build,
 while final production hardware/pixel checks establish actual acceleration and visual behavior.

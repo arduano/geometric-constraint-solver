@@ -2808,10 +2808,18 @@ force fresh work. Newly built or moved artifacts receive fresh transport verific
 fresh-results mode remains available. Corrected-source functional qualification and serial/parallel parity pass. The supervising user accepted closure on 2026-09-07 with the [recorded C5 timing miss and unperformed historical four-entry replay](docs/M93_QUALIFICATION.md).
 [Release qualification](docs/RELEASE_QUALIFICATION.md) owns the implemented commands and policy.
 
-## M94 accelerated canvas architecture — implementation qualified
+## M94 accelerated canvas architecture — accepted and closed on 2026-09-07
 
 [M94](docs/M94_GOALS.md) introduces a typed presentation draw frame after Rust authenticates and
 composes EditorScene. TypeScript/PixiJS consumes ordered finite paint primitives; geometry,
 annotation layout, hit priorities and accepted/history authority remain Rust-owned. Bridge v2
 changes transient frame transport only. Native SVG/PNG exports and persisted formats remain.
 One WebGL2 canvas replaces the live SVG tree; native React controls and popovers remain outside it.
+
+Live CSS extents now govern camera, Fit and pointer coordinates independently of raster DPR.
+Navigation reprojects authenticated retained scenes and preserves ordered camera input; guarded
+frame-only point previews and immutable prepared/delegated publication avoid redundant work.
+Terminal/error snapshots, native validation and exact history remain authoritative. Pixi 8.20.1
+context restoration clears invalid upload caches and rebuilds retained paint resources once.
+[The M94 closure audit](docs/M94_CLOSURE.md) records accepted source `7727cbf`, complete
+qualification and the remaining dense-editing/context-compatibility limits.

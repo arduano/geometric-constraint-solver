@@ -2,7 +2,7 @@
 
 # M94 — accelerated canvas viewport
 
-Status: **implementation qualified on 2026-09-07; awaiting supervising-user acceptance**. M93 remains accepted and closed.
+Status: **accepted and closed on 2026-09-07**. [M94_CLOSURE.md](M94_CLOSURE.md) records supervising-user acceptance, final audit, exact product qualification and retained limits. M93 remains accepted and closed.
 
 ## Outcome and ownership
 
@@ -73,7 +73,7 @@ Qualification compares direct WASM and actual GPU submission timings with the pr
 and exercises persistence/history preservation, picking after navigation, annotations/strokes,
 resize/DPR and terminal/cancellation ordering. The stable candidate receives one integrated
 qualification with authenticated unaffected reuse and exact replacement delivery at port 18096.
-M94 remains open for supervising-user acceptance.
+This work is included in the accepted M94 scope; its measured dense-frame limits remain recorded.
 
 ## Authorized dense-backplane drag optimization — 2026-09-07
 
@@ -84,7 +84,7 @@ The bounded correction reuses validated immutable internal state and the existin
 transport, preserving every semantic sample, independent native validation, exact terminal,
 history and strict imported-byte validation. No solver algorithm or branch policy changes.
 [The drag report](M94_DRAG_OPTIMIZATION.md) records reproduction, implementation, focused evidence,
-remaining costs and final qualification/delivery. M94 remains open for supervising-user acceptance.
+remaining costs and final qualification/delivery. It is included in the accepted M94 scope.
 
 The F003 visual audit also reproduced M94-F004: loss during initial GPU shader compilation retained
 empty Pixi upload caches after restoration. The same correction pass repairs that presentation

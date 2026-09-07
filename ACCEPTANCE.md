@@ -5426,17 +5426,24 @@ After reviewing these results and limitations, the supervising user said, "yeah 
 we can close at this" on 2026-09-07. M93 is accepted and closed at the delivered scope; the timing
 miss and unperformed historical replay remain documented without being reclassified as passes.
 
-## M94 accelerated canvas acceptance — awaiting supervising-user acceptance
+## M94 accelerated canvas acceptance — accepted and closed on 2026-09-07
 
 [M94_GOALS.md](docs/M94_GOALS.md#acceptance) requires complete viewport drawing and interaction,
 all 16 sample visual/history workflows, finite accepted-frame retention, lifecycle/coordinate
 alignment, new canvas browser witnesses, actual GPU evidence and complete integrated qualification.
 Native UI/export compatibility, exact mathematical golden results and existing release ceilings
-remain required. The integrated gate, all 16 sample workflows, 35 production visual captures and
-actual hardware/failure checks pass on source `85c57f1`; exact evidence and measured performance
-limits are in [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md). The M94-F001 replacement now
-passes full-aspect drawing/input and layout fitting on `2f1711b` with complete qualification
-and exact Tailscale delivery. Human acceptance remains pending.
+remain required. The initial implementation supplies 35 production visual captures and actual
+hardware/failure checks; F001 adds full-aspect drawing/input and layout fitting, F002 optimizes
+navigation, and F003/F004 improve dense point dragging and first-shader context recovery.
+Final product `7727cbf` passes all 241 gate stages, all 271 unchanged golden rows and the complete
+42-case browser inventory, including every sample's two-edit/history workflow and real canvas
+stroke/text pixels. Its exact 12-file artifact is byte-verified at `http://100.94.63.83:18096/`.
+
+The supervising user accepted the delivered result and requested audit and milestone closure.
+Independent final reviews and receipt/artifact authentication found no checkpoint blocker.
+[M94_CLOSURE.md](docs/M94_CLOSURE.md) records that acceptance and exact evidence without claiming
+an unrecorded exhaustive human replay. Remaining dense-frame/Fillet costs, about 1.32s point-drag
+release including saving, and the pinned Pixi recovery seam are explicitly retained limitations.
 
 ## Regression and oracle policy
 
