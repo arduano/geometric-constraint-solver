@@ -5,8 +5,9 @@
 The user reported that the PC water-manifold sample contains channel centre lines
 and an O-ring centre line instead of actual finite-width boundaries. They requested
 two reusable custom patches accepting polylines, specifically using two offsets,
-fillets at the corners and arcs at the ends. Implementation is authorized; M95
-remains the accepted product baseline.
+fillets at the corners and arcs at the ends. The supervising user accepted the final
+12 mm amendment and closed M96 on 2026-09-08; [M96_CLOSURE.md](M96_CLOSURE.md)
+records the accepted product, qualification and limits.
 
 The patch helper composes existing native supporting-line offset dimensions,
 computed Fillets, Center Arc and endpoint-contact declarations. It adds no solver equations or new
@@ -83,9 +84,10 @@ Acceptance requires finite independently validated native geometry, independent
 boundary closure/area/width and separation checks, retained source association,
 edit/history/restore checks, visual review and proportional integrated qualification.
 Implementation and provisional integrated qualification pass in `20260908T012505-e9d6c999`.
-Final M96 human acceptance and clean-source qualification remain pending.
-The earlier 6 mm preview was positively reviewed, then amended; that feedback
-is not final acceptance of the new 12 mm layout. Integrated run
+Clean-source run `20260908T090848-ddc447b8` subsequently passes all 243 obligations on
+product `d77228559f9b860ce69cc03ceea6a5d34d8a3660`. The user accepted the amended
+12 mm layout on 2026-09-08 with “sounds good yeah, close the milestone please”.
+The earlier 6 mm preview and its positive review remain historical. Integrated run
 `20260907T235737-86172414` was deliberately interrupted during browser qualification
 for this scope change, preserving 241 completed stages and the unchanged golden.
 The [implementation and focused evidence](M96_IMPLEMENTATION.md) records delivered

@@ -1262,8 +1262,12 @@ executing geometry or admitting arbitrary plan-dependent operation outputs.
 A validation-only host request checks accepted native line/arc boundaries after
 Fillet composition, including closure, intersections and expected components.
 It creates no persistent computed-feature kind or solver equation.
-M96's 12 mm amendment passes provisional development qualification; final acceptance
-and clean-source qualification remain pending. M95 retains accepted product authority.
+The supervising user accepted and closed M96's 12 mm amendment on 2026-09-08.
+Product `d77228559f9b860ce69cc03ceea6a5d34d8a3660` passes all 243 integrated obligations
+in clean-source run `20260908T090848-ddc447b8`; [M96_CLOSURE.md](docs/M96_CLOSURE.md)
+binds the accepted frozen artifact and records input limits. M96-F006 recognizes large
+full-rank hard components as having no preference motion, preserving the existing rank
+policy, actual free-motion behavior and independent residual validation.
 
 PNG export remains outside every sketch/code authority boundary. The browser wraps the already
 composed SVG viewport in self-contained paint rules, hides hit/provisional/error-only presentation,

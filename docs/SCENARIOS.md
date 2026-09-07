@@ -7372,7 +7372,11 @@ The detailed L3 fixture above demonstrates that geometric alignment does not its
   preserved CodeMirror cursor/focus, and compare M94 pan/zoom/point-preview paths. Qualification
   uses the integrated runner and frozen artifact rather than rebuilding the accepted M94 service.
 
-## M96 finite-width manifold scenarios — provisionally verified, final user review pending
+## M96 finite-width manifold scenarios — accepted and closed on 2026-09-08
+
+Clean-source run `20260908T090848-ddc447b8` accounts for all 243 integrated obligations.
+[M96_CLOSURE.md](M96_CLOSURE.md) records supervising-user acceptance and the accepted
+product identity; scenario coverage does not imply an unrecorded exhaustive human replay.
 
 - Offset one keyed L-shaped polyline by 3 mm on each side, fillet the walls at
   R2/R8 and connect semicircular R3 caps. Check finite accepted geometry and

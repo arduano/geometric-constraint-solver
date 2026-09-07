@@ -8388,8 +8388,9 @@ records the accepted endpoint, preserved evidence and fresh-session instructions
 
 ## M96 — finite-width manifold channels and silicone grooves
 
-Status: **implementation and provisional development qualification complete; final user acceptance pending.**
-[M96_GOALS.md](docs/M96_GOALS.md) owns the scope.
+Status: **accepted and closed by the supervising user on 2026-09-08.**
+[M96_GOALS.md](docs/M96_GOALS.md) owns the scope;
+[M96_CLOSURE.md](docs/M96_CLOSURE.md) records final qualification and handoff.
 
 - [x] Prove two native offsets, corner fillets, and semicircular caps on an open route.
 - [x] Reproduce and regress keyed Polyline offset output alias ambiguity (M96-F001).
@@ -8398,7 +8399,7 @@ Status: **implementation and provisional development qualification complete; fin
 - [x] Verify width, closure, area, clearances, source edits and persistence independently.
 - [x] Complete format, Clippy, focused tests, WASM and provisional integrated qualification.
 - [x] Present the amended 12 mm sample and frozen development preview.
-- [ ] Record final user acceptance and qualify clean source before a release claim.
+- [x] Record final user acceptance and qualify committed clean source through the integrated gate.
 
 The original 6 mm/R5 prototype was positively reviewed. The 2026-09-08 amendment
 uses 12 mm channels with centreline R8 and adds a separate two-bend stair passage
@@ -8408,8 +8409,11 @@ Run `20260908T012505-e9d6c999` passes all 243 integrated obligations on unchange
 [M96-F006](docs/M96_F006.md) preserves editability across the large fully constrained
 priority-solver boundary. [Implementation evidence](docs/M96_IMPLEMENTATION.md)
 records the finite areas, clearances, edit/history/restoration and exact served bytes.
-This is provisional development evidence; the earlier 6 mm visual feedback is not
-final acceptance of this amended layout.
+That run remains provisional development evidence. The final product commit
+`d77228559f9b860ce69cc03ceea6a5d34d8a3660` passes all 243 obligations in clean-source
+run `20260908T090848-ddc447b8`. The user stated “sounds good yeah, close the
+milestone please”, accepting the amended layout and its documented limits.
+Closure prose preserves those qualified product bytes; no further M96 work is pending.
 
 ## Explicit non-goals
 

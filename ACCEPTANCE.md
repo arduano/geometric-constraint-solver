@@ -5481,7 +5481,7 @@ an independently byte-verified candidate. The user explicitly accepted UAT and r
 on 2026-09-07; [M95_CLOSURE.md](docs/M95_CLOSURE.md) records acceptance of the qualified scope
 and its disclosed limits. M95 is closed.
 
-## M96 manifold channel acceptance — implementation verified, final user review pending
+## M96 manifold channel acceptance — accepted and closed on 2026-09-08
 
 [M96_GOALS.md](docs/M96_GOALS.md) requires reusable polyline water-channel and
 silicone-groove patches composed from native offsets, corner fillets and end arcs.
@@ -5489,8 +5489,11 @@ The amended sample contains three 12 mm reservoir passages, a separate 12 mm
 point-to-point stair passage with two bends, and a closed 2.4 mm groove. It retains
 driving dimensions, three original outlets and eight screws, and adds two stair ports.
 Independent accepted-geometry checks cover closure, widths, areas, separation and
-source edits; edit/history/restoration, WASM and browser checks pass in provisional
-integrated run `20260908T012505-e9d6c999`. The exact frozen development preview is
+source edits. Edit/history/restoration, WASM and browser obligations pass in clean-source
+integrated run `20260908T090848-ddc447b8`, with all 243 stages accounted for on product
+`d77228559f9b860ce69cc03ceea6a5d34d8a3660`. The accepted frozen product is
 `http://100.94.63.83:18101/`; [implementation evidence](docs/M96_IMPLEMENTATION.md)
-records the commands and limits. Changes remain uncommitted. Earlier positive
-feedback on the 6 mm version is not final acceptance of the amended 12 mm layout.
+retains the earlier provisional run `20260908T012505-e9d6c999` and its historical limits.
+The supervising user stated “sounds good yeah, close the milestone please” on 2026-09-08.
+[M96_CLOSURE.md](docs/M96_CLOSURE.md) records acceptance of the amended 12 mm layout and
+documented scope without asserting an unrecorded exhaustive human replay. M96 is closed.

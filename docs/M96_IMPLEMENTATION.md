@@ -5,8 +5,10 @@
 The PC liquid-cooling manifold now has three **12 mm** passages joined to one
 reservoir, a separate **12 mm two-bend stair passage** between two ports, and a
 **2.4 mm** perimeter silicone groove. The user positively reviewed the initial
-6 mm version and requested this 2026-09-08 amendment. M95 remains the accepted
-product; the amended M96 layout is not yet human-accepted or clean-qualified.
+6 mm version and requested this 2026-09-08 amendment. The supervising user accepted
+the amended layout and closed M96 on 2026-09-08. [M96_CLOSURE.md](M96_CLOSURE.md)
+records the clean-qualified product and frozen artifact; this implementation ledger
+retains the earlier development evidence, including failed and interrupted attempts.
 
 ## Files and API
 
@@ -102,7 +104,11 @@ The initial browser view was inspected with construction hidden. Native export
 construction and reference/grid layers for a clear geometry-only preview;
 `target/m96/manifold-geometry.png` is its rasterization. No geometry was redrawn.
 
-## Amendment and qualification status
+## Amendment development qualification — historical provisional record
+
+Final clean-source qualification and acceptance are recorded in
+[M96_CLOSURE.md](M96_CLOSURE.md). The following provisional evidence retains its
+original scope and does not acquire a clean-source claim retrospectively.
 
 Integrated run `20260908T012505-e9d6c999` passes all 243 stages (20 fresh and
 223 authenticated reused successes). Source remained unchanged throughout.
@@ -136,7 +142,8 @@ The integrated run covers format, warnings-denied workspace Clippy, Rust suites,
 optimized WASM, generated packages, 271 unchanged golden cases, browser
 selection/edit/history/reload/canvas workflows and performance checks. Exact
 stage commands, timings and evidence hashes are retained in the authenticated
-qualification manifest. No commit was made and final user acceptance is pending.
+qualification manifest. At this historical checkpoint, changes were uncommitted
+and final user acceptance remained pending.
 The artifact was prepared
 in run `20260908T010723-6a0a9164`, whose browser batch could not start because the
 interrupted previous run left its test server on 127.0.0.1:4173. The stale server
