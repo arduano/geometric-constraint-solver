@@ -4459,27 +4459,7 @@ fn local_fillet_root_from_seed(
         ];
         let norm = residual[0].hypot(residual[1]);
         if norm <= tolerance {
-            if !offset_derivatives_are_transverse(first.derivative, second.derivative) {
-                return RootAttempt::Failed(RootSearchFailure::SingularParents);
-            }
-            let center = [
-                0.5 * (first.point[0] + second.point[0]),
-                0.5 * (first.point[1] + second.point[1]),
-            ];
-            let score = parents
-                .iter()
-                .enumerate()
-                .map(|(index, parent)| {
-                    (parameters[index] - parent.seed_total).abs()
-                        / (parent.bounds.1 - parent.bounds.0)
-                })
-                .sum();
-            return RootAttempt::Solution(LocalFilletSolution {
-                parameters,
-                sides,
-                center,
-                score,
-            });
+            return polished_root_solution(parents, parameters, sides, first, second);
         }
         let matrix = [
             [first.derivative[0], -second.derivative[0]],
@@ -4565,10 +4545,57 @@ fn local_fillet_root_from_seed(
             factor *= 0.5;
         }
         if !accepted {
+            // M96-F002: retain the ordinary polishing path and its exact results.
+            // Only a stalled Newton/line search may finish at the representable
+            // error floor of evaluating and subtracting the two offset points.
+            // This is a candidate root: independent arc/branch validation below
+            // still owns publication and keeps its unchanged geometry tolerances.
+            let magnitude = first
+                .point
+                .into_iter()
+                .chain(second.point)
+                .chain(first.derivative)
+                .chain(second.derivative)
+                .map(f64::abs)
+                .fold(radius.abs(), f64::max);
+            let roundoff = 8.0 * f64::EPSILON * magnitude;
+            if norm.is_finite() && roundoff.is_finite() && norm <= roundoff {
+                return polished_root_solution(parents, parameters, sides, first, second);
+            }
             return RootAttempt::Failed(observed_failure);
         }
     }
     RootAttempt::Failed(observed_failure)
+}
+
+fn polished_root_solution(
+    parents: &[RootParent; 2],
+    parameters: [f64; 2],
+    sides: [DocumentCurveNormalSide; 2],
+    first: OffsetGeometry,
+    second: OffsetGeometry,
+) -> RootAttempt {
+    if !offset_derivatives_are_transverse(first.derivative, second.derivative) {
+        return RootAttempt::Failed(RootSearchFailure::SingularParents);
+    }
+    // Preserve the historical arithmetic for already-polished roots.
+    let center = [
+        0.5 * (first.point[0] + second.point[0]),
+        0.5 * (first.point[1] + second.point[1]),
+    ];
+    let score = parents
+        .iter()
+        .enumerate()
+        .map(|(index, parent)| {
+            (parameters[index] - parent.seed_total).abs() / (parent.bounds.1 - parent.bounds.0)
+        })
+        .sum();
+    RootAttempt::Solution(LocalFilletSolution {
+        parameters,
+        sides,
+        center,
+        score,
+    })
 }
 
 #[derive(Clone, Copy, Debug)]

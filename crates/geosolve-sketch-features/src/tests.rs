@@ -5006,3 +5006,177 @@ fn explicit_lifecycle_high_water_rebase_is_strictly_monotonic() {
     });
     assert_eq!(allocator.high_water().next_revision.raw(), 42);
 }
+
+// M96-F002: the 220 x 100 mm silicone groove needs a 3.8 mm inner
+// Fillet. Its representable center mismatch is 1.42e-14 at model_scale=1,
+// beyond the old polishing threshold despite independent geometry validity.
+fn m96_f002_corner(
+    scale: f64,
+    translation: [f64; 2],
+    parallel: bool,
+) -> (SketchDocument, ComputedFilletCornerAuthoringRequest) {
+    let mut document = SketchDocument::with_id(
+        scale,
+        geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(0x96_0002)),
+    )
+    .unwrap();
+    let transform = |point: [f64; 2]| {
+        [
+            scale * (point[0] + translation[0]),
+            scale * (point[1] + translation[1]),
+        ]
+    };
+    let points = [
+        [-112.8, -48.8],
+        [104.8, -48.8],
+        if parallel {
+            [202.4, -48.8]
+        } else {
+            [104.8, 48.8]
+        },
+    ]
+    .map(|point| document.add_point("wall", transform(point)).unwrap());
+    let first = document
+        .add_curve(
+            "incoming",
+            CurveDefinition::Line {
+                start: points[0],
+                end: points[1],
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .unwrap();
+    let second = document
+        .add_curve(
+            "outgoing",
+            CurveDefinition::Line {
+                start: points[1],
+                end: points[2],
+                branch_direction: if parallel { [1.0, 0.0] } else { [0.0, 1.0] },
+            },
+        )
+        .unwrap();
+    let request = ComputedFilletCornerAuthoringRequest {
+        first: curve_pick(
+            &document,
+            CurveSpan::line(first),
+            0.5,
+            DocumentFilletTrimEndpoint::End,
+        ),
+        second: curve_pick(
+            &document,
+            CurveSpan::line(second),
+            0.5,
+            DocumentFilletTrimEndpoint::Start,
+        ),
+        options: ComputedFilletAuthoringOptions::default(),
+    };
+    (document, request)
+}
+
+#[test]
+fn m96_f002_small_fillet_on_long_translated_walls_polishes_to_representable_accuracy() {
+    for scale in [1.0, 1e-6, 1e6] {
+        for translation in [[0.0, 0.0], [300.0, -200.0], [-300.0, 200.0]] {
+            let (document, request) = m96_f002_corner(scale, translation, false);
+            let session = retained(document.clone());
+            let before = session.prepared_input();
+            let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+            let resolved = complete(
+                authoring
+                    .resolve_fillet_corner(
+                        request,
+                        3.8 * scale,
+                        ComputedFeatureEvaluationPolicy::default(),
+                        OperationControl::unlimited(),
+                    )
+                    .unwrap(),
+            );
+            assert_eq!(
+                resolved.corner.first.normal_side,
+                DocumentCurveNormalSide::Left
+            );
+            assert_eq!(
+                resolved.corner.second.normal_side,
+                DocumentCurveNormalSide::Left
+            );
+            assert_eq!(
+                resolved.corner.first.retained_endpoint,
+                DocumentFilletTrimEndpoint::End
+            );
+            assert_eq!(
+                resolved.corner.second.retained_endpoint,
+                DocumentFilletTrimEndpoint::Start
+            );
+            let arc = &resolved.arc;
+            let expected = [
+                scale * (101.0 + translation[0]),
+                scale * (-45.0 + translation[1]),
+            ];
+            for (actual, expected) in arc.center.into_iter().zip(expected) {
+                assert!(((actual - expected) / scale).abs() <= 1e-9);
+            }
+            assert!((arc.radius / scale - 3.8).abs() <= 1e-9);
+            assert!(arc.center.into_iter().all(f64::is_finite));
+            for contact in arc.contacts {
+                let jet = document
+                    .evaluate_curve_jet(contact.source.span, contact.total_parameter)
+                    .unwrap();
+                let radial = [
+                    arc.center[0] - jet.position.x,
+                    arc.center[1] - jet.position.y,
+                ];
+                assert!((radial[0].hypot(radial[1]) / scale - 3.8).abs() <= 1e-9);
+                assert!(
+                    (jet.first_derivative.x * radial[0] + jet.first_derivative.y * radial[1]).abs()
+                        / (jet.first_derivative.x.hypot(jet.first_derivative.y) * arc.radius)
+                        <= 1e-9
+                );
+            }
+            let mut features = ComputedFeatureDocument::new(document.id());
+            features
+                .create_fillet_set("M96-F002", 3.8 * scale, vec![resolved.corner])
+                .unwrap();
+            let snapshot = ComputedFeatureEvaluationSnapshot::capture(
+                &session,
+                &features,
+                ComputedFeatureEvaluationPolicy::default(),
+            )
+            .unwrap();
+            let mut allocator = ComputedEvaluationAllocator::default();
+            let evaluated = complete(
+                snapshot
+                    .prepare(&mut allocator)
+                    .unwrap()
+                    .execute(OperationControl::unlimited())
+                    .unwrap(),
+            );
+            assert!(matches!(
+                evaluated.feature_evaluations()[0].state,
+                ComputedFeatureEvaluationState::Current { .. }
+            ));
+            assert_eq!(session.prepared_input(), before);
+        }
+    }
+}
+
+#[test]
+fn m96_f002_roundoff_floor_does_not_admit_parallel_or_out_of_span_fillets() {
+    for parallel in [false, true] {
+        let (document, request) = m96_f002_corner(1.0, [300.0, -200.0], parallel);
+        let session = retained(document);
+        let before = session.prepared_input();
+        let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+        assert!(
+            authoring
+                .resolve_fillet_corner(
+                    request,
+                    if parallel { 3.8 } else { 500.0 },
+                    ComputedFeatureEvaluationPolicy::default(),
+                    OperationControl::unlimited()
+                )
+                .is_err()
+        );
+        assert_eq!(session.prepared_input(), before);
+    }
+}
