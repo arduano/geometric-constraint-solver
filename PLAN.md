@@ -8417,8 +8417,10 @@ Closure prose preserves those qualified product bytes; no further M96 work is pe
 
 ## M97 — focused dimensions and stable annotation placement
 
-Status: **default-priority amendment qualified; supervising-user acceptance pending.** [M97_GOALS.md](docs/M97_GOALS.md)
-owns the accepted plan; M96 remains the accepted product.
+Status: **default-priority preview qualified; source-native authoring amendment designed,
+implementation pending.** [M97_GOALS.md](docs/M97_GOALS.md) owns the interaction contract;
+[authoring design](docs/M97_AUTHORING_METADATA.md) specifies the requested next amendment.
+M96 remains the accepted product; M97 is open.
 
 - [x] Regress M97-F001 zoom-then-click layout jumps at the native owner.
 - [x] Implement shared native dimension metadata, relevance, bounded visibility and retained placement.
@@ -8427,6 +8429,12 @@ owns the accepted plan; M96 remains the accepted product.
 - [x] Qualify native/WASM/frontend/golden/browser behavior and navigation performance.
 - [x] Freeze and present the qualified candidate for supervising-user acceptance.
 - [x] Add and qualify default design-intent priorities, including all Gridfinity measurements.
+- [x] Design source-owned dimension priorities and audit adjacent authoring metadata.
+- [ ] Add document options, named parameters, patch input presentation and authenticated compiler metadata.
+- [ ] Add prepared metadata/extraction edits, source-driven projections and exact history/restoration.
+- [ ] Connect overview/name/help/document controls and consistently honor authored display labels.
+- [ ] Migrate live sample priorities/title/description to source, derive catalog projections and remove selector fallbacks.
+- [ ] Qualify source-only imports, precedence, shared controls and authoring transactions; deliver an amended preview.
 - [ ] Obtain supervising-user acceptance and close M97.
 
 Source `a39f35ade58c3d5a272899dfb4e616d6578a9d14` passes all 243 integrated obligations
@@ -8440,8 +8448,11 @@ passes all 243 obligations in `20260908T172035-7255b491` (13 fresh, 230 authenti
 reused results). Its frozen preview at `http://100.94.63.83:18104/` passes exact
 served-byte and actual-WASM checks. M97-F002 now preserves exact annotation
 geometry for identical viewports; archived-fixture and package-cache checks are
-corrected without changing historical fixtures or golden rows. M97 remains open
-for acceptance; M96 remains accepted.
+corrected without changing historical fixtures or golden rows. The subsequent
+authoring request is now designed: Inspector edits write the same local source metadata
+that code authors use; public parameters, labels/help and document identity join the
+scope. The design changes no product bytes and its implementation/qualification remain
+unchecked above. M97 remains open; M96 remains accepted.
 
 ## Explicit non-goals
 

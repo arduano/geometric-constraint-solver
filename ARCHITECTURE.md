@@ -2894,3 +2894,21 @@ generated dimensions do not acquire writable authority from their displayed valu
 [M97 qualification](docs/M97_QUALIFICATION.md) records the passing clean-source gate
 and verified preview at `http://100.94.63.83:18103/`. Supervising-user acceptance
 remains pending; no solver equations or branch semantics changed.
+
+### Planned M97 source-native metadata amendment
+
+[M97_AUTHORING_METADATA.md](docs/M97_AUTHORING_METADATA.md) specifies the next
+authoring change; it is not implemented. Document title/description and authored
+dimension defaults belong to `sketch` options. Local dimension `key`, existing
+`label`, optional `description`, named public parameters and patch input schema
+presentation travel through authenticated managed IR and execution artifacts.
+Rust projects accepted metadata into the workbench and prepares bounded structural
+source edits; metadata is not a solver consumer or an independent GUI sidecar.
+
+Named parameters retain stable source identity and one public edit route across
+their consumers. Inline inputs can inherit patch defaults; named parameters own
+their presentation independently. The catalog derives title/summary/groups from
+compiled source and retains ordering/category/legal/test metadata. Its priority
+selectors and the first-six fallback retire after live sources are migrated.
+Existing view preferences retain their current owners. The new formats, transactions
+and old-source compatibility require the uncompleted qualification in PLAN.md.

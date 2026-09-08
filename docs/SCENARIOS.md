@@ -7443,3 +7443,31 @@ unrecorded human replay.
 - Check all eight native dimension families, reference notation, bounded automatic
   displacement, collision suppression and restoration hysteresis. Simple, manifold
   and dense presentation captures and navigation comparisons accompany qualification.
+
+### M97 source-native metadata — planned scenarios, not yet executed
+
+[The authoring amendment](M97_AUTHORING_METADATA.md) defines the proposed APIs and
+workflow. These scenarios extend M97 and do not claim coverage from the prior gate.
+
+- Toggle Show in overview on an authored driving and reference measurement; inspect
+  the exact local `key` source edit. Reset to a true document default, then explicitly
+  opt out. Undo/Redo/reload and source-only import preserve names/help and flags.
+- Create a dimension in the GUI and verify explicit overview intent in source.
+  Import unmarked legacy source and reach every measurement through the Inspector
+  without a sample manifest or an inferred first-six priority list.
+- Use one named 12 mm width in all four manifold channels, select each consumer and
+  verify one shared public row. Extract the 2.4 mm groove input into a named parameter.
+  Numeric editing retains real geometry validation; metadata changes preserve geometry,
+  residuals, rank/DOF, branches and identities. Generated 6/1.2 mm offsets remain distinct.
+- Give two separate parameters the same value; never merge them. Add another patch
+  consumer with different input defaults; the named parameter's own name/help/key
+  stay unchanged. An inline input inherits the exact patch schema until extracted.
+- Edit display labels and document title/description, including multibyte text and
+  nearby comments. Keep symbols, groups, selection and pins stable. Rejected/stale
+  metadata edits and failed publication retain the entire accepted source and scene.
+- Open migrated Gridfinity and manifold without catalog origin: retain 20 and six
+  overview dimensions respectively, plus the manifold's full public width values.
+  Hidden, contextual selection, collisions and retained navigation still apply.
+- Load supported old snapshots and archived fixtures without rewriting their source
+  or history. Test the documented contextual fallback separately from migrated live
+  samples. Personal view actions must never write authored metadata.

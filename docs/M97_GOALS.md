@@ -6,6 +6,11 @@ Implementation authorized on 2026-09-08 from the approved plan. M96 remains the
 accepted product. The workbench should convey relevant measurements without
 filling general navigation with dimension widgets.
 
+The subsequent source-native authoring request has a completed
+[design and implementation plan](M97_AUTHORING_METADATA.md). That amendment is
+not implemented or qualified yet. The interactions below describe the current
+qualified preview; the addendum replaces catalog priority ownership when implemented.
+
 ## Approved interaction
 
 - Canvas control: Dimensions **Focused / All / Hidden**; Focused is the default.
@@ -53,7 +58,7 @@ Zoom alone does not promote additional measurements. Explicit Fit and the first
 measured host layout reconsider hidden callouts, reserving existing visible
 positions before a bounded search for newly readable measurements.
 
-Sample manifests own checked declaration/parameter selectors for design-intent
+In the current qualified preview, sample manifests own checked declaration/parameter selectors for design-intent
 priorities. Rust resolves them through accepted declaration and control provenance,
 never rendered labels. Default priorities stay in the Inspector even when occluded.
 
@@ -86,3 +91,23 @@ important shape-intent measurements by default, explicitly including every
 Gridfinity measurement. This amendment changes presentation only. Qualification
 of the prior preview remains historical evidence until the amended product is
 qualified; M97 is open.
+
+## Source-native authoring amendment — designed, implementation pending
+
+The supervising user requested native/intuitive authoring and an audit of adjacent
+metadata that should belong in code. [M97_AUTHORING_METADATA.md](M97_AUTHORING_METADATA.md)
+defines one source owner for dimension `key`, named public parameters, display
+labels/help and document title/description. Inspector actions rewrite these same
+properties through authenticated source transactions, with Undo/Redo and restoration.
+Gridfinity uses an explicit document dimension default; the manifold keeps its exact
+selected dimensions and full channel/groove values. Shared parameters appear once;
+generated offsets retain their owning patch and existing editing restrictions.
+
+Live catalog priorities, titles and descriptions migrate into source. Runtime
+selection by sample identity and the first-six heuristic retire. Existing groups
+remain source-owned, with catalog projections derived from them. Catalog ordering,
+categories, legal records and independent qualification expectations retain their
+existing purpose. Personal mode/pins/visibility/camera remain outside design source.
+
+This adds implementation and qualification obligations to the open M97 milestone;
+it does not claim a replacement qualified product or supervising-user closure.

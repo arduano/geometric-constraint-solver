@@ -5521,4 +5521,27 @@ The 2026-09-08 default-priority amendment must preserve all 20 Gridfinity
 measurement rows, keep curated manifold dimensions eligible without selection,
 show truthful 12 mm/2.4 mm public widths in the default Inspector, and retain
 Hidden, pins, selection access and stable navigation. Replacement qualification
-is pending.
+passes all 243 obligations in `20260908T172035-7255b491` on
+`fc3fdcb71b4d910815a51cf030128c42317ff2ed`; the frozen preview at
+`http://100.94.63.83:18104/` passes exact served-byte and actual-WASM verification.
+[Default-priority evidence](docs/M97_PRIORITY_DIMENSIONS.md) records that qualified
+amendment; user acceptance remains pending.
+
+### Source-native authoring amendment — not yet implemented or qualified
+
+[The authoring design](docs/M97_AUTHORING_METADATA.md) adds source-owned overview
+flags/defaults, named parameters, patch input presentation and document metadata,
+plus consistent projection of existing display labels. Acceptance requires code
+and GUI changes to produce the same accepted metadata, one source-backed edit route
+for shared values, exact Undo/Redo/reload, rejection of stale/tampered source edits,
+and unchanged mathematical invariants for presentation-only mutations. Copying
+source and patches without sample identity must preserve the same overview.
+
+Preserve the manifold's six selected dimensions and 12/2.4 mm public inputs and
+Gridfinity's 20 authored priorities. Document true/default false/local false,
+reference/construction dimensions, inline patch defaults, equal-valued distinct
+parameters and generated read-only offsets need independent owner coverage.
+Legacy source remains valid without automatic rewrites; the intentional retirement
+of implicit first-six priorities must retain an accessible all-measurements path.
+These are additional unchecked M97 obligations; prior qualification covers only
+the existing preview, and no source-native authoring pass is claimed.

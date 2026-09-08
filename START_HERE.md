@@ -22,6 +22,15 @@ Inspector. [The prior M97 preview](docs/M97_QUALIFICATION.md) remains preserved
 at port 18103. [M97 goals](docs/M97_GOALS.md) records the approved interaction.
 M97 is open for acceptance; M96 remains the accepted product.
 
+**Current task: source-native authoring design is complete; implementation is pending.**
+The user requested intuitive authoring for key dimensions and adjacent metadata.
+[M97 authoring amendment](docs/M97_AUTHORING_METADATA.md) specifies source-owned
+overview flags, named public parameters, consistent labels/help and document
+title/description, with Inspector edits using the existing authenticated source
+transaction. [PLAN.md](PLAN.md) records the ordered implementation work within M97.
+The port-18104 preview remains the qualified catalog-driven product; none of the
+new authoring APIs or controls is claimed to exist yet.
+
 [M95 qualification](docs/M95_QUALIFICATION.md) and [closure](docs/M95_CLOSURE.md) retain
 the previous accepted checkpoint at `http://100.94.63.83:18100/`. M94 remains at port 18096.
 Connected selection preserves layout and code cursor/focus; UI selections highlight visible
