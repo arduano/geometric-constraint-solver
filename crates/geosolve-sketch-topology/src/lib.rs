@@ -22,6 +22,9 @@ use thiserror::Error;
 
 mod endpoint_topology;
 mod offset_operands;
+mod sampling;
+
+pub use sampling::{SampledTopologyRegion, TopologySamplingError};
 
 pub use endpoint_topology::{
     EndpointTopologyConsumptionError, EndpointTopologyError, EndpointTopologyIndex,
