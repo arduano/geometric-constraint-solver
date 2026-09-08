@@ -121,6 +121,20 @@ env CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG_A
 The first failed run does not qualify a release. The focused log is retained at
 `target/m97/authoring-stale-selectors-exact.log`.
 
+Resumed run `20260908T223007-8fb67de1` on `4a7fb6c` passes all 337 web-adapter
+tests (one existing ignored test), then exposes a stale manifest `groups` read in
+`m92_fabrication_wave_a`. An adjacent audit finds the same expectation in wave B.
+Both now freeze the previously reviewed ordered group names independently of actual
+compiled source, preserving ownership, provenance, editing, restoration and residual
+assertions. No sample, product or golden changes are needed. Focused validation passes:
+
+```bash
+CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG_ASSERTIONS=true CARGO_PROFILE_TEST_OVERFLOW_CHECKS=true CARGO_PROFILE_TEST_DEBUG=line-tables-only nix-shell shell.nix --run 'cargo fmt --all && cargo test --locked -p geosolve-sketch-code --test m92_fabrication_wave_a --test m92_fabrication_wave_b'
+```
+
+Wave A passes in 5.11 s and wave B in 0.67 s;
+`target/m97/authoring-fabrication-groups.log` retains the exact output.
+
 Repair the affected owner checks and resume through the integrated release runner.
 Reuse only its authenticated
 unchanged-input evidence. Freeze the qualified production artifact without rebuilding,

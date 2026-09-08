@@ -24,6 +24,48 @@ const SAMPLES: [&str; 5] = [
     "gridfinity-bin-section",
 ];
 
+// Independent ordered names retained from the reviewed M92 sample contract.
+// Display metadata is now authored in sketch.ts, not duplicated in manifests.
+fn expected_groups(key: &str) -> &'static [&'static str] {
+    match key {
+        "pc-water-manifold" => &[
+            "Manifold envelope and reservoir",
+            "Upper channel circuit",
+            "Middle channel circuit",
+            "Lower channel circuit",
+            "Point-to-point stair channel",
+            "Shared circuit seal",
+            "Fastener stack",
+        ],
+        "cnc-dogbone-coupon" => &[
+            "Female coupon blank",
+            "Relational station datums",
+            "Press-fit station",
+            "Nominal-fit station",
+            "Loose-fit station",
+        ],
+        "vacuum-fixture-plate" => &[
+            "Fixture envelope",
+            "Gasket groove",
+            "Vacuum distribution grid",
+            "Workholding pattern",
+        ],
+        "dust-shoe-clamp" => &[
+            "Spindle clamp ring",
+            "Dust extraction port",
+            "Symmetric clamp lug",
+            "Split relief",
+        ],
+        "gridfinity-bin-section" => &[
+            "3U material section",
+            "Section standard dimensions",
+            "Section projection datums",
+            "1 x 1 plan study",
+        ],
+        _ => panic!("unknown fabrication sample {key}"),
+    }
+}
+
 fn asset(key: &str, file: &str) -> String {
     fs::read_to_string(format!(
         "{}/assets/bundled-samples/{key}/{file}",
@@ -210,12 +252,6 @@ fn fabrication_wave_a_is_source_authoritative_grouped_and_fully_constrained() {
         assert_eq!(manifest["expected"]["effective_dof"], 0, "{key}");
 
         let compiled = compiled(key);
-        let expected_groups = manifest["groups"]
-            .as_array()
-            .expect("manifest groups")
-            .iter()
-            .map(|name| name.as_str().expect("group name"))
-            .collect::<Vec<_>>();
         assert_eq!(
             compiled
                 .artifact
@@ -223,7 +259,7 @@ fn fabrication_wave_a_is_source_authoritative_grouped_and_fully_constrained() {
                 .iter()
                 .map(|group| group.name.as_str())
                 .collect::<Vec<_>>(),
-            expected_groups,
+            expected_groups(key),
             "{key} ordered functional groups"
         );
         let declarations = compiled

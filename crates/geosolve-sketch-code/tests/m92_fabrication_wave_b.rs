@@ -19,6 +19,29 @@ use geosolve_sketch_intent::IntentSessionId;
 
 const SAMPLES: [&str; 3] = ["voron-panel", "micron-carriage", "bondtech-indx-link"];
 
+// Independent ordered names retained from the reviewed M92 sample contract.
+// Display metadata is now authored in sketch.ts, not duplicated in manifests.
+fn expected_groups(key: &str) -> &'static [&'static str] {
+    match key {
+        "voron-panel" => &[
+            "Panel envelope",
+            "Central motor passage",
+            "Side-notch references",
+        ],
+        "micron-carriage" => &[
+            "CNC carriage body",
+            "Rail-block datum",
+            "Toolhead interface",
+        ],
+        "bondtech-indx-link" => &[
+            "Tool-link envelope",
+            "Three-point coupling",
+            "Link-board interface",
+        ],
+        _ => panic!("unknown fabrication sample {key}"),
+    }
+}
+
 fn generated(project: &CodeProject) -> KeyedReconcileState {
     KeyedReconcileState::empty()
         .plan(
@@ -100,18 +123,13 @@ fn assert_group_ownership(key: &str, sample: &TestSample, project: &CodeProject)
             .iter()
             .map(|group| group.name.as_str())
             .collect::<Vec<_>>(),
-        sample.manifest()["groups"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|group| group.as_str().unwrap())
-            .collect::<Vec<_>>(),
+        expected_groups(key),
         "{key} ordered functional groups"
     );
     if let Some(live) = sample.catalog_sample() {
         assert_eq!(
-            serde_json::json!(live.functional_groups),
-            sample.manifest()["groups"],
+            live.functional_groups,
+            expected_groups(key),
             "{key} generated registry preserves the declared groups"
         );
     }
