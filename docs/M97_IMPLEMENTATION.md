@@ -179,3 +179,53 @@ The WASM command passes its one all-sample case; the browser command passes its
 one case in 10.8 seconds. The latter uses the resumed gate's prepared harness
 `4814c5b3d8e08cb4b7a696c4f7fc1a889be875e368a092185c8da95fb8f42fef`,
 port 18102 and the Nix Chromium path through the same environment variables above.
+
+## Large browser publication and restoration checks
+
+Run `20260908T123427-82cdb8e6` passed all native, WASM and 271 unchanged golden
+cases, plus all three M97 browser cases. Its sole browser failure was a `TIMEOUT`
+in existing cubic authoring on the manifold. The final click took 17.64 seconds;
+the first subsequent IndexedDB evaluation stayed pending beyond the existing
+30-second accepted-source deadline. No missed click, explicit rejection or
+network failure was captured. The identical production bytes passed that case
+in the previous run and in an unchanged isolated check: 57.9 seconds overall,
+with a 23.3-second accepted-source wait. This is not evidence of fast editing.
+
+Unchanged-source run `20260908T130518-dc9ad29d` passed cubic authoring but exposed
+the same pending-publication timeout in Circle authoring. It also failed the
+reproduction import's five-second title check: `setFiles` starts asynchronous
+restoration, and the UI query remained blocked for 21.5 seconds; the eventual
+failure snapshot already contained the restored manifold. The gate parent later
+exited with SIGTERM while its browser child drained. That run remains interrupted
+and incomplete, with its two browser failures and traces preserved.
+
+The harness now captures the exact accepted source before export, proves New
+sketch removed that source from persistence, and waits for the exact source to
+return after import through the existing 30-second completion helper. The
+original title, source, geometry and runtime assertions follow this authenticated
+transition. No timeout constant changed. The old source cannot satisfy the import
+check before restoration.
+
+Cubic, Circle, reproduction import and M97 contextual edits now share the existing
+one-worker browser project for expensive compilation/restoration workflows. The
+failed cubic interval overlapped reproduction import; the focused unchanged cubic
+check passed in isolation. Four project assignments change in the reviewed
+inventory, preserving every case and assertion. This is test scheduling and
+completion synchronization, not a production performance correction. Large
+manifold compilation, restoration and source authoring still take tens of seconds.
+
+Focused checks use the unchanged gate-prepared harness and Nix Chromium with
+`GEOSOLVE_E2E_PORT=18102` and the artifact environment described above:
+
+```bash
+node_modules/.bin/playwright test tests/e2e/workbench.spec.ts tests/e2e/m97-dimensions.spec.ts --grep "Cubic Bézier authoring|a downloaded reproduction imports|M97 contextual dimension edits" --workers=2 --reporter=json --output=/home/arduano/programming/geometric-constraint-solver/target/m97/browser-publication-focused
+node_modules/.bin/playwright test tests/e2e/workbench.spec.ts --grep "normal pointer capture release commits Circle" --workers=2 --reporter=json --output=/home/arduano/programming/geometric-constraint-solver/target/m97/browser-circle-focused
+node_modules/.bin/playwright test --list --reporter=json
+git diff --check
+```
+
+The first three cases pass in 170.1 seconds and Circle passes in 75.6 seconds,
+without failures, skips or retries. Actual discovery through
+`release_browser.validate_discovery` matches all 48 cases, 16 sample workflows
+and one catalog check after all four reviewed project assignments. These focused
+results remain development evidence until replacement integrated qualification.

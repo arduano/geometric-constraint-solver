@@ -86,7 +86,7 @@
     [
       "workbench.spec.ts",
       "Cubic B\u00e9zier authoring publishes one named typed declaration",
-      "chromium"
+      "chromium-memory"
     ],
     [
       "workbench.spec.ts",
@@ -96,7 +96,7 @@
     [
       "workbench.spec.ts",
       "a downloaded reproduction imports atomically through the real bridge",
-      "chromium"
+      "chromium-memory"
     ],
     [
       "workbench.spec.ts",
@@ -141,7 +141,7 @@
     [
       "workbench.spec.ts",
       "normal pointer capture release commits Circle geometry and edits its compact radius",
-      "chromium"
+      "chromium-memory"
     ],
     [
       "workbench.spec.ts",
@@ -226,7 +226,7 @@
     [
       "m97-dimensions.spec.ts",
       "M97 contextual dimension edits retain source authority and Undo Redo reload",
-      "chromium"
+      "chromium-memory"
     ]
   ]
 }

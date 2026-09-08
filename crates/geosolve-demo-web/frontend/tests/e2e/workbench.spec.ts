@@ -976,6 +976,11 @@ test("a downloaded reproduction imports atomically through the real bridge", asy
   await boot(page);
   await openManifold(page);
 
+  const originalSource = await waitForAcceptedManagedSource(
+    page,
+    (accepted) => accepted.includes("const reservoirWidth = $.dimension.curveLength"),
+  );
+
   await page.getByRole("button", { name: "Diagnostics" }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("menuitem", { name: "Download reproduction" }).click();
@@ -991,11 +996,17 @@ test("a downloaded reproduction imports atomically through the real bridge", asy
   await page.getByRole("button", { name: "New sketch" }).click();
   await expect(page.locator("header").getByText("Untitled sketch", { exact: true })).toBeVisible();
 
+  // The old source must leave persistence before it can witness a new import.
+  await expect.poll(() => readAcceptedManagedSource(page)).toBeNull();
+
   await page.getByRole("button", { name: "File menu" }).click();
   const chooserPromise = page.waitForEvent("filechooser");
   await page.getByRole("menuitem", { name: "Import project or repro…" }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "geosolve-reproduction.txt", mimeType: "text/plain", buffer: Buffer.from(reproduction) });
+  // setFiles starts asynchronous restoration; wait for its accepted publication
+  // before checking the surrounding UI. Preserve the shared 30-second budget.
+  await waitForAcceptedManagedSource(page, (accepted) => accepted === originalSource);
   await expect(page.locator("header").getByText(MANIFOLD_TITLE, { exact: true })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText("const reservoirWidth = $.dimension.curveLength");
   expect((await presentedFrame(canvasFrame(page))).items.some((item) => item.layer === "points" && item.style.strokeWidth > 0)).toBe(true);

@@ -11,9 +11,10 @@ if (prepared && (prepared.format !== "geosolve-release-artifact-v1" || prepared.
   throw new Error("full browser qualification requires a prepared compiler-harness artifact");
 }
 const prefix = prepared?.publicBase && prepared.publicBase !== "./" ? prepared.publicBase : "/";
-// Fresh browser contexts isolate ordinary tests. Scale/atlas and legacy payload
-// workflows share a single memory-heavy project slot under the gate's total cap.
-const memoryHeavy = /M92 visual workflow: (perforated-fixture-field|robotic-harness-backplane|curves-contact-continuity-atlas|fabrication-operations-atlas)|legacy|scale|recovery/i;
+// Fresh browser contexts isolate ordinary tests. Scale/atlas, payload and large
+// manifold compilation/restoration workflows share one memory-heavy project slot.
+// Keep their existing timeouts independent of competing expensive publications.
+const memoryHeavy = /M92 visual workflow: (perforated-fixture-field|robotic-harness-backplane|curves-contact-continuity-atlas|fabrication-operations-atlas)|Cubic Bézier authoring|normal pointer capture release commits Circle|a downloaded reproduction imports|M97 contextual dimension edits|legacy|scale|recovery/i;
 const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1024, height: 720 } };
 
 export default defineConfig({
