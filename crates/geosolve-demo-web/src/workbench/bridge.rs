@@ -15,6 +15,10 @@ use std::str::FromStr as _;
 
 mod navigation;
 use navigation::{NavigationSnapshot, NavigationState};
+#[cfg(test)]
+mod dimension_navigation_tests;
+mod dimensions;
+use dimensions::{DimensionBridgeState, DimensionPersistence, DimensionsSnapshot};
 
 use geosolve_constraint_editor::{
     ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome, AuthoringState, EditorEffect,
@@ -438,6 +442,7 @@ struct BridgeSnapshot {
     source: SourceSnapshot,
     explorer: Vec<ExplorerSnapshot>,
     navigation: NavigationSnapshot,
+    dimensions: DimensionsSnapshot,
     #[serde(skip_serializing_if = "Option::is_none")]
     selection: Option<SelectionSnapshot>,
     parameters: Vec<ParameterSnapshot>,
@@ -456,6 +461,9 @@ struct FrameUpdate<'a> {
     kind: &'static str,
     revision: u64,
     frame: &'a FrameSnapshot,
+    /// A terminal camera update also refreshes Inspector visibility once.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dimensions: Option<DimensionsSnapshot>,
 }
 
 /// The chrome inputs that ordinary Point previews may retain. Native preview
@@ -500,6 +508,8 @@ struct WorkbenchPresentationPersistence {
     #[serde(skip_serializing_if = "Option::is_none")]
     isolate_restore: Option<Vec<String>>,
     construction_visible: bool,
+    #[serde(default)]
+    dimensions: DimensionPersistence,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -582,6 +592,7 @@ fn pending_managed_snapshot(pending: &PendingManagedMutation) -> PendingManagedM
 /// One presentation-toolkit instance over the existing Rust authorities.
 pub(crate) struct WorkbenchBridge {
     navigation: NavigationState,
+    dimensions: DimensionBridgeState,
     authority: WorkbenchDocumentAuthority,
     code_project: Option<CodeProjectWorkbench>,
     samples: super::samples::SampleCatalogState,
@@ -691,6 +702,7 @@ impl WorkbenchBridge {
             .editor_mut()
             .editor_mut()
             .set_geometry_visibility(visibility);
+        self.restore_dimension_presentation(presentation.dimensions)?;
         self.retained_scene = None;
         self.accepted_frame = None;
         Ok(self)
@@ -783,6 +795,7 @@ impl WorkbenchBridge {
             camera: super::scene::CanvasCamera::default(),
             retained_scene: None,
             navigation: NavigationState::default(),
+            dimensions: DimensionBridgeState::default(),
             accepted_frame: None,
             preserve_frame_once: false,
             construction_preview: None,
@@ -814,6 +827,13 @@ impl WorkbenchBridge {
     }
 
     fn frame_update_json(&mut self) -> Result<String, String> {
+        self.frame_update_with_dimensions_json(false)
+    }
+
+    fn frame_update_with_dimensions_json(
+        &mut self,
+        include_dimensions: bool,
+    ) -> Result<String, String> {
         match self.compose_frame_snapshot() {
             Ok(frame) => self.accepted_frame = Some(frame),
             Err(error) => self.last_error = Some(format!("Canvas scene unavailable: {error}")),
@@ -831,6 +851,7 @@ impl WorkbenchBridge {
                 .accepted_frame
                 .as_ref()
                 .expect("successful composition installed the accepted frame"),
+            dimensions: include_dimensions.then(|| self.dimensions_snapshot()),
         })
         .map_err(|error| error.to_string())
     }
@@ -964,6 +985,29 @@ impl WorkbenchBridge {
         self.dispatch(&request.command, request.payload)?;
         if matches!(
             request.command.as_str(),
+            "selection.select"
+                | "declaration.select"
+                | "navigation.rows.select"
+                | "navigation.source.select"
+        ) {
+            self.clear_dimension_focus();
+            self.set_dimension_navigation(false);
+        }
+        if matches!(
+            request.command.as_str(),
+            "dimensions.hover" | "dimensions.hover.clear" | "dimensions.navigation.end"
+        ) {
+            // A delayed timer may settle after an edit has prepared its compiler
+            // ticket. Cleanup changes no accepted state and needs no publication
+            // until that transaction produces its complete replacement snapshot.
+            if self.pending_managed_mutation.is_some() {
+                return Ok("null".into());
+            }
+            return self
+                .frame_update_with_dimensions_json(request.command == "dimensions.navigation.end");
+        }
+        if matches!(
+            request.command.as_str(),
             "navigation.rows.select" | "navigation.source.select"
         ) {
             return self.navigation_update_json();
@@ -1042,8 +1086,14 @@ impl WorkbenchBridge {
         self.last_error = None;
         let canvas_pan = self.route_canvas_pan(request, input);
         if !canvas_pan {
+            if matches!(request.phase, PointerPhase::Down) {
+                self.set_dimension_navigation(false);
+            }
             match request.phase {
-                PointerPhase::Down => self.pointer_down(input),
+                PointerPhase::Down => {
+                    self.pointer_down(input);
+                    self.clear_dimension_focus();
+                }
                 PointerPhase::Move => self.pointer_move(input),
                 PointerPhase::Up => self.pointer_up(input),
             }
@@ -1056,7 +1106,8 @@ impl WorkbenchBridge {
         self.record_pointer_presentation();
         if transient_before && self.select_navigation_is_transient() {
             if canvas_pan {
-                return self.frame_update_json();
+                return self
+                    .frame_update_with_dimensions_json(matches!(request.phase, PointerPhase::Up));
             }
             if select_hover {
                 return if frame_was_current && self.editor().editor().hover_state() == hover_before
@@ -1132,6 +1183,7 @@ impl WorkbenchBridge {
         let transient = self.select_navigation_is_transient();
         let hover_before = self.editor().editor().hover_state();
         self.cancel_active_gesture(None)?;
+        self.set_dimension_navigation(true);
         self.camera = camera;
         if changed {
             self.notice = format!(
@@ -1265,6 +1317,7 @@ impl WorkbenchBridge {
                     .map(|rows| rows.iter().cloned().collect()),
                 construction_visible: construction.explicit_construction
                     && construction.implicit_construction,
+                dimensions: self.dimension_persistence(),
             },
         })
         .map_err(|error| error.to_string())
@@ -1359,6 +1412,10 @@ impl WorkbenchBridge {
         application.response
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive command router keeps bridge authority visible"
+    )]
     fn dispatch(&mut self, command: &str, payload: serde_json::Value) -> Result<(), String> {
         if self.pending_managed_mutation.is_some()
             && !command_allowed_while_managed_mutation_pending(command)
@@ -1452,6 +1509,13 @@ impl WorkbenchBridge {
             }
             "view.fit" => self.fit_canvas(),
             "view.origin" => self.center_canvas_origin(),
+            "dimensions.navigation.end" => {
+                self.set_dimension_navigation(false);
+                Ok(())
+            }
+            command if command.starts_with("dimensions.") => {
+                self.dispatch_dimensions(command, payload)
+            }
             _ => Err(format!("unknown workbench command `{command}`")),
         }
     }
@@ -2197,6 +2261,7 @@ impl WorkbenchBridge {
 
     fn reset_explorer_visibility(&mut self) {
         self.explorer_visibility = ExplorerVisibilityState::default();
+        self.reset_dimensions();
         let current = self
             .editor()
             .editor()
@@ -2595,6 +2660,7 @@ impl WorkbenchBridge {
                 origin: input.position,
                 origin_center: self.camera.model_center(),
             });
+            self.set_dimension_navigation(true);
             self.notice = "Canvas pan active".into();
             return true;
         }
@@ -2617,6 +2683,7 @@ impl WorkbenchBridge {
         }
         if matches!(request.phase, PointerPhase::Up) {
             self.canvas_pan = None;
+            self.set_dimension_navigation(false);
         }
         true
     }
@@ -3480,6 +3547,8 @@ impl WorkbenchBridge {
         self.dispatch_construction(effects);
         self.captured_pointer = None;
         self.canvas_pan = None;
+        self.set_dimension_navigation(false);
+        self.clear_dimension_hover();
         if !retain_navigation_scene {
             self.retained_scene = None;
         }
@@ -3593,6 +3662,7 @@ impl WorkbenchBridge {
                     .is_ok()
             };
             if reusable {
+                self.apply_dimension_scene(&mut scene);
                 self.retained_scene = Some(scene);
                 return;
             }
@@ -3613,6 +3683,9 @@ impl WorkbenchBridge {
                 ));
                 scene = None;
             }
+        }
+        if let Some(candidate) = scene.as_mut() {
+            self.apply_dimension_scene(candidate);
         }
         self.retained_scene = scene;
     }
@@ -3731,6 +3804,7 @@ impl WorkbenchBridge {
         let explorer = self.navigation_explorer_snapshot();
         let selection = self.navigation_selection_snapshot(&navigation);
         let parameters = self.parameter_snapshot();
+        let dimensions = self.dimensions_snapshot();
         let problems = self.problem_snapshot();
         let status = if !problems.is_empty() {
             ProjectStatus::Failed
@@ -3778,6 +3852,7 @@ impl WorkbenchBridge {
             source,
             explorer,
             navigation,
+            dimensions,
             selection,
             parameters,
             problems,
@@ -4125,6 +4200,8 @@ fn command_allowed_while_managed_mutation_pending(command: &str) -> bool {
             | "explorer.visibility.isolate"
             | "explorer.visibility.restore"
             | "view.construction.toggle"
+            | "dimensions.hover.clear"
+            | "dimensions.navigation.end"
     )
 }
 
@@ -4662,7 +4739,7 @@ mod tests {
     };
 
     use super::{
-        MAX_REQUEST_BYTES, MAX_VISIBILITY_ROWS, ManagedMutationAbortPayload,
+        DimensionPersistence, MAX_REQUEST_BYTES, MAX_VISIBILITY_ROWS, ManagedMutationAbortPayload,
         PendingManagedMutation, WORKBENCH_PERSISTENCE_FORMAT, WorkbenchBridge,
         WorkbenchDocumentAuthority, WorkbenchPersistenceEnvelope, WorkbenchPresentationPersistence,
         pending_managed_ticket_digest,
@@ -10673,6 +10750,7 @@ export default sketch(($) => {
                 hidden_rows: stale.clone(),
                 isolate_restore: Some(stale),
                 construction_visible: true,
+                dimensions: DimensionPersistence::default(),
             },
         })
         .unwrap();
@@ -10708,6 +10786,7 @@ export default sketch(($) => {
                     .collect(),
                 isolate_restore: None,
                 construction_visible: true,
+                dimensions: DimensionPersistence::default(),
             },
         })
         .unwrap();

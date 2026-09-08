@@ -601,6 +601,7 @@ impl WorkbenchBridge {
         }
         let navigation = self.navigation_snapshot();
         let selection = self.navigation_selection_snapshot(&navigation);
+        let dimensions = self.dimensions_snapshot();
         let selected_geometry_role = self
             .editor()
             .selected_geometry_role_state()
@@ -618,6 +619,7 @@ impl WorkbenchBridge {
             "version":PROTOCOL_VERSION, "kind":"selection", "revision":self.revision,
             "frame":frame, "navigation":navigation, "selectedDeclarations":selected_declarations,
             "selection":selection, "selectedGeometryRole":selected_geometry_role,
+            "dimensions":dimensions,
         }))
         .map_err(|error| error.to_string())
     }
