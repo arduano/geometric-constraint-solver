@@ -6,11 +6,14 @@
 
 This is the approved design and implementation plan requested after reviewing the
 default-priority preview. The user authorized implementation and requested explicit
-`isKeyConstraint` / `isKeyParameter` property names. The APIs and interactions below are **implemented, with release qualification underway**. M97 remains open; the qualified product is still
-`fc3fdcb71b4d910815a51cf030128c42317ff2ed`, served at
-`http://100.94.63.83:18104/`. Its catalog-owned priorities are the starting point,
-not evidence that this amendment works. [Current qualification](M97_PRIORITY_DIMENSIONS.md)
-and [M97 goals](M97_GOALS.md) retain the existing product contract.
+`isKeyConstraint` / `isKeyParameter` property names. The APIs and interactions below
+are **implemented and qualified; supervising-user acceptance remains pending**.
+Clean product `e26270cb89e5849092145b329d0cf95821a81b27` passes all 244 obligations
+in `20260908T235146-b387d273` and is served at `http://100.94.63.83:18105/`.
+[Implementation and qualification evidence](M97_AUTHORING_IMPLEMENTATION.md) records
+the gate, frozen production artifact and served-byte/actual-WASM verification.
+The previous [catalog-driven preview](M97_PRIORITY_DIMENSIONS.md) remains preserved
+at port 18104. [M97 goals](M97_GOALS.md) retains the interaction contract; M97 remains open.
 
 Put reusable design intent beside its declaration. A dimension's overview status,
 a parameter's public name/help, and the document's title must travel with ordinary
@@ -59,7 +62,7 @@ automatically promoting arbitrary dimensions. A newly created GUI dimension writ
 
 ## Source API
 
-The following is proposed syntax. Existing `sketch(callback)` and unannotated
+The following syntax is implemented. Existing `sketch(callback)` and unannotated
 declarations remain valid. This shortened example uses existing rectangle outputs;
 the complete manifold retains its current anchors, constraints and patches.
 
@@ -277,8 +280,8 @@ placements must continue to resolve only their exact surviving identities.
 ## Implementation order and acceptance
 
 The implementation follows these obligations within the open M97 milestone.
-[Implementation evidence](M97_AUTHORING_IMPLEMENTATION.md) records completed focused
-checks; integrated replacement qualification remains required:
+[Implementation evidence](M97_AUTHORING_IMPLEMENTATION.md) records the completed
+focused checks, integrated qualification and verified replacement preview:
 
 1. **Compiler/domain:** SDK options and parameter API, managed parser/source sites,
    executed metadata, Rust validation, provenance and version compatibility. Prove

@@ -5527,7 +5527,7 @@ passes all 243 obligations in `20260908T172035-7255b491` on
 [Default-priority evidence](docs/M97_PRIORITY_DIMENSIONS.md) records that qualified
 amendment; user acceptance remains pending.
 
-### Source-native authoring amendment — implemented, qualification underway
+### Source-native authoring amendment — qualified, user acceptance pending
 
 [The authoring design](docs/M97_AUTHORING_METADATA.md) adds source-owned overview
 flags/defaults, named parameters, patch input presentation and document metadata,
@@ -5543,7 +5543,13 @@ reference/construction dimensions, inline patch defaults, equal-valued distinct
 parameters and generated read-only offsets need independent owner coverage.
 Legacy source remains valid without automatic rewrites; the intentional retirement
 of implicit first-six priorities must retain an accessible all-measurements path.
-The implementation passes focused compiler, native, frontend and all four browser
-workflows. [Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) records
-the commands and results. Integrated qualification and amended-preview verification
-remain outstanding; prior qualification covers only the existing preview.
+Clean source `e26270cb89e5849092145b329d0cf95821a81b27` passes all 244 obligations
+in `20260908T235146-b387d273` (37m29.9s; nine fresh, 235 authenticated reused results).
+The browser passes 17/17 prefix and 48/48 full workflows without retries, skips or
+failures, including fresh workflows for all 16 samples. The 271-case golden remains
+unchanged. [Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) records
+the commands and owner coverage. The frozen production preview at
+`http://100.94.63.83:18105/` passes exact served-byte verification across 12 files and
+13 HTTP routes and actual-WASM manifold readiness. Port 18104 preserves the preceding
+preview. Generated per-instance overview overrides remain deferred. Mechanical
+qualification is complete; supervising-user acceptance and M97 closure remain pending.

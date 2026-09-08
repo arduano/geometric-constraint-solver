@@ -2,12 +2,22 @@
 
 # M97 source-native authoring implementation
 
-The source-native amendment is implemented locally. M97 remains open, and the
-qualified preview at `http://100.94.63.83:18104/` remains unchanged until replacement
-qualification and served-byte verification finish. This document records focused
-development evidence, not a completed release claim.
+The source-native amendment is implemented and qualified on
+`e26270cb89e5849092145b329d0cf95821a81b27`. The verified preview is
+`http://100.94.63.83:18105/`; port 18104 preserves the prior default-priority
+product. All 244 integrated obligations pass in `20260908T235146-b387d273`.
+M97 remains open for supervising-user acceptance; M96 remains the accepted milestone.
 
 ## Authoring and presentation
+
+The public API lives in `packages/geosolve-sketch-code/src/authoring.ts`,
+`presentation.ts` and `managed.ts`. Native authentication, control projection and
+prepared edits live in `crates/geosolve-sketch-code/src/managed.rs`,
+`managed_control.rs` and `prepared_mutation.rs`. The new
+`crates/geosolve-demo-web/src/workbench/bridge/authoring_metadata.rs` and frontend
+`src/components/authoring-metadata.tsx` connect those transactions to the Inspector.
+The package and native crate READMEs document authoring; all 16 bundled sample
+sources and their compiled projections use the new API.
 
 `sketch(options, callback)` owns title, description and
 `dimensions.areKeyConstraintsByDefault`. Existing callback-only source remains valid.
@@ -96,14 +106,14 @@ Commands ran in the pinned Nix environment where applicable:
   cases in 3.2 minutes (`authoring-browser-r15.log`), including the repaired manifold
   selection, stable placement, numeric history and source metadata/extraction.
   Final demo-web all-targets Clippy and the native source-property lifecycle test
-  also pass (`authoring-native-final-r1.log`). The clean-source gate remains pending.
+  also pass (`authoring-native-final-r1.log`). Final clean-source evidence follows below.
 
 Development logs, exact failed attempts and immutable browser artifacts are under
 `target/m97/authoring-*`. A diagnostic unoptimized native manifold selection probe
 was stopped after the browser/native response localized the defect to the frontend;
 that interrupted probe supplies no passing evidence.
 
-## Remaining qualification
+## Qualification attempts and repairs
 
 The first clean candidate is `3bcd06611f15a20d79f94d5f795d0694db8eaeed`
 (implementation `27a844a`, followed by the sample authoring README correction).
@@ -163,8 +173,83 @@ nix-shell shell.nix --run 'node crates/geosolve-demo-web/frontend/scripts/build-
 GEOSOLVE_E2E_ARTIFACT_MANIFEST=/home/arduano/programming/geometric-constraint-solver/target/m97/authoring-dev-artifacts-r6/harness.json GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome GEOSOLVE_E2E_PORT=18112 nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npx playwright test tests/e2e/workbench.spec.ts tests/e2e/m95-navigation.spec.ts tests/e2e/m92-sample-audit.spec.ts --grep "real WASM opens|click-authored|canonical Jansen|non-axis Parallel|computed Fillet|Cubic Bézier|normal pointer capture|M95 canvas and Explorer|M95 explicit|robotic-harness-backplane" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/authoring-browser-repairs-r1'
 ```
 
-Repair the affected owner checks and resume through the integrated release runner.
-Reuse only its authenticated
-unchanged-input evidence. Freeze the qualified production artifact without rebuilding,
-verify its HTTP bytes and actual WASM readiness, and record the new preview here.
-Supervising-user acceptance and M97 closure remain separate outstanding actions.
+## Final integrated qualification
+
+Clean candidate `e26270cb89e5849092145b329d0cf95821a81b27`, tree
+`de47931a170ce13d2dfd7feb2d65ddf6ba2ded81`, passes **244/244 obligations** in
+`20260908T235146-b387d273`, with complete coverage and unchanged source at exit.
+The command was:
+
+```bash
+CARGO_BUILD_JOBS=4 nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260908T224238-9270c86f --since d80bf22'
+```
+
+Wall time is 2249.9 seconds (37m29.9s). Nine stages execute freshly and 235 passing
+results are authenticated unchanged-input reuse: 59 originate in R1, 97 in R2 and
+79 in R3. Those attempts remain failed; only their independently successful stage
+receipts supply evidence. Fresh stages are inventory, metadata/format, frontend,
+catalog, browser preparation, production transport, licenses, browser and performance.
+The complete inventory includes strict Clippy, native workspace/headless, actual-WASM,
+documentation, packaging and parity coverage. The extra obligation relative to the
+prior 243-stage product is the new native `m97_authoring_metadata` test executable.
+
+Browser prefix coverage passes 17/17 in 107.2 seconds. The full batch passes 48/48
+in 1237.6 seconds, with zero skipped, failed, retried or flaky workflows. Its inventory
+contains 49 distinct obligations: the fresh catalog check plus those 48 full workflows;
+all 16 sample prefixes run freshly and no browser leaves are reused. All four M97
+workflows pass, including source metadata/parameter editing (31.2 seconds). The dense
+fixture's full two-edit/history/reload workflow passes in 226.0 seconds with its original
+six-minute limit. Browser stage wall time, including preparation of its evidence, is
+1358.8 seconds. The isolated 256-body sparse crossover passes independent validation
+in 137.73 seconds of test execution (145.3-second stage).
+
+The three actual-WASM lifecycle cases pass through authenticated receipts. The
+271-case golden remains clean and byte-identical, SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+The signed qualification and stage records are under
+`target/release-gate/runs/20260908T235146-b387d273/`; the integrated log is
+`target/m97/authoring-integrated-r4.log`.
+
+## Frozen preview and acceptance
+
+The qualified `prepare.browser` receipt authenticates the production manifest and
+its exact directory. They were copied without rebuilding into the read-only
+`target/m97/preview-20260908T235146-b387d273/` and served on
+`http://100.94.63.83:18105/`. The following commands pass:
+
+```bash
+python3 target/m97/freeze-authoring-preview.py 20260908T235146-b387d273
+GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npm run verify:artifact -- --manifest /home/arduano/programming/geometric-constraint-solver/target/m97/preview-20260908T235146-b387d273/production.json --directory /home/arduano/programming/geometric-constraint-solver/target/m97/preview-20260908T235146-b387d273/geosolve-production --url http://100.94.63.83:18105/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m97/authoring-preview-artifact-verification.json'
+python3 target/m97/audit-authoring-preview-artifact.py 20260908T235146-b387d273
+```
+
+All 12 files (28,761,396 bytes) and `/` pass HTTP status, byte, MIME and base-path
+verification. Production manifest SHA-256 is
+`89c3612719ed45b894ccd68833f58157b4f3f528bff9d80e6d84237f99a7aaea`;
+file aggregate SHA-256 is
+`ffea0a9f5f22a6e7c6fc33e070ef7c9706c1c6e1820f6df57557d0acbf4ecf93`.
+Actual Chromium 151.0.7922.173 opens the manifold, reports 182 geometry entries and
+a ready WebGL2 renderer with no runtime errors. Served WASM SHA-256 is
+`8d7a7dfedb5baa73ef6747ad8fd2cc371faae595f212dbe4b86d4c3cb5e34a44`.
+The transport and authenticated binding records are
+`target/m97/authoring-preview-artifact-verification.json` and
+`target/m97/authoring-preview-artifact-binding.json`. The detached server uses
+`target/m97/serve-authoring-preview.mjs`; its log and supervisor PID record are
+`target/m97/authoring-preview-server.log` and `authoring-preview-server-pid.json`.
+
+Mechanical acceptance passes for explicit flag/default precedence, source-only
+imports, shared and distinct parameter identities, exact source transactions,
+stale/tampered rejection, GUI creation/extraction, labels/help/title, Undo/Redo/reload,
+old-source compatibility, manifold/Gridfinity intent and retained dimension navigation.
+The final manifold overview screenshot shows all six callouts, full 12/2.4 mm parameter
+values and their source-editing controls. Mathematical behavior remains unchanged.
+
+Generated per-instance overview overrides remain deferred, overview eligibility
+remains subject to collision handling, and old unmarked source has no implicit
+first-six priorities. All measurements remain discoverable. Dense-workflow timing
+varies: this successful qualification does not erase the recorded R3 timeout or claim
+a performance optimization. Supervising-user acceptance and M97 closure remain open.
+
+Documentation-only continuation is checked with
+`nix-shell shell.nix --run './scripts/release-gate.sh --docs-only --since e26270c'`.
+It preserves the qualified product identity above and does not rebuild preview bytes.

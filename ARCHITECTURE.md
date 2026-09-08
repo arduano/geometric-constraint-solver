@@ -2879,27 +2879,29 @@ The workbench supplies accepted ownership and source editing authority, defaults
 to Focused and persists display mode and at most four exact annotation identities.
 Automatic layout is transient retained state. Camera and selection changes reuse
 slots; geometry changes invalidate affected anchors. Bounded placement and a
-six-callout contextual Focused limit keep ordinary navigation readable. The
-default-priority amendment adds catalog-owned declaration and parameter selectors:
-all Gridfinity measurements and curated design sizes in other samples stay
-eligible beyond that contextual limit, subject to the same collision policy.
-Accepted provenance resolves selectors; defaults do not consume pins or enter
-design history. New/imported sketches retain up to six authored defaults.
+six-callout contextual Focused limit keep ordinary navigation readable. Authored
+overview metadata keeps all Gridfinity measurements and curated design sizes in other
+samples eligible beyond that contextual limit, subject to the same collision policy.
+Overview flags belong to source and its design history; personal pins remain separate.
+The earlier catalog-owned selectors and implicit first-six defaults have been replaced
+by the source-native amendment below. Unmarked source retains contextual discovery.
 Explicit Fit and first host measurement retry hidden slots after reserving
 visible placements; ordinary navigation never requests that reconsideration. The frontend owns
 idle-hover timing and Inspector controls while Rust owns visibility and hit tests.
 Public patch parameters retain their source values and existing edit transaction;
 generated dimensions do not acquire writable authority from their displayed value.
 [M97_GOALS.md](docs/M97_GOALS.md) owns the approved contract.
-[M97 qualification](docs/M97_QUALIFICATION.md) records the passing clean-source gate
-and verified preview at `http://100.94.63.83:18103/`. Supervising-user acceptance
-remains pending; no solver equations or branch semantics changed.
+[M97 qualification](docs/M97_QUALIFICATION.md) records the original gate and preserved
+preview at `http://100.94.63.83:18103/`. The current qualified authoring preview is
+`http://100.94.63.83:18105/`. Supervising-user acceptance remains pending;
+no solver equations or branch semantics changed.
 
-### M97 source-native metadata amendment — implemented, qualification underway
+### M97 source-native metadata amendment — qualified, awaiting acceptance
 
 [M97_AUTHORING_METADATA.md](docs/M97_AUTHORING_METADATA.md) specifies the implemented
 authoring API. Document title/description and authored
-dimension defaults belong to `sketch` options. Local dimension `isKeyConstraint`, existing
+dimension defaults belong to `sketch` options as `dimensions.areKeyConstraintsByDefault`.
+Local dimension `isKeyConstraint`, parameter `isKeyParameter`, existing
 `label`, optional `description`, named public parameters and patch input schema
 presentation travel through authenticated managed IR and execution artifacts.
 Rust projects accepted metadata into the workbench and prepares bounded structural
@@ -2913,4 +2915,6 @@ selectors and the first-six fallback have been removed after migrating all live 
 Existing view preferences retain their current owners. V4 envelopes authenticate metadata,
 while the bounded V3 reader preserves old source and upgrades only through a source
 transaction. [Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) records
-focused checks; the integrated replacement gate and new preview remain pending in PLAN.md.
+the passing 244-obligation clean-source gate on `e26270cb89e5849092145b329d0cf95821a81b27`
+and the frozen production preview's exact served-byte and actual-WASM verification.
+Generated per-instance overview overrides remain deferred.

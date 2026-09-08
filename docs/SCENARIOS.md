@@ -7411,10 +7411,11 @@ product identity; scenario coverage does not imply an unrecorded exhaustive huma
 
 ## M97 focused dimension scenarios — qualified, awaiting acceptance
 
-Clean-source amendment run `20260908T172035-7255b491` passes all 243 obligations,
-including authenticated successes for all three M97 browser workflows and the
+The preceding clean-source amendment run `20260908T172035-7255b491` passes all
+243 obligations, including authenticated successes for all three M97 browser workflows and the
 unchanged 271-case golden. [Amendment qualification](M97_PRIORITY_DIMENSIONS.md)
-records the verified scope and frozen preview at `http://100.94.63.83:18104/`.
+records that scope and preserved preview at `http://100.94.63.83:18104/`.
+The source-native replacement below is now qualified and served at port 18105.
 Supervising-user acceptance remains pending; these checks do not imply an
 unrecorded human replay.
 
@@ -7451,11 +7452,16 @@ unrecorded human replay.
   regression and bridge lifecycle fixture cover the retained evidence and
   Undo/Redo/reload.
 
-### M97 source-native metadata — implemented scenarios
+### M97 source-native metadata — qualified scenarios
 
 [The authoring amendment](M97_AUTHORING_METADATA.md) defines the APIs and
-workflow. [Implementation evidence](M97_AUTHORING_IMPLEMENTATION.md) records focused
-coverage. These scenarios extend M97 and do not claim coverage from the prior gate.
+workflow. [Implementation evidence](M97_AUTHORING_IMPLEMENTATION.md) records owner
+coverage and clean-source gate `20260908T235146-b387d273` on
+`e26270cb89e5849092145b329d0cf95821a81b27`: 244/244 obligations pass, with 17/17
+prefix and 48/48 full browser workflows and the unchanged 271-case golden.
+All 16 samples receive fresh full workflows, with no retries, skips or failures.
+The frozen preview at `http://100.94.63.83:18105/` passes served-byte and actual-WASM
+verification. These results qualify the amendment; supervising-user acceptance remains pending.
 
 - Toggle Show in overview on an authored driving and reference measurement; inspect
   the exact local `isKeyConstraint` source edit. Reset to a true document default, then explicitly

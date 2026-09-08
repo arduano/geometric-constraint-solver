@@ -10,27 +10,31 @@ a separate 12 mm two-bend stair passage and a 2.4 mm silicone groove.
 [M96 goals](docs/M96_GOALS.md) and [implementation evidence](docs/M96_IMPLEMENTATION.md)
 record the custom-patch API, independent geometry checks and editing corrections.
 The supervising user accepted the final amendment and requested closure. No M96 blocker
-or acceptance action remains. **M97 focused dimensions and its default-priority
+or acceptance action remains. **M97 focused dimensions and its source-native authoring
 amendment are implemented and qualified; supervising-user acceptance remains pending.**
-The verified amended preview is `http://100.94.63.83:18104/`.
-[Default-priority qualification](docs/M97_PRIORITY_DIMENSIONS.md) is the current
-continuation point: source `fc3fdcb71b4d910815a51cf030128c42317ff2ed` passes all 243
-obligations in `20260908T172035-7255b491`, with exact served-byte and actual-WASM
-verification. Gridfinity retains all 20 authored measurements as defaults; the
+The verified amended preview is `http://100.94.63.83:18105/`.
+[Authoring implementation and qualification](docs/M97_AUTHORING_IMPLEMENTATION.md) is the
+current continuation point: clean source `e26270cb89e5849092145b329d0cf95821a81b27`
+passes all 244 obligations in `20260908T235146-b387d273` (37m29.9s; nine fresh,
+235 authenticated reused results). The frozen production copy passes exact served-byte
+verification for 12 files and 13 HTTP routes and actual-WASM manifold readiness.
+Gridfinity retains all 20 authored measurements as defaults; the
 manifold retains six key callouts and its public channel/groove widths in the
-Inspector. [The prior M97 preview](docs/M97_QUALIFICATION.md) remains preserved
+Inspector. [The previous default-priority preview](docs/M97_PRIORITY_DIMENSIONS.md)
+remains preserved at port 18104, and [the first M97 preview](docs/M97_QUALIFICATION.md)
 at port 18103. [M97 goals](docs/M97_GOALS.md) records the approved interaction.
 M97 is open for acceptance; M96 remains the accepted product.
 
-**Current task: source-native authoring is implemented; replacement qualification is underway.**
+**Current task: review the qualified source-native authoring preview for acceptance.**
 The user requested intuitive authoring for key dimensions and adjacent metadata.
 [M97 authoring amendment](docs/M97_AUTHORING_METADATA.md) specifies source-owned
 overview flags, named public parameters, consistent labels/help and document
 title/description, with Inspector edits using the existing authenticated source
-transaction. [PLAN.md](PLAN.md) records the ordered implementation work within M97.
-The port-18104 preview remains the qualified catalog-driven product; the new APIs and controls are implemented locally.
-[Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) records focused checks
-and the remaining integrated qualification and preview work.
+transaction. The explicit APIs are `isKeyConstraint`, `isKeyParameter` and
+`dimensions.areKeyConstraintsByDefault`. [PLAN.md](PLAN.md) records completed
+implementation and qualification within the open M97 milestone. The final browser
+run passes 17 prefix and 48 full workflows without retries, skips or failures,
+including fresh workflows for all 16 samples; the 271-case golden is unchanged.
 
 [M95 qualification](docs/M95_QUALIFICATION.md) and [closure](docs/M95_CLOSURE.md) retain
 the previous accepted checkpoint at `http://100.94.63.83:18100/`. M94 remains at port 18096.

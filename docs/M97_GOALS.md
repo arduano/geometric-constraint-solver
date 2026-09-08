@@ -8,8 +8,9 @@ filling general navigation with dimension widgets.
 
 The subsequent source-native authoring request has a completed
 [design and implementation plan](M97_AUTHORING_METADATA.md). That amendment is
-implemented locally and undergoing replacement qualification. The interactions below describe the current
-qualified preview; the addendum replaces catalog priority ownership when implemented.
+qualified and served at `http://100.94.63.83:18105/`; it replaces catalog priority
+ownership with source metadata. The interactions below describe this current preview.
+The previous catalog-driven preview remains preserved at port 18104.
 
 ## Approved interaction
 
@@ -58,9 +59,11 @@ Zoom alone does not promote additional measurements. Explicit Fit and the first
 measured host layout reconsider hidden callouts, reserving existing visible
 positions before a bounded search for newly readable measurements.
 
-In the current qualified preview, sample manifests own checked declaration/parameter selectors for design-intent
-priorities. Rust resolves them through accepted declaration and control provenance,
-never rendered labels. Default priorities stay in the Inspector even when occluded.
+Source owns design-intent priorities through `isKeyConstraint`, `isKeyParameter` and
+`dimensions.areKeyConstraintsByDefault`. Rust resolves them through authenticated
+accepted metadata and control provenance, never rendered labels. Default priorities
+stay in the Inspector even when occluded. The previous manifest selectors and
+first-six fallback are historical; unmarked source uses contextual discovery.
 
 Mode and pins are presentation preferences. Older workspaces default to Focused
 while preserving manual placements; stale identities must never retarget another
@@ -88,11 +91,12 @@ any golden changes individually. Final supervising-user acceptance remains pendi
 
 On 2026-09-08 the supervising user approved the general direction and requested
 important shape-intent measurements by default, explicitly including every
-Gridfinity measurement. This amendment changes presentation only. Qualification
-of the prior preview remains historical evidence until the amended product is
-qualified; M97 is open.
+Gridfinity measurement. This amendment changes presentation only.
+[Default-priority qualification](M97_PRIORITY_DIMENSIONS.md) records its passing
+gate and preserved port-18104 preview. The source-native amendment below now
+supersedes it; M97 remains open.
 
-## Source-native authoring amendment — implemented, qualification underway
+## Source-native authoring amendment — qualified, awaiting acceptance
 
 The supervising user requested native/intuitive authoring and an audit of adjacent
 metadata that should belong in code. [M97_AUTHORING_METADATA.md](M97_AUTHORING_METADATA.md)
@@ -103,11 +107,15 @@ Gridfinity uses an explicit document dimension default; the manifold keeps its e
 selected dimensions and full channel/groove values. Shared parameters appear once;
 generated offsets retain their owning patch and existing editing restrictions.
 
-Live catalog priorities, titles and descriptions migrate into source. Runtime
-selection by sample identity and the first-six heuristic retire. Existing groups
-remain source-owned, with catalog projections derived from them. Catalog ordering,
+Live catalog priorities, titles and descriptions now belong to source. Runtime
+priority selection by sample identity and the first-six heuristic have been removed.
+Existing groups remain source-owned, with catalog projections derived from them. Catalog ordering,
 categories, legal records and independent qualification expectations retain their
 existing purpose. Personal mode/pins/visibility/camera remain outside design source.
 
-This adds implementation and qualification obligations to the open M97 milestone;
-it does not claim a replacement qualified product or supervising-user closure.
+[Implementation evidence](M97_AUTHORING_IMPLEMENTATION.md) records clean product
+`e26270cb89e5849092145b329d0cf95821a81b27`, the passing 244-obligation gate
+`20260908T235146-b387d273`, and the frozen port-18105 preview's served-byte and
+actual-WASM verification. Generated per-instance overview overrides remain deferred.
+Implementation and mechanical qualification are complete; supervising-user acceptance
+and M97 closure remain pending.
