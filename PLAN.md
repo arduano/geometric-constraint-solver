@@ -8454,6 +8454,20 @@ that code authors use; public parameters, labels/help and document identity join
 scope. The design changes no product bytes and its implementation/qualification remain
 unchecked above. M97 remains open; M96 remains accepted.
 
+## M98 — local plaintext sketch folder prototype (authorized parallel exception)
+
+Status: **PROTOTYPE_READY_FOR_UAT**, not accepted or release-qualified. Pinned to
+`d80bf22264f74b60870f2e99feb8cc6ccb9d0133`; M97 remains separately active and unclosed.
+[Goals](docs/M98_GOALS.md), [handoff and evidence](docs/M98_HANDOFF.md).
+
+- [x] Implement init/serve/check/status, one managed source file and the existing demo adapter.
+- [x] Witness two-way live file/Inspector editing, restart, invalid-source retention, stale-write
+  refusal, failed-write recovery, manual export and ordinary demo mode in Chromium.
+- [x] Run focused checks and leave a private loopback preview plus run instructions.
+- [ ] Human prototype UAT/iteration; production nomination and integrated release gate deferred.
+
+No solver math, primitive or M97 implementation changes; no other checkout/service touched.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

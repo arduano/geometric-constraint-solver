@@ -2,7 +2,8 @@
 
 # M98 local plaintext sketch prototype
 
-Status: implementation in progress; production nomination and acceptance deferred.
+Status: **PROTOTYPE_READY_FOR_UAT**; production nomination and acceptance deferred.
+Implementation, commands and actual-browser evidence: [M98_HANDOFF.md](M98_HANDOFF.md).
 Authorized parallel exception, pinned to `d80bf22264f74b60870f2e99feb8cc6ccb9d0133`.
 M97 remains owned by the active primary checkout; its live metadata changes are absent here.
 
@@ -25,7 +26,10 @@ Existing writer comment/label retention applies; arbitrary handwritten AST round
 
 The bridge polls entry content, including save-by-rename, and coalesces settled changes.
 One serialized workbench performs each external source transaction. Accepted UI source changes
-write atomically only against the browser's expected SHA-256 and a fresh disk comparison.
+publish complete file bytes only against the browser's expected SHA-256 and a fresh disk comparison.
+An exclusive link publishes the staged file after retaining the displaced inode in a plaintext
+recovery file, preventing a concurrent rename from being overwritten. There is a brief missing-entry
+interval; interrupted publication may require recovery from `.geosolve/before-*.ts`.
 Conflict leaves disk intact and returns pending intent for explicit refresh/retry. Invalid disk
 text stays intact, with last accepted geometry and clear stale/error status. A derived last-good
 plaintext cache can reconstruct that view after restart; it never overrides the current entry.
