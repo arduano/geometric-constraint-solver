@@ -87,6 +87,8 @@ pub enum SceneAnnotationVisibility {
     Always,
     /// Visible only through direct context, selection, or diagnostics.
     Contextual,
+    /// Explicitly excluded by an applied presentation policy; never a pick target.
+    Hidden,
 }
 
 /// One glyph location. A displaced marker retains its semantic leader origin.
@@ -577,7 +579,7 @@ impl SceneAnnotation {
         clippy::too_many_lines,
         reason = "one exhaustive semantic placement dispatch keeps every annotation geometry form explicit"
     )]
-    fn apply_placement(&mut self, placement: AnnotationPlacement) {
+    pub(crate) fn apply_placement(&mut self, placement: AnnotationPlacement) {
         match (&mut self.geometry, placement) {
             (
                 SceneAnnotationGeometry::LinearDimension {
@@ -817,14 +819,15 @@ impl SceneAnnotation {
         hovered: Option<SelectionItem>,
         problem_items: &[SelectionItem],
     ) -> bool {
-        self.visibility == SceneAnnotationVisibility::Always
-            || selection.contains(&self.item)
-            || problem_items.contains(&self.item)
-            || hovered == Some(self.item)
-            || hovered.is_some_and(|item| self.operands.contains(&item))
-            || selection
-                .iter()
-                .any(|selected| self.operands.contains(selected))
+        self.visibility != SceneAnnotationVisibility::Hidden
+            && (self.visibility == SceneAnnotationVisibility::Always
+                || selection.contains(&self.item)
+                || problem_items.contains(&self.item)
+                || hovered == Some(self.item)
+                || hovered.is_some_and(|item| self.operands.contains(&item))
+                || selection
+                    .iter()
+                    .any(|selected| self.operands.contains(selected)))
     }
 
     /// Reports whether the screen position hits this annotation.
@@ -1277,7 +1280,7 @@ fn trim_decimal(mut value: String) -> String {
     value
 }
 
-pub(crate) fn build_annotations(
+pub(crate) fn build_annotations_unlaid(
     document: &SketchDocument,
     points: &[ScenePoint],
     curves: &[SceneCurve],
@@ -1319,6 +1322,19 @@ pub(crate) fn build_annotations(
             reference: false,
         });
     }
+    annotations.extend(build_dimension_annotations_unlaid(
+        document, points, curves, viewport,
+    ));
+    annotations
+}
+
+pub(crate) fn build_dimension_annotations_unlaid(
+    document: &SketchDocument,
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+) -> Vec<SceneAnnotation> {
+    let mut annotations = Vec::new();
     for dimension in document.dimensions() {
         if let Some((kind, operands, geometry)) =
             dimension_presentation(document, points, curves, viewport, &dimension.definition)
@@ -1356,6 +1372,16 @@ pub(crate) fn build_annotations(
             annotations.push(annotation);
         }
     }
+    annotations
+}
+
+pub(crate) fn build_annotations(
+    document: &SketchDocument,
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+) -> Vec<SceneAnnotation> {
+    let mut annotations = build_annotations_unlaid(document, points, curves, viewport);
     resolve_automatic_layout(
         document.id(),
         &mut annotations,
@@ -2369,7 +2395,7 @@ fn dimension_presentation(
     }
 }
 
-fn profile_offset_edge_pairs(
+pub(crate) fn profile_offset_edge_pairs(
     operand: &geosolve_sketch::DocumentProfileOffsetOperand,
 ) -> Vec<&geosolve_sketch::DocumentProfileOffsetEdgePair> {
     match operand {
@@ -2956,7 +2982,7 @@ fn resolve_automatic_layout(
         {
             continue;
         }
-        place_dimension_automatically(annotation, &occupied, points, curves, viewport);
+        place_dimension_automatically(annotation, &occupied, points, curves, viewport, None);
         push_dimension_obstacles(annotation, &mut occupied);
     }
 
@@ -3070,15 +3096,31 @@ fn push_dimension_obstacles(
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "exhaustive typed annotation placement families share one bounded candidate search"
+)]
 fn place_dimension_automatically(
     annotation: &mut SceneAnnotation,
     occupied: &[AnnotationLayoutObstacle],
     points: &[ScenePoint],
     curves: &[SceneCurve],
     viewport: Viewport,
+    maximum_displacement: Option<f64>,
 ) {
     if annotation.label_bounds.is_none()
-        || annotation_label_is_clear(annotation, occupied, points, curves, viewport)
+        || annotation_label_is_clear_with_clearance(
+            annotation,
+            occupied,
+            points,
+            curves,
+            viewport,
+            if maximum_displacement.is_some() {
+                6.0
+            } else {
+                AUTO_LAYOUT_CLEARANCE_PIXELS
+            },
+        )
     {
         return;
     }
@@ -3087,6 +3129,11 @@ fn place_dimension_automatically(
     };
     let base = annotation.clone();
     let mut candidates = Vec::new();
+    let search_rings = if maximum_displacement.is_some() {
+        5
+    } else {
+        AUTO_DIMENSION_SEARCH_RINGS
+    };
     match default {
         AnnotationPlacement::Linear {
             perpendicular_pixels,
@@ -3096,7 +3143,7 @@ fn place_dimension_automatically(
             } else {
                 1.0
             };
-            for ring in 1..=AUTO_DIMENSION_SEARCH_RINGS {
+            for ring in 1..=search_rings {
                 let distance = AUTO_DIMENSION_STEP_PIXELS * f64::from(ring);
                 candidates.push(AnnotationPlacement::Linear {
                     perpendicular_pixels: perpendicular_pixels + side * distance,
@@ -3117,7 +3164,7 @@ fn place_dimension_automatically(
                     ..
                 }
             );
-            for ring in 0..=AUTO_DIMENSION_SEARCH_RINGS {
+            for ring in 0..=search_rings {
                 let clearance = clearance_pixels + AUTO_DIMENSION_STEP_PIXELS * f64::from(ring);
                 let phases = if full_circle { 16 } else { 1 };
                 for phase_index in 0..phases {
@@ -3136,14 +3183,14 @@ fn place_dimension_automatically(
             }
         }
         AnnotationPlacement::Angular { radius_pixels } => {
-            for ring in 1..=AUTO_DIMENSION_SEARCH_RINGS {
+            for ring in 1..=search_rings {
                 candidates.push(AnnotationPlacement::Angular {
                     radius_pixels: radius_pixels + AUTO_DIMENSION_STEP_PIXELS * f64::from(ring),
                 });
             }
         }
         AnnotationPlacement::Free { .. } => {
-            for ring in 1..=AUTO_DIMENSION_SEARCH_RINGS {
+            for ring in 1..=search_rings {
                 let radius = AUTO_DIMENSION_STEP_PIXELS * f64::from(ring);
                 let slots = 8 * ring;
                 for phase_index in 0..slots {
@@ -3158,36 +3205,101 @@ fn place_dimension_automatically(
     for placement in candidates {
         let mut candidate = base.clone();
         candidate.apply_placement(placement);
-        if annotation_label_is_clear(&candidate, occupied, points, curves, viewport) {
+        if maximum_displacement.is_some_and(|maximum| {
+            base.label_bounds
+                .zip(candidate.label_bounds)
+                .is_some_and(|(first, second)| {
+                    midpoint(first.min, first.max).distance(midpoint(second.min, second.max))
+                        > maximum
+                })
+        }) {
+            continue;
+        }
+        if annotation_label_is_clear_with_clearance(
+            &candidate,
+            occupied,
+            points,
+            curves,
+            viewport,
+            if maximum_displacement.is_some() {
+                6.0
+            } else {
+                AUTO_LAYOUT_CLEARANCE_PIXELS
+            },
+        ) {
             *annotation = candidate;
             return;
         }
     }
 }
 
-fn annotation_label_is_clear(
+fn annotation_label_is_clear_with_clearance(
     annotation: &SceneAnnotation,
     occupied: &[AnnotationLayoutObstacle],
     points: &[ScenePoint],
     curves: &[SceneCurve],
     viewport: Viewport,
+    clearance: f64,
 ) -> bool {
     annotation.label_bounds.is_none_or(|bounds| {
-        rectangle_within_viewport(bounds, viewport, AUTO_LAYOUT_CLEARANCE_PIXELS)
+        rectangle_within_viewport(bounds, viewport, clearance)
             && points.iter().all(|point| {
-                bounds.distance(point.screen_position)
-                    >= AUTO_POINT_RADIUS_PIXELS + AUTO_LAYOUT_CLEARANCE_PIXELS
+                bounds.distance(point.screen_position) >= AUTO_POINT_RADIUS_PIXELS + clearance
             })
             && curves.iter().all(|curve| {
                 curve.screen_polyline.windows(2).all(|segment| {
-                    segment_rectangle_distance(segment[0], segment[1], bounds)
-                        >= AUTO_LAYOUT_CLEARANCE_PIXELS
+                    segment_rectangle_distance(segment[0], segment[1], bounds) >= clearance
                 })
             })
-            && occupied.iter().all(|obstacle| {
-                rectangle_obstacle_distance(bounds, *obstacle) >= AUTO_LAYOUT_CLEARANCE_PIXELS
-            })
+            && occupied
+                .iter()
+                .all(|obstacle| rectangle_obstacle_distance(bounds, *obstacle) >= clearance)
     })
+}
+
+/// Applies a bounded search only to the selected visible dimension cohort.
+pub(crate) fn place_focused_dimension(
+    annotation: &mut SceneAnnotation,
+    occupied: &[SceneAnnotation],
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+) -> bool {
+    let obstacles = presentation_obstacles(occupied);
+    place_dimension_automatically(annotation, &obstacles, points, curves, viewport, Some(96.0));
+    annotation_label_is_clear_with_clearance(annotation, &obstacles, points, curves, viewport, 6.0)
+}
+
+pub(crate) fn focused_dimension_is_clear(
+    annotation: &SceneAnnotation,
+    occupied: &[SceneAnnotation],
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+    clearance: f64,
+) -> bool {
+    annotation_label_is_clear_with_clearance(
+        annotation,
+        &presentation_obstacles(occupied),
+        points,
+        curves,
+        viewport,
+        clearance,
+    )
+}
+
+fn presentation_obstacles(annotations: &[SceneAnnotation]) -> Vec<AnnotationLayoutObstacle> {
+    let mut occupied = Vec::new();
+    for annotation in annotations {
+        if let SceneAnnotationGeometry::Glyph { markers } = &annotation.geometry {
+            for marker in markers {
+                push_marker_obstacles(marker, &mut occupied);
+            }
+        } else {
+            push_dimension_obstacles(annotation, &mut occupied);
+        }
+    }
+    occupied
 }
 
 fn glyph_position_is_clear(
@@ -3896,18 +4008,20 @@ mod tests {
             &[],
             &[blocker],
             Viewport::new([160.0, 220.0], [0.0, 0.0], 1.0).expect("viewport"),
+            None,
         );
         let SceneAnnotationGeometry::LinearDimension { label_anchor, .. } = annotation.geometry
         else {
             unreachable!()
         };
         assert!((label_anchor.y - 68.0).abs() > 1.0e-9);
-        assert!(super::annotation_label_is_clear(
+        assert!(super::annotation_label_is_clear_with_clearance(
             &annotation,
             &occupied,
             &[],
             &[],
             Viewport::new([160.0, 220.0], [0.0, 0.0], 1.0).expect("viewport"),
+            super::AUTO_LAYOUT_CLEARANCE_PIXELS,
         ));
     }
 

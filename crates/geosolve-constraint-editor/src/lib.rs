@@ -12,6 +12,7 @@ mod authoring;
 mod commit_plan;
 mod coordinator;
 mod curve_controls;
+mod dimension_presentation;
 mod feature_authoring;
 mod geometry_tools;
 mod inference;
@@ -66,6 +67,10 @@ pub use curve_controls::{
     SceneCurveControl, SceneCurveControlGripGeometry, SceneCurveControlGuide,
     SceneCurveControlGuideKind, SceneCurveControlHit, SceneCurveControlInteraction,
     SceneCurveControlRail, SceneCurveControlRole,
+};
+pub use dimension_presentation::{
+    DimensionDisplayMode, DimensionPresentationContext, DimensionPresentationState,
+    SceneDimensionEntry,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -3834,11 +3839,19 @@ impl EditorScene {
             return false;
         }
         let corridor_tolerance = tolerance.annotation_pixels.max(14.0);
+        let dimension_context =
+            dimension_presentation::expanded_context(&self.accepted_document, &[context_owner]);
         let related = self
             .annotations
             .iter()
             .filter(|annotation| {
-                annotation.item == context_owner || annotation.operands.contains(&context_owner)
+                annotation.item == context_owner
+                    || annotation.operands.contains(&context_owner)
+                    || (matches!(annotation.item, SelectionItem::Dimension(_))
+                        && annotation
+                            .operands
+                            .iter()
+                            .any(|item| dimension_context.contains(item)))
             })
             .filter(|annotation| {
                 (self.show_all_constraint_annotations

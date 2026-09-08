@@ -1640,6 +1640,18 @@ pub struct DimensionTargetMetadata {
     pub mode: DocumentDimensionMode,
 }
 
+impl DimensionTargetMetadata {
+    /// Converts an edited display value to storage while preserving the current
+    /// directed angle quadrant and complete-turn branch.
+    ///
+    /// # Errors
+    ///
+    /// Rejects nonfinite values and acute angles outside `(0, 90]` degrees.
+    pub fn storage_value_for_display(self, value: f64) -> Result<f64, CoordinatorError> {
+        storage_dimension_target(self, value)
+    }
+}
+
 /// Explicit persisted direction of one selected native Profile Offset association.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProfileOffsetDirectionState {
@@ -9203,7 +9215,7 @@ impl RetainedEditorCoordinator {
             .ok_or(CoordinatorError::ActionUnavailable(
                 DisabledReason::MissingObject,
             ))?;
-        let value = storage_dimension_target(metadata, display_value)?;
+        let value = metadata.storage_value_for_display(display_value)?;
         self.set_dimension_target(expected, dimension, value)
     }
 

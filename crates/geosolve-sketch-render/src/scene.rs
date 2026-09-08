@@ -2260,7 +2260,9 @@ fn render_annotations(
         let visible = annotation.is_visible(selection, visibility_context, problem_items)
             || scene.show_all_constraint_annotations
                 && matches!(annotation.kind, SceneAnnotationKind::Constraint(_));
-        if !visible && !retain_contextual {
+        if annotation.visibility == geosolve_constraint_editor::SceneAnnotationVisibility::Hidden
+            || (!visible && !retain_contextual)
+        {
             continue;
         }
         let selected = selection.contains(&annotation.item);

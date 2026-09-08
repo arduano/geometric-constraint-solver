@@ -2814,6 +2814,82 @@ mod tests {
         );
     }
     #[test]
+    fn m97_dimension_policy_agrees_in_numeric_svg_static_and_hidden_contextual_exports() {
+        use geosolve_constraint_editor::{
+            AnnotationLayoutState, DimensionDisplayMode, DimensionPresentationContext,
+            DimensionPresentationState,
+        };
+        let owner = session();
+        let mut scene = scene(&owner, crate::viewport());
+        let accepted = owner.accepted_state().unwrap();
+        let mut state = DimensionPresentationState::default();
+        state.mode = DimensionDisplayMode::Focused;
+        let rows = state.apply(
+            &mut scene,
+            &AnnotationLayoutState::default(),
+            &DimensionPresentationContext::default(),
+        );
+        assert!(!rows.is_empty());
+        let selection: Vec<_> = rows.iter().map(|row| row.key.item).collect();
+        let drawing = frame(&scene, accepted, &selection);
+        assert!(
+            drawing
+                .items
+                .iter()
+                .all(|item| !item.class_name.starts_with("wb-dimension"))
+        );
+        let svg = crate::svg_markup_with_computed_context_action_stamp_display_and_provisional(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &selection,
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions {
+                retain_contextual_annotations: true,
+                ..CanvasDisplayOptions::default()
+            },
+            None,
+            scene.viewport,
+        );
+        assert!(!svg.contains("data-editor-kind=\"dimension\""));
+        let exported = crate::compose_static_scene_svg(
+            Some(&scene),
+            Some(accepted),
+            crate::CanvasCamera::default(),
+        );
+        assert!(!exported.contains("wb-annotation wb-dimension"));
+        state.focus = Some(rows[0].key);
+        let focused = state.apply(
+            &mut scene,
+            &AnnotationLayoutState::default(),
+            &DimensionPresentationContext::default(),
+        );
+        assert!(focused[0].visible);
+        assert!(
+            frame(&scene, accepted, &[])
+                .items
+                .iter()
+                .any(|item| item.class_name.starts_with("wb-dimension"))
+        );
+        assert!(
+            crate::compose_static_scene_svg(
+                Some(&scene),
+                Some(accepted),
+                crate::CanvasCamera::default()
+            )
+            .contains("wb-annotation wb-dimension")
+        );
+    }
+
+    #[test]
     fn dimensions_paint_the_exact_headless_arrowheads_and_mask_bounds() {
         let owner = session();
         let mut scene = scene(&owner, crate::viewport());
