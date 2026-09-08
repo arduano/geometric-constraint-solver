@@ -7411,11 +7411,12 @@ product identity; scenario coverage does not imply an unrecorded exhaustive huma
 
 ## M97 focused dimension scenarios — qualified, awaiting acceptance
 
-Clean-source run `20260908T133354-cff36f90` passes all 243 obligations, including
-all three M97 browser workflows and the unchanged 271-case golden.
-[M97 qualification](M97_QUALIFICATION.md) records the mechanically verified scope
-and frozen preview at `http://100.94.63.83:18103/`. Supervising-user acceptance
-remains pending; these checks do not imply an unrecorded human replay.
+Clean-source amendment run `20260908T172035-7255b491` passes all 243 obligations,
+including authenticated successes for all three M97 browser workflows and the
+unchanged 271-case golden. [Amendment qualification](M97_PRIORITY_DIMENSIONS.md)
+records the verified scope and frozen preview at `http://100.94.63.83:18104/`.
+Supervising-user acceptance remains pending; these checks do not imply an
+unrecorded human replay.
 
 - Open the manifold in Focused mode: curated envelope/reservoir and representative
   bore/fastener dimensions remain eligible without selection. Public 12 mm channel

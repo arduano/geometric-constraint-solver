@@ -10,14 +10,17 @@ a separate 12 mm two-bend stair passage and a 2.4 mm silicone groove.
 [M96 goals](docs/M96_GOALS.md) and [implementation evidence](docs/M96_IMPLEMENTATION.md)
 record the custom-patch API, independent geometry checks and editing corrections.
 The supervising user accepted the final amendment and requested closure. No M96 blocker
-or acceptance action remains. **M97 focused dimensions and stable annotation placement
-has a qualified preview; the requested default-priority amendment is in progress.** The verified preview is
-`http://100.94.63.83:18103/`; [M97 qualification](docs/M97_QUALIFICATION.md) is the
-prior qualification point. [The default-priority amendment](docs/M97_PRIORITY_DIMENSIONS.md)
-is the active continuation point. Source `a39f35ade58c3d5a272899dfb4e616d6578a9d14` passes
-all 243 obligations in `20260908T133354-cff36f90`, with exact served-byte and actual-WASM
-verification. [M97 goals](docs/M97_GOALS.md) records the approved interaction and
-the repaired zoom-then-click layout jump. M96 remains the accepted product.
+or acceptance action remains. **M97 focused dimensions and its default-priority
+amendment are implemented and qualified; supervising-user acceptance remains pending.**
+The verified amended preview is `http://100.94.63.83:18104/`.
+[Default-priority qualification](docs/M97_PRIORITY_DIMENSIONS.md) is the current
+continuation point: source `fc3fdcb71b4d910815a51cf030128c42317ff2ed` passes all 243
+obligations in `20260908T172035-7255b491`, with exact served-byte and actual-WASM
+verification. Gridfinity retains all 20 authored measurements as defaults; the
+manifold retains six key callouts and its public channel/groove widths in the
+Inspector. [The prior M97 preview](docs/M97_QUALIFICATION.md) remains preserved
+at port 18103. [M97 goals](docs/M97_GOALS.md) records the approved interaction.
+M97 is open for acceptance; M96 remains the accepted product.
 
 [M95 qualification](docs/M95_QUALIFICATION.md) and [closure](docs/M95_CLOSURE.md) retain
 the previous accepted checkpoint at `http://100.94.63.83:18100/`. M94 remains at port 18096.

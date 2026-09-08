@@ -2,9 +2,11 @@
 
 # M97 qualification and review preview
 
-M97 is implemented and mechanically qualified. The verified review preview is
-**http://100.94.63.83:18103/**. Supervising-user acceptance remains pending; M97
-is open and M96 remains the accepted product at port 18101.
+This records the prior M97 candidate, preserved at **http://100.94.63.83:18103/**.
+The user-requested default-priority amendment is now qualified and verified at
+**http://100.94.63.83:18104/**; [its report](M97_PRIORITY_DIMENSIONS.md) owns the
+current behavior and evidence. The details below describe the prior candidate.
+Supervising-user acceptance remains pending; M97 is open and M96 remains accepted.
 
 ## Files, APIs and behavior
 

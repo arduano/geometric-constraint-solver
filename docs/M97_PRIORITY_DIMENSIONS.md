@@ -43,11 +43,12 @@ DOF/rank semantics, hard/soft priorities or branch state change.
 
 ## Qualification status
 
-Implementation and focused development verification pass. The prior
-qualified preview at `http://100.94.63.83:18103/` remains unchanged. Replacement
-integrated qualification is pending; M97 remains open. Visual review verifies
-all six manifold callouts in the fitted Design view and readable Gridfinity
-measurements with all 20 rows retained in the Inspector.
+Implementation and integrated qualification pass. The amended preview is
+`http://100.94.63.83:18104/`; the prior preview at port 18103 remains preserved.
+M97 remains open for supervising-user acceptance. Visual review verifies all six
+manifold callouts in the fitted Design view and 17 readable Gridfinity callouts
+with all 20 rows retained in the Inspector. The final evidence below supersedes
+the intermediate attempts recorded here.
 
 Focused checks passed:
 
@@ -168,3 +169,109 @@ dependency compilation stays reusable. No product behavior or assertion changes.
 passes in an isolated checkout against a reflink copy of the stale verification
 cache. Cargo rebuilds the extracted package and accepts the current manifests.
 Output is retained in `target/m97/priority-package-timestamps.log`.
+
+## Final integrated qualification
+
+Clean candidate `fc3fdcb71b4d910815a51cf030128c42317ff2ed`, tree
+`300a72c8e54bec0522531ccd6a8234ad36671958`, passes **243/243 obligations** in
+`20260908T172035-7255b491` (376.0 seconds). The product implementation is the
+unchanged descendant of `c8584ce`; the final commit corrects package verification.
+
+```bash
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+python3 target/m97/audit-priority-qualification.py 20260908T172035-7255b491
+```
+
+The runner freshly executes 13 stages and authenticates 230 unchanged-input
+successes. Fresh coverage includes package contents/archive, licenses, transport,
+seven WASM interaction-parity suites, inventory and isolated performance. Reused
+native, optimized-WASM, golden and browser receipts preserve their original run
+identities; those successes do not turn earlier failed overall runs into passes.
+The audit authenticates all 243 signed stage receipts and **9,903 evidence files**.
+Logs and audit: `target/m97/priority-gate-r4.log` and
+`target/m97/priority-qualification-audit.json`.
+
+The authenticated coverage includes 217 frontend tests, 459 editor tests and 335
+workbench tests (one existing ignored test), all headless sample/edit/history
+checks, warnings-denied Clippy, formatting, documentation, optimized WASM,
+packaging and licenses. All three optimized-WASM lifecycle cases pass, including
+exact complete drawing equality for every sample. All 271 golden cases pass,
+with the unchanged checklist SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+The final performance stage passes in 172.9 seconds; its 256-moving-body case
+passes in 128.5 seconds.
+
+Browser evidence comes from the unchanged prepared artifact in
+`20260908T164242-cfcce90c`: all 17 catalog/sample-open checks and 47 full workflows
+pass, with no failures, skips, retries or reused leaves. The browser stage takes
+1254.6 seconds. M97 focus/pins, stable placement, and editing/history workflows
+pass in 53.8, 31.7 and 68.6 seconds. Native zoom, Hidden, inspection, default
+priorities, contextual budget, explicit Fit, source controls and reload criteria
+remain covered. The prior attempt `20260908T160816-fcd4a3b4` also completed its
+independent browser stage successfully; both failed overall attempts retain their
+original failed qualification status.
+
+## Frozen preview
+
+The authenticated production artifact is copied without rebuilding to
+`target/m97/preview-20260908T172035-7255b491/`, made read-only and served by
+`target/m97/serve-priority-preview.mjs` at **http://100.94.63.83:18104/**.
+It contains 12 files and 28,404,410 bytes, with files SHA-256
+`53c300834fa3d8a2c65256148852d9cafab982eadc6cb232b3c422020b176ee6`
+and manifest SHA-256
+`6c90674ef5fdc7692b0d79ba472ff2b7961a6695f8f4c117a00dacab9fac9f5a`.
+
+```bash
+python3 target/m97/freeze-priority-preview.py 20260908T172035-7255b491
+```
+
+The first transport invocation raced the detached server startup and failed before
+any route or WASM execution. Its receipt is preserved as
+`target/m97/priority-preview-artifact-verification-startup-failure.json`.
+The server then responded successfully; the same full verification was repeated.
+
+The following repeated verification and binding audit pass:
+
+```bash
+env GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npm run verify:artifact -- --manifest /home/arduano/programming/geometric-constraint-solver/target/m97/preview-20260908T172035-7255b491/production.json --directory /home/arduano/programming/geometric-constraint-solver/target/m97/preview-20260908T172035-7255b491/geosolve-production --url http://100.94.63.83:18104/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m97/priority-preview-artifact-verification.json'
+python3 target/m97/audit-priority-preview-artifact.py 20260908T172035-7255b491
+```
+
+All 13 routes (12 files and `/`) match exact bytes, MIME and base-path requirements;
+actual WASM readiness opens the manifold with accepted rendered geometry and no
+browser errors. `target/m97/priority-preview-artifact-binding.json` binds endpoint,
+manifest and file hashes to the signed preparation and qualification. The prior
+preview on port 18103 remains preserved. Both temporary repair worktrees were
+removed after integrating their commits and preserving evidence.
+
+## Final navigation observations and acceptance
+
+```bash
+env NAV_OUTPUT=target/m97/priority-navigation-final NAV_MANIFEST=target/m97/preview-20260908T172035-7255b491/production.json nix-shell shell.nix --run 'node target/m97/run-navigation-probe.mjs'
+```
+
+The same Chromium 151, 1440×900, DPR 1, RTX 3090 probe measures the exact frozen
+artifact. All three samples have zero browser errors, zero idle frames and exact
+direct-probe saved-source preservation. Median bridge work, milliseconds:
+
+| Sample | Wheel | Hover | Pan |
+| --- | ---: | ---: | ---: |
+| Dogbone coupon | 4.2 | 3.5 | 4.7 |
+| Manifold | 9.3 | 11.0 | 8.8 |
+| Dense robotic harness | 5.7 | 4.0 | 5.6 |
+
+These are bounded navigation observations, not a universal speedup or 60 Hz claim.
+Full report and screenshots: `target/m97/priority-navigation-final/`. Source
+compilation and large managed edits retain their previously recorded costs.
+Priority dimensions still require readable canvas slots; all key measurements
+remain accessible in the Inspector. Full patch widths are Inspector parameters.
+
+The amendment's mechanical criteria pass: authored sample priorities, all 20
+Gridfinity rows, truthful manifold widths, stable navigation/identical snapshots,
+contextual access, pins/Hidden, precise edits and persistence. **M97 remains open
+for supervising-user acceptance; this report does not close the milestone.**
+
+The prose handoff passes `git diff --check` and
+`./scripts/release-gate.sh --docs-only --since fc3fdcb` for five documentation files
+and six added links. This preserves the qualified product identity and served
+bytes; it does not rebuild or requalify the product.
