@@ -7436,6 +7436,9 @@ remains pending; these checks do not imply an unrecorded human replay.
 - M97-F001: zoom the manifold four times by -90 wheel units, then click empty
   canvas. Labels retain their projected positions. Repeat with pan, Fit, centering
   and resize; only affected geometry edits invalidate automatic placements.
+- M97-F002: repeatedly present an unchanged fitted viewport with a retained radial
+  dimension. Its geometry, label bounds and visibility remain exactly equal;
+  the existing actual-WASM all-sample drawing comparison retains exact equality.
 - Check all eight native dimension families, reference notation, bounded automatic
   displacement, collision suppression and restoration hysteresis. Simple, manifold
   and dense presentation captures and navigation comparisons accompany qualification.

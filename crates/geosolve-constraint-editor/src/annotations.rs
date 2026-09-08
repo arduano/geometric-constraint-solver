@@ -1468,6 +1468,15 @@ pub(crate) fn reproject_retained_layout(
     previous: Viewport,
     next: Viewport,
 ) {
+    if previous == next {
+        // An unchanged camera is an exact identity, without screen/model
+        // round-trip drift. Callers may have replaced retained geometry, so
+        // picking and collision bounds still need to follow that geometry.
+        for annotation in annotations {
+            annotation.refresh_label_bounds();
+        }
+        return;
+    }
     let map_anchor = |point: ScreenPoint| next.model_to_screen(previous.screen_to_model(point));
     let offset_from =
         |point: ScreenPoint, anchor: ScreenPoint| [point.x - anchor.x, point.y - anchor.y];

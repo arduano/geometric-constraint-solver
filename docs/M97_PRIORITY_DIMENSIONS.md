@@ -106,3 +106,43 @@ passes both retained-sample tests and formatting. Output is retained in
 `target/m97/priority-retained-fixture.log`. Replacement integrated qualification
 will authenticate reuse of independently completed stages from the failed run;
 the failed attempt remains failed.
+
+## M97-F002: exact identity for unchanged annotation viewports
+
+Replacement run `20260908T160816-fcd4a3b4` reproduced a native presentation defect
+at source `e87a7ba270c7440184bda359b9a915bf79868ea7`. The existing actual-WASM
+all-sample frame comparison failed on the manifold's 5 mm screw diameter. All
+364 drawing items and their identities matched; five annotation items differed
+only through approximately `1e-14`-pixel rounding in the same radial geometry.
+The scale/history and transition-matrix WASM cases passed.
+
+Repeated unchanged snapshots reprojected retained annotations through
+screen-to-model-to-screen conversion despite identical viewports. The diameter
+edge's x coordinate changed from `111.07604117731624` to `111.07604117731626`.
+An isolated native regression with the same circle, fitted viewport and radial
+placement independently reproduced the drift through `DimensionPresentationState`.
+The helper now treats identical viewports as exact geometry identities while
+still refreshing label bounds after callers restore retained geometry. That
+refresh preserves collision and picking authority. Actual viewport changes keep
+their existing mapping; the complete WASM frame comparison remains exact.
+
+The first minimal circle fixture retained a default radial direction that did
+not expose the rounding; it passed before repair. Reproducing the observed radial
+direction with an explicit placement made the exact annotation assertion fail.
+The regression compares geometry, label bounds and visible metadata over four
+unchanged applications. No golden rows, solver equations or sample geometry were
+changed. Development occurred in an isolated checkout while independent browser
+checks on the failed candidate finished.
+
+Focused correction commands ran in the isolated checkout, in its repository Nix shell:
+
+- `env CARGO_BUILD_JOBS=4 nix-shell shell.nix --run 'cargo test --locked -p geosolve-constraint-editor --lib dimension_presentation::tests::m97_identical_viewport_reapplication_preserves_exact_radial_annotation'`: the observed radial-placement fixture fails before repair with exact coordinate/bounds differences.
+- `env CARGO_BUILD_JOBS=4 nix-shell shell.nix --run 'cargo fmt --all -- --check && cargo test --locked -p geosolve-constraint-editor --lib dimension_presentation::tests::m97_ && cargo clippy --locked -p geosolve-constraint-editor --all-targets --all-features -- -D warnings'`: formatting, all 18 dimension tests and warnings-denied Clippy pass after repair. The first Clippy attempt caught a test initializer style issue; a direct struct initializer resolves it.
+
+Native before/after logs are preserved under `target/m97/priority-idempotence-*.log`.
+
+`env CARGO_BUILD_JOBS=4 CARGO_PROFILE_RELEASE_INCREMENTAL=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 nix-shell shell.nix --run 'CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked --release -p geosolve-demo-web --lib actual_wasm_all_bundled_samples_match_independently_composed_production_frames --target wasm32-unknown-unknown'`
+passes the existing exact all-sample drawing comparison after repair (48.0 seconds
+of test execution, two other cases filtered). The complete comparison and all
+sample assertions remain unchanged. Output is preserved in
+`target/m97/priority-idempotence-wasm.log`.

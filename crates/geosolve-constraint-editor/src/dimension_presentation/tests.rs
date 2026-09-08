@@ -98,6 +98,68 @@ fn anchor(annotation: &SceneAnnotation) -> ScreenPoint {
 }
 
 #[test]
+fn m97_identical_viewport_reapplication_preserves_exact_radial_annotation() {
+    let mut document = SketchDocument::new(240.0).unwrap();
+    let center = document.add_point("screw center", [12.0, 116.0]).unwrap();
+    let radius = document
+        .add_scalar("radius", 2.5, ScalarUnit::Length, ScalarDomain::Positive)
+        .unwrap();
+    let circle = document
+        .add_curve("screw", CurveDefinition::Circle { center, radius })
+        .unwrap();
+    let target = document
+        .add_scalar("diameter", 5.0, ScalarUnit::Length, ScalarDomain::Positive)
+        .unwrap();
+    let dimension = document
+        .add_dimension(
+            "screw diameter",
+            DocumentDimensionDefinition::Diameter {
+                curve: circle,
+                target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .unwrap();
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let mut scene = scene(&session, 10.0);
+    scene
+        .reproject_viewport(Viewport::new([1000.0, 700.0], [120.0, 60.0], 872.0 / 240.0).unwrap())
+        .unwrap();
+    let mut state = DimensionPresentationState {
+        mode: DimensionDisplayMode::Focused,
+        ..DimensionPresentationState::default()
+    };
+    let context = DimensionPresentationContext {
+        default_priority: BTreeSet::from([SelectionItem::Dimension(dimension)]),
+        ..DimensionPresentationContext::default()
+    };
+    let manual = AnnotationLayoutState::from_entries([crate::AnnotationLayoutEntry {
+        key: scene.annotations[0].layout_key(scene.accepted_document.id(), None),
+        placement: crate::AnnotationPlacement::Radial {
+            direction_radians: -3.0 * std::f64::consts::PI / 8.0,
+            clearance_pixels: 34.0,
+        },
+    }]);
+    let first_rows = state.apply(&mut scene, &manual, &context);
+    assert_eq!(first_rows.len(), 1);
+    assert!(first_rows[0].visible);
+    let original = scene.annotations.clone();
+    for _ in 0..4 {
+        let rows = state.apply(&mut scene, &manual, &context);
+        assert_eq!(rows, first_rows);
+        assert_eq!(
+            scene.annotations, original,
+            "an unchanged viewport must be an exact identity"
+        );
+    }
+}
+
+#[test]
 fn m97_legacy_cold_rebuild_reproduces_dimension_jump_after_zoom() {
     let (session, _) = fixture(12);
     let mut retained = scene(&session, 18.0);
