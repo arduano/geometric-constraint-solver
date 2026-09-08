@@ -131,9 +131,12 @@ fn m97_dimension_metadata_keeps_exact_values_and_angle_edit_quadrants() {
         .set_scalar_value(target.scalar, 12.0009)
         .unwrap();
     let exact = row.target_metadata(&scene).unwrap();
-    assert_eq!(exact.value, 12.0009);
-    assert_eq!(exact.display_value, 12.0009);
-    assert_eq!(exact.storage_value_for_display(12.0).unwrap(), 12.0);
+    assert_eq!(exact.value.to_bits(), 12.0009_f64.to_bits());
+    assert_eq!(exact.display_value.to_bits(), 12.0009_f64.to_bits());
+    assert_eq!(
+        exact.storage_value_for_display(12.0).unwrap().to_bits(),
+        12.0_f64.to_bits()
+    );
     for (old, expected) in [
         (30.0_f64, 40.0_f64),
         (150.0, 140.0),
