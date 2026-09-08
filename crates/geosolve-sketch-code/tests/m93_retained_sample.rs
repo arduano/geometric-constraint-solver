@@ -33,6 +33,16 @@ fn retained_bondtech_fixture_preserves_original_source_project_and_provenance() 
             // Catalog order can change without changing the retained original.
             live_manifest.as_object_mut().unwrap().remove("ordinal");
             original_manifest.as_object_mut().unwrap().remove("ordinal");
+            // M97 adds explicit overview preferences only to the live catalog;
+            // the historical fixture retains its exact original metadata.
+            assert_eq!(
+                live_manifest
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("dimension_presentation"),
+                Some(serde_json::json!({ "all_authored": true }))
+            );
+            assert!(original_manifest.get("dimension_presentation").is_none());
             assert_eq!(live_manifest, original_manifest);
             assert_eq!(live.witnesses_json(), archived.witnesses());
             assert_eq!(live.notice(), archived.notice());

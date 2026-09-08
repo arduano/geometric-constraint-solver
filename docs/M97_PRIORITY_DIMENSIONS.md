@@ -91,3 +91,18 @@ The browser runs use `GEOSOLVE_E2E_ARTIFACT_MANIFEST` pointing to the correspond
 - `npx playwright test tests/e2e/m97-dimensions.spec.ts --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/priority-browser-r1`: the managed edit/history/reload case passed; two overview probes failed as described above.
 - `npx playwright test tests/e2e/m97-dimensions.spec.ts --grep-invert "contextual dimension edits" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/priority-browser-r2`: Gridfinity/zoom/Hidden passed; manifold waited for the wrong Explorer name, `Middle outlet bore`, instead of the accepted declaration `middleOutlet`. No timing or visibility assertion was relaxed to resolve this selector error.
 - `npx playwright test tests/e2e/m97-dimensions.spec.ts --grep "manifold focus limits" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/priority-browser-r3`: passed in 55 seconds, covering six default rows, truthful widths, explicit inspection, nonpriority pin/reload/clear, hover/pan/transit and unchanged source/history.
+
+The first integrated amendment run, `20260908T155245-5f0fbeb8`, stopped at
+`workspace.geosolve-sketch-code::m93_retained_sample::normal`. Its historical
+Bondtech comparison did not account for the intentionally added live-catalog
+presentation metadata. The test now asserts exactly `{"all_authored": true}` on
+the live manifest and absence of that field in the archive, then compares all
+remaining metadata exactly. Historical source, project, witnesses, notices and
+edit fixtures remain unchanged. This is a harness expectation correction; no
+product behavior or golden rows were changed.
+
+`env CARGO_BUILD_JOBS=4 nix-shell shell.nix --run 'cargo test --locked -p geosolve-sketch-code --test m93_retained_sample && cargo fmt --all -- --check'`
+passes both retained-sample tests and formatting. Output is retained in
+`target/m97/priority-retained-fixture.log`. Replacement integrated qualification
+will authenticate reuse of independently completed stages from the failed run;
+the failed attempt remains failed.
