@@ -86,9 +86,12 @@ done
 # construct the real normalized archive while retaining local dependency
 # authority; the extracted code crate itself has no workspace-relative asset.
 cargo package --locked --allow-dirty --no-verify -p "$package_name" "${patches[@]}"
-tar -xzf "$archive" -C "$staging_dir"
-# Reuse dependency compilation across independently extracted archives. Cargo still
-# checks this newly extracted package and its exact normalized manifest every time.
+# Cargo archives use normalized historical timestamps. Give extracted files their
+# extraction time so Cargo's mtime-based freshness check cannot reuse an older
+# build script or library for changed package contents in this shared target.
+tar -xmzf "$archive" -C "$staging_dir"
+# Reuse dependency compilation, but check this newly extracted package and its
+# exact normalized manifest every time.
 cargo check \
   --target-dir "$cargo_target_dir/package-verification" \
   --locked \

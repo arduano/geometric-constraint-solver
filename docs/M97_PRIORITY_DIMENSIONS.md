@@ -146,3 +146,25 @@ passes the existing exact all-sample drawing comparison after repair (48.0 secon
 of test execution, two other cases filtered). The complete comparison and all
 sample assertions remain unchanged. Output is preserved in
 `target/m97/priority-idempotence-wasm.log`.
+
+## Package-verification cache correction
+
+Run `20260908T164242-cfcce90c` passes the repaired three-case WASM lifecycle
+suite and the unchanged golden, then fails `package.archive`. The packaged
+`build.rs` exactly matches the checked-in file (SHA-256
+`031627ca30f3ecbd5b3f58e9ef8b3a934895ad3e4d9548aea800e45d66affa13`), but Cargo
+reuses a cached build-script executable dated 2026-09-06 that predates
+`dimension_presentation`. Its old parser rejects the new manifest field.
+
+Cargo's archive gives source files a normalized historical modification time
+(`1153704088`). The verifier previously restored those timestamps into every
+new extraction while sharing a Cargo target directory, allowing mtime-based
+freshness checks to retain stale package code. Extraction now uses `tar -m` so
+the extracted package files receive current timestamps. The archive bytes and
+normalized manifest remain intact; the package's own code is checked afresh while
+dependency compilation stays reusable. No product behavior or assertion changes.
+
+`env CARGO_BUILD_JOBS=4 nix-shell shell.nix --run 'bash scripts/verify-geosolve-sketch-code-package.sh'`
+passes in an isolated checkout against a reflink copy of the stale verification
+cache. Cargo rebuilds the extracted package and accepts the current manifests.
+Output is retained in `target/m97/priority-package-timestamps.log`.
