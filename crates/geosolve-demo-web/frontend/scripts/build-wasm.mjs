@@ -94,6 +94,7 @@ try {
     "resize(request: string): string;",
     "cancel(request: string): string;",
     "exportProject(): string;",
+    "bakeProfile(max_chord_error_mm: number): string;",
     "persistProject(): string;",
     "exportReproduction(): string;",
     "exportInteractionTrace(): string;",

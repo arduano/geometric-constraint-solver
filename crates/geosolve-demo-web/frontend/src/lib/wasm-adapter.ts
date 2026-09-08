@@ -16,6 +16,7 @@ export interface JsonWorkbenchHandle {
   resize(request: string): string;
   cancel(request: string): string;
   exportProject(): string;
+  bakeProfile?(maxChordErrorMm: number): string;
   persistProject(): string;
   exportReproduction(): string;
   exportInteractionTrace(): string;
@@ -121,6 +122,11 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
   async resize(input: { version: 2; width: number; height: number; pixelRatio: number }) { return this.decodeUpdate(this.required().resize(JSON.stringify(input))); }
   async cancel(input: { version: 2; reason: "escape" | "lost-capture" | "blur" }) { return this.decodeUpdate(this.required().cancel(JSON.stringify(input))); }
   async exportProject() { return JSON.parse(this.required().exportProject()) as { version: 2; filename: string; contents: string }; }
+  async bakeProfile(maxChordErrorMm: number): Promise<Record<string, unknown>> {
+    const handle = this.required();
+    if (!handle.bakeProfile) throw new Error("Rebuild the M98-B WASM package to enable bakeProfile");
+    return JSON.parse(handle.bakeProfile(maxChordErrorMm)) as Record<string, unknown>;
+  }
   async persistProject() { return JSON.parse(this.required().persistProject()) as { version: 2; contents: string }; }
   async exportReproduction() { return JSON.parse(this.required().exportReproduction()) as { version: 2; filename: string; contents: string }; }
   async exportInteractionTrace() { return JSON.parse(this.required().exportInteractionTrace()) as { version: 2; filename: string; contents: string }; }

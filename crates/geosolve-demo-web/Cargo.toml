@@ -22,6 +22,7 @@ geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-featu
 geosolve-sketch-code = { version = "0.2.0", path = "../geosolve-sketch-code" }
 geosolve-sketch-intent = { version = "0.2.0", path = "../geosolve-sketch-intent" }
 geosolve-sketch-render = { version = "0.2.0", path = "../geosolve-sketch-render" }
+geosolve-sketch-topology = { version = "0.2.0", path = "../geosolve-sketch-topology" }
 miniz_oxide.workspace = true
 serde.workspace = true
 serde_json.workspace = true

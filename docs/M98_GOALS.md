@@ -46,3 +46,19 @@ Production release gate and milestone acceptance; M97 implementation/closure; mu
 semantic merges/CRDT; recursive dependency watching; custom patch builds; durable native drag
 overlays, camera and history; account/cloud services; deployment; 3D/solid export; Pi case modelling;
 new primitives, solver changes, golden expansion and a general filesystem framework.
+
+## M98-B authorized bounded follow-up
+
+The owner additionally authorized headless baked **2D profile data**, under
+[M98_BAKE_CONTRACT.md](M98_BAKE_CONTRACT.md), plus a nominal Pi footprint reference fixture.
+This does not authorize a solid kernel or case design in GeoSolve.
+
+Plan: reuse cold managed-source compilation and accepted retained geometry; expose a small
+Rust/WASM production-topology sampler; add `bake <folder> --out <file> --chord-error-mm 0.02`;
+exercise real exports, solved curves, refusal paths and the existing browser regressions.
+Node binds exact disk SHA-256 and publishes complete output after a fresh disk comparison.
+Rust owns region authority, model-space curve subdivision and polygon validation.
+No cache/last-good geometry is eligible when current disk source is invalid.
+The source scope remains the fixed manifest and single `sketch.ts` entry. Initial sampling
+supports lines/polyline spans, circles and circular arcs; computed features are deferred.
+MiniCAD import/solid validation is independently owned; there are no cross-checkout changes.

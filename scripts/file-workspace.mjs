@@ -5,7 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, lstatSync, realpathSync,
   renameSync, linkSync, unlinkSync, openSync, fsyncSync, closeSync } from "node:fs";
-import { resolve, dirname, extname, sep } from "node:path";
+import { resolve, dirname, basename, extname, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -237,7 +237,7 @@ export async function serveProject(folder, { port = 0 } = {}) {
         }); return;
       }
       if (request.method !== "GET") { send(response, 405, { error: "GET required" }); return; }
-      const dist = resolve(root, "crates/geosolve-demo-web/dist");
+      const dist = resolve(root, process.env.GEOSOLVE_DIST ?? "crates/geosolve-demo-web/dist");
       const path = resolve(dist, `.${decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname)}`);
       if (!path.startsWith(dist + sep) || !realpathSync(path).startsWith(dist + sep)) throw Error("Unknown asset");
       const mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".wasm": "application/wasm", ".json": "application/json" }[extname(path)] ?? "text/plain";
@@ -259,9 +259,58 @@ export async function serveProject(folder, { port = 0 } = {}) {
   return { ...session, project, close };
 }
 
+export async function bakeProject(folder, output, chordErrorMm) {
+  if (!Number.isFinite(chordErrorMm) || chordErrorMm <= 0) throw Error("--chord-error-mm must be finite and positive");
+  folder = realpathSync(folder);
+  // Generated interchange is deliberately outside the source project, never source/cache authority.
+  output = resolve(realpathSync(dirname(resolve(output))), basename(resolve(output)));
+  if (output === folder || output.startsWith(folder + sep)) throw Error("Bake output must be outside the source project");
+  if (existsSync(output) && (!lstatSync(output).isFile() || lstatSync(output).isSymbolicLink())) throw Error("Bake output must be a regular file, not a symlink");
+  const sourcePath = resolve(folder, "sketch.ts");
+  const manifestPath = resolve(folder, "geosolve.json");
+  regular(sourcePath);
+  regular(manifestPath);
+  const sourceBytes = readFileSync(sourcePath);
+  const manifestBytes = readFileSync(manifestPath);
+  const sourceText = new TextDecoder("utf-8", { fatal: true }).decode(sourceBytes);
+  const sourceHash = hash(sourceBytes);
+  const project = await openProject(folder, { cache: false });
+  const state = project.state();
+  if (!state.ok || state.acceptedHash !== hash(sourceText)) {
+    throw Error(`Bake requires current accepted disk source: ${JSON.stringify(state)}`);
+  }
+  const geometry = await project.adapter.bakeProfile(chordErrorMm);
+  geometry.source = { sha256: sourceHash };
+  const temporary = `${output}.m98-${randomBytes(8).toString("hex")}.tmp`;
+  try {
+    const descriptor = openSync(temporary, "wx", 0o600);
+    try { writeFileSync(descriptor, JSON.stringify(geometry, null, 2) + "\n"); fsyncSync(descriptor); }
+    finally { closeSync(descriptor); }
+    regular(sourcePath);
+    regular(manifestPath);
+    if (hash(readFileSync(sourcePath)) !== sourceHash || !readFileSync(manifestPath).equals(manifestBytes)) {
+      throw Error("Bake conflict: disk changed during export; retry with the current source");
+    }
+    renameSync(temporary, output);
+  } finally { if (existsSync(temporary)) unlinkSync(temporary); }
+  return { ok: true, output, source: { path: sourcePath, sha256: sourceHash },
+    acceptedRevision: state.acceptedRevision, workbenchRevision: state.workbenchRevision,
+    regions: geometry.regions.map(({ id, outer, holes }) => ({ id, outerVertices: outer.length, holes: holes.map((loop) => loop.length) })) };
+}
+
 async function main() {
   const [command, folder, ...options] = process.argv.slice(2);
-  if (!folder || !["init", "serve", "open", "check", "status"].includes(command)) throw Error("Usage: node scripts/file-workspace.mjs init|serve|open|check|status <folder> [--port N]");
+  if (!folder || !["init", "serve", "open", "check", "status", "bake"].includes(command)) throw Error("Usage: node scripts/file-workspace.mjs init|serve|open|check|status <folder> [--port N]; bake <folder> --out <file> --chord-error-mm <positive number>");
+  if (command === "bake") {
+    const flags = new Map();
+    for (let i = 0; i < options.length; i += 2) {
+      if (!["--out", "--chord-error-mm"].includes(options[i]) || !options[i + 1] || flags.has(options[i])) throw Error("Expected --out <file> --chord-error-mm <positive number>");
+      flags.set(options[i], options[i + 1]);
+    }
+    if (flags.size !== 2) throw Error("Bake requires --out <file> and --chord-error-mm <positive number>");
+    console.log(JSON.stringify(await bakeProject(folder, flags.get("--out"), Number(flags.get("--chord-error-mm"))), null, 2));
+    return;
+  }
   if (command === "init") { console.log(JSON.stringify(initProject(folder), null, 2)); return; }
   if (command === "status") {
     const session = JSON.parse(readSource(resolve(folder, ".geosolve/session.json")));

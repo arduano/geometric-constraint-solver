@@ -154,6 +154,14 @@ mod wasm {
                 .map_err(|error| JsValue::from_str(&error))
         }
 
+        /// Model-space line/circle/arc polygons from current accepted production topology.
+        #[wasm_bindgen(js_name = bakeProfile)]
+        pub fn bake_profile(&self, max_chord_error_mm: f64) -> Result<String, JsValue> {
+            self.bridge
+                .bake_profile_json(max_chord_error_mm)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
         #[wasm_bindgen(js_name = persistProject)]
         pub fn persist_project(&self) -> Result<String, JsValue> {
             self.bridge

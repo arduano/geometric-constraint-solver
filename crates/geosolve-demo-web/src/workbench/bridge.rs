@@ -13,6 +13,7 @@
 
 use std::str::FromStr as _;
 
+mod bake;
 mod navigation;
 use navigation::{NavigationSnapshot, NavigationState};
 #[cfg(test)]
