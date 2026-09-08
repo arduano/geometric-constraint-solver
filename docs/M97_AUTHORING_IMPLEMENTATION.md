@@ -105,8 +105,24 @@ that interrupted probe supplies no passing evidence.
 
 ## Remaining qualification
 
-Nominate the completed implementation as clean committed source to the integrated
-release runner. Reuse only its authenticated
+The first clean candidate is `3bcd06611f15a20d79f94d5f795d0694db8eaeed`
+(implementation `27a844a`, followed by the sample authoring README correction).
+`CARGO_BUILD_JOBS=4 nix-shell shell.nix --run './scripts/release-gate.sh --since d80bf22'`
+starts run `20260908T221332-021daddc`. Preflight and strict workspace Clippy pass;
+the native web-adapter stage reports 335 passes, two failures and one ignored test.
+The failures are existing Profile Offset and scale-sample tests looking up old display
+labels. The repaired tests retain stable source-ID checks and separately verify authored
+labels, with no production changes. Focused exact reruns pass (1.05 s and 42.48 s):
+
+```bash
+env CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG_ASSERTIONS=true CARGO_PROFILE_TEST_OVERFLOW_CHECKS=true CARGO_PROFILE_TEST_DEBUG=line-tables-only nix-shell shell.nix --run 'cargo test --locked -p geosolve-demo-web --lib workbench::bridge::tests::managed_profile_offset_closure_is_nested_and_mutates_as_one_source_block -- --exact --nocapture && cargo test --locked -p geosolve-demo-web --lib workbench::bridge::tests::m92_scale_sample_edited_history_restores_through_the_browser_request_envelope -- --exact --nocapture'
+```
+
+The first failed run does not qualify a release. The focused log is retained at
+`target/m97/authoring-stale-selectors-exact.log`.
+
+Repair the affected owner checks and resume through the integrated release runner.
+Reuse only its authenticated
 unchanged-input evidence. Freeze the qualified production artifact without rebuilding,
 verify its HTTP bytes and actual WASM readiness, and record the new preview here.
 Supervising-user acceptance and M97 closure remain separate outstanding actions.

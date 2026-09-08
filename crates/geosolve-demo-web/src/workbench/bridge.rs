@@ -5098,6 +5098,26 @@ mod tests {
             .clone()
     }
 
+    fn nested_explorer_row_by_id(snapshot: &serde_json::Value, id: &str) -> serde_json::Value {
+        fn find<'a>(rows: &'a [serde_json::Value], id: &str) -> Option<&'a serde_json::Value> {
+            rows.iter().find_map(|row| {
+                (row["id"] == id).then_some(row).or_else(|| {
+                    row["children"]
+                        .as_array()
+                        .and_then(|children| find(children, id))
+                })
+            })
+        }
+        find(
+            snapshot["explorer"]
+                .as_array()
+                .expect("snapshot explorer groups"),
+            id,
+        )
+        .unwrap_or_else(|| panic!("nested explorer identity `{id}`"))
+        .clone()
+    }
+
     fn pointer_request(
         phase: &str,
         pointer_id: u64,
@@ -6944,15 +6964,17 @@ export default sketch(($) => {
 
         let base_snapshot: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
-        let root = nested_explorer_row(&base_snapshot, "profileOffset12");
-        let helper = nested_explorer_row(&base_snapshot, "offsetChain11");
+        let root = nested_explorer_row_by_id(&base_snapshot, "managed:profileOffset12");
+        let helper = nested_explorer_row_by_id(&base_snapshot, "managed:offsetChain11");
+        assert_eq!(root["label"], "canvas.offset");
+        assert_eq!(helper["label"], "canvas.offset.helper");
         assert_eq!(root["rowKind"], "declaration");
         assert_eq!(helper["rowKind"], "declaration");
-        assert!(
-            root["children"]
-                .as_array()
-                .is_some_and(|children| children.iter().any(|row| row["label"] == "offsetChain11"))
-        );
+        assert!(root["children"].as_array().is_some_and(|children| {
+            children
+                .iter()
+                .any(|row| row["id"] == "managed:offsetChain11")
+        }));
         for capability in ["select", "navigate", "edit"] {
             assert_eq!(helper["capabilities"][capability]["enabled"], true);
         }
@@ -7055,10 +7077,11 @@ export default sketch(($) => {
         // root declaration after its private helper.
         let reordered_snapshot: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
-        let root_id = nested_explorer_row(&reordered_snapshot, "profileOffset12")["id"]
-            .as_str()
-            .unwrap()
-            .to_owned();
+        let root_id =
+            nested_explorer_row_by_id(&reordered_snapshot, "managed:profileOffset12")["id"]
+                .as_str()
+                .unwrap()
+                .to_owned();
         let guide_id = managed_row_id(&reordered_snapshot, "guide");
         bridge
             .dispatch_json(
@@ -7095,7 +7118,7 @@ export default sketch(($) => {
         // survive without a presentation overlay.
         let snapshot: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
-        let root_id = nested_explorer_row(&snapshot, "profileOffset12")["id"]
+        let root_id = nested_explorer_row_by_id(&snapshot, "managed:profileOffset12")["id"]
             .as_str()
             .unwrap()
             .to_owned();
@@ -7132,15 +7155,18 @@ export default sketch(($) => {
         let restored_snapshot: serde_json::Value =
             serde_json::from_str(&restored.snapshot_json().unwrap()).unwrap();
         assert!(
-            nested_explorer_row(&restored_snapshot, "profileOffset12")["children"]
+            nested_explorer_row_by_id(&restored_snapshot, "managed:profileOffset12")["children"]
                 .as_array()
-                .is_some_and(|children| children.iter().any(|row| row["label"] == "offsetChain11"))
+                .is_some_and(|children| children
+                    .iter()
+                    .any(|row| row["id"] == "managed:offsetChain11"))
         );
 
-        let root_id = nested_explorer_row(&restored_snapshot, "profileOffset12")["id"]
-            .as_str()
-            .unwrap()
-            .to_owned();
+        let root_id =
+            nested_explorer_row_by_id(&restored_snapshot, "managed:profileOffset12")["id"]
+                .as_str()
+                .unwrap()
+                .to_owned();
         restored
             .dispatch_json(
                 &serde_json::json!({
@@ -11252,6 +11278,10 @@ export default sketch(($) => {
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one persistence regression proves authored control identity, complete edited history and independent cold native validation together"
+    )]
     fn m92_scale_sample_edited_history_restores_through_the_browser_request_envelope() {
         let cases: &[(&str, &str, &str, &[u8])] = &[
             (
@@ -11265,7 +11295,7 @@ export default sketch(($) => {
             ),
             (
                 "robotic-harness-backplane",
-                "bendRadius",
+                "Bend radius",
                 "4.5",
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
@@ -11288,6 +11318,25 @@ export default sketch(($) => {
                 .into_iter()
                 .find(|parameter| parameter.label == *label)
                 .expect("declared scale parameter");
+            let code = bridge.code_project.as_ref().unwrap();
+            let manifest = code.managed_controls_cached().unwrap();
+            let control = manifest
+                .controls
+                .iter()
+                .find(|control| control.id.0 == parameter.id)
+                .unwrap();
+            let (declaration, path) = if *key == "robotic-harness-backplane" {
+                ("bendRadius", Vec::new())
+            } else {
+                (
+                    "northernCells",
+                    vec![geosolve_sketch_code::ManagedPathSegment::Field(
+                        "pilotRadius".into(),
+                    )],
+                )
+            };
+            assert_eq!(control.source.declaration.0, declaration);
+            assert_eq!(control.source.path.0, path);
             bridge
                 .dispatch_json(
                     &serde_json::json!({
