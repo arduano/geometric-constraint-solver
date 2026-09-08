@@ -7443,14 +7443,22 @@ unrecorded human replay.
 - Check all eight native dimension families, reference notation, bounded automatic
   displacement, collision suppression and restoration hysteresis. Simple, manifold
   and dense presentation captures and navigation comparisons accompany qualification.
+- M97-F003: renaming a source dimension commits an organization-only native
+  transaction. Incremental composition must preserve its independently accepted
+  geometry and allow the exact code-history publication; it must not report
+  a mathematical rejection merely because no solve was necessary. The native
+  `m97_f003_source_relabel_preserves_independently_accepted_native_authority`
+  regression and bridge lifecycle fixture cover the retained evidence and
+  Undo/Redo/reload.
 
-### M97 source-native metadata — planned scenarios, not yet executed
+### M97 source-native metadata — implemented scenarios
 
-[The authoring amendment](M97_AUTHORING_METADATA.md) defines the proposed APIs and
-workflow. These scenarios extend M97 and do not claim coverage from the prior gate.
+[The authoring amendment](M97_AUTHORING_METADATA.md) defines the APIs and
+workflow. [Implementation evidence](M97_AUTHORING_IMPLEMENTATION.md) records focused
+coverage. These scenarios extend M97 and do not claim coverage from the prior gate.
 
 - Toggle Show in overview on an authored driving and reference measurement; inspect
-  the exact local `key` source edit. Reset to a true document default, then explicitly
+  the exact local `isKeyConstraint` source edit. Reset to a true document default, then explicitly
   opt out. Undo/Redo/reload and source-only import preserve names/help and flags.
 - Create a dimension in the GUI and verify explicit overview intent in source.
   Import unmarked legacy source and reach every measurement through the Inspector
@@ -7460,7 +7468,7 @@ workflow. These scenarios extend M97 and do not claim coverage from the prior ga
   Numeric editing retains real geometry validation; metadata changes preserve geometry,
   residuals, rank/DOF, branches and identities. Generated 6/1.2 mm offsets remain distinct.
 - Give two separate parameters the same value; never merge them. Add another patch
-  consumer with different input defaults; the named parameter's own name/help/key
+  consumer with different input defaults; the named parameter's own name/help/isKeyParameter
   stay unchanged. An inline input inherits the exact patch schema until extracted.
 - Edit display labels and document title/description, including multibyte text and
   nearby comments. Keep symbols, groups, selection and pins stable. Rejected/stale

@@ -8417,8 +8417,8 @@ Closure prose preserves those qualified product bytes; no further M96 work is pe
 
 ## M97 — focused dimensions and stable annotation placement
 
-Status: **default-priority preview qualified; source-native authoring amendment designed,
-implementation pending.** [M97_GOALS.md](docs/M97_GOALS.md) owns the interaction contract;
+Status: **default-priority preview qualified; source-native authoring implemented,
+replacement qualification underway.** [M97_GOALS.md](docs/M97_GOALS.md) owns the interaction contract;
 [authoring design](docs/M97_AUTHORING_METADATA.md) specifies the requested next amendment.
 M96 remains the accepted product; M97 is open.
 
@@ -8430,10 +8430,10 @@ M96 remains the accepted product; M97 is open.
 - [x] Freeze and present the qualified candidate for supervising-user acceptance.
 - [x] Add and qualify default design-intent priorities, including all Gridfinity measurements.
 - [x] Design source-owned dimension priorities and audit adjacent authoring metadata.
-- [ ] Add document options, named parameters, patch input presentation and authenticated compiler metadata.
-- [ ] Add prepared metadata/extraction edits, source-driven projections and exact history/restoration.
-- [ ] Connect overview/name/help/document controls and consistently honor authored display labels.
-- [ ] Migrate live sample priorities/title/description to source, derive catalog projections and remove selector fallbacks.
+- [x] Add document options, named parameters, patch input presentation and authenticated compiler metadata.
+- [x] Add prepared metadata/extraction edits, source-driven projections and exact history/restoration.
+- [x] Connect overview/name/help/document controls and consistently honor authored display labels.
+- [x] Migrate live sample priorities/title/description to source, derive catalog projections and remove selector fallbacks.
 - [ ] Qualify source-only imports, precedence, shared controls and authoring transactions; deliver an amended preview.
 - [ ] Obtain supervising-user acceptance and close M97.
 
@@ -8451,8 +8451,10 @@ geometry for identical viewports; archived-fixture and package-cache checks are
 corrected without changing historical fixtures or golden rows. The subsequent
 authoring request is now designed: Inspector edits write the same local source metadata
 that code authors use; public parameters, labels/help and document identity join the
-scope. The design changes no product bytes and its implementation/qualification remain
-unchecked above. M97 remains open; M96 remains accepted.
+scope. The implementation now passes focused compiler/native/frontend checks, including
+exact source transactions and label-only native authority retention.
+[Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) tracks replacement
+qualification; a new frozen preview has not yet been nominated. M97 remains open; M96 remains accepted.
 
 ## Explicit non-goals
 

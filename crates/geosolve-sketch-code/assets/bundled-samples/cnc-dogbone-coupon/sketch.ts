@@ -1,7 +1,10 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "CNC joinery and dogbone fit coupon",
+  description: "A fully constrained three-station router coupon compares press, nominal and loose mortises against common tabs and explicit cutter reliefs.",
+}, ($) => {
   // Sacrificial router-fit coupon comparing loose, nominal and press stations.
   // The corner-centred circles are explicit dogbone overcuts, not CAM output.
   const femaleBlank = $.geometry.twoPointAlignedRectangle("femaleBlank", {
@@ -108,6 +111,7 @@ export default sketch(($) => {
     mode: "driving",
   });
   const pressMortiseHeight = $.dimension.curveLength("pressMortiseHeight", {
+    isKeyConstraint: true,
     curve: pressMortise.spans[1],
     value: mm(17.6),
     label: "Press mortise width",
@@ -126,6 +130,7 @@ export default sketch(($) => {
     mode: "driving",
   });
   const nominalMortiseHeight = $.dimension.curveLength("nominalMortiseHeight", {
+    isKeyConstraint: true,
     curve: nominalMortise.spans[1],
     value: mm(18),
     label: "Nominal mortise width",
@@ -144,6 +149,7 @@ export default sketch(($) => {
     mode: "driving",
   });
   const looseMortiseHeight = $.dimension.curveLength("looseMortiseHeight", {
+    isKeyConstraint: true,
     curve: looseMortise.spans[1],
     value: mm(18.4),
     label: "Loose mortise width",
@@ -231,6 +237,7 @@ export default sketch(($) => {
     mode: "driving",
   });
   const nominalTabThickness = $.dimension.curveLength("nominalTabThickness", {
+    isKeyConstraint: true,
     curve: nominalTab.spans[1],
     value: mm(18),
     label: "Nominal tab thickness",
@@ -327,6 +334,7 @@ export default sketch(($) => {
     role: "profile",
   });
   const cutterRadius = $.dimension.radius("cutterRadius", {
+    isKeyConstraint: true,
     curve: pressReliefLl.curve,
     value: mm(3.175),
     label: "6.35 mm cutter",

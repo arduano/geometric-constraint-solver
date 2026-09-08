@@ -2,22 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 15,
   "key": "perforated-fixture-field",
-  "title": "Parametric perforated fixture field",
-  "summary": "Three keyed serpentine lattices generate 192 pilot/counterbore pairs across a complete fixture plate.",
   "category": "scale_study",
   "expected": {
     "raw_dof": 772,
     "effective_dof": 772
-  },
-  "groups": [
-    "Fixture envelope",
-    "Northern mounting bank",
-    "Central mounting bank",
-    "Southern mounting bank",
-    "Fixture pitch annotations"
-  ],
-  "dimension_presentation": {
-    "all_authored": true
   },
   "provenance": []
 }

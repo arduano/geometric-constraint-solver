@@ -1,7 +1,13 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Printers for Ants Micron CNC X-carriage",
+  description: "A continuous stepped carriage relates extracted 16 x 15 mm and alternate 10 x 15 mm rail patterns to the 25 mm belt-fastener pitch.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   // Selected YZ interface from CNC_Carriage.step, with Z=18.89933933439
   // as the rail-pattern mid-height. The source has M3 axes at Y=+/-8
   // and Z=11.39933933439/26.39933933439 (16 x 15 pitch); the alternate

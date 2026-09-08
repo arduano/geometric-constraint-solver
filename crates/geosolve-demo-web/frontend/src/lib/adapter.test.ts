@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from "vitest";
-import { assertWorkbenchSnapshot, type DimensionsSnapshot, type NavigationSnapshot } from "./adapter";
+import { assertWorkbenchSnapshot, type AuthoringMetadataSnapshot, type DimensionsSnapshot, type NavigationSnapshot } from "./adapter";
 import { MockWorkbenchAdapter } from "./mock-adapter";
 
 const navigation: NavigationSnapshot = {
@@ -30,6 +30,32 @@ describe("M95 navigation snapshot transport", () => {
   ])("rejects malformed navigation fields %j", async (changes) => {
     const snapshot = await new MockWorkbenchAdapter().snapshot();
     snapshot.navigation = { ...navigation, ...changes } as NavigationSnapshot;
+    expect(() => assertWorkbenchSnapshot(snapshot)).toThrow("Unsupported or malformed workbench snapshot");
+  });
+});
+
+describe("source authoring metadata snapshot transport", () => {
+  const metadata: AuthoringMetadataSnapshot = { authority: "accepted-source", target: { kind: "parameter", id: "width" }, label: "Channel width", description: "Full passage width", isKeyParameter: true, hasKeyOverride: true, editable: true, canExtract: false };
+  it("accepts source-owned document and parameter presentation without altering authority", async () => {
+    const snapshot = await new MockWorkbenchAdapter().snapshot();
+    snapshot.parameters[0].metadata = metadata;
+    snapshot.authoringDocument = { authority: "accepted-source", title: "Manifold", description: "Water passages", areKeyConstraintsByDefault: false, editable: true };
+    expect(assertWorkbenchSnapshot(snapshot)).toBe(snapshot);
+  });
+  it.each([
+    { authority: "" }, { target: { kind: "opaque", id: "width" } }, { target: { kind: "parameter", id: "" } },
+    { editable: "true" }, { isKeyParameter: 1 }, { isKeyConstraint: true }, { description: { html: "injected" } }, { hasKeyOverride: "false" }, { canExtract: 1 },
+  ])("rejects malformed authored presentation %j", async (changes) => {
+    const snapshot = await new MockWorkbenchAdapter().snapshot();
+    snapshot.parameters[0].metadata = { ...metadata, ...changes } as AuthoringMetadataSnapshot;
+    expect(() => assertWorkbenchSnapshot(snapshot)).toThrow("Unsupported or malformed workbench snapshot");
+  });
+  it("rejects malformed discovery and document defaults", async () => {
+    const snapshot = await new MockWorkbenchAdapter().snapshot();
+    snapshot.authoringDocument = { authority: "accepted-source", title: "Title", description: "", areKeyConstraintsByDefault: "true" as unknown as boolean, editable: true };
+    expect(() => assertWorkbenchSnapshot(snapshot)).toThrow("Unsupported or malformed workbench snapshot");
+    delete snapshot.authoringDocument;
+    snapshot.dimensions = { mode: "focused", entries: [], parameters: [], pinCount: 0, allMeasurements: [{}] as DimensionsSnapshot["entries"] };
     expect(() => assertWorkbenchSnapshot(snapshot)).toThrow("Unsupported or malformed workbench snapshot");
   });
 });

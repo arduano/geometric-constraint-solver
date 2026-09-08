@@ -1,7 +1,10 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "CNC vacuum fixture and spoilboard plate",
+  description: "A 200 x 120 mm datum-driven plate combines a gasket groove, six-port vacuum grid and symmetric workholding pattern.",
+}, ($) => {
   // A reusable 200 x 120 mm fixture plate. One corner fixes the global gauge;
   // the vacuum grid and mounting pattern are located by symmetry and datums.
   const plate = $.geometry.twoPointAlignedRectangle("plate", {
@@ -16,12 +19,14 @@ export default sketch(($) => {
     label: "Fixture origin",
   });
   const plateWidth = $.dimension.curveLength("plateWidth", {
+    isKeyConstraint: true,
     curve: plate.spans[0],
     value: mm(200),
     label: "Plate width",
     mode: "driving",
   });
   const plateHeight = $.dimension.curveLength("plateHeight", {
+    isKeyConstraint: true,
     curve: plate.spans[1],
     value: mm(120),
     label: "Plate height",
@@ -68,12 +73,14 @@ export default sketch(($) => {
     label: "Gasket centered on vacuum axis",
   });
   const gasketWidth = $.dimension.curveLength("gasketWidth", {
+    isKeyConstraint: true,
     curve: gasket.spans[0],
     value: mm(180),
     label: "Gasket width",
     mode: "driving",
   });
   const gasketHeight = $.dimension.curveLength("gasketHeight", {
+    isKeyConstraint: true,
     curve: gasket.spans[1],
     value: mm(100),
     label: "Gasket height",
@@ -288,6 +295,7 @@ export default sketch(($) => {
     role: "profile",
   });
   const centerPortRadius = $.dimension.radius("centerPortRadius", {
+    isKeyConstraint: true,
     curve: centerPort.curve,
     value: mm(8),
     label: "Central port radius",
@@ -330,6 +338,7 @@ export default sketch(($) => {
     mode: "driving",
   });
   const holeNeRadius = $.dimension.radius("holeNeRadius", {
+    isKeyConstraint: true,
     curve: holeNe.curve,
     value: mm(3.25),
     label: "NE workholding radius",

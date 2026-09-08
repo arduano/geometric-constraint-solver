@@ -902,6 +902,8 @@ pub(crate) struct CodeProjectWorkbench {
     // Mutations still derive a fresh borrow-scoped `ManagedControlAuthority`
     // for exact-CAS application.
     managed_control_manifest_cache: RefCell<Option<ManagedControlManifestCache>>,
+    authored_metadata_cache:
+        RefCell<Option<(String, Rc<geosolve_sketch_code::ManagedAuthoredMetadata>)>>,
     // A referenced consumer may need to be detached before native pointer
     // continuation starts. This is disposable gesture state and is never
     // serialized or entered into history unless the terminal sample commits.
@@ -936,13 +938,6 @@ enum CodeProjectOrigin {
 }
 
 impl CodeProjectOrigin {
-    fn title(&self) -> &'static str {
-        match self {
-            Self::Bundled(sample) => sample.title,
-            Self::Authored => "Untitled code sketch",
-        }
-    }
-
     fn sample_key(&self) -> Option<&'static str> {
         match self {
             Self::Bundled(sample) => Some(sample.key),
@@ -1231,7 +1226,18 @@ impl CodeProjectWorkbench {
             declarations: insertion
                 .declarations
                 .into_iter()
-                .map(ManagedDeclarationDraft::from)
+                .map(|draft| {
+                    let mut draft = ManagedDeclarationDraft::from(draft);
+                    if draft
+                        .builder_path
+                        .first()
+                        .is_some_and(|namespace| namespace == "dimension")
+                        && let ManagedValue::Object(arguments) = &mut draft.arguments
+                    {
+                        arguments.insert("isKeyConstraint".into(), ManagedValue::Bool(true));
+                    }
+                    draft
+                })
                 .collect(),
         };
         let request =
@@ -1721,6 +1727,7 @@ impl CodeProjectWorkbench {
                 // that already-restored authority without a second decode.
                 materialized: Some(materialized),
                 managed_control_manifest_cache: RefCell::new(None),
+                authored_metadata_cache: RefCell::new(None),
                 pending_semantic_point_drag: None,
                 trace_semantic_point: None,
             },
@@ -1860,6 +1867,7 @@ impl CodeProjectWorkbench {
             last_receipt: None,
             materialized: Some(materialized),
             managed_control_manifest_cache: RefCell::new(None),
+            authored_metadata_cache: RefCell::new(None),
             pending_semantic_point_drag: None,
             trace_semantic_point: None,
         };
@@ -2523,10 +2531,13 @@ impl CodeProjectWorkbench {
 
     /// Human-facing project title for presentation adapters.
     ///
-    /// The title is origin metadata only; it carries no code-session or
-    /// accepted-scene authority.
-    pub(crate) fn title(&self) -> &'static str {
-        self.origin.title()
+    /// The accepted source owns the title; dirty drafts never change it.
+    pub(crate) fn title(&self) -> &str {
+        self.managed_compilation()
+            .and_then(|compiled| compiled.artifact.document.as_ref())
+            .and_then(|document| document.title.as_deref())
+            .filter(|title| !title.is_empty())
+            .unwrap_or("Untitled code sketch")
     }
 
     /// Currently selected source path in the code workspace.
@@ -3770,7 +3781,17 @@ impl CodeProjectWorkbench {
                 ManagedDeclarationPanelRow {
                     id: managed_panel_row_id(&declaration.symbol),
                     symbol: declaration.symbol.clone(),
-                    label: declaration.symbol.0.clone(),
+                    label: self
+                        .authored_metadata_cached()
+                        .ok()
+                        .and_then(|metadata| {
+                            metadata
+                                .declarations
+                                .get(&declaration.symbol)
+                                .and_then(|presentation| presentation.label.clone())
+                        })
+                        .filter(|label| !label.is_empty())
+                        .unwrap_or_else(|| declaration.symbol.0.clone()),
                     kind: declaration.patch.as_ref().map_or_else(
                         || declaration.builder_path.join("."),
                         |_| "Patch invocation".into(),
@@ -3838,6 +3859,48 @@ impl CodeProjectWorkbench {
         &self.session.snapshot().managed.source
     }
 
+    /// Accepted compiler authority; retained source drafts never enter this projection.
+    pub(crate) fn managed_compilation(&self) -> Option<&CompiledManagedSource> {
+        let snapshot = self.session.snapshot();
+        snapshot
+            .accepted_code_project
+            .as_ref()
+            .map_or(&snapshot.managed, |project| &project.managed)
+            .compiled
+            .as_deref()
+    }
+
+    pub(crate) fn metadata_edit_blocked_reason(&self) -> Option<String> {
+        if self.is_dirty() {
+            Some("Apply or Revert the source draft before editing properties".into())
+        } else if self.session.snapshot().failure.is_some() {
+            Some("Resolve or Undo the retained failure before editing properties".into())
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn authored_metadata_cached(
+        &self,
+    ) -> Result<Rc<geosolve_sketch_code::ManagedAuthoredMetadata>, String> {
+        let compiled = self
+            .managed_compilation()
+            .ok_or("This project has no compiled source")?;
+        let digest = &compiled.artifact.artifact_digest;
+        if let Some((cached_digest, metadata)) = self.authored_metadata_cache.borrow().as_ref()
+            && cached_digest == digest
+        {
+            return Ok(Rc::clone(metadata));
+        }
+        let metadata = Rc::new(
+            compiled
+                .authored_metadata()
+                .map_err(|error| error.to_string())?,
+        );
+        *self.authored_metadata_cache.borrow_mut() = Some((digest.clone(), Rc::clone(&metadata)));
+        Ok(metadata)
+    }
+
     pub(crate) fn panel_markup(&self) -> String {
         let manifest = self.managed_controls_cached();
         self.panel_markup_with_managed_controls(
@@ -3876,7 +3939,7 @@ impl CodeProjectWorkbench {
                 "<strong>{}</strong><small>managed · revision {}{}</small>",
                 "</div><span class=\"wb-code-runtime-badge\">Rust runtime · data only</span></header>"
             ),
-            escape_html(self.origin.title()),
+            escape_html(self.title()),
             revision,
             dirty,
         );

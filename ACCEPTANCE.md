@@ -5527,7 +5527,7 @@ passes all 243 obligations in `20260908T172035-7255b491` on
 [Default-priority evidence](docs/M97_PRIORITY_DIMENSIONS.md) records that qualified
 amendment; user acceptance remains pending.
 
-### Source-native authoring amendment — not yet implemented or qualified
+### Source-native authoring amendment — implemented, qualification underway
 
 [The authoring design](docs/M97_AUTHORING_METADATA.md) adds source-owned overview
 flags/defaults, named parameters, patch input presentation and document metadata,
@@ -5543,5 +5543,7 @@ reference/construction dimensions, inline patch defaults, equal-valued distinct
 parameters and generated read-only offsets need independent owner coverage.
 Legacy source remains valid without automatic rewrites; the intentional retirement
 of implicit first-six priorities must retain an accessible all-measurements path.
-These are additional unchecked M97 obligations; prior qualification covers only
-the existing preview, and no source-native authoring pass is claimed.
+The implementation passes focused compiler, native, frontend and all four browser
+workflows. [Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) records
+the commands and results. Integrated qualification and amended-preview verification
+remain outstanding; prior qualification covers only the existing preview.

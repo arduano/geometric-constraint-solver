@@ -2,13 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 2,
   "key": "whitworth-quick-return",
-  "title": "Whitworth quick-return · 1 DOF",
-  "summary": "A crank pin sliding in a branch-explicit rocker slot drives a guided return ram.",
   "category": "mechanism",
-  "expected": { "raw_dof": 1, "effective_dof": 1 },
-  "groups": ["Ground pivots", "Crank and slot", "Quick-return ram"],
-  "dimension_presentation": {
-    "all_authored": true
+  "expected": {
+    "raw_dof": 1,
+    "effective_dof": 1
   },
   "provenance": []
 }

@@ -43,7 +43,7 @@ function validSelection(value: unknown): value is WorkbenchSnapshot["selection"]
   const selection = value as Record<string, unknown>;
   if (typeof selection.id !== "string" || typeof selection.label !== "string" || typeof selection.kind !== "string"
     || (selection.ownership !== undefined && typeof selection.ownership !== "string")
-    || Object.keys(selection).some((key) => !["id", "label", "kind", "ownership", "source"].includes(key))) return false;
+    || Object.keys(selection).some((key) => !["id", "label", "kind", "ownership", "source", "metadata"].includes(key))) return false;
   if (selection.source === undefined) return true;
   if (!selection.source || typeof selection.source !== "object" || Array.isArray(selection.source)) return false;
   const source = selection.source as Record<string, unknown>;

@@ -342,3 +342,17 @@ test("typed operation results expose native spans and topology-dependent members
   assert.ok(authored.output.pattern.instances[0]?.sources["first.curve"]?.span);
   assert.ok(authored.output.offset.operand.chain?.edges["first.span"]?.span);
 });
+
+test("named parameters retain ordinary scalar types and share stable declaration namespace", () => {
+  const result = sketch({ title: "Channel", dimensions: { areKeyConstraintsByDefault: true } }, ($) => {
+    const width = $.parameter("width", mm(12), { label: "Width", isKeyParameter: true });
+    const count = $.parameter("count", 3);
+    return { width, count };
+  });
+  assert.deepEqual(result.output, { width: mm(12), count: 3 });
+  assert.throws(() => sketch(($) => {
+    $.parameter("same", 12);
+    return $.geometry.sketchPoint("same", { point: [0, 0] });
+  }), /duplicate declaration ID/u);
+  assert.throws(() => sketch(($) => $.parameter("width", Infinity)), /finite/u);
+});

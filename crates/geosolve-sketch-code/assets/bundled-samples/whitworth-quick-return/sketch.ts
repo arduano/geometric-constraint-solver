@@ -1,7 +1,13 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Whitworth quick-return · 1 DOF",
+  description: "A crank pin sliding in a branch-explicit rocker slot drives a guided return ram.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   // The rocker pivot is below the crank so its end swings left/right beneath
   // the horizontal ram guide. The 8 mm return link reaches every crank angle.
   // A vertical fixed frame retains the selected ground orientation explicitly.

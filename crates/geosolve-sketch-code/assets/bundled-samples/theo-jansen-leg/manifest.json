@@ -2,26 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 1,
   "key": "theo-jansen-leg",
-  "title": "Theo Jansen-style walking leg \u00b7 1 DOF",
-  "summary": "The articulated Jansen eight-bar leg turns a complete crank revolution into a broad, nearly level stance and lifted return.",
   "category": "mechanism",
   "expected": {
     "raw_dof": 1,
     "effective_dof": 1
-  },
-  "groups": [
-    "Ground frame",
-    "Crank input",
-    "Coupled leg"
-  ],
-  "dimension_presentation": {
-    "dimensions": [
-      "crankLength",
-      "upperRockerLength",
-      "lowerRockerLength",
-      "lowerCrankCouplerLength",
-      "upperFootLinkLength"
-    ]
   },
   "provenance": [
     {

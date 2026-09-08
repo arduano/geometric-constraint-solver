@@ -1,7 +1,10 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Theo Jansen-style walking leg · 1 DOF",
+  description: "The articulated Jansen eight-bar leg turns a complete crank revolution into a broad, nearly level stance and lifted return.",
+}, ($) => {
   // Jansen eight-bar topology: rigid A-C-E and D-F-G triangles are coupled
   // by E-F and driven separately by B-C and B-D. G is a free output.
   // Published dimensionless Jansen ratios are interpreted as millimetres.
@@ -54,6 +57,7 @@ export default sketch(($) => {
     role: "profile",
   });
   const crankLength = $.dimension.curveLength("crankLength", {
+    isKeyConstraint: true,
     curve: crank.span,
     value: mm(15),
     label: "crank length",
@@ -67,6 +71,7 @@ export default sketch(($) => {
     role: "profile",
   });
   const upperRockerLength = $.dimension.curveLength("upperRockerLength", {
+    isKeyConstraint: true,
     curve: upperRocker.span,
     value: mm(41.5),
     label: "upperRocker length",
@@ -93,6 +98,7 @@ export default sketch(($) => {
     role: "profile",
   });
   const lowerRockerLength = $.dimension.curveLength("lowerRockerLength", {
+    isKeyConstraint: true,
     curve: lowerRocker.span,
     value: mm(39.3),
     label: "lowerRocker length",
@@ -106,6 +112,7 @@ export default sketch(($) => {
     role: "profile",
   });
   const lowerCrankCouplerLength = $.dimension.curveLength("lowerCrankCouplerLength", {
+    isKeyConstraint: true,
     curve: lowerCrankCoupler.span,
     value: mm(61.9),
     label: "lowerCrankCoupler length",
@@ -184,6 +191,7 @@ export default sketch(($) => {
     role: "profile",
   });
   const upperFootLinkLength = $.dimension.curveLength("upperFootLinkLength", {
+    isKeyConstraint: true,
     curve: upperFootLink.span,
     value: mm(65.7),
     label: "upperFootLink length",

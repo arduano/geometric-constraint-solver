@@ -22,8 +22,10 @@ use crate::{
     UnitLiteral, code_authoring_family, declaration_result_catalog,
 };
 
-pub const MANAGED_SKETCH_IR_FORMAT: &str = "geosolve-managed-sketch-ir-v3";
-pub const EXECUTED_SKETCH_ARTIFACT_FORMAT: &str = "geosolve-executed-sketch-artifact-v3";
+pub const MANAGED_SKETCH_IR_FORMAT: &str = "geosolve-managed-sketch-ir-v4";
+pub const LEGACY_MANAGED_SKETCH_IR_FORMAT: &str = "geosolve-managed-sketch-ir-v3";
+pub const EXECUTED_SKETCH_ARTIFACT_FORMAT: &str = "geosolve-executed-sketch-artifact-v4";
+pub const LEGACY_EXECUTED_SKETCH_ARTIFACT_FORMAT: &str = "geosolve-executed-sketch-artifact-v3";
 /// Maximum admitted byte length of one compiler-normalized managed sketch.
 pub const MANAGED_SOURCE_LIMIT: usize = 4 * 1024 * 1024;
 pub const MANAGED_WIRE_LIMIT: usize = 32 * 1024 * 1024;
@@ -45,6 +47,9 @@ pub struct ManagedSourceSpan {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ManagedSourceSiteKind {
+    Document,
+    Parameter,
+    Presentation,
     Declaration,
     Value,
     Group,
@@ -117,6 +122,66 @@ pub struct ManagedReference {
     pub site: String,
 }
 
+/// Source-owned public scalar identity and presentation, independent of lexical spelling.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManagedParameterDeclaration {
+    pub symbol: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<ManagedExpression>,
+    pub site: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutedParameter {
+    pub declaration: String,
+    pub variable: String,
+    pub site: String,
+    pub value_site: String,
+    pub value: ManagedValue,
+    pub presentation: ManagedPresentation,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutedPresentation {
+    pub declaration: String,
+    pub presentation: ManagedPresentation,
+}
+
+/// Small authored presentation vocabulary. It cannot widen a value schema.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ManagedPresentation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_key_constraint: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_key_parameter: Option<bool>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ManagedDimensionDefaults {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub are_key_constraints_by_default: Option<bool>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManagedDocumentPresentation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dimensions: Option<ManagedDimensionDefaults>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "statement", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ManagedStatement {
@@ -124,6 +189,8 @@ pub enum ManagedStatement {
         variable: String,
         value: ManagedExpression,
         comments: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parameter: Option<ManagedParameterDeclaration>,
     },
     Declaration {
         variable: String,
@@ -133,6 +200,8 @@ pub enum ManagedStatement {
         arguments: ManagedExpression,
         site: String,
         comments: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        presentation: Option<ManagedExpression>,
     },
     Group {
         name: String,
@@ -163,6 +232,8 @@ pub struct ManagedSketchIr {
     pub output: ManagedExpression,
     pub source_sites: Vec<ManagedSourceSite>,
     pub source_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document: Option<ManagedExpression>,
     pub ir_digest: String,
 }
 
@@ -248,6 +319,12 @@ pub struct ExecutedSketchArtifact {
     pub suppressions: Vec<ExecutedSuppression>,
     pub value_consumers: Vec<ExecutedValueConsumer>,
     pub output: ManagedValue,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document: Option<ManagedDocumentPresentation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parameters: Vec<ExecutedParameter>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub presentations: Vec<ExecutedPresentation>,
     pub artifact_digest: String,
 }
 
@@ -309,6 +386,8 @@ struct IrDigestEnvelope<'a> {
     output: &'a ManagedExpression,
     source_sites: &'a [ManagedSourceSite],
     source_digest: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document: &'a Option<ManagedExpression>,
 }
 
 #[derive(Serialize)]
@@ -322,6 +401,12 @@ struct ArtifactDigestEnvelope<'a> {
     suppressions: &'a [ExecutedSuppression],
     value_consumers: &'a [ExecutedValueConsumer],
     output: &'a ManagedValue,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document: &'a Option<ManagedDocumentPresentation>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    parameters: &'a Vec<ExecutedParameter>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    presentations: &'a Vec<ExecutedPresentation>,
 }
 
 /// Source-owned managed suppression state lowered into the existing Rust
@@ -403,12 +488,19 @@ impl CompiledManagedSource {
                 self.normalized_source.len()
             ));
         }
-        if self.ir.format != MANAGED_SKETCH_IR_FORMAT {
+        if !matches!(
+            self.ir.format.as_str(),
+            MANAGED_SKETCH_IR_FORMAT | LEGACY_MANAGED_SKETCH_IR_FORMAT
+        ) {
             return invalid("unsupported managed sketch IR format");
         }
-        if self.artifact.format != EXECUTED_SKETCH_ARTIFACT_FORMAT {
+        if !matches!(
+            self.artifact.format.as_str(),
+            EXECUTED_SKETCH_ARTIFACT_FORMAT | LEGACY_EXECUTED_SKETCH_ARTIFACT_FORMAT
+        ) {
             return invalid("unsupported executed sketch artifact format");
         }
+        validate_metadata_version(self)?;
         let source_digest = intent_content_digest(self.normalized_source.as_bytes()).to_string();
         if self.ir.source_digest != source_digest || self.artifact.source_digest != source_digest {
             return invalid("source digest does not authenticate normalized source bytes");
@@ -419,6 +511,7 @@ impl CompiledManagedSource {
 
         let ir_envelope = IrDigestEnvelope {
             format: &self.ir.format,
+            document: &self.ir.document,
             imports: &self.ir.imports,
             statements: &self.ir.statements,
             output: &self.ir.output,
@@ -438,6 +531,9 @@ impl CompiledManagedSource {
 
         let artifact_envelope = ArtifactDigestEnvelope {
             format: &self.artifact.format,
+            document: &self.artifact.document,
+            parameters: &self.artifact.parameters,
+            presentations: &self.artifact.presentations,
             source_digest: &self.artifact.source_digest,
             ir_digest: &self.artifact.ir_digest,
             declarations: &self.artifact.declarations,
@@ -463,7 +559,8 @@ impl CompiledManagedSource {
             return invalid("executed artifact belongs to a different managed IR");
         }
         self.validate_ir()?;
-        self.validate_artifact()
+        self.validate_artifact()?;
+        validate_metadata(self)
     }
 
     /// Authenticates this compiler response against the exact Rust-retained
@@ -570,11 +667,26 @@ impl CompiledManagedSource {
                 ManagedStatement::Binding {
                     variable,
                     value,
+                    parameter,
                     comments,
                 } => {
                     require_unique_name(variable, "binding", &mut variables)?;
                     validate_comments(comments)?;
                     validate_expression(value, &site_kinds, &variables, 0)?;
+                    if let Some(parameter) = parameter {
+                        require_unique_name(&parameter.symbol, "parameter", &mut declarations)?;
+                        require_site(
+                            &parameter.site,
+                            ManagedSourceSiteKind::Parameter,
+                            &site_kinds,
+                        )?;
+                        if let Some(presentation) = &parameter.presentation {
+                            validate_expression(presentation, &site_kinds, &variables, 0)?;
+                        }
+                    }
+                    if parameter.is_none() {
+                        require_unique_name(variable, "source scalar identity", &mut declarations)?;
+                    }
                     bindings.insert(variable.as_str(), value);
                 }
                 ManagedStatement::Declaration {
@@ -583,6 +695,7 @@ impl CompiledManagedSource {
                     builder_path,
                     patch,
                     arguments,
+                    presentation,
                     site,
                     comments,
                 } => {
@@ -600,6 +713,14 @@ impl CompiledManagedSource {
                     require_site(site, ManagedSourceSiteKind::Declaration, &site_kinds)?;
                     validate_comments(comments)?;
                     validate_expression(arguments, &site_kinds, &variables, 0)?;
+                    if let Some(presentation) = presentation {
+                        if patch.is_none() {
+                            return invalid(
+                                "separate presentation belongs only to patch invocations",
+                            );
+                        }
+                        validate_expression(presentation, &site_kinds, &variables, 0)?;
+                    }
                     if patch.is_none() {
                         validate_named_declaration_arguments(
                             arguments,
@@ -641,6 +762,9 @@ impl CompiledManagedSource {
                     )?;
                 }
             }
+        }
+        if let Some(document) = &self.ir.document {
+            validate_expression(document, &site_kinds, &BTreeSet::new(), 0)?;
         }
         validate_expression(&self.ir.output, &site_kinds, &variables, 0)?;
         Ok(())
@@ -1203,9 +1327,16 @@ fn project_managed_document(
     for statement in &compiled.ir.statements {
         match statement {
             ManagedStatement::Binding {
-                variable, value, ..
+                variable,
+                value,
+                parameter,
+                ..
             } => {
-                let symbol = SemanticSymbol(variable.clone());
+                let symbol = SemanticSymbol(
+                    parameter
+                        .as_ref()
+                        .map_or_else(|| variable.clone(), |p| p.symbol.clone()),
+                );
                 let converted = convert_scalar_binding(value, &variables)?;
                 let span = expression_span(value, &site_spans)?;
                 variables.insert(variable.clone(), symbol.clone());
@@ -1297,7 +1428,10 @@ fn project_managed_document(
             kind: match site.kind {
                 ManagedSourceSiteKind::Declaration => ManagedOwnedSpanKind::Declaration,
                 ManagedSourceSiteKind::Value => ManagedOwnedSpanKind::Literal,
-                ManagedSourceSiteKind::Group
+                ManagedSourceSiteKind::Document
+                | ManagedSourceSiteKind::Parameter
+                | ManagedSourceSiteKind::Presentation
+                | ManagedSourceSiteKind::Group
                 | ManagedSourceSiteKind::GroupReference
                 | ManagedSourceSiteKind::Suppression
                 | ManagedSourceSiteKind::SuppressionReference => ManagedOwnedSpanKind::Organization,
@@ -1729,6 +1863,7 @@ fn validate_direct_value_consumers(
                 &mut Vec::new(),
                 &binding_origins,
                 &mut expected,
+                compiled.ir.format == MANAGED_SKETCH_IR_FORMAT,
             )?,
             ManagedStatement::Declaration { .. }
             | ManagedStatement::Group { .. }
@@ -1834,6 +1969,7 @@ fn collect_expected_direct_consumers(
     property: &mut Vec<ManagedPathSegment>,
     bindings: &BTreeMap<String, Vec<String>>,
     consumers: &mut BTreeMap<String, usize>,
+    metadata_aware: bool,
 ) -> Result<(), ManagedValidationError> {
     let sites = match expression {
         ManagedExpression::Reference {
@@ -1851,13 +1987,29 @@ fn collect_expected_direct_consumers(
         ManagedExpression::Array { values, .. } => {
             for (index, value) in values.iter().enumerate() {
                 property.push(ManagedPathSegment::Index(index));
-                collect_expected_direct_consumers(value, target, property, bindings, consumers)?;
+                collect_expected_direct_consumers(
+                    value,
+                    target,
+                    property,
+                    bindings,
+                    consumers,
+                    metadata_aware,
+                )?;
                 property.pop();
             }
             return Ok(());
         }
         ManagedExpression::Object { fields, .. } => {
             for field in fields {
+                if metadata_aware
+                    && property.is_empty()
+                    && matches!(
+                        field.name.as_str(),
+                        "description" | "isKeyConstraint" | "isKeyParameter"
+                    )
+                {
+                    continue;
+                }
                 property.push(ManagedPathSegment::Field(field.name.clone()));
                 collect_expected_direct_consumers(
                     &field.value,
@@ -1865,6 +2017,7 @@ fn collect_expected_direct_consumers(
                     property,
                     bindings,
                     consumers,
+                    metadata_aware,
                 )?;
                 property.pop();
             }
@@ -2258,7 +2411,7 @@ fn validate_expression<'a>(
         | ManagedExpression::Reference { site, .. }
         | ManagedExpression::Call { site, .. } => site,
     };
-    require_site(site, ManagedSourceSiteKind::Value, sites)?;
+    require_expression_site(site, sites)?;
     match expression {
         ManagedExpression::Number { value, .. } if !value.is_finite() => {
             return invalid("managed numeric value is not finite");
@@ -2410,13 +2563,675 @@ fn invalid<T>(message: impl Into<String>) -> Result<T, ManagedValidationError> {
     Err(ManagedValidationError::Invalid(message.into()))
 }
 
+fn expression_site_id(expression: &ManagedExpression) -> &str {
+    match expression {
+        ManagedExpression::Null { site }
+        | ManagedExpression::Boolean { site, .. }
+        | ManagedExpression::Number { site, .. }
+        | ManagedExpression::String { site, .. }
+        | ManagedExpression::Array { site, .. }
+        | ManagedExpression::Object { site, .. }
+        | ManagedExpression::Reference { site, .. }
+        | ManagedExpression::Call { site, .. } => site,
+    }
+}
+
+fn require_expression_site(
+    site: &str,
+    sites: &BTreeMap<&str, ManagedSourceSiteKind>,
+) -> Result<(), ManagedValidationError> {
+    if !matches!(
+        sites.get(site),
+        Some(
+            ManagedSourceSiteKind::Value
+                | ManagedSourceSiteKind::Document
+                | ManagedSourceSiteKind::Presentation
+        )
+    ) {
+        return invalid("managed expression has no authenticated value or presentation site");
+    }
+    Ok(())
+}
+
+fn validate_metadata_version(
+    compiled: &CompiledManagedSource,
+) -> Result<(), ManagedValidationError> {
+    let legacy = compiled.ir.format == LEGACY_MANAGED_SKETCH_IR_FORMAT;
+    if legacy != (compiled.artifact.format == LEGACY_EXECUTED_SKETCH_ARTIFACT_FORMAT) {
+        return invalid("managed IR and artifact versions differ");
+    }
+    if legacy && compiled.ir.statements.iter().any(|statement| matches!(statement, ManagedStatement::Declaration { arguments: ManagedExpression::Object { fields, .. }, .. } if fields.iter().any(|field| matches!(field.name.as_str(), "description" | "isKeyConstraint" | "isKeyParameter")))) { return invalid("V3 envelope cannot carry V4 declaration metadata"); }
+    if legacy
+        && (compiled.ir.document.is_some()
+            || compiled.artifact.document.is_some()
+            || !compiled.artifact.parameters.is_empty()
+            || !compiled.artifact.presentations.is_empty()
+            || compiled.ir.statements.iter().any(|s| {
+                matches!(
+                    s,
+                    ManagedStatement::Binding {
+                        parameter: Some(_),
+                        ..
+                    } | ManagedStatement::Declaration {
+                        presentation: Some(_),
+                        ..
+                    }
+                )
+            })
+            || compiled.ir.source_sites.iter().any(|s| {
+                matches!(
+                    s.kind,
+                    ManagedSourceSiteKind::Document
+                        | ManagedSourceSiteKind::Parameter
+                        | ManagedSourceSiteKind::Presentation
+                )
+            }))
+    {
+        return invalid("V3 envelope cannot carry V4 metadata");
+    }
+    Ok(())
+}
+
+fn value_plain_json(value: &ManagedValue) -> Result<serde_json::Value, ManagedValidationError> {
+    Ok(match value {
+        ManagedValue::Null => serde_json::Value::Null,
+        ManagedValue::Bool(value) => (*value).into(),
+        ManagedValue::String(value) => value.clone().into(),
+        ManagedValue::Object(fields) => serde_json::Value::Object(
+            fields
+                .iter()
+                .map(|(key, value)| Ok((key.clone(), value_plain_json(value)?)))
+                .collect::<Result<_, ManagedValidationError>>()?,
+        ),
+        _ => return invalid("presentation contains a nonliteral field"),
+    })
+}
+
+pub(crate) fn parse_presentation(
+    value: &ManagedValue,
+    constraint: bool,
+    parameter: bool,
+) -> Result<ManagedPresentation, ManagedValidationError> {
+    let ManagedValue::Object(fields) = value else {
+        return invalid("presentation must be a literal object");
+    };
+    for (field, value) in fields {
+        if !match field.as_str() {
+            "label" | "description" => matches!(value, ManagedValue::String(_)),
+            "isKeyConstraint" | "isKeyParameter" => matches!(value, ManagedValue::Bool(_)),
+            _ => false,
+        } {
+            return invalid("presentation field has an unknown name or wrong literal type");
+        }
+    }
+    let presentation: ManagedPresentation = serde_json::from_value(value_plain_json(value)?)
+        .map_err(|error| {
+            ManagedValidationError::Invalid(format!("invalid authored presentation: {error}"))
+        })?;
+    if (!constraint && presentation.is_key_constraint.is_some())
+        || (!parameter && presentation.is_key_parameter.is_some())
+    {
+        return invalid("overview flag belongs to a different authored target");
+    }
+    validate_presentation_text(&presentation)?;
+    Ok(presentation)
+}
+
+pub(crate) fn validate_presentation_text(
+    presentation: &ManagedPresentation,
+) -> Result<(), ManagedValidationError> {
+    if let Some(label) = &presentation.label
+        && (label.len() > 256
+            || (!label.is_empty() && label.trim() != label)
+            || label.chars().any(char::is_control))
+    {
+        return invalid("label exceeds 256 UTF-8 bytes or has padding/control characters");
+    }
+    if presentation
+        .description
+        .as_ref()
+        .is_some_and(|description| description.chars().count() > 2048 || description.contains('\0'))
+    {
+        return invalid("description exceeds 2048 characters or contains NUL");
+    }
+    Ok(())
+}
+
+pub(crate) fn parse_document_presentation(
+    value: &ManagedValue,
+) -> Result<ManagedDocumentPresentation, ManagedValidationError> {
+    let ManagedValue::Object(fields) = value else {
+        return invalid("document metadata must be a literal object");
+    };
+    for (field, value) in fields {
+        let valid = match (field.as_str(), value) {
+            ("title" | "description", ManagedValue::String(_)) => true,
+            ("dimensions", ManagedValue::Object(defaults)) => {
+                defaults.iter().all(|(field, value)| {
+                    field == "areKeyConstraintsByDefault" && matches!(value, ManagedValue::Bool(_))
+                })
+            }
+            _ => false,
+        };
+        if !valid {
+            return invalid("document metadata field has an unknown name or wrong literal type");
+        }
+    }
+    let presentation: ManagedDocumentPresentation =
+        serde_json::from_value(value_plain_json(value)?).map_err(|error| {
+            ManagedValidationError::Invalid(format!("invalid document presentation: {error}"))
+        })?;
+    if presentation
+        .title
+        .as_ref()
+        .is_some_and(|title| title.chars().count() > 128 || title.chars().any(char::is_control))
+    {
+        return invalid("title exceeds 128 characters or contains control characters");
+    }
+    if presentation
+        .description
+        .as_ref()
+        .is_some_and(|description| description.chars().count() > 2048 || description.contains('\0'))
+    {
+        return invalid("document description exceeds 2048 characters or contains NUL");
+    }
+    Ok(presentation)
+}
+
+fn declaration_presentation(arguments: &ManagedExpression) -> Option<ManagedExpression> {
+    let ManagedExpression::Object { fields, site } = arguments else {
+        return None;
+    };
+    let fields = fields
+        .iter()
+        .filter(|field| {
+            matches!(
+                field.name.as_str(),
+                "label" | "description" | "isKeyConstraint" | "isKeyParameter" | "key"
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    (!fields.is_empty()).then(|| ManagedExpression::Object {
+        fields,
+        site: site.clone(),
+    })
+}
+
+fn metadata_value(expression: &ManagedExpression) -> Result<ManagedValue, ManagedValidationError> {
+    evaluate_runtime_expression(expression, &BTreeMap::new())
+}
+
+fn validate_metadata_literal_source(
+    compiled: &CompiledManagedSource,
+    expression: &ManagedExpression,
+    spans: &BTreeMap<&str, ManagedSourceSpan>,
+) -> Result<(), ManagedValidationError> {
+    let span = spans.get(expression_site_id(expression)).ok_or_else(|| {
+        ManagedValidationError::Invalid("metadata literal source site is absent".into())
+    })?;
+    let source = &compiled.normalized_source[span.start..span.end];
+    match expression {
+        ManagedExpression::String { value, .. } => {
+            if serde_json::from_str::<String>(source).ok().as_ref() != Some(value) {
+                return invalid("metadata string disagrees with exact source literal");
+            }
+        }
+        ManagedExpression::Boolean { value, .. } => {
+            if source != if *value { "true" } else { "false" } {
+                return invalid("metadata boolean disagrees with exact source literal");
+            }
+        }
+        ManagedExpression::Number { value, .. } => {
+            if source.parse::<f64>().ok() != Some(*value) {
+                return invalid("parameter number disagrees with exact source literal");
+            }
+        }
+        ManagedExpression::Object { fields, .. } => {
+            for field in fields {
+                validate_metadata_literal_source(compiled, &field.value, spans)?;
+            }
+        }
+        ManagedExpression::Call {
+            callee, arguments, ..
+        } if arguments.len() == 1 && matches!(arguments[0], ManagedExpression::Number { .. }) => {
+            if source
+                .split_once('(')
+                .is_none_or(|(name, _)| name != callee)
+            {
+                return invalid("parameter unit disagrees with exact source call");
+            }
+            validate_metadata_literal_source(compiled, &arguments[0], spans)?;
+        }
+        _ => return invalid("authored metadata must retain literal source ownership"),
+    }
+    Ok(())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one bounded audit keeps source metadata and its independent executed receipts adjacent"
+)]
+fn validate_metadata(compiled: &CompiledManagedSource) -> Result<(), ManagedValidationError> {
+    let spans = compiled
+        .ir
+        .source_sites
+        .iter()
+        .map(|site| (site.id.as_str(), site.span))
+        .collect::<BTreeMap<_, _>>();
+    if let Some(document) = &compiled.ir.document {
+        validate_metadata_literal_source(compiled, document, &spans)?;
+    }
+    let document = compiled
+        .ir
+        .document
+        .as_ref()
+        .map(metadata_value)
+        .transpose()?;
+    if document
+        .as_ref()
+        .map(parse_document_presentation)
+        .transpose()?
+        != compiled.artifact.document
+    {
+        return invalid("executed document metadata differs from authored IR");
+    }
+    if let Some(document) = &document {
+        parse_document_presentation(document)?;
+    }
+    let mut parameters = Vec::new();
+    let mut presentations = Vec::new();
+    for statement in &compiled.ir.statements {
+        match statement {
+            ManagedStatement::Binding {
+                variable,
+                value,
+                parameter: Some(parameter),
+                ..
+            } => {
+                validate_metadata_literal_source(compiled, value, &spans)?;
+                if let Some(presentation) = &parameter.presentation {
+                    validate_metadata_literal_source(compiled, presentation, &spans)?;
+                }
+                let value_literal = metadata_value(value)?;
+                if !matches!(&value_literal, ManagedValue::Number(value) if value.is_finite())
+                    && !matches!(&value_literal, ManagedValue::Unit(value) if value.value.is_finite())
+                {
+                    return invalid(
+                        "public parameter must own an explicit finite number or unit literal",
+                    );
+                }
+                let presentation = parameter
+                    .presentation
+                    .as_ref()
+                    .map(metadata_value)
+                    .transpose()?;
+                if let Some(presentation) = &presentation {
+                    parse_presentation(presentation, false, true)?;
+                }
+                parameters.push(ExecutedParameter {
+                    declaration: parameter.symbol.clone(),
+                    variable: variable.clone(),
+                    site: parameter.site.clone(),
+                    value_site: expression_site_id(value).to_owned(),
+                    value: value_literal,
+                    presentation: presentation
+                        .as_ref()
+                        .map(|value| parse_presentation(value, false, true))
+                        .transpose()?
+                        .unwrap_or_default(),
+                });
+            }
+            ManagedStatement::Declaration {
+                symbol,
+                builder_path,
+                patch,
+                arguments,
+                presentation,
+                ..
+            } => {
+                let selected = if patch.is_some() {
+                    presentation.clone()
+                } else {
+                    declaration_presentation(arguments)
+                };
+                if let Some(selected) = selected {
+                    if matches!(&selected, ManagedExpression::Object { fields, .. } if fields.is_empty())
+                    {
+                        continue;
+                    }
+                    if compiled.ir.format == MANAGED_SKETCH_IR_FORMAT {
+                        validate_metadata_literal_source(compiled, &selected, &spans)?;
+                    }
+                    let value = metadata_value(&selected)?;
+                    parse_presentation(
+                        &value,
+                        patch.is_none()
+                            && builder_path
+                                .first()
+                                .is_some_and(|namespace| namespace == "dimension"),
+                        false,
+                    )?;
+                    presentations.push(ExecutedPresentation {
+                        declaration: symbol.clone(),
+                        presentation: parse_presentation(
+                            &value,
+                            patch.is_none()
+                                && builder_path
+                                    .first()
+                                    .is_some_and(|namespace| namespace == "dimension"),
+                            false,
+                        )?,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    if compiled.ir.format == MANAGED_SKETCH_IR_FORMAT
+        && (parameters != compiled.artifact.parameters
+            || presentations != compiled.artifact.presentations)
+    {
+        return invalid("executed parameter or declaration presentation differs from authored IR");
+    }
+    Ok(())
+}
+
+/// One validated source-owned metadata projection, reusable for a complete scene snapshot.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ManagedAuthoredMetadata {
+    pub document: ManagedDocumentPresentation,
+    pub declarations: BTreeMap<SemanticSymbol, ManagedPresentation>,
+    pub parameters: Vec<ExecutedParameter>,
+}
+
+impl CompiledManagedSource {
+    /// # Errors
+    ///
+    /// Rejects unauthenticated source, metadata, or executed artifact bytes.
+    pub fn authored_metadata(&self) -> Result<ManagedAuthoredMetadata, ManagedValidationError> {
+        self.validate()?;
+        let mut declarations = BTreeMap::new();
+        for statement in &self.ir.statements {
+            if let ManagedStatement::Declaration {
+                symbol,
+                builder_path,
+                patch,
+                arguments,
+                presentation,
+                ..
+            } = statement
+            {
+                let selected = if patch.is_some() {
+                    presentation.clone()
+                } else {
+                    declaration_presentation(arguments)
+                };
+                let metadata = selected
+                    .as_ref()
+                    .map(|expression| {
+                        parse_presentation(
+                            &metadata_value(expression)?,
+                            patch.is_none()
+                                && builder_path
+                                    .first()
+                                    .is_some_and(|namespace| namespace == "dimension"),
+                            false,
+                        )
+                    })
+                    .transpose()?
+                    .unwrap_or_default();
+                declarations.insert(SemanticSymbol(symbol.clone()), metadata);
+            }
+        }
+        Ok(ManagedAuthoredMetadata {
+            document: self.artifact.document.clone().unwrap_or_default(),
+            declarations,
+            parameters: self.artifact.parameters.clone(),
+        })
+    }
+}
+
+impl CompiledManagedSource {
+    /// Authenticated document presentation. A missing title uses the ordinary authored fallback.
+    /// # Errors
+    ///
+    /// Rejects unauthenticated source, metadata, or executed artifact bytes.
+    pub fn document_presentation(
+        &self,
+    ) -> Result<ManagedDocumentPresentation, ManagedValidationError> {
+        self.validate()?;
+        Ok(self.artifact.document.clone().unwrap_or_default())
+    }
+
+    /// Presentation for an exact directly authored declaration identity.
+    /// # Errors
+    ///
+    /// Rejects unauthenticated source, metadata, or executed artifact bytes.
+    pub fn declaration_presentation(
+        &self,
+        declaration: &SemanticSymbol,
+    ) -> Result<ManagedPresentation, ManagedValidationError> {
+        self.validate()?;
+        let statement = self.ir.statements.iter().find(|statement| matches!(statement, ManagedStatement::Declaration { symbol, .. } if symbol == &declaration.0));
+        let Some(ManagedStatement::Declaration {
+            builder_path,
+            patch,
+            arguments,
+            presentation,
+            ..
+        }) = statement
+        else {
+            return Ok(ManagedPresentation::default());
+        };
+        let selected = if patch.is_some() {
+            presentation.clone()
+        } else {
+            declaration_presentation(arguments)
+        };
+        selected
+            .as_ref()
+            .map(|expression| {
+                parse_presentation(
+                    &metadata_value(expression)?,
+                    patch.is_none()
+                        && builder_path
+                            .first()
+                            .is_some_and(|namespace| namespace == "dimension"),
+                    false,
+                )
+            })
+            .transpose()
+            .map(Option::unwrap_or_default)
+    }
+
+    /// Source ordered public parameters with exact, validated value identities.
+    /// # Errors
+    ///
+    /// Rejects unauthenticated source, metadata, or executed artifact bytes.
+    pub fn parameters(&self) -> Result<&[ExecutedParameter], ManagedValidationError> {
+        self.validate()?;
+        Ok(&self.artifact.parameters)
+    }
+
+    /// # Errors
+    ///
+    /// Rejects unauthenticated source, metadata, or executed artifact bytes.
+    pub fn parameter_presentation(
+        &self,
+        symbol: &SemanticSymbol,
+    ) -> Result<Option<ManagedPresentation>, ManagedValidationError> {
+        self.validate()?;
+        Ok(self
+            .artifact
+            .parameters
+            .iter()
+            .find(|parameter| parameter.declaration == symbol.0)
+            .map(|parameter| parameter.presentation.clone()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "public metadata authority regression checks independent source tampering, cold materialization and restricted control edits together"
+    )]
+    fn authored_metadata_is_independently_checked_and_equal_parameters_keep_identity() {
+        let compiled = CompiledManagedSource::from_json(include_str!(
+            "../tests/fixtures/m97-source-metadata.json"
+        ))
+        .expect("V4 source metadata");
+        let metadata = compiled
+            .authored_metadata()
+            .expect("one authenticated projection");
+        assert_eq!(metadata.document.title.as_deref(), Some("Metadata"));
+        assert_eq!(
+            metadata
+                .document
+                .dimensions
+                .unwrap()
+                .are_key_constraints_by_default,
+            Some(true)
+        );
+        assert_eq!(
+            metadata.declarations[&SemanticSymbol("length".into())].is_key_constraint,
+            Some(false)
+        );
+        assert_eq!(metadata.parameters.len(), 2);
+        assert_eq!(metadata.parameters[0].value, metadata.parameters[1].value);
+        assert_ne!(
+            metadata.parameters[0].declaration,
+            metadata.parameters[1].declaration
+        );
+        assert_ne!(
+            metadata.parameters[0].value_site,
+            metadata.parameters[1].value_site
+        );
+        let mut tampered = compiled.clone();
+        tampered.artifact.parameters[0]
+            .presentation
+            .is_key_parameter = Some(false);
+        refresh_authority(&mut tampered);
+        assert!(
+            tampered
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("presentation differs")
+        );
+        let mut tampered = compiled.clone();
+        tampered.artifact.document.as_mut().unwrap().title = Some("Forgery".into());
+        refresh_authority(&mut tampered);
+        assert!(
+            tampered
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("document metadata differs")
+        );
+        let project =
+            crate::CodeProject::managed(crate::ProjectKey("metadata-test".into()), compiled)
+                .expect("managed project");
+        let generated = crate::KeyedReconcileState::empty()
+            .plan(
+                crate::required_generated_members(&project).unwrap(),
+                &BTreeSet::new(),
+            )
+            .unwrap()
+            .into_staged();
+        let expansion = crate::materialize_code_project_cold(
+            &project,
+            &generated,
+            geosolve_sketch_intent::IntentSessionId::from_raw(0x97_a0),
+            geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(0x97_a0)),
+            1.0,
+        )
+        .expect("cold metadata materialization")
+        .expansion;
+        let manifest = crate::managed_control_manifest(&project, &expansion)
+            .expect("metadata source controls");
+        let parameters = manifest
+            .controls
+            .iter()
+            .filter(|control| control.is_public_parameter)
+            .collect::<Vec<_>>();
+        assert_eq!(parameters.len(), 2);
+        assert!(parameters.iter().all(|control| control.token().is_some()));
+        let unused = parameters
+            .iter()
+            .find(|control| control.source.declaration.0 == "otherWidth")
+            .unwrap();
+        assert!(
+            unused.consumers.is_empty(),
+            "unused parameter must not fabricate a solver consumer"
+        );
+        assert!(
+            matches!(unused.schema, Some(crate::ManagedControlSchema::Unit { ref unit, minimum: None, maximum: None, .. }) if unit == "mm")
+        );
+        let negative = ManagedValue::Unit(UnitLiteral {
+            unit: "mm".into(),
+            value: -1.0,
+        });
+        let unused_edit = crate::ManagedControlEditBatch::new([crate::ManagedControlEdit {
+            token: unused.token().unwrap().clone(),
+            value: negative.clone(),
+        }]);
+        crate::prepare_managed_control_mutation(&project, &expansion, &unused_edit)
+            .expect("unused numeric base schema allows finite negative values");
+        let consumed = parameters
+            .iter()
+            .find(|control| control.source.declaration.0 == "width")
+            .unwrap();
+        let restricted = crate::ManagedControlEditBatch::new([crate::ManagedControlEdit {
+            token: consumed.token().unwrap().clone(),
+            value: negative,
+        }]);
+        assert!(
+            crate::prepare_managed_control_mutation(&project, &expansion, &restricted).is_err(),
+            "native length restriction must intersect the explicit parameter schema"
+        );
+        let mut stale = unused_edit;
+        stale.edits[0].token.source_digest = "0".repeat(64);
+        assert!(crate::prepare_managed_control_mutation(&project, &expansion, &stale).is_err());
+    }
+
+    #[test]
+    fn authored_parameter_identity_cannot_alias_an_ordinary_scalar() {
+        CompiledManagedSource::from_json(include_str!("../tests/fixtures/m97-empty-use.json"))
+            .expect("empty optional patch presentation is valid");
+        let error = CompiledManagedSource::from_json(include_str!(
+            "../tests/fixtures/m97-parameter-symbol-collision.json"
+        ))
+        .unwrap_err();
+        assert!(error.to_string().contains("repeats"), "{error}");
+    }
+
+    #[test]
+    fn authored_metadata_validates_utf8_byte_labels_and_plain_text_bounds() {
+        let mut presentation = ManagedPresentation {
+            label: Some("é".repeat(128)),
+            ..ManagedPresentation::default()
+        };
+        validate_presentation_text(&presentation).unwrap();
+        presentation.label = Some("é".repeat(129));
+        assert!(validate_presentation_text(&presentation).is_err());
+        presentation.label = Some(" padded".into());
+        assert!(validate_presentation_text(&presentation).is_err());
+        presentation.label = Some(String::new());
+        validate_presentation_text(&presentation).unwrap();
+        let unknown =
+            ManagedValue::Object(BTreeMap::from([("key".into(), ManagedValue::Bool(true))]));
+        assert!(parse_presentation(&unknown, true, false).is_err());
+    }
+
     fn refresh_authority(compiled: &mut CompiledManagedSource) {
         let ir_envelope = IrDigestEnvelope {
             format: &compiled.ir.format,
+            document: &compiled.ir.document,
             imports: &compiled.ir.imports,
             statements: &compiled.ir.statements,
             output: &compiled.ir.output,
@@ -2438,6 +3253,9 @@ mod tests {
             .clone_from(&compiled.ir.ir_digest);
         let artifact_envelope = ArtifactDigestEnvelope {
             format: &compiled.artifact.format,
+            document: &compiled.artifact.document,
+            parameters: &compiled.artifact.parameters,
+            presentations: &compiled.artifact.presentations,
             source_digest: &compiled.artifact.source_digest,
             ir_digest: &compiled.artifact.ir_digest,
             declarations: &compiled.artifact.declarations,
@@ -2476,6 +3294,7 @@ mod tests {
             input_source_digest: source_digest.clone(),
             normalized_source,
             ir: ManagedSketchIr {
+                document: None,
                 format: MANAGED_SKETCH_IR_FORMAT.into(),
                 imports: Vec::new(),
                 statements: Vec::new(),
@@ -2490,6 +3309,9 @@ mod tests {
                 ir_digest: String::new(),
             },
             artifact: ExecutedSketchArtifact {
+                document: None,
+                parameters: Vec::new(),
+                presentations: Vec::new(),
                 format: EXECUTED_SKETCH_ARTIFACT_FORMAT.into(),
                 source_digest,
                 ir_digest: String::new(),
@@ -2533,6 +3355,7 @@ mod tests {
         arguments: ManagedExpression,
     ) -> ManagedStatement {
         ManagedStatement::Declaration {
+            presentation: None,
             variable: variable.into(),
             symbol: symbol.into(),
             builder_path: builder_path.into_iter().map(str::to_owned).collect(),
@@ -2568,6 +3391,7 @@ mod tests {
             input_source_digest: String::new(),
             normalized_source: String::new(),
             ir: ManagedSketchIr {
+                document: None,
                 format: MANAGED_SKETCH_IR_FORMAT.into(),
                 imports: Vec::new(),
                 statements: vec![
@@ -2609,6 +3433,9 @@ mod tests {
                 ir_digest: String::new(),
             },
             artifact: ExecutedSketchArtifact {
+                document: None,
+                parameters: Vec::new(),
+                presentations: Vec::new(),
                 format: EXECUTED_SKETCH_ARTIFACT_FORMAT.into(),
                 source_digest: String::new(),
                 ir_digest: String::new(),
@@ -2640,6 +3467,7 @@ mod tests {
             input_source_digest: intent_content_digest(b"").to_string(),
             normalized_source: String::new(),
             ir: ManagedSketchIr {
+                document: None,
                 format: ir_format.into(),
                 imports: Vec::new(),
                 statements: Vec::new(),
@@ -2651,6 +3479,9 @@ mod tests {
                 ir_digest: "0".repeat(64),
             },
             artifact: ExecutedSketchArtifact {
+                document: None,
+                parameters: Vec::new(),
+                presentations: Vec::new(),
                 format: artifact_format.into(),
                 source_digest: "0".repeat(64),
                 ir_digest: "0".repeat(64),
@@ -2833,6 +3664,7 @@ mod tests {
         compiled.ir.statements.insert(
             first_declaration,
             ManagedStatement::Binding {
+                parameter: None,
                 variable: "legacyPayload".into(),
                 value: ManagedExpression::Object {
                     fields: vec![field(
@@ -3039,6 +3871,7 @@ mod tests {
         binding_consumer.ir.statements.insert(
             1,
             ManagedStatement::Binding {
+                parameter: None,
                 variable: "shared_alias".into(),
                 value: ManagedExpression::Reference {
                     declaration: "aggregate_variable".into(),

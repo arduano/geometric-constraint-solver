@@ -554,3 +554,13 @@ test("native-defining tangent centre and conic weighted control stay explicit li
     ],
   });
 });
+
+test("patch dimensional schema presentation travels in authenticated interface metadata", () => {
+  const make = (isKeyParameter: boolean) => definePatch({ width: t.length({ label: "Channel width", description: "Full width", isKeyParameter }) }, (p, { width }) => ({ circle: p.geometry.centerRadiusCircle("circle", { center: [0, 0], radius: width }) }));
+  const base = { source: "schema fixture", moduleSpecifier: "./patches/schema.patch.ts", exportName: "schema" };
+  const first = compilePatchArtifact({ ...base, patch: make(true) });
+  const second = compilePatchArtifact({ ...base, patch: make(false) });
+  assert.deepEqual(first.artifact.input_presentation, { width: { label: "Channel width", description: "Full width", isKeyParameter: true } });
+  assert.notEqual(first.artifact.interface_digest, second.artifact.interface_digest);
+  assert.deepEqual(first.artifact.templates, second.artifact.templates);
+});

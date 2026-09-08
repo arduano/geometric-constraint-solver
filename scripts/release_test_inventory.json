@@ -227,6 +227,11 @@
       "m97-dimensions.spec.ts",
       "M97 contextual dimension edits retain source authority and Undo Redo reload",
       "chromium-memory"
+    ],
+    [
+      "m97-dimensions.spec.ts",
+      "M97 contextual dimension edits author source-owned overview metadata and public parameters",
+      "chromium-memory"
     ]
   ]
 }

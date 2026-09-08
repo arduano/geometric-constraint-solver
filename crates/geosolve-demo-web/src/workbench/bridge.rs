@@ -13,6 +13,8 @@
 
 use std::str::FromStr as _;
 
+mod authoring_metadata;
+use authoring_metadata::{AuthoringDocumentSnapshot, AuthoringMetadataSnapshot};
 mod navigation;
 use navigation::{NavigationSnapshot, NavigationState};
 #[cfg(test)]
@@ -399,6 +401,8 @@ struct SelectionSnapshot {
     ownership: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     source: Option<SelectionSourceSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    metadata: Option<AuthoringMetadataSnapshot>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize)]
@@ -409,6 +413,7 @@ struct SelectionSourceSnapshot {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ParameterSnapshot {
     id: String,
     label: String,
@@ -416,6 +421,10 @@ struct ParameterSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     unit: Option<String>,
     editable: bool,
+    row_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    metadata: Option<AuthoringMetadataSnapshot>,
+    consumers: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -443,6 +452,8 @@ struct BridgeSnapshot {
     explorer: Vec<ExplorerSnapshot>,
     navigation: NavigationSnapshot,
     dimensions: DimensionsSnapshot,
+    #[serde(rename = "authoringDocument", skip_serializing_if = "Option::is_none")]
+    authoring_document: Option<AuthoringDocumentSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     selection: Option<SelectionSnapshot>,
     parameters: Vec<ParameterSnapshot>,
@@ -1498,6 +1509,9 @@ impl WorkbenchBridge {
             "declaration.delete" => {
                 let payload: SelectionPayload = decode_payload(payload)?;
                 self.delete_declaration_row(&payload.id)
+            }
+            "authoring.metadata.set" | "authoring.parameter.extract" => {
+                self.dispatch_authoring_metadata(command, payload)
             }
             "parameter.edit" => {
                 let payload: ParameterPayload = decode_payload(payload)?;
@@ -3800,6 +3814,9 @@ impl WorkbenchBridge {
     fn snapshot(&mut self) -> Result<BridgeSnapshot, String> {
         self.reconcile_explorer_visibility();
         self.ensure_navigation_index();
+        if let Some(code) = &self.code_project {
+            self.title = code.title().to_owned();
+        }
         let frame = self.frame_snapshot();
         let source = self.source_snapshot()?;
         let navigation = self.navigation_snapshot();
@@ -3855,6 +3872,7 @@ impl WorkbenchBridge {
             explorer,
             navigation,
             dimensions,
+            authoring_document: self.authoring_document_snapshot(),
             selection,
             parameters,
             problems,
@@ -4092,6 +4110,7 @@ impl WorkbenchBridge {
                 kind: node_family_label(&inspector.kind).into(),
                 ownership: Some(ownership),
                 source,
+                metadata: self.selected_authoring_metadata(),
             });
         }
         editor
@@ -4104,6 +4123,7 @@ impl WorkbenchBridge {
                 kind: selection_kind(*item).into(),
                 ownership: Some("Modifiable instance".into()),
                 source: None,
+                metadata: self.selected_authoring_metadata(),
             })
     }
 
@@ -4114,9 +4134,10 @@ impl WorkbenchBridge {
         let Ok(manifest) = code.managed_controls_cached() else {
             return Vec::new();
         };
-        manifest
-            .controls
-            .iter()
+        let mut controls: Vec<_> = manifest.controls.iter().collect();
+        controls.sort_by_key(|control| control.source.span.start);
+        controls
+            .into_iter()
             .filter_map(|control| {
                 let editable = matches!(control.access, ManagedControlAccess::Editable { .. });
                 let (value, unit) = managed_value_text(&control.value)?;
@@ -4126,6 +4147,9 @@ impl WorkbenchBridge {
                     value,
                     unit,
                     editable,
+                    row_key: format!("{}:{}", self.dimension_instance(), control.id.0),
+                    metadata: self.parameter_metadata_snapshot(control),
+                    consumers: self.parameter_consumer_labels(control),
                 })
             })
             .collect()
@@ -4694,6 +4718,14 @@ fn selection_label(item: SelectionItem) -> String {
 }
 
 fn managed_control_label(control: &geosolve_sketch_code::ManagedControl) -> String {
+    if let Some(label) = control
+        .presentation
+        .label
+        .as_ref()
+        .filter(|label| !label.is_empty())
+    {
+        return label.clone();
+    }
     let path = control
         .source
         .path

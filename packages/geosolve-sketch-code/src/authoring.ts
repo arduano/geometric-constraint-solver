@@ -7,6 +7,10 @@
  * and presentation labels are deliberately separate from that identity.
  */
 
+import { validatePresentation, validateSketchOptions } from "./presentation.js";
+import type { PresentationOptions, ParameterOptions, SketchOptions } from "./presentation.js";
+export type { PresentationOptions, ParameterOptions, SketchOptions } from "./presentation.js";
+
 import {
   registerAuthoringSchema,
   registerPatchRuntime,
@@ -140,11 +144,6 @@ export type Sweep = "counterClockwise" | "clockwise";
 export type Side = "left" | "right";
 export type Endpoint = "start" | "end";
 export type DimensionMode = "driving" | "reference";
-
-export interface PresentationOptions {
-  /** Presentation only; never declaration identity. */
-  readonly label?: string;
-}
 
 export interface SuppressibleOptions extends PresentationOptions {
   readonly suppressed?: boolean;
@@ -960,6 +959,7 @@ export interface ConstraintBuilder<Project> {
 }
 
 type DimensionValues<Value> = SuppressibleOptions & {
+  readonly isKeyConstraint?: boolean;
   readonly value: Value;
   readonly mode?: DimensionMode;
 };
@@ -1134,6 +1134,7 @@ interface ValueSchemaRuntime {
   readonly kind: ValueSchemaKind;
   readonly feature?: FeatureSchemaName;
   readonly element?: ValueSchema<unknown>;
+  readonly presentation?: ParameterOptions;
 }
 
 export interface ValueSchema<Value> {
@@ -1170,11 +1171,21 @@ function valueSchema<Value>(
   kind: ValueSchemaKind,
   feature?: FeatureSchemaName,
   element?: ValueSchema<unknown>,
+  presentation?: ParameterOptions,
 ): ValueSchema<Value> {
+  if (presentation !== undefined) {
+    validatePresentation(presentation, "isKeyParameter");
+    presentation = Object.freeze({
+      ...(presentation.label === undefined ? {} : { label: presentation.label }),
+      ...(presentation.description === undefined ? {} : { description: presentation.description }),
+      ...(presentation.isKeyParameter === undefined ? {} : { isKeyParameter: presentation.isKeyParameter }),
+    });
+  }
   const runtime = Object.freeze({
     kind,
     ...(feature === undefined ? {} : { feature }),
     ...(element === undefined ? {} : { element }),
+    ...(presentation === undefined ? {} : { presentation }),
   });
   const schema = Object.freeze({ [schemaRuntime]: Object.freeze({
     value: undefined as Value,
@@ -1184,6 +1195,7 @@ function valueSchema<Value>(
     kind,
     ...(feature === undefined ? {} : { feature }),
     ...(element === undefined ? {} : { element }),
+    ...(presentation === undefined ? {} : { presentation }),
   });
   return schema;
 }
@@ -1232,8 +1244,8 @@ export const t = Object.freeze({
   curve: (): ValueSchema<CurveRef<unknown>> => valueSchema("curve"),
   curveSpan: (): ValueSchema<NativeCurveSpanRef<unknown>> => valueSchema("curveSpan"),
   scalar: (): ValueSchema<ScalarRef<unknown>> => valueSchema("scalar"),
-  length: (): ValueSchema<Length> => valueSchema("length"),
-  angle: (): ValueSchema<Angle> => valueSchema("angle"),
+  length: (options?: ParameterOptions): ValueSchema<Length> => valueSchema("length", undefined, undefined, options),
+  angle: (options?: ParameterOptions): ValueSchema<Angle> => valueSchema("angle", undefined, undefined, options),
   feature: <const Name extends FeatureSchemaName>(name: Name): ValueSchema<FeatureSchemaValue<Name>> =>
     valueSchema("feature", name),
   keyed: <Value>(element: ValueSchema<Value>): ValueSchema<KeyedFeatureCollection<string, Value>> =>
@@ -1311,7 +1323,9 @@ export interface SketchBuilder<Project> {
     id: string,
     patch: PatchDefinition<Schemas, Result>,
     inputs: PatchInvocationInputs<Schemas, Project>,
+    options?: PresentationOptions,
   ): PatchApplication<Project, Result>;
+  parameter<Value extends number | UnitLiteral>(id: string, value: Value, options?: ParameterOptions): Value;
   group(label: string, declarations: readonly (OutputRef<Project, FeatureKind> | PatchApplication<Project, unknown>)[]): void;
   suppress(declaration: OutputRef<Project, FeatureKind>): void;
 }
@@ -1325,9 +1339,14 @@ export interface Sketch<Result> {
 }
 
 /** Execute the equation-free callback and retain its ordinary nested result. */
+export function sketch<Result>(build: (builder: SketchBuilder<SketchExecutionProject>) => Result): Sketch<Result>;
+export function sketch<Result>(options: SketchOptions, build: (builder: SketchBuilder<SketchExecutionProject>) => Result): Sketch<Result>;
 export function sketch<Result>(
-  build: (builder: SketchBuilder<SketchExecutionProject>) => Result,
+  optionsOrBuild: SketchOptions | ((builder: SketchBuilder<SketchExecutionProject>) => Result),
+  callback?: (builder: SketchBuilder<SketchExecutionProject>) => Result,
 ): Sketch<Result> {
+  const build = typeof optionsOrBuild === "function" ? optionsOrBuild : callback;
+  if (typeof optionsOrBuild !== "function") validateSketchOptions(optionsOrBuild);
   if (typeof build !== "function") throw new TypeError("sketch requires a builder callback");
   const result = build(createSketchBuilder());
   return Object.freeze({ output: result, [sketchRuntime]: result }) as unknown as Sketch<Result>;
@@ -1754,15 +1773,27 @@ function createSketchBuilder(): SketchBuilder<SketchExecutionProject> {
       id: string,
       patch: PatchDefinition<Schemas, Result>,
       inputs: PatchInvocationInputs<Schemas, SketchExecutionProject>,
+      options?: PresentationOptions,
     ): PatchApplication<SketchExecutionProject, Result> => {
+      if (options !== undefined) validatePresentation(options);
       requireId(id, "patch application ID");
-      if (usedIds.has(id)) throw new TypeError(`duplicate declaration ID ${JSON.stringify(id)}`);
-      usedIds.add(id);
+      if (usedIds.has(JSON.stringify([id]))) throw new TypeError(`duplicate declaration ID ${JSON.stringify(id)}`);
+      usedIds.add(JSON.stringify([id]));
       const builder = createPatchBuilder(project, [id]);
       return patch[patchRuntime].build(
         builder as unknown as PatchBuilder<PatchProject>,
         inputs as unknown as PatchInputs<Schemas, PatchProject>,
       ) as PatchApplication<SketchExecutionProject, Result>;
+    },
+    parameter: <Value extends number | UnitLiteral>(id: string, value: Value, options?: ParameterOptions): Value => {
+      requireId(id, "parameter ID");
+      if (usedIds.has(JSON.stringify([id]))) throw new TypeError(`duplicate declaration ID ${JSON.stringify(id)}`);
+      if (options !== undefined) validatePresentation(options, "isKeyParameter");
+      if (typeof value === "number") requireFinite(value, "parameter value");
+      else if (typeof value === "object" && value !== null && ["mm", "cm", "m", "inch", "deg", "rad"].includes(value.unit)) requireFinite(value.value, "parameter value");
+      else throw new TypeError("parameter requires a finite number or unit literal");
+      usedIds.add(JSON.stringify([id]));
+      return value;
     },
     group: (label: string) => {
       if (label.length === 0) throw new TypeError("group label cannot be empty");
@@ -1845,6 +1876,8 @@ function validateAuthoringValues(
   method: string,
   values: Readonly<Record<string, unknown>>,
 ): void {
+  const presentation = Object.fromEntries(Object.entries(values).filter(([name]) => name === "label" || name === "description" || name === "isKeyConstraint"));
+  validatePresentation(presentation, namespace === "dimension" ? "isKeyConstraint" : undefined);
   if (namespace === "constraint" && method === "endpointContinuity") {
     if (values.continuity === "parametricC2") {
       for (const field of ["firstRate", "secondRate"] as const) {

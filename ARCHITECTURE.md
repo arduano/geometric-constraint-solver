@@ -2895,11 +2895,11 @@ generated dimensions do not acquire writable authority from their displayed valu
 and verified preview at `http://100.94.63.83:18103/`. Supervising-user acceptance
 remains pending; no solver equations or branch semantics changed.
 
-### Planned M97 source-native metadata amendment
+### M97 source-native metadata amendment — implemented, qualification underway
 
-[M97_AUTHORING_METADATA.md](docs/M97_AUTHORING_METADATA.md) specifies the next
-authoring change; it is not implemented. Document title/description and authored
-dimension defaults belong to `sketch` options. Local dimension `key`, existing
+[M97_AUTHORING_METADATA.md](docs/M97_AUTHORING_METADATA.md) specifies the implemented
+authoring API. Document title/description and authored
+dimension defaults belong to `sketch` options. Local dimension `isKeyConstraint`, existing
 `label`, optional `description`, named public parameters and patch input schema
 presentation travel through authenticated managed IR and execution artifacts.
 Rust projects accepted metadata into the workbench and prepares bounded structural
@@ -2909,6 +2909,8 @@ Named parameters retain stable source identity and one public edit route across
 their consumers. Inline inputs can inherit patch defaults; named parameters own
 their presentation independently. The catalog derives title/summary/groups from
 compiled source and retains ordering/category/legal/test metadata. Its priority
-selectors and the first-six fallback retire after live sources are migrated.
-Existing view preferences retain their current owners. The new formats, transactions
-and old-source compatibility require the uncompleted qualification in PLAN.md.
+selectors and the first-six fallback have been removed after migrating all live sources.
+Existing view preferences retain their current owners. V4 envelopes authenticate metadata,
+while the bounded V3 reader preserves old source and upgrades only through a source
+transaction. [Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) records
+focused checks; the integrated replacement gate and new preview remain pending in PLAN.md.

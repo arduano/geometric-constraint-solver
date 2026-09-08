@@ -1,7 +1,10 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "CNC router dust shoe and spindle clamp",
+  description: "A fully constrained 65 mm spindle ring combines an extraction boss, split relief and symmetric clamp lug.",
+}, ($) => {
   // A planar router dust-shoe interface: a split spindle ring feeds a second
   // extraction port and a symmetric two-screw clamp lug. All locations are
   // related to one origin datum rather than frozen independently.
@@ -27,12 +30,14 @@ export default sketch(($) => {
     role: "profile",
   });
   const spindleBoreRadius = $.dimension.radius("spindleBoreRadius", {
+    isKeyConstraint: true,
     curve: spindleBore.curve,
     value: mm(32.5),
     label: "Spindle bore radius",
     mode: "driving",
   });
   const clampOutsideRadius = $.dimension.radius("clampOutsideRadius", {
+    isKeyConstraint: true,
     curve: clampOutside.curve,
     value: mm(42),
     label: "Clamp outside radius",
@@ -50,6 +55,7 @@ export default sketch(($) => {
     label: "Port vertical datum",
   });
   const dustPortOffset = $.dimension.curveLength("dustPortOffset", {
+    isKeyConstraint: true,
     curve: dustPortDatum.span,
     value: mm(55),
     label: "Port offset",
@@ -68,6 +74,7 @@ export default sketch(($) => {
     role: "profile",
   });
   const dustPortBoreRadius = $.dimension.radius("dustPortBoreRadius", {
+    isKeyConstraint: true,
     curve: dustPortBore.curve,
     value: mm(14),
     label: "Dust port bore radius",
@@ -138,6 +145,7 @@ export default sketch(($) => {
     label: "Vertical screw axis",
   });
   const screwAxisLength = $.dimension.curveLength("screwAxisLength", {
+    isKeyConstraint: true,
     curve: screwAxis.span,
     value: mm(20),
     label: "Screw pitch",
@@ -199,6 +207,7 @@ export default sketch(($) => {
     mode: "driving",
   });
   const splitGap = $.dimension.curveLength("splitGap", {
+    isKeyConstraint: true,
     curve: splitRelief.spans[1],
     value: mm(5),
     label: "Split gap",

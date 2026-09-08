@@ -2,30 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 16,
   "key": "robotic-harness-backplane",
-  "title": "Dense robotic harness-routing backplane",
-  "summary": "Eight readable harness trunks generate keyed clips and computed bend fillets across a complete robotic cell backplane.",
   "category": "scale_study",
   "expected": {
     "raw_dof": 268,
     "effective_dof": 268
-  },
-  "groups": [
-    "Backplane and mounting grid",
-    "Power and servo harnesses",
-    "Sensor harnesses",
-    "Tooling vision and service harnesses"
-  ],
-  "dimension_presentation": {
-    "parameters": [
-      {
-        "declaration": "clipRadius",
-        "path": []
-      },
-      {
-        "declaration": "bendRadius",
-        "path": []
-      }
-    ]
   },
   "provenance": []
 }

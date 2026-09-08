@@ -2,20 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 8,
   "key": "dust-shoe-clamp",
-  "title": "CNC router dust shoe and spindle clamp",
-  "summary": "A fully constrained 65 mm spindle ring combines an extraction boss, split relief and symmetric clamp lug.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Spindle clamp ring", "Dust extraction port", "Symmetric clamp lug", "Split relief"],
-  "dimension_presentation": {
-    "dimensions": [
-      "spindleBoreRadius",
-      "clampOutsideRadius",
-      "dustPortBoreRadius",
-      "dustPortOffset",
-      "screwAxisLength",
-      "splitGap"
-    ]
+  "expected": {
+    "raw_dof": 0,
+    "effective_dof": 0
   },
   "provenance": [
     {

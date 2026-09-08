@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DeclarationCapability, DeclarationRow, NavigationSnapshot, WorkbenchSnapshot } from "../lib/adapter";
 import { Button } from "./ui/button";
 import { DimensionInspector, type DimensionPanelActions } from "./dimension-inspector";
+import { AuthoringDocumentProperties, AuthoringMetadataEditor, type AuthoringMetadataActions } from "./authoring-metadata";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 export type DeclarationMove = { direction: "up" | "down" } | { targetId: string; position: "before" | "after" };
@@ -105,18 +106,49 @@ function RowAction({ label, capability, pressed, danger = false, onClick, childr
   return <button type="button" aria-label={label} aria-pressed={pressed} disabled={!capability.enabled} title={capability.enabled ? label : capability.reason} onClick={onClick} className={`grid size-6 place-items-center rounded outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30 [&>svg]:size-3 ${danger ? "text-red-300 hover:bg-danger/20" : "text-muted hover:bg-raised hover:text-foreground"}`}>{children}</button>;
 }
 
-export function DetailsPanel({ snapshot, onOpenCode, onParameterEdit, onProblemOpen, parametersBlocked, navigationBlockedReason, dimensionActions, dimensionInspectionBlocked }: { snapshot: WorkbenchSnapshot; onOpenCode: () => void; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void; parametersBlocked: boolean; navigationBlockedReason?: string; dimensionActions: DimensionPanelActions; dimensionInspectionBlocked?: string }) {
-  return <Tabs defaultValue="inspector" className="flex h-full min-h-0 flex-col bg-surface"><TabsList aria-label="Details"><TabsTrigger value="inspector">Inspector</TabsTrigger><TabsTrigger value="parameters">Parameters</TabsTrigger><TabsTrigger value="problems">Problems {snapshot.problems.length > 0 && <span className="ml-1 rounded bg-danger px-1 text-[9px] text-white">{snapshot.problems.length}</span>}</TabsTrigger></TabsList><TabsContent value="inspector" className="overflow-auto p-3"><Inspector snapshot={snapshot} onOpenCode={onOpenCode} blockedReason={navigationBlockedReason} /><DimensionInspector dimensions={snapshot.dimensions} actions={dimensionActions} onParameterEdit={onParameterEdit} editingBlocked={parametersBlocked ? "Apply or Revert the source draft before editing dimensions." : dimensionInspectionBlocked} inspectionBlocked={dimensionInspectionBlocked} /></TabsContent><TabsContent value="parameters" className="overflow-auto p-3"><ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={parametersBlocked} /></TabsContent><TabsContent value="problems" className="overflow-auto p-3"><ProblemsView snapshot={snapshot} onOpen={onProblemOpen} /></TabsContent></Tabs>;
+export function DetailsPanel({ snapshot, onOpenCode, onParameterEdit, onProblemOpen, parametersBlocked, navigationBlockedReason, dimensionActions, dimensionInspectionBlocked, metadataActions, metadataBlockedReason }: { snapshot: WorkbenchSnapshot; onOpenCode: () => void; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void; parametersBlocked: boolean; navigationBlockedReason?: string; dimensionActions: DimensionPanelActions; dimensionInspectionBlocked?: string; metadataActions?: AuthoringMetadataActions; metadataBlockedReason?: string }) {
+  return <Tabs defaultValue="inspector" className="flex h-full min-h-0 flex-col bg-surface">
+    <TabsList aria-label="Details"><TabsTrigger value="inspector">Inspector</TabsTrigger><TabsTrigger value="parameters">Parameters</TabsTrigger><TabsTrigger value="problems">Problems {snapshot.problems.length > 0 && <span className="ml-1 rounded bg-danger px-1 text-[9px] text-white">{snapshot.problems.length}</span>}</TabsTrigger></TabsList>
+    <TabsContent value="inspector" className="overflow-auto p-3">
+      <Inspector snapshot={snapshot} onOpenCode={onOpenCode} blockedReason={navigationBlockedReason} metadataActions={metadataActions} metadataBlockedReason={metadataBlockedReason} />
+      <DimensionInspector dimensions={snapshot.dimensions} actions={dimensionActions} onParameterEdit={onParameterEdit} editingBlocked={parametersBlocked ? "Apply or Revert the source draft before editing dimensions." : dimensionInspectionBlocked} inspectionBlocked={dimensionInspectionBlocked} metadataActions={metadataActions} />
+      <AuthoringDocumentProperties document={snapshot.authoringDocument} actions={metadataActions} blockedReason={metadataBlockedReason} />
+    </TabsContent>
+    <TabsContent value="parameters" className="overflow-auto p-3"><ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={parametersBlocked} metadataActions={metadataActions} blockedReason={metadataBlockedReason} /></TabsContent>
+    <TabsContent value="problems" className="overflow-auto p-3"><ProblemsView snapshot={snapshot} onOpen={onProblemOpen} /></TabsContent>
+  </Tabs>;
 }
 
-function Inspector({ snapshot, onOpenCode, blockedReason }: { snapshot: WorkbenchSnapshot; onOpenCode: () => void; blockedReason?: string }) {
+function Inspector({ snapshot, onOpenCode, blockedReason, metadataActions, metadataBlockedReason }: { snapshot: WorkbenchSnapshot; onOpenCode: () => void; blockedReason?: string; metadataActions?: AuthoringMetadataActions; metadataBlockedReason?: string }) {
   if (!snapshot.selection && snapshot.navigation && (snapshot.navigation.itemCount > 0 || snapshot.navigation.rows.length > 0)) return <div><p className="text-sm font-medium">{snapshot.navigation.itemCount > 0 ? `${snapshot.navigation.itemCount} ${snapshot.navigation.itemCount === 1 ? "item" : "items"} selected` : "Declaration selected"}</p><p className="mt-2 text-xs text-muted">Select one editable declaration to inspect its properties.</p>{snapshot.navigation.sources.length > 0 && <Button onClick={onOpenCode} disabled={Boolean(blockedReason)} title={blockedReason} className="mt-4 w-full"><ExternalLink className="size-3.5" />Show in code</Button>}</div>;
   if (!snapshot.selection) return <Empty icon={<SlidersHorizontal />} title="Nothing selected" detail="Select sketch geometry to inspect it." />;
-  return <div><div className="mb-4"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{snapshot.selection.kind}</p><h2 className="mt-1 truncate text-base font-medium text-foreground">{snapshot.selection.label}</h2></div><dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs"><dt className="text-muted">Ownership</dt><dd className="text-right text-foreground">{snapshot.selection.ownership ?? "Editable native"}</dd><dt className="text-muted">Status</dt><dd className="text-right text-emerald-300">Accepted</dd></dl>{(snapshot.navigation?.sources.length || snapshot.selection.ownership?.includes("source")) && <Button onClick={onOpenCode} disabled={Boolean(blockedReason)} title={blockedReason} className="mt-4 w-full"><ExternalLink className="size-3.5" />Show in code</Button>}</div>;
+  return <div><div className="mb-4"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{snapshot.selection.kind}</p><h2 className="mt-1 truncate text-base font-medium text-foreground">{snapshot.selection.label}</h2></div><dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs"><dt className="text-muted">Ownership</dt><dd className="text-right text-foreground">{snapshot.selection.ownership ?? "Editable native"}</dd><dt className="text-muted">Status</dt><dd className="text-right text-emerald-300">Accepted</dd></dl>{snapshot.selection.metadata?.target.kind !== "dimension" && <AuthoringMetadataEditor metadata={snapshot.selection.metadata} label={snapshot.selection.label} actions={metadataActions} blockedReason={metadataBlockedReason} />}{(snapshot.navigation?.sources.length || snapshot.selection.ownership?.includes("source")) && <Button onClick={onOpenCode} disabled={Boolean(blockedReason)} title={blockedReason} className="mt-4 w-full"><ExternalLink className="size-3.5" />Show in code</Button>}</div>;
 }
-export function ParametersView({ snapshot, onEdit, blocked }: { snapshot: WorkbenchSnapshot; onEdit: (id: string, value: string) => void; blocked: boolean }) {
-  if (!snapshot.parameters.length) return <Empty icon={<Braces />} title="No parameters" detail="Managed source parameters appear here." />;
-  return <div className="grid gap-3">{blocked && <p role="status" className="rounded border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-accent">Apply or Revert the source draft before editing parameters.</p>}{snapshot.parameters.map((parameter) => <label key={`${parameter.id}:${parameter.value}`} className="grid gap-1 text-xs text-muted"><span>{parameter.label}</span><span className="flex"><input aria-label={parameter.label} disabled={!parameter.editable || blocked} defaultValue={parameter.value} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onEdit(parameter.id, event.currentTarget.value); } }} onBlur={(event) => { if (event.currentTarget.value !== parameter.value) onEdit(parameter.id, event.currentTarget.value); }} className="h-8 min-w-0 flex-1 rounded-l border border-border bg-canvas px-2 text-right text-sm text-foreground outline-none focus:border-accent disabled:opacity-50" /><span className="flex h-8 items-center rounded-r border border-l-0 border-border bg-raised px-2 text-xs text-muted">{parameter.unit}</span></span></label>)}</div>;
+export function ParametersView({ snapshot, onEdit, blocked, metadataActions, blockedReason }: { snapshot: WorkbenchSnapshot; onEdit: (id: string, value: string) => void; blocked: boolean; metadataActions?: AuthoringMetadataActions; blockedReason?: string }) {
+  const reason = blockedReason ?? (blocked ? "Apply or Revert the source draft before editing parameters." : undefined);
+  if (!snapshot.parameters.length) return <Empty icon={<Braces />} title="No parameters" detail="Named parameters and editable source values appear here." />;
+  return <section aria-label="Parameters" className="grid gap-3">
+    {reason && <p role="status" className="rounded border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-accent">{reason}</p>}
+    {snapshot.parameters.map((parameter) => <div key={parameter.rowKey ?? parameter.id} className="min-w-0 rounded border border-border p-2">
+      <ParameterValue parameter={parameter} onEdit={onEdit} blockedReason={reason} />
+      <AuthoringMetadataEditor metadata={parameter.metadata} label={parameter.label} actions={metadataActions} blockedReason={reason} extractionId={parameter.id} />
+      {parameter.consumers && parameter.consumers.length > 0 && <p className="mt-2 break-words text-[10px] leading-relaxed text-muted">Used by {parameter.consumers.join(", ")}</p>}
+    </div>)}
+  </section>;
+}
+function ParameterValue({ parameter, onEdit, blockedReason }: { parameter: WorkbenchSnapshot["parameters"][number]; onEdit: (id: string, value: string) => void; blockedReason?: string }) {
+  const [draft, setDraft] = useState(parameter.value);
+  const submitted = useRef(parameter.value);
+  useEffect(() => { setDraft(parameter.value); submitted.current = parameter.value; }, [parameter.value]);
+  const submit = (value: string) => {
+    if (!parameter.editable || blockedReason || value === submitted.current) return;
+    submitted.current = value;
+    onEdit(parameter.id, value);
+  };
+  return <label className="grid min-w-0 gap-1 text-xs text-muted"><span>{parameter.label}</span><span className="flex"><input aria-label={parameter.label} disabled={!parameter.editable || Boolean(blockedReason)} title={blockedReason} value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onKeyDown={(event) => {
+    if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); submit(event.currentTarget.value); }
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setDraft(parameter.value); submitted.current = parameter.value; }
+  }} onBlur={(event) => submit(event.currentTarget.value)} className="h-8 min-w-0 flex-1 rounded-l border border-border bg-canvas px-2 text-right text-sm text-foreground outline-none focus:border-accent disabled:opacity-50" /><span className="flex h-8 items-center rounded-r border border-l-0 border-border bg-raised px-2 text-xs text-muted">{parameter.unit}</span></span></label>;
 }
 export function ProblemsView({ snapshot, onOpen }: { snapshot: WorkbenchSnapshot; onOpen?: (problem: WorkbenchSnapshot["problems"][number]) => void }) {
   if (!snapshot.problems.length) return <Empty icon={<AlertCircle />} title="No problems" detail="The accepted project has no reported issues." />;

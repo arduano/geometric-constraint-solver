@@ -2,7 +2,10 @@
 import { sketch, mm } from "@geosolve/sketch-code";
 import { harnessRoute } from "./patches/harness-route.patch.ts";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Dense robotic harness-routing backplane",
+  description: "Eight readable harness trunks generate keyed clips and computed bend fillets across a complete robotic cell backplane.",
+}, ($) => {
   // A 360 × 220 mm backplane carries eight source-authored harness trunks.
   // The patch maps every keyed vertex to a clip and every keyed corner to a
   // computed Fillet, yielding 80 clips and 64 branch-explicit bend features.
@@ -353,8 +356,16 @@ export default sketch(($) => {
     role: "profile",
     label: "Service-loop trunk",
   });
-  const clipRadius = mm(2.4);
-  const bendRadius = mm(5);
+  const clipRadius = $.parameter("clipRadius", mm(2.4), {
+    label: "Clip radius",
+    description: "Shared clip radius.",
+    isKeyParameter: true,
+  });
+  const bendRadius = $.parameter("bendRadius", mm(5), {
+    label: "Bend radius",
+    description: "Shared centreline bend radius.",
+    isKeyParameter: true,
+  });
   const powerHarness = $.use("powerHarness", harnessRoute, {
     vertices: powerBus.vertices,
     corners: powerBus.filletableCorners,

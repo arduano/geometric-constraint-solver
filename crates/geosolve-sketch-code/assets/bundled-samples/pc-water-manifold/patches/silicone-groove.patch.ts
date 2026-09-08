@@ -9,8 +9,8 @@ import { definePatch, t } from "@geosolve/sketch-code";
 export const siliconeGroove = definePatch(
   {
     polyline: t.feature("polyline"),
-    width: t.length(),
-    bendRadius: t.length(),
+    width: t.length({ label: "Seal groove width", description: "Full width across the silicone seal groove.", isKeyParameter: true }),
+    bendRadius: t.length({ label: "Bend radius", description: "Centreline radius; must exceed half the width." }),
   },
   (p, { polyline, width, bendRadius }) => ({
     profile: p.computed.polylineChannel("groove", {

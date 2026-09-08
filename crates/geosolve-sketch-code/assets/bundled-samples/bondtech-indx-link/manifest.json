@@ -2,13 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 12,
   "key": "bondtech-indx-link",
-  "title": "Bondtech INDX tool-link interface",
-  "summary": "A Bondtech INDX Link study pairs the published plan envelope with a schematic three-point Maxwell coupling and link-board service zone.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Tool-link envelope", "Three-point coupling", "Link-board interface"],
-  "dimension_presentation": {
-    "all_authored": true
+  "expected": {
+    "raw_dof": 0,
+    "effective_dof": 0
   },
   "provenance": [
     {

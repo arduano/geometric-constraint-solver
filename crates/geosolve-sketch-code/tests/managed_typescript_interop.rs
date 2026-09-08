@@ -58,6 +58,8 @@ struct IrDigestEnvelope<'a> {
     output: &'a ManagedExpression,
     source_sites: &'a [ManagedSourceSite],
     source_digest: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document: &'a Option<ManagedExpression>,
 }
 
 #[derive(Serialize)]
@@ -71,6 +73,12 @@ struct ArtifactDigestEnvelope<'a> {
     suppressions: &'a [ExecutedSuppression],
     value_consumers: &'a [ExecutedValueConsumer],
     output: &'a ManagedValue,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document: &'a Option<geosolve_sketch_code::ManagedDocumentPresentation>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    parameters: &'a Vec<geosolve_sketch_code::ExecutedParameter>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    presentations: &'a Vec<geosolve_sketch_code::ExecutedPresentation>,
 }
 
 fn digest(value: impl AsRef<[u8]>) -> String {
@@ -80,6 +88,9 @@ fn digest(value: impl AsRef<[u8]>) -> String {
 fn refresh_artifact_authority(compiled: &mut CompiledManagedSource) {
     let envelope = ArtifactDigestEnvelope {
         format: &compiled.artifact.format,
+        document: &compiled.artifact.document,
+        parameters: &compiled.artifact.parameters,
+        presentations: &compiled.artifact.presentations,
         source_digest: &compiled.artifact.source_digest,
         ir_digest: &compiled.artifact.ir_digest,
         declarations: &compiled.artifact.declarations,
@@ -125,6 +136,7 @@ fn typescript_managed_envelope_is_exact_rust_canonical_json_and_digest_parity() 
     assert_eq!(compiled.canonical_ir_json, canonical_ir);
     let ir_digest_envelope = IrDigestEnvelope {
         format: &compiled.ir.format,
+        document: &compiled.ir.document,
         imports: &compiled.ir.imports,
         statements: &compiled.ir.statements,
         output: &compiled.ir.output,
@@ -142,6 +154,9 @@ fn typescript_managed_envelope_is_exact_rust_canonical_json_and_digest_parity() 
     assert_eq!(compiled.artifact.ir_digest, compiled.ir.ir_digest);
     let artifact_digest_envelope = ArtifactDigestEnvelope {
         format: &compiled.artifact.format,
+        document: &compiled.artifact.document,
+        parameters: &compiled.artifact.parameters,
+        presentations: &compiled.artifact.presentations,
         source_digest: &compiled.artifact.source_digest,
         ir_digest: &compiled.artifact.ir_digest,
         declarations: &compiled.artifact.declarations,

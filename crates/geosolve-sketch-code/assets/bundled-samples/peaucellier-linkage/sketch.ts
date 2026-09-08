@@ -1,7 +1,13 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Peaucellier straight-line linkage · 1 DOF",
+  description: "A dimensioned inversor cell converts a circular driver into exact straight-line motion.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   // The inversor relation is OP * OQ = 5^2 - 3^2. Because the radius-4
   // input circle passes through O, the free output follows x = 2 mm.
   // The authored 45..115 degree stroke stays on the open inversor cell

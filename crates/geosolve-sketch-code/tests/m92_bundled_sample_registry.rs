@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch_code::{
-    KeyedReconcileState, ManagedPathSegment, ManagedStatement, ManagedValue, SampleCategory,
-    bundled_sample, bundled_sample_catalog, expand_code_project, managed_control_manifest,
+    KeyedReconcileState, ManagedStatement, ManagedValue, SampleCategory, bundled_sample,
+    bundled_sample_catalog, expand_code_project, managed_control_manifest,
     required_generated_members,
 };
 use geosolve_sketch_intent::{IntentSession, IntentSessionId};
@@ -113,9 +113,18 @@ fn every_compiler_envelope_reconstructs_and_authenticates_its_project() {
 #[test]
 fn dimension_presets_cover_gridfinity_standards_and_curated_manifold_intent() {
     let gridfinity = bundled_sample("gridfinity-bin-section").unwrap();
-    assert!(gridfinity.dimension_presentation.all_authored);
     let project = gridfinity.project();
     let compiled = project.managed.compiled.as_deref().unwrap();
+    assert_eq!(
+        compiled
+            .authored_metadata()
+            .unwrap()
+            .document
+            .dimensions
+            .unwrap()
+            .are_key_constraints_by_default,
+        Some(true)
+    );
     let authored: Vec<_> = compiled
         .ir
         .statements
@@ -143,26 +152,42 @@ fn dimension_presets_cover_gridfinity_standards_and_curated_manifold_intent() {
     );
 
     let manifold = bundled_sample("pc-water-manifold").unwrap();
-    assert!(!manifold.dimension_presentation.all_authored);
+    let project = manifold.project();
+    let metadata = project
+        .managed
+        .compiled
+        .as_deref()
+        .unwrap()
+        .authored_metadata()
+        .unwrap();
+    assert!(metadata.document.dimensions.is_none());
+    let keys: BTreeSet<_> = metadata
+        .declarations
+        .iter()
+        .filter(|(_, presentation)| presentation.is_key_constraint == Some(true))
+        .map(|(symbol, _)| symbol.0.as_str())
+        .collect();
     assert_eq!(
-        manifold.dimension_presentation.dimensions,
-        [
+        keys,
+        BTreeSet::from([
             "plateWidth",
             "plateHeight",
             "reservoirWidth",
             "reservoirHeight",
             "upperOutletRadius",
             "screwNwOuterDiameter",
-        ]
+        ])
     );
 }
 
 #[test]
-fn overview_parameter_selectors_resolve_authenticated_public_source_controls() {
-    for sample in bundled_sample_catalog()
-        .iter()
-        .filter(|sample| !sample.dimension_presentation.parameters.is_empty())
-    {
+fn authored_overview_parameters_resolve_authenticated_public_source_controls() {
+    for sample in bundled_sample_catalog().iter().filter(|sample| {
+        matches!(
+            sample.key,
+            "pc-water-manifold" | "robotic-harness-backplane"
+        )
+    }) {
         let project = sample.project();
         let generated = KeyedReconcileState::empty()
             .plan(
@@ -175,19 +200,33 @@ fn overview_parameter_selectors_resolve_authenticated_public_source_controls() {
         let expansion = expand_code_project(&project, &generated, intent.identity()).unwrap();
         let controls = managed_control_manifest(&project, &expansion).unwrap();
         let mut values = Vec::new();
-        for selector in sample.dimension_presentation.parameters {
+        let parameters = project
+            .managed
+            .compiled
+            .as_deref()
+            .unwrap()
+            .authored_metadata()
+            .unwrap()
+            .parameters;
+        assert_eq!(parameters.len(), 2);
+        for parameter in parameters {
+            assert_eq!(parameter.presentation.is_key_parameter, Some(true));
             let matches: Vec<_> = controls
                 .controls
                 .iter()
                 .filter(|control| {
-                    control.source.declaration.0 == selector.declaration
-                        && control.source.path.0.len() == selector.path.len()
-                        && control.source.path.0.iter().zip(selector.path).all(|(actual, expected)| {
-                                matches!(actual, ManagedPathSegment::Field(field) if field.as_str() == *expected)
-                        })
+                    control.source.declaration.0 == parameter.declaration
+                        && control.source.path.0.is_empty()
+                        && control.is_public_parameter
                 })
                 .collect();
-            assert_eq!(matches.len(), 1, "{}: {selector:?}", sample.key);
+            assert_eq!(
+                matches.len(),
+                1,
+                "{}: {}",
+                sample.key,
+                parameter.declaration
+            );
             let ManagedValue::Unit(value) = &matches[0].value else {
                 panic!("overview parameter must retain its dimensional source value");
             };

@@ -8,7 +8,7 @@ filling general navigation with dimension widgets.
 
 The subsequent source-native authoring request has a completed
 [design and implementation plan](M97_AUTHORING_METADATA.md). That amendment is
-not implemented or qualified yet. The interactions below describe the current
+implemented locally and undergoing replacement qualification. The interactions below describe the current
 qualified preview; the addendum replaces catalog priority ownership when implemented.
 
 ## Approved interaction
@@ -17,8 +17,8 @@ qualified preview; the addendum replaces catalog priority ownership when impleme
 - Focused keeps sample design-intent priorities eligible without selection.
   Gridfinity prioritizes all 20 authored measurements; the manifold prioritizes
   plate/reservoir sizes and representative outlet/fastener sizes. Other samples
-  curate a small overview set. New/imported sketches default to up to six directly
-  authored measurements. These defaults do not consume user pins.
+  curate a small overview set. In the source-native amendment, unmarked source has no implicit
+  overview measurements; All measurements provides discovery and explicit promotion. These defaults do not consume user pins.
 - A selected object reveals related measurements, with no more than six ordinary
   contextual callouts plus the default priorities. Every callout still needs a
   readable retained slot; crowded priority measurements remain in the Inspector.
@@ -92,11 +92,11 @@ Gridfinity measurement. This amendment changes presentation only. Qualification
 of the prior preview remains historical evidence until the amended product is
 qualified; M97 is open.
 
-## Source-native authoring amendment — designed, implementation pending
+## Source-native authoring amendment — implemented, qualification underway
 
 The supervising user requested native/intuitive authoring and an audit of adjacent
 metadata that should belong in code. [M97_AUTHORING_METADATA.md](M97_AUTHORING_METADATA.md)
-defines one source owner for dimension `key`, named public parameters, display
+defines one source owner for dimension `isKeyConstraint`, named public parameters, display
 labels/help and document title/description. Inspector actions rewrite these same
 properties through authenticated source transactions, with Undo/Redo and restoration.
 Gridfinity uses an explicit document dimension default; the manifold keeps its exact

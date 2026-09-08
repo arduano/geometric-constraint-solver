@@ -2495,7 +2495,10 @@ fn lower_named_geometry_samples(
             }
         })?;
     let mut draft = projected.draft;
-    if let Some(label) = arguments.get("label") {
+    if let Some(label) = arguments
+        .get("label")
+        .filter(|value| !matches!(value, ManagedValue::String(label) if label.is_empty()))
+    {
         draft = draft.with_display_name(IntentKey::new(string(label, "geometry label")?)?);
     }
     for (field, expected) in &definition_fields {
@@ -2761,7 +2764,10 @@ fn lower_named_tangent_arc(
                 message: format!("Tangent Arc native recipe state is invalid: {error}"),
             }
         })?;
-    if let Some(label) = arguments.get("label") {
+    if let Some(label) = arguments
+        .get("label")
+        .filter(|value| !matches!(value, ManagedValue::String(label) if label.is_empty()))
+    {
         draft = draft.with_display_name(IntentKey::new(string(label, "Tangent Arc label")?)?);
     }
     let outputs = draft_semantic_outputs(&draft, &alias)?;
@@ -3135,7 +3141,10 @@ fn lower_named_spline(
             )
         });
     }
-    if let Some(label) = arguments.get("label") {
+    if let Some(label) = arguments
+        .get("label")
+        .filter(|value| !matches!(value, ManagedValue::String(label) if label.is_empty()))
+    {
         draft = draft.with_display_name(IntentKey::new(string(label, "spline label")?)?);
     }
     for (ordinal, control) in resolved_controls.iter().enumerate() {
@@ -3289,7 +3298,10 @@ fn lower_named_geometry_generic(
     let alias = builder.lowering_alias("geometry", &declaration.symbol, &[])?;
     let mut draft = IntentNodeDraft::new(IntentNodeKind::Geometry { recipe }, alias.clone())
         .with_dynamic_children(descriptor.dynamic_children.count);
-    if let Some(label) = arguments.get("label") {
+    if let Some(label) = arguments
+        .get("label")
+        .filter(|value| !matches!(value, ManagedValue::String(label) if label.is_empty()))
+    {
         draft = draft.with_display_name(IntentKey::new(string(label, "geometry label")?)?);
     }
 
@@ -3535,7 +3547,10 @@ fn build_named_native_draft(
     let kind = descriptor.declaration.intent_kind();
     let mut draft = IntentNodeDraft::new(kind, alias.clone())
         .with_dynamic_children(descriptor.dynamic_children.count);
-    if let Some(label) = arguments.get("label") {
+    if let Some(label) = arguments
+        .get("label")
+        .filter(|value| !matches!(value, ManagedValue::String(label) if label.is_empty()))
+    {
         draft = draft.with_display_name(IntentKey::new(string(label, "declaration label")?)?);
     }
     draft.suppressed = arguments
@@ -5080,10 +5095,12 @@ fn lower_direct_circle(
     overlay: &CodeInteractionOverlay,
 ) -> Result<(), CodeExpansionError> {
     let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
-    if arguments
-        .keys()
-        .any(|key| !matches!(key.as_str(), "center" | "radius" | "label" | "role"))
-        || !arguments.contains_key("center")
+    if arguments.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "center" | "radius" | "label" | "description" | "role"
+        )
+    }) || !arguments.contains_key("center")
         || !arguments.contains_key("radius")
     {
         return Err(CodeExpansionError::Unsupported(format!(
@@ -5150,7 +5167,10 @@ fn lower_direct_circle(
         LeafField::Value,
         length(radius),
     );
-    if let Some(label) = arguments.get("label") {
+    if let Some(label) = arguments
+        .get("label")
+        .filter(|value| !matches!(value, ManagedValue::String(label) if label.is_empty()))
+    {
         draft = draft.with_display_name(IntentKey::new(string(label, "circle label")?)?);
     }
     if let Some(role) = arguments.get("role") {

@@ -1,7 +1,13 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Bondtech INDX tool-link interface",
+  description: "A Bondtech INDX Link study pairs the published plan envelope with a schematic three-point Maxwell coupling and link-board service zone.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   // This planar diagram combines the published Link assembly envelope with
   // the README's qualitative three-point Maxwell-coupling architecture. Seat
   // and board coordinates are schematic, not extracted manufacturing data.

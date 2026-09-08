@@ -287,7 +287,7 @@ fn m97_priority_manifold_keeps_design_sizes_and_truthful_public_widths() {
         snapshot
             .parameters
             .iter()
-            .any(|row| row.label == "channelWidth"
+            .any(|row| row.label == "Channel width"
                 && row.value == "12"
                 && row.default_priority
                 && row.editable)
@@ -296,7 +296,7 @@ fn m97_priority_manifold_keeps_design_sizes_and_truthful_public_widths() {
         snapshot
             .parameters
             .iter()
-            .any(|row| row.label == "commonSealGroove · width"
+            .any(|row| row.label == "Seal groove width"
                 && row.value == "2.4"
                 && row.default_priority
                 && row.editable)
@@ -394,8 +394,8 @@ fn m97_native_dimension_edit_uses_inspector_history_and_invalidates_old_tokens()
             .iter()
             .filter(|row| row.default_priority)
             .count(),
-        DimensionPresentationState::MAX_VISIBLE,
-        "ordinary native sketches retain a bounded authored overview"
+        0,
+        "native sketches without source metadata do not infer overview intent from order"
     );
     let before = bridge.editor().coordinator().intent().identity();
     let revision_before = bridge.revision;

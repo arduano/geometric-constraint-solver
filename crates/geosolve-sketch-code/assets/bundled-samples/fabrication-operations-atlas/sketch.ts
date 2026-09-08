@@ -1,7 +1,10 @@
 "use geosolve sketch";
 import { deg, sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Fabrication operations, constraints, dimensions and annotations atlas",
+  description: "Profile and topology operations, generated drilling, explicit constraint relations and a broad metrology annotation bench.",
+}, ($) => {
   // Profile generators: these operations deliberately expose their authored
   // width, height, radius, side count and orientation as managed controls.
   const stockBlank = $.operation.rectangle("stockBlank", {
@@ -318,12 +321,14 @@ export default sketch(($) => {
     label: "Inspection bores share radius",
   });
   const baselineLength = $.dimension.curveLength("baselineLength", {
+    isKeyConstraint: true,
     curve: datumBaseline.span,
     value: mm(14),
     mode: "driving",
     label: "Primary datum length · 14 mm",
   });
   const uprightHeight = $.dimension.curveLength("uprightHeight", {
+    isKeyConstraint: true,
     curve: datumUpright.span,
     value: mm(10),
     mode: "driving",
@@ -336,6 +341,7 @@ export default sketch(($) => {
     label: "Secondary datum height · 10 mm",
   });
   const datumAngle = $.dimension.orientedAngle("datumAngle", {
+    isKeyConstraint: true,
     first: datumBaseline.span,
     second: datumUpright.span,
     value: deg(90),
@@ -344,12 +350,14 @@ export default sketch(($) => {
     label: "Reference datum angle · 90°",
   });
   const inspectionDiameter = $.dimension.diameter("inspectionDiameter", {
+    isKeyConstraint: true,
     curve: inspectionBore.curve,
     value: mm(6),
     mode: "driving",
     label: "Driven inspection diameter · 6 mm",
   });
   const comparisonRadius = $.dimension.radius("comparisonRadius", {
+    isKeyConstraint: true,
     curve: comparisonBore.curve,
     value: mm(3),
     mode: "reference",
@@ -358,6 +366,7 @@ export default sketch(($) => {
   // Driving and reference annotations stay next to the functional specimens
   // they describe, rather than living in generic type-based buckets.
   const seedChord = $.dimension.pointDistance("seedChord", {
+    isKeyConstraint: true,
     first: splitSource.start,
     second: splitSource.end,
     value: mm(14),

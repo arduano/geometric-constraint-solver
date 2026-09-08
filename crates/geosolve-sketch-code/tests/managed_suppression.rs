@@ -274,6 +274,7 @@ fn finish_compiled(
     complete_consumers.extend(value_consumers);
     let output = object(&mut sites, []);
     let mut ir = ManagedSketchIr {
+        document: None,
         format: MANAGED_SKETCH_IR_FORMAT.into(),
         imports,
         statements,
@@ -294,6 +295,9 @@ fn finish_compiled(
         .unwrap(),
     );
     let mut artifact = ExecutedSketchArtifact {
+        document: None,
+        parameters: Vec::new(),
+        presentations: Vec::new(),
         format: EXECUTED_SKETCH_ARTIFACT_FORMAT.into(),
         source_digest: ir.source_digest.clone(),
         ir_digest: ir.ir_digest.clone(),
@@ -368,6 +372,10 @@ fn refresh_artifact_digest(compiled: &mut CompiledManagedSource) {
     compiled.canonical_artifact_json = serde_json::to_string(&compiled.artifact).unwrap();
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "exact synthetic compiler fixture keeps both declaration and runtime result records adjacent"
+)]
 fn direct_lines_compiled(suppressed: bool) -> CompiledManagedSource {
     let suppression_source = if suppressed {
         "  $.suppress(hidden);\n"
@@ -387,6 +395,7 @@ fn direct_lines_compiled(suppressed: bool) -> CompiledManagedSource {
     let hidden_site = sites.add(ManagedSourceSiteKind::Declaration);
     let mut statements = vec![
         ManagedStatement::Declaration {
+            presentation: None,
             variable: "kept".into(),
             symbol: "kept".into(),
             builder_path: vec!["geometry".into(), "segment".into()],
@@ -396,6 +405,7 @@ fn direct_lines_compiled(suppressed: bool) -> CompiledManagedSource {
             comments: Vec::new(),
         },
         ManagedStatement::Declaration {
+            presentation: None,
             variable: "hidden".into(),
             symbol: "hidden".into(),
             builder_path: vec!["geometry".into(), "segment".into()],
@@ -561,11 +571,13 @@ fn direct_shared_radius_compiled() -> CompiledManagedSource {
         }],
         vec![
             ManagedStatement::Binding {
+                parameter: None,
                 variable: "sharedRadius".into(),
                 value: binding_value,
                 comments: Vec::new(),
             },
             ManagedStatement::Declaration {
+                presentation: None,
                 variable: "hole".into(),
                 symbol: "hole".into(),
                 builder_path: vec!["geometry".into(), "centerRadiusCircle".into()],
@@ -575,6 +587,7 @@ fn direct_shared_radius_compiled() -> CompiledManagedSource {
                 comments: Vec::new(),
             },
             ManagedStatement::Declaration {
+                presentation: None,
                 variable: "radius".into(),
                 symbol: "radius".into(),
                 builder_path: vec!["dimension".into(), "radius".into()],

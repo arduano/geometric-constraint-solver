@@ -107,41 +107,25 @@ struct ManifestProvenance {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ManifestDimensionParameter {
-    declaration: String,
-    #[serde(default)]
-    path: Vec<String>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ManifestDimensionPresentation {
-    #[serde(default)]
-    all_authored: bool,
-    #[serde(default)]
-    dimensions: Vec<String>,
-    #[serde(default)]
-    parameters: Vec<ManifestDimensionParameter>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct SampleManifest {
     format: String,
     ordinal: usize,
     key: String,
-    title: String,
-    summary: String,
     category: ManifestCategory,
     expected: ManifestExpected,
-    groups: Vec<String>,
-    #[serde(default)]
-    dimension_presentation: ManifestDimensionPresentation,
+
     provenance: Vec<ManifestProvenance>,
+}
+
+struct SampleSourceMetadata {
+    title: String,
+    summary: String,
+    groups: Vec<String>,
 }
 
 struct ValidatedSample {
     manifest: SampleManifest,
+    metadata: SampleSourceMetadata,
     directory: PathBuf,
     patches: Vec<ValidatedSamplePatch>,
 }
@@ -214,7 +198,10 @@ fn validate_bundled_samples(manifest_dir: &Path) -> Vec<ValidatedSample> {
         );
         let expected = &contract.samples[index];
         assert_eq!(manifest.key, expected.key, "catalog key/order differs");
-        assert_eq!(manifest.title, expected.title, "catalog title differs");
+        assert_eq!(
+            sample.metadata.title, expected.title,
+            "catalog title differs"
+        );
         assert_eq!(
             manifest.category, expected.category,
             "catalog category differs"
@@ -225,9 +212,9 @@ fn validate_bundled_samples(manifest_dir: &Path) -> Vec<ValidatedSample> {
             manifest.key
         );
         assert!(
-            titles.insert(manifest.title.as_str()),
+            titles.insert(sample.metadata.title.as_str()),
             "duplicate bundled-sample title `{}`",
-            manifest.title
+            sample.metadata.title
         );
     }
     let retired: BTreeSet<_> = contract.retired_keys.iter().collect();
@@ -279,8 +266,6 @@ fn validate_sample(directory: PathBuf) -> ValidatedSample {
         "manifest key must equal its directory name"
     );
     assert_valid_key(&manifest.key);
-    assert_meaningful(&manifest.title, "sample title");
-    assert_meaningful(&manifest.summary, "sample summary");
     validate_expected(&manifest);
     validate_provenance(&manifest, &directory);
 
@@ -292,7 +277,7 @@ fn validate_sample(directory: PathBuf) -> ValidatedSample {
     });
     let compiled: Value = read_json(&compiled_path, "bundled-sample compiler envelope");
     validate_compiler_envelope(&manifest, &source, &compiled);
-    validate_dimension_presentation(&manifest, &compiled);
+    let metadata = sample_source_metadata(&manifest.key, &compiled);
 
     let witnesses: Value = read_json(&witnesses_path, "bundled-sample witnesses");
     assert_eq!(
@@ -316,6 +301,7 @@ fn validate_sample(directory: PathBuf) -> ValidatedSample {
 
     ValidatedSample {
         manifest,
+        metadata,
         directory,
         patches,
     }
@@ -514,14 +500,14 @@ fn validate_compiler_envelope(manifest: &SampleManifest, source: &str, compiled:
     }
     assert_eq!(
         compiled.pointer("/ir/format").and_then(Value::as_str),
-        Some("geosolve-managed-sketch-ir-v3"),
-        "{} must own V3 managed IR",
+        Some("geosolve-managed-sketch-ir-v4"),
+        "{} must own V4 managed IR",
         manifest.key
     );
     assert_eq!(
         compiled.pointer("/artifact/format").and_then(Value::as_str),
-        Some("geosolve-executed-sketch-artifact-v3"),
-        "{} must own a V3 executed artifact",
+        Some("geosolve-executed-sketch-artifact-v4"),
+        "{} must own a V4 executed artifact",
         manifest.key
     );
     assert_eq!(
@@ -545,94 +531,29 @@ fn validate_canonical_projection(compiled: &Value, field: &str, canonical: &str,
         .unwrap_or_else(|error| panic!("{key} `{canonical}` is invalid JSON: {error}"));
 }
 
-fn validate_dimension_presentation(manifest: &SampleManifest, compiled: &Value) {
-    let presentation = &manifest.dimension_presentation;
-    assert!(
-        !presentation.all_authored || presentation.dimensions.is_empty(),
-        "{} must use all_authored or an explicit dimension list",
-        manifest.key
-    );
-    let statements = compiled
-        .pointer("/ir/statements")
+fn sample_source_metadata(key: &str, compiled: &Value) -> SampleSourceMetadata {
+    let document = compiled
+        .pointer("/artifact/document")
+        .unwrap_or_else(|| panic!("{key} must describe its document in source"));
+    let title = required_string(document, "title", key).to_owned();
+    let summary = required_string(document, "description", key).to_owned();
+    assert_meaningful(&title, "source sample title");
+    assert_meaningful(&summary, "source sample description");
+    let groups = compiled
+        .pointer("/artifact/groups")
         .and_then(Value::as_array)
-        .expect("validated compiler envelope has IR statements");
-    let mut seen = BTreeSet::new();
-    for dimension in &presentation.dimensions {
-        assert!(
-            seen.insert(dimension),
-            "{} repeats priority dimension `{dimension}`",
-            manifest.key
-        );
-        assert!(
-            statements.iter().any(|statement| {
-                statement.get("symbol").and_then(Value::as_str) == Some(dimension)
-                    && statement.pointer("/builder_path/0").and_then(Value::as_str)
-                        == Some("dimension")
-            }),
-            "{} priority dimension `{dimension}` must name an authored dimension",
-            manifest.key
-        );
-    }
-    let mut seen_parameters = BTreeSet::new();
-    for parameter in &presentation.parameters {
-        assert!(
-            seen_parameters.insert((&parameter.declaration, &parameter.path)),
-            "{} repeats a priority parameter selector",
-            manifest.key
-        );
-        let value = statements.iter().find_map(|statement| {
-            if statement.get("symbol").and_then(Value::as_str) == Some(&parameter.declaration) {
-                statement.get("arguments")
-            } else if statement.get("statement").and_then(Value::as_str) == Some("binding")
-                && statement.get("variable").and_then(Value::as_str) == Some(&parameter.declaration)
-            {
-                statement.get("value")
-            } else {
-                None
-            }
-        });
-        let value = parameter.path.iter().fold(value, |value, field| {
-            value?
-                .get("fields")?
-                .as_array()?
-                .iter()
-                .find(|candidate| candidate.get("name").and_then(Value::as_str) == Some(field))?
-                .get("value")
-        });
-        assert!(
-            value.is_some_and(|value| {
-                value.get("kind").and_then(Value::as_str) == Some("call")
-                    && value
-                        .get("callee")
-                        .and_then(Value::as_str)
-                        .is_some_and(|callee| {
-                            matches!(callee, "mm" | "cm" | "m" | "inch" | "deg" | "rad")
-                        })
-            }),
-            "{} priority parameter `{}.{}` must name an authored dimensional source value",
-            manifest.key,
-            parameter.declaration,
-            parameter.path.join(".")
-        );
+        .expect("validated functional groups")
+        .iter()
+        .map(|group| required_string(group, "name", key).to_owned())
+        .collect();
+    SampleSourceMetadata {
+        title,
+        summary,
+        groups,
     }
 }
 
 fn validate_functional_groups(manifest: &SampleManifest, compiled: &Value) {
-    assert!(
-        !manifest.groups.is_empty(),
-        "{} must declare functional groups",
-        manifest.key
-    );
-    let mut manifest_names = BTreeSet::new();
-    for group in &manifest.groups {
-        assert_meaningful(group, "functional-group name");
-        assert!(
-            manifest_names.insert(group.as_str()),
-            "{} repeats functional group `{group}`",
-            manifest.key
-        );
-    }
-
     let artifact = compiled
         .get("artifact")
         .expect("validated compiler envelope has artifact");
@@ -663,19 +584,20 @@ fn validate_functional_groups(manifest: &SampleManifest, compiled: &Value) {
             .unwrap_or_else(|| panic!("{} artifact groups are missing", manifest.key)),
         &manifest.key,
     );
-    assert_eq!(
-        artifact_groups
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect::<Vec<_>>(),
-        manifest
-            .groups
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>(),
-        "{} manifest groups must exactly match executed order",
+    assert!(
+        !artifact_groups.is_empty(),
+        "{} must declare functional groups in source",
         manifest.key
     );
+    let mut names = BTreeSet::new();
+    for (name, _) in &artifact_groups {
+        assert_meaningful(name, "functional-group name");
+        assert!(
+            names.insert(name),
+            "{} repeats functional group `{name}`",
+            manifest.key
+        );
+    }
 
     let mut ownership = BTreeMap::<&str, usize>::new();
     for (_, members) in &artifact_groups {
@@ -804,13 +726,13 @@ fn generate_registry(samples: &[ValidatedSample], output_dir: &Path) {
 
 fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
     let manifest = &sample.manifest;
-    let groups = manifest
+    let groups = sample
+        .metadata
         .groups
         .iter()
         .map(|group| RustString(group).to_string())
         .collect::<Vec<_>>()
         .join(", ");
-    let dimension_presentation = generated_dimension_presentation(&manifest.dimension_presentation);
     let provenance = manifest
         .provenance
         .iter()
@@ -865,7 +787,6 @@ fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
         generated,
         "    BundledSampleSpec::new(\n        {ordinal}, {key}, {title}, {category}, {summary},\n        \
          SampleExpected::new({raw}, {effective}),\n        &[{groups}],\n        \
-         {dimension_presentation},\n        \
          &[{provenance}],\n        \
          include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \
          \"/assets/bundled-samples/{raw_key}/manifest.json\")),\n        \
@@ -875,45 +796,15 @@ fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
          \"/assets/bundled-samples/{raw_key}/witnesses.json\")),\n        {notice},\n        &[{patches}],\n    ),\n",
         ordinal = manifest.ordinal,
         key = RustString(&manifest.key),
-        title = RustString(&manifest.title),
+        title = RustString(&sample.metadata.title),
         category = manifest.category.rust_variant(),
-        summary = RustString(&manifest.summary),
+        summary = RustString(&sample.metadata.summary),
         raw = manifest.expected.raw_dof,
         effective = manifest.expected.effective_dof,
         raw_key = manifest.key,
         patches = patches,
     )
     .expect("writing generated Rust to a String cannot fail");
-}
-
-fn generated_dimension_presentation(presentation: &ManifestDimensionPresentation) -> String {
-    let dimensions = presentation
-        .dimensions
-        .iter()
-        .map(|dimension| RustString(dimension).to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let parameters = presentation
-        .parameters
-        .iter()
-        .map(|parameter| {
-            let path = parameter
-                .path
-                .iter()
-                .map(|field| RustString(field).to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!(
-                "SampleDimensionParameter {{ declaration: {}, path: &[{path}] }}",
-                RustString(&parameter.declaration),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!(
-        "SampleDimensionPresentation {{ all_authored: {}, dimensions: &[{dimensions}], parameters: &[{parameters}] }}",
-        presentation.all_authored,
-    )
 }
 
 fn generate_frontend_manifest(samples: &[ValidatedSample], output_dir: &Path) {
@@ -923,10 +814,10 @@ fn generate_frontend_manifest(samples: &[ValidatedSample], output_dir: &Path) {
             ordinal: sample.manifest.ordinal,
             stable_id: format!("sample.{}", sample.manifest.key),
             key: &sample.manifest.key,
-            title: &sample.manifest.title,
+            title: &sample.metadata.title,
             category: sample.manifest.category,
             group: sample.manifest.category.label(),
-            summary: &sample.manifest.summary,
+            summary: &sample.metadata.summary,
         })
         .collect::<Vec<_>>();
     let mut json = serde_json::to_string_pretty(&frontend)

@@ -662,6 +662,18 @@ fn authenticate_point_consumers(
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mutation", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ManagedSketchMutation {
+    SetMetadata {
+        target: ManagedMetadataTarget,
+        property: String,
+        value: Option<ManagedValue>,
+    },
+    ExtractParameter {
+        declaration: String,
+        path: Vec<ManagedPathSegment>,
+        symbol: String,
+        variable: String,
+        presentation: crate::ManagedPresentation,
+    },
     InsertDeclarations {
         declarations: Vec<ManagedDeclarationDraft>,
     },
@@ -685,6 +697,15 @@ pub enum ManagedSketchMutation {
     Delete {
         target: ManagedMutationTarget,
     },
+}
+
+/// Exact source owner of a bounded authored metadata property.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "target", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ManagedMetadataTarget {
+    Document,
+    Declaration { declaration: String },
+    Parameter { declaration: String },
 }
 
 /// Independently requested lifecycle action refused for a source-owned
@@ -1048,8 +1069,13 @@ pub fn prepare_managed_mutation(
         &mutation,
     )?;
     let expected = apply_expected_mutation(current, &mutation)?;
-    let base_semantics_digest = semantic_ir_digest(&current.ir.imports, &current.ir.statements)?;
-    let candidate_semantics_digest = semantic_ir_digest(&expected.imports, &expected.statements)?;
+    let base_semantics_digest = semantic_ir_digest(
+        &current.ir.imports,
+        &current.ir.statements,
+        &current.ir.document,
+    )?;
+    let candidate_semantics_digest =
+        semantic_ir_digest(&expected.imports, &expected.statements, &expected.document)?;
     let mut ticket = PreparedManagedMutationTicket {
         format: PREPARED_MANAGED_MUTATION_FORMAT.into(),
         ticket_digest: String::new(),
@@ -1231,6 +1257,7 @@ pub fn validate_prepared_managed_mutation(
     let actual_semantics = semantic_ir_digest(
         &receipt.compiled.ir.imports,
         &receipt.compiled.ir.statements,
+        &receipt.compiled.ir.document,
     )?;
     if actual_semantics != request.ticket.candidate_semantics_digest
         || expected.imports != receipt.compiled.ir.imports
@@ -1240,8 +1267,11 @@ pub fn validate_prepared_managed_mutation(
             "candidate IR differs from the one operation authorized by Rust".into(),
         ));
     }
-    let base_semantics =
-        semantic_ir_digest(&request.current.ir.imports, &request.current.ir.statements)?;
+    let base_semantics = semantic_ir_digest(
+        &request.current.ir.imports,
+        &request.current.ir.statements,
+        &request.current.ir.document,
+    )?;
     if actual_semantics == base_semantics {
         if !same_compiled_authority(&request.current, &receipt.compiled) {
             return Err(PreparedManagedMutationError::SemanticDelta(
@@ -1298,9 +1328,13 @@ fn validate_request(
         &request.ticket.mutation,
     )?;
     let expected = apply_expected_mutation(&request.current, &request.ticket.mutation)?;
-    let base_semantics =
-        semantic_ir_digest(&request.current.ir.imports, &request.current.ir.statements)?;
-    let candidate_semantics = semantic_ir_digest(&expected.imports, &expected.statements)?;
+    let base_semantics = semantic_ir_digest(
+        &request.current.ir.imports,
+        &request.current.ir.statements,
+        &request.current.ir.document,
+    )?;
+    let candidate_semantics =
+        semantic_ir_digest(&expected.imports, &expected.statements, &expected.document)?;
     if base_semantics != request.ticket.base_semantics_digest
         || candidate_semantics != request.ticket.candidate_semantics_digest
     {
@@ -1440,7 +1474,9 @@ fn validate_high_water(
                 ));
             }
         }
-        ManagedSketchMutation::ReorderDeclaration { .. }
+        ManagedSketchMutation::SetMetadata { .. }
+        | ManagedSketchMutation::ExtractParameter { .. }
+        | ManagedSketchMutation::ReorderDeclaration { .. }
         | ManagedSketchMutation::SetSuppressed { .. }
         | ManagedSketchMutation::SetValue { .. }
         | ManagedSketchMutation::SetValues { .. }
@@ -1505,6 +1541,7 @@ fn source_ticket_digest(
 }
 
 struct ExpectedManagedSemantics {
+    document: Option<ManagedExpression>,
     imports: Vec<ManagedIrImport>,
     statements: Vec<ManagedStatement>,
 }
@@ -1513,9 +1550,39 @@ fn apply_expected_mutation(
     current: &CompiledManagedSource,
     mutation: &ManagedSketchMutation,
 ) -> Result<ExpectedManagedSemantics, PreparedManagedMutationError> {
+    let mut document = current.ir.document.clone();
     let mut imports = current.ir.imports.clone();
     let mut statements = current.ir.statements.clone();
     match mutation {
+        ManagedSketchMutation::SetMetadata {
+            target,
+            property,
+            value,
+        } => {
+            set_metadata(
+                &mut document,
+                &mut statements,
+                target,
+                property,
+                value.as_ref(),
+            )?;
+        }
+        ManagedSketchMutation::ExtractParameter {
+            declaration,
+            path,
+            symbol,
+            variable,
+            presentation,
+        } => {
+            extract_parameter(
+                &mut statements,
+                declaration,
+                path,
+                symbol,
+                variable,
+                presentation,
+            )?;
+        }
         ManagedSketchMutation::InsertDeclarations { declarations } => {
             insert_declarations(current, &mut statements, declarations)?;
             add_required_generated_unit_helpers(&mut imports, declarations)?;
@@ -1553,9 +1620,317 @@ fn apply_expected_mutation(
         )));
     }
     Ok(ExpectedManagedSemantics {
+        document,
         imports,
         statements,
     })
+}
+
+fn metadata_is_empty(expression: &ManagedExpression) -> bool {
+    matches!(expression, ManagedExpression::Object { fields, .. } if fields.is_empty())
+}
+
+fn metadata_expression() -> ManagedExpression {
+    ManagedExpression::Object {
+        fields: Vec::new(),
+        site: placeholder_site("presentation"),
+    }
+}
+
+fn set_metadata_field(
+    expression: &mut ManagedExpression,
+    property: &str,
+    value: Option<&ManagedValue>,
+) -> Result<(), PreparedManagedMutationError> {
+    let ManagedExpression::Object { fields, .. } = expression else {
+        return semantic_refusal("metadata must own a literal options object");
+    };
+    if let Some(value) = value {
+        let next = managed_value_expression(value)?;
+        if let Some(field) = fields.iter_mut().find(|field| field.name == property) {
+            field.value = next;
+        } else {
+            fields.push(crate::ManagedObjectField {
+                name: property.to_owned(),
+                value: next,
+                comments: Vec::new(),
+            });
+        }
+    } else {
+        fields.retain(|field| field.name != property);
+    }
+    Ok(())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "target-specific source metadata and final-reset cleanup form one bounded semantic transaction"
+)]
+fn set_metadata(
+    document: &mut Option<ManagedExpression>,
+    statements: &mut [ManagedStatement],
+    target: &ManagedMetadataTarget,
+    property: &str,
+    value: Option<&ManagedValue>,
+) -> Result<(), PreparedManagedMutationError> {
+    let valid_value = match property {
+        "label" | "description" | "title" => {
+            value.is_none_or(|value| matches!(value, ManagedValue::String(_)))
+        }
+        "isKeyConstraint" | "isKeyParameter" | "areKeyConstraintsByDefault" => {
+            value.is_none_or(|value| matches!(value, ManagedValue::Bool(_)))
+        }
+        _ => false,
+    };
+    if !valid_value {
+        return semantic_refusal("metadata property or replacement type is invalid");
+    }
+    if matches!(target, ManagedMetadataTarget::Document) {
+        if !matches!(
+            property,
+            "title" | "description" | "areKeyConstraintsByDefault"
+        ) {
+            return semantic_refusal("metadata property does not belong to document");
+        }
+        let expression = document.get_or_insert_with(metadata_expression);
+        if property == "areKeyConstraintsByDefault" {
+            let ManagedExpression::Object { fields, .. } = expression else {
+                return semantic_refusal("document metadata must be literal");
+            };
+            if !fields.iter().any(|field| field.name == "dimensions") {
+                fields.push(crate::ManagedObjectField {
+                    name: "dimensions".into(),
+                    value: metadata_expression(),
+                    comments: Vec::new(),
+                });
+            }
+            let field = fields
+                .iter_mut()
+                .find(|field| field.name == "dimensions")
+                .expect("dimension default field was inserted");
+            set_metadata_field(&mut field.value, property, value)?;
+            fields.retain(|field| field.name != "dimensions" || !metadata_is_empty(&field.value));
+        } else {
+            set_metadata_field(expression, property, value)?;
+        }
+        crate::managed::parse_document_presentation(&expression_to_managed_value(expression)?)
+            .map_err(|error| PreparedManagedMutationError::SemanticDelta(error.to_string()))?;
+        if metadata_is_empty(expression) {
+            *document = None;
+        }
+        return Ok(());
+    }
+    let (declaration, is_parameter) = match target {
+        ManagedMetadataTarget::Declaration { declaration } => (declaration, false),
+        ManagedMetadataTarget::Parameter { declaration } => (declaration, true),
+        ManagedMetadataTarget::Document => unreachable!(),
+    };
+    for statement in statements {
+        match statement {
+            ManagedStatement::Binding {
+                parameter: Some(parameter),
+                ..
+            } if is_parameter && parameter.symbol == *declaration => {
+                if !matches!(property, "label" | "description" | "isKeyParameter") {
+                    return semantic_refusal("metadata property does not belong to parameter");
+                }
+                let expression = parameter
+                    .presentation
+                    .get_or_insert_with(metadata_expression);
+                set_metadata_field(expression, property, value)?;
+                crate::managed::parse_presentation(
+                    &expression_to_managed_value(expression)?,
+                    false,
+                    true,
+                )
+                .map_err(|error| PreparedManagedMutationError::SemanticDelta(error.to_string()))?;
+                if metadata_is_empty(expression) {
+                    parameter.presentation = None;
+                }
+                return Ok(());
+            }
+            ManagedStatement::Declaration {
+                symbol,
+                arguments,
+                builder_path,
+                patch,
+                presentation,
+                ..
+            } if !is_parameter && symbol == declaration => {
+                let dimension = patch.is_none()
+                    && builder_path
+                        .first()
+                        .is_some_and(|namespace| namespace == "dimension");
+                if !(matches!(property, "label" | "description")
+                    || dimension && property == "isKeyConstraint")
+                {
+                    return semantic_refusal("metadata property does not belong to declaration");
+                }
+                let expression = if patch.is_some() {
+                    presentation.get_or_insert_with(metadata_expression)
+                } else {
+                    arguments
+                };
+                set_metadata_field(expression, property, value)?;
+                // Validate the requested field independently of the declaration's mathematical arguments.
+                if let Some(value) = value {
+                    crate::managed::parse_presentation(
+                        &ManagedValue::Object(BTreeMap::from([(
+                            property.to_owned(),
+                            value.clone(),
+                        )])),
+                        dimension,
+                        false,
+                    )
+                    .map_err(|error| {
+                        PreparedManagedMutationError::SemanticDelta(error.to_string())
+                    })?;
+                }
+                if patch.is_some() && metadata_is_empty(expression) {
+                    *presentation = None;
+                }
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
+    semantic_refusal("metadata source owner is absent")
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one bounded extraction pass preserves source ownership while proving the exact new binding"
+)]
+fn extract_parameter(
+    statements: &mut Vec<ManagedStatement>,
+    declaration: &str,
+    path: &[ManagedPathSegment],
+    symbol: &str,
+    variable: &str,
+    presentation: &crate::ManagedPresentation,
+) -> Result<(), PreparedManagedMutationError> {
+    validate_path(path)?;
+    require_text(variable, "parameter variable").map_err(semantic_error)?;
+    if symbol.is_empty()
+        || symbol.len() > 256
+        || !symbol.chars().enumerate().all(|(index, character)| {
+            character.is_ascii_alphabetic()
+                || (index > 0
+                    && (character.is_ascii_digit() || matches!(character, '_' | '.' | '-')))
+        })
+    {
+        return semantic_refusal("parameter ID is not a supported stable declaration identifier");
+    }
+    if variable.is_empty()
+        || !variable.chars().enumerate().all(|(index, character)| {
+            character == '_'
+                || character == '$'
+                || character.is_ascii_alphabetic()
+                || (index > 0 && character.is_ascii_digit())
+        })
+    {
+        return semantic_refusal("parameter variable is not a supported JavaScript binding");
+    }
+    crate::managed::validate_presentation_text(presentation)
+        .map_err(|error| PreparedManagedMutationError::SemanticDelta(error.to_string()))?;
+    if presentation.is_key_constraint.is_some() {
+        return semantic_refusal("parameter extraction cannot set a constraint overview flag");
+    }
+    if statements.iter().any(|statement| matches!(statement, ManagedStatement::Declaration { symbol: existing, .. } if existing == symbol) || matches!(statement, ManagedStatement::Binding { parameter: Some(parameter), .. } if parameter.symbol == symbol)) {
+        return semantic_refusal("parameter ID already exists");
+    }
+    let index = statements
+        .iter()
+        .position(|statement| match statement {
+            ManagedStatement::Declaration { symbol, .. } => symbol == declaration,
+            ManagedStatement::Binding {
+                variable,
+                parameter: None,
+                ..
+            } => variable == declaration,
+            _ => false,
+        })
+        .ok_or_else(|| {
+            PreparedManagedMutationError::SemanticDelta(
+                "parameter extraction source owner is absent".into(),
+            )
+        })?;
+    let root = match &statements[index] {
+        ManagedStatement::Declaration { arguments, .. } => arguments,
+        ManagedStatement::Binding { value, .. } => value,
+        _ => unreachable!(),
+    };
+    let source = expression_at_path(root, path)?.clone();
+    let literal = expression_to_managed_value(&source)?;
+    if !matches!(&literal, ManagedValue::Number(value) if value.is_finite())
+        && !matches!(&literal, ManagedValue::Unit(value) if value.value.is_finite())
+    {
+        return semantic_refusal(
+            "parameter extraction requires an explicit finite number or unit literal",
+        );
+    }
+    let mut expression = metadata_expression();
+    if let Some(label) = &presentation.label {
+        set_metadata_field(
+            &mut expression,
+            "label",
+            Some(&ManagedValue::String(label.clone())),
+        )?;
+    }
+    if let Some(description) = &presentation.description {
+        set_metadata_field(
+            &mut expression,
+            "description",
+            Some(&ManagedValue::String(description.clone())),
+        )?;
+    }
+    if let Some(flag) = presentation.is_key_parameter {
+        set_metadata_field(
+            &mut expression,
+            "isKeyParameter",
+            Some(&ManagedValue::Bool(flag)),
+        )?;
+    }
+    let metadata = crate::ManagedParameterDeclaration {
+        symbol: symbol.to_owned(),
+        presentation: if metadata_is_empty(&expression) {
+            None
+        } else {
+            Some(expression)
+        },
+        site: placeholder_site("parameter"),
+    };
+    if let ManagedStatement::Binding {
+        variable: existing,
+        parameter,
+        ..
+    } = &mut statements[index]
+    {
+        if existing != variable || !path.is_empty() {
+            return semantic_refusal("scalar binding extraction preserves its lexical variable");
+        }
+        *parameter = Some(metadata);
+        return Ok(());
+    }
+    if statements.iter().any(|statement| matches!(statement, ManagedStatement::Binding { variable: existing, .. } | ManagedStatement::Declaration { variable: existing, .. } if existing == variable)) { return semantic_refusal("parameter variable already exists"); }
+    let replacement = ManagedExpression::Reference {
+        declaration: variable.to_owned(),
+        path: Vec::new(),
+        site: placeholder_site("value"),
+    };
+    if let ManagedStatement::Declaration { arguments, .. } = &mut statements[index] {
+        *arguments = replace_expression_at_path(arguments, path, &replacement)?;
+    }
+    statements.insert(
+        index,
+        ManagedStatement::Binding {
+            variable: variable.to_owned(),
+            value: source,
+            comments: Vec::new(),
+            parameter: Some(metadata),
+        },
+    );
+    Ok(())
 }
 
 fn add_required_generated_unit_helpers(
@@ -1706,6 +2081,7 @@ fn insert_declarations(
             builder_path: draft.builder_path.clone(),
             patch: draft.patch.clone(),
             arguments: managed_value_expression(&draft.arguments)?,
+            presentation: None,
             site: placeholder_site("declaration"),
             comments: draft.comments.clone().unwrap_or_default(),
         });
@@ -2156,7 +2532,17 @@ fn set_value(
         .iter()
         .enumerate()
         .filter_map(|(index, statement)| match statement {
-            ManagedStatement::Binding { variable, .. } if variable == declaration => Some(index),
+            ManagedStatement::Binding {
+                variable,
+                parameter,
+                ..
+            } if parameter
+                .as_ref()
+                .map_or(variable.as_str(), |p| p.symbol.as_str())
+                == declaration =>
+            {
+                Some(index)
+            }
             ManagedStatement::Declaration { symbol, .. } if symbol == declaration => Some(index),
             _ => None,
         })
@@ -2182,9 +2568,13 @@ fn set_value(
     let next = replace_expression_at_path(root, path, &replacement)?;
     statements[*index] = match statement {
         ManagedStatement::Binding {
-            variable, comments, ..
+            variable,
+            comments,
+            parameter,
+            ..
         } => ManagedStatement::Binding {
             variable,
+            parameter,
             value: next,
             comments,
         },
@@ -2193,6 +2583,7 @@ fn set_value(
             symbol,
             builder_path,
             patch,
+            presentation,
             site,
             comments,
             ..
@@ -2202,6 +2593,7 @@ fn set_value(
             builder_path,
             patch,
             arguments: next,
+            presentation,
             site,
             comments,
         },
@@ -2709,7 +3101,7 @@ fn prune_unused_bindings(statements: &mut Vec<ManagedStatement>, candidates: &BT
             })
             .collect::<BTreeSet<_>>();
         let removable = statements.iter().position(|statement| {
-            matches!(statement, ManagedStatement::Binding { variable, .. }
+            matches!(statement, ManagedStatement::Binding { variable, parameter: None, .. }
                 if candidates.contains(variable) && !used.contains(variable))
         });
         if let Some(index) = removable {
@@ -2744,20 +3136,32 @@ fn expression_references(expression: &ManagedExpression) -> Vec<String> {
 
 #[derive(Serialize)]
 struct SemanticIrEnvelope<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document: &'a Option<ManagedExpression>,
     imports: &'a [crate::ManagedIrImport],
     statements: &'a [ManagedStatement],
 }
 
+#[allow(
+    clippy::ref_option,
+    reason = "the optional field is cloned and erased before canonical V3-compatible serialization"
+)]
 fn semantic_ir_digest(
     imports: &[ManagedIrImport],
     statements: &[ManagedStatement],
+    document: &Option<ManagedExpression>,
 ) -> Result<String, PreparedManagedMutationError> {
     let erased = statements
         .iter()
         .cloned()
         .map(erase_statement_sites)
         .collect::<Vec<_>>();
+    let mut document = document.clone();
+    if let Some(document) = &mut document {
+        erase_expression_sites(document);
+    }
     let envelope = SemanticIrEnvelope {
+        document: &document,
         imports,
         statements: &erased,
     };
@@ -2793,12 +3197,28 @@ fn same_semantic_statements(
 
 fn erase_statement_sites(mut statement: ManagedStatement) -> ManagedStatement {
     match &mut statement {
-        ManagedStatement::Binding { value, .. } => erase_expression_sites(value),
+        ManagedStatement::Binding {
+            value, parameter, ..
+        } => {
+            erase_expression_sites(value);
+            if let Some(parameter) = parameter {
+                parameter.site.clear();
+                if let Some(presentation) = &mut parameter.presentation {
+                    erase_expression_sites(presentation);
+                }
+            }
+        }
         ManagedStatement::Declaration {
-            arguments, site, ..
+            arguments,
+            presentation,
+            site,
+            ..
         } => {
             site.clear();
             erase_expression_sites(arguments);
+            if let Some(presentation) = presentation {
+                erase_expression_sites(presentation);
+            }
         }
         ManagedStatement::Group {
             declarations, site, ..
@@ -2857,6 +3277,10 @@ fn same_compiled_authority(
         && current.canonical_artifact_json == candidate.canonical_artifact_json
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one artifact audit keeps generated identities and consumer remapping adjacent"
+)]
 fn validate_artifact_delta(
     current: &CompiledManagedSource,
     candidate: &CompiledManagedSource,
@@ -2932,8 +3356,22 @@ fn validate_artifact_delta(
         .difference(&mutable_consumer_owners)
         .cloned()
         .collect::<BTreeSet<_>>();
-    let base_consumers = semantic_consumers(current, &stable_consumer_owners)?;
-    let candidate_consumers = semantic_consumers(candidate, &stable_consumer_owners)?;
+    let base_consumers = semantic_consumers(current, &stable_consumer_owners, &BTreeMap::new())?;
+    let mut remapped = BTreeMap::new();
+    if let ManagedSketchMutation::ExtractParameter {
+        declaration,
+        path,
+        symbol,
+        ..
+    } = mutation
+        && let Some(ManagedStatement::Declaration { arguments, .. }) = current.ir.statements.iter().find(|statement| matches!(statement, ManagedStatement::Declaration { symbol, .. } if symbol == declaration)) {
+            let source = expression_at_path(arguments, path)?;
+            let old_coordinates = value_site_coordinates(&current.ir.statements)?;
+            if let Some(ManagedStatement::Binding { value, .. }) = candidate.ir.statements.iter().find(|statement| matches!(statement, ManagedStatement::Binding { parameter: Some(parameter), .. } if &parameter.symbol == symbol)) {
+                remapped.insert(expression_site(value).to_owned(), old_coordinates.get(expression_site(source)).ok_or_else(|| PreparedManagedMutationError::SemanticDelta("extracted source coordinate disappeared".into()))?.clone());
+            }
+    }
+    let candidate_consumers = semantic_consumers(candidate, &stable_consumer_owners, &remapped)?;
     if base_consumers != candidate_consumers {
         return semantic_refusal(
             "candidate changed value-consumer provenance for a retained declaration",
@@ -2972,7 +3410,9 @@ fn directly_mutated_declaration_owners(
             .iter()
             .map(|value| value.declaration.clone())
             .collect(),
-        ManagedSketchMutation::InsertDeclarations { .. }
+        ManagedSketchMutation::SetMetadata { .. }
+        | ManagedSketchMutation::ExtractParameter { .. }
+        | ManagedSketchMutation::InsertDeclarations { .. }
         | ManagedSketchMutation::ReorderDeclaration { .. }
         | ManagedSketchMutation::SetSuppressed { .. }
         | ManagedSketchMutation::Delete { .. } => BTreeSet::new(),
@@ -3214,6 +3654,14 @@ fn collect_expected_consumers(
         }
         ManagedExpression::Object { fields, .. } => {
             for field in fields {
+                if property.is_empty()
+                    && matches!(
+                        field.name.as_str(),
+                        "description" | "isKeyConstraint" | "isKeyParameter"
+                    )
+                {
+                    continue;
+                }
                 property.push(ManagedPathSegment::Field(field.name.clone()));
                 collect_expected_consumers(&field.value, target, property, bindings, consumers)?;
                 property.pop();
@@ -3250,7 +3698,7 @@ enum ValueOwner {
 #[serde(tag = "step", content = "value", rename_all = "snake_case")]
 enum ValueStep {
     Array(usize),
-    Object { index: usize, name: String },
+    Object { name: String },
     Call(usize),
 }
 
@@ -3263,10 +3711,16 @@ struct ValueCoordinate<'a> {
 fn semantic_consumers(
     compiled: &CompiledManagedSource,
     owners: &BTreeSet<String>,
+    remapped: &BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, usize>, PreparedManagedMutationError> {
-    let sites = value_site_coordinates(&compiled.ir.statements)?;
+    let mut sites = value_site_coordinates(&compiled.ir.statements)?;
+    sites.extend(remapped.clone());
     let mut consumers = BTreeMap::new();
     for consumer in &compiled.artifact.value_consumers {
+        if matches!(consumer.property.first(), Some(ManagedPathSegment::Field(field)) if matches!(field.as_str(), "label" | "description" | "isKeyConstraint" | "isKeyParameter"))
+        {
+            continue;
+        }
         if !owners.contains(consumer_target_owner(&consumer.target)) {
             continue;
         }
@@ -3338,9 +3792,11 @@ fn collect_value_coordinates(
             }
         }
         ManagedExpression::Object { fields, .. } => {
-            for (index, field) in fields.iter().enumerate() {
+            // Semantic field names own object values. Presentation insertion must not
+            // move a consumer, and patch inputs may legitimately be named `label`.
+            // The independent full-IR comparison still authenticates source field order.
+            for field in fields {
                 path.push(ValueStep::Object {
-                    index,
                     name: field.name.clone(),
                 });
                 collect_value_coordinates(&field.value, owner, path, sites)?;
@@ -3495,6 +3951,8 @@ mod tests {
         output: &'a ManagedExpression,
         source_sites: &'a [crate::ManagedSourceSite],
         source_digest: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        document: &'a Option<ManagedExpression>,
     }
 
     #[derive(Serialize)]
@@ -3508,6 +3966,12 @@ mod tests {
         suppressions: &'a [crate::ExecutedSuppression],
         value_consumers: &'a [crate::ExecutedValueConsumer],
         output: &'a ManagedValue,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        document: &'a Option<crate::ManagedDocumentPresentation>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        parameters: &'a Vec<crate::ExecutedParameter>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        presentations: &'a Vec<crate::ExecutedPresentation>,
     }
 
     fn compiled_fixture() -> CompiledManagedSource {
@@ -3591,6 +4055,7 @@ mod tests {
         arguments: ManagedExpression,
     ) -> ManagedStatement {
         ManagedStatement::Declaration {
+            presentation: None,
             variable: variable.into(),
             symbol: symbol.into(),
             builder_path: builder_path.into_iter().map(str::to_owned).collect(),
@@ -3603,6 +4068,7 @@ mod tests {
 
     fn independent_declaration(variable: &str, symbol: &str) -> ManagedStatement {
         ManagedStatement::Declaration {
+            presentation: None,
             variable: variable.into(),
             symbol: symbol.into(),
             builder_path: vec!["geometry".into(), "centerRadiusCircle".into()],
@@ -3684,6 +4150,64 @@ mod tests {
         .expect("managed detached-reference fixture")
     }
 
+    #[test]
+    fn authored_metadata_prepared_resets_and_parameter_extraction_accept_exact_receipts() {
+        for fixture in [
+            include_str!("../tests/fixtures/m97-parameter-reset.json"),
+            include_str!("../tests/fixtures/m97-document-reset.json"),
+            include_str!("../tests/fixtures/m97-default-reset.json"),
+            include_str!("../tests/fixtures/m97-extract-label-flag.json"),
+            include_str!("../tests/fixtures/m97-patch-label-input.json"),
+            include_str!("../tests/fixtures/m97-v3-metadata-upgrade.json"),
+        ] {
+            let data: serde_json::Value = serde_json::from_str(fixture).unwrap();
+            let current: CompiledManagedSource =
+                serde_json::from_value(data["current"].clone()).unwrap();
+            let mutation: ManagedSketchMutation =
+                serde_json::from_value(data["mutation"].clone()).unwrap();
+            let receipt: ManagedMutationReceipt =
+                serde_json::from_value(data["receipt"].clone()).unwrap();
+            let accepted = authority(&current);
+            let request = prepare_managed_mutation(
+                &accepted,
+                &current,
+                mutation.clone(),
+                accepted.declaration_name_high_water,
+            )
+            .unwrap();
+            let prepared = PreparedManagedMutationReceipt::new(
+                request.ticket.ticket_digest.clone(),
+                receipt.clone(),
+            );
+            validate_prepared_managed_mutation(&accepted, &request, prepared.clone())
+                .expect("exact independently compiled source edit");
+            assert_eq!(
+                request.current, current,
+                "preparation preserves accepted source and metadata"
+            );
+            let mut stale = accepted.clone();
+            stale.session.revision += 1;
+            assert!(validate_prepared_managed_mutation(&stale, &request, prepared).is_err());
+            let mut unrelated = request.clone();
+            unrelated.ticket.mutation = ManagedSketchMutation::SetMetadata {
+                target: ManagedMetadataTarget::Document,
+                property: "description".into(),
+                value: Some(ManagedValue::String("unrelated".into())),
+            };
+            assert!(
+                validate_prepared_managed_mutation(
+                    &accepted,
+                    &unrelated,
+                    PreparedManagedMutationReceipt::new(
+                        unrelated.ticket.ticket_digest.clone(),
+                        receipt
+                    )
+                )
+                .is_err()
+            );
+        }
+    }
+
     fn authority(compiled: &CompiledManagedSource) -> ManagedMutationAuthority {
         ManagedMutationAuthority::new(
             ProjectKey("prepared-test".into()),
@@ -3751,6 +4275,7 @@ mod tests {
         }
         let ir = IrDigestEnvelope {
             format: &compiled.ir.format,
+            document: &compiled.ir.document,
             imports: &compiled.ir.imports,
             statements: &compiled.ir.statements,
             output: &compiled.ir.output,
@@ -3768,6 +4293,9 @@ mod tests {
             .clone_from(&compiled.ir.ir_digest);
         let artifact = ArtifactDigestEnvelope {
             format: &compiled.artifact.format,
+            document: &compiled.artifact.document,
+            parameters: &compiled.artifact.parameters,
+            presentations: &compiled.artifact.presentations,
             source_digest: &compiled.artifact.source_digest,
             ir_digest: &compiled.artifact.ir_digest,
             declarations: &compiled.artifact.declarations,
@@ -4066,6 +4594,7 @@ mod tests {
         compiled.ir.statements.insert(
             group_index,
             ManagedStatement::Declaration {
+                presentation: None,
                 variable: "segment42".into(),
                 symbol: "segment42".into(),
                 builder_path: vec!["geometry".into(), "segment".into()],
@@ -4691,7 +5220,7 @@ mod tests {
         .expect("prepared empty-circle insertion");
         assert_eq!(
             request.ticket.candidate_semantics_digest,
-            semantic_ir_digest(&expected.imports, &expected.statements)
+            semantic_ir_digest(&expected.imports, &expected.statements, &expected.document)
                 .expect("expected candidate semantic digest")
         );
         let receipt = PreparedManagedMutationReceipt {

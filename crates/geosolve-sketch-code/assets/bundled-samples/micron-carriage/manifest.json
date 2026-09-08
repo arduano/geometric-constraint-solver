@@ -2,20 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 11,
   "key": "micron-carriage",
-  "title": "Printers for Ants Micron CNC X-carriage",
-  "summary": "A continuous stepped carriage relates extracted 16 x 15 mm and alternate 10 x 15 mm rail patterns to the 25 mm belt-fastener pitch.",
   "category": "product_fabrication",
   "expected": {
     "raw_dof": 0,
     "effective_dof": 0
-  },
-  "groups": [
-    "CNC carriage body",
-    "Rail-block datum",
-    "Toolhead interface"
-  ],
-  "dimension_presentation": {
-    "all_authored": true
   },
   "provenance": [
     {

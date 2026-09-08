@@ -2,13 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 3,
   "key": "peaucellier-linkage",
-  "title": "Peaucellier straight-line linkage · 1 DOF",
-  "summary": "A dimensioned inversor cell converts a circular driver into exact straight-line motion.",
   "category": "mechanism",
-  "expected": { "raw_dof": 1, "effective_dof": 1 },
-  "groups": ["Ground and circular input", "Inversor cell", "Straight-line output"],
-  "dimension_presentation": {
-    "all_authored": true
+  "expected": {
+    "raw_dof": 1,
+    "effective_dof": 1
   },
   "provenance": []
 }

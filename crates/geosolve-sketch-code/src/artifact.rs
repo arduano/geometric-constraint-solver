@@ -121,6 +121,8 @@ pub struct PatchModuleArtifact {
     pub source_digest: String,
     pub interface_digest: String,
     pub inputs: BTreeMap<String, FeatureKind>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub input_presentation: BTreeMap<String, crate::ManagedPresentation>,
     pub outputs: BTreeMap<String, FeatureKind>,
     pub templates: Vec<PatchTemplateNode>,
     pub collections: Vec<CollectionRule>,
@@ -279,6 +281,17 @@ fn validate_artifact(artifact: &PatchModuleArtifact) -> Result<(), ArtifactValid
     validate_key(&artifact.export_name)?;
     for key in artifact.inputs.keys().chain(artifact.outputs.keys()) {
         validate_key(key)?;
+    }
+    for (input, presentation) in &artifact.input_presentation {
+        if !matches!(artifact.inputs.get(input), Some(FeatureKind::Scalar))
+            || presentation.is_key_constraint.is_some()
+        {
+            return Err(ArtifactValidationError::InvalidJson(
+                "patch input presentation requires a declared dimensional input".into(),
+            ));
+        }
+        crate::managed::validate_presentation_text(presentation)
+            .map_err(|error| ArtifactValidationError::InvalidJson(error.to_string()))?;
     }
     let expected_interface_digest = canonical_interface_digest(artifact)?;
     if artifact.interface_digest != expected_interface_digest {
@@ -843,6 +856,8 @@ struct CanonicalArtifactInterface<'a> {
     // Field order is the UTF-8 lexical order used by TypeScript's
     // `canonicalStringify` helper. BTreeMap applies the same order to schemas.
     export_name: &'a str,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    input_presentation: &'a BTreeMap<String, serde_json::Value>,
     inputs: &'a BTreeMap<String, FeatureKind>,
     module_specifier: &'a str,
     outputs: &'a BTreeMap<String, FeatureKind>,
@@ -852,8 +867,15 @@ struct CanonicalArtifactInterface<'a> {
 fn canonical_interface_digest(
     artifact: &PatchModuleArtifact,
 ) -> Result<String, ArtifactValidationError> {
+    let input_presentation = artifact
+        .input_presentation
+        .iter()
+        .map(|(key, value)| serde_json::to_value(value).map(|value| (key.clone(), value)))
+        .collect::<Result<BTreeMap<_, _>, _>>()
+        .map_err(|error| ArtifactValidationError::InvalidJson(error.to_string()))?;
     let canonical = serde_json::to_vec(&CanonicalArtifactInterface {
         export_name: &artifact.export_name,
+        input_presentation: &input_presentation,
         inputs: &artifact.inputs,
         module_specifier: &artifact.module_specifier,
         outputs: &artifact.outputs,
@@ -919,6 +941,7 @@ mod tests {
 
     fn artifact() -> PatchModuleArtifact {
         let mut artifact = PatchModuleArtifact {
+            input_presentation: BTreeMap::new(),
             format: PATCH_ARTIFACT_FORMAT.into(),
             sdk_abi: SKETCH_CODE_SDK_ABI.into(),
             module_specifier: "./patches/round.patch.ts".into(),
