@@ -22,6 +22,7 @@ import { DeclarationPanel, DetailsPanel, Explorer, ParametersView, ProblemsView,
 import { CodeEditor, type EditorNavigation } from "./components/code-editor";
 import { OpenSurface, type SampleEntry } from "./components/open-surface";
 import type { ToolCatalog } from "./lib/tool-catalog";
+import type { FolderWorkbenchAdapter } from "./lib/folder-adapter";
 import { toolLabel, toolSection } from "./lib/tool-catalog";
 
 const FALLBACK = new MockWorkbenchAdapter();
@@ -47,9 +48,10 @@ function readPresentation() {
   } catch { return { ...fallback, storageIssue: null }; }
 }
 
-export interface AppProps { adapter?: WorkbenchAdapter; projectStore?: ProjectStore; }
+export interface AppProps { adapter?: WorkbenchAdapter; projectStore?: ProjectStore; folder?: FolderWorkbenchAdapter; }
 
-export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT_STORE }: AppProps) {
+export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT_STORE, folder }: AppProps) {
+  const [, updateFolderStatus] = useState(0);
   const [initialPresentation] = useState(readPresentation);
   const [initialRecents] = useState(readRecentSamples);
   const [snapshot, setSnapshot] = useState<WorkbenchSnapshot | null>(null);
@@ -104,6 +106,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   );
 
   const queueProjectSave = useCallback((intent: ProjectSaveIntent, clearError: boolean) => {
+    if (folder) return folder.refresh().then(() => undefined).catch(reportError);
     const epoch = projectSaveEpoch.current;
     const save = projectSaveTail.current.then(async () => {
       if (projectSaveEpoch.current !== epoch || (intent !== "manual" && !projectAutosaveSafe.current)) return;
@@ -130,7 +133,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     });
     projectSaveTail.current = save.catch(() => undefined);
     return save;
-  }, [adapter, projectStore, reportError]);
+  }, [adapter, folder, projectStore, reportError]);
 
   const start = useCallback(() => {
     const request = startupRequest.current + 1;
@@ -149,12 +152,16 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       setSnapshot(checked);
       setToolCatalog(catalog);
       const file = checked.source.files.find((candidate) => candidate.path === checked.source.selectedPath);
-      const restored = restoredBrowserDraft(checked, file);
+      const restored = folder ? { contents: file?.contents, issue: null } : restoredBrowserDraft(checked, file);
       if (restored.issue) reportError(restored.issue);
       setDraft(restored.contents ?? file?.contents ?? "");
       setDraftStorageSafe(projectAutosaveSafe.current);
       return true;
     };
+    if (folder) {
+      void adapter.construct({ version: 2 }).then(install).catch((error) => setStartupError(errorText(error)));
+      return;
+    }
     void projectStore.read().then(async (storedProject) => {
       if (startupRequest.current !== request) return;
       lastSavedProject.current = storedProject.value;
@@ -192,7 +199,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     }).catch((error: unknown) => {
       if (startupRequest.current === request) setStartupError(errorText(error));
     });
-  }, [adapter, projectStore, queueProjectSave, reportError, resolveAdapterSnapshot]);
+  }, [adapter, folder, projectStore, queueProjectSave, reportError, resolveAdapterSnapshot]);
   useEffect(() => {
     start();
     return () => { startupRequest.current += 1; };
@@ -216,6 +223,10 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const acceptCanvasSnapshot = useCallback((next: WorkbenchSnapshot) => {
     void acceptSnapshot(next).catch(reportError);
   }, [acceptSnapshot, reportError]);
+  useEffect(() => folder?.subscribe((next) => {
+    updateFolderStatus((value) => value + 1);
+    if (next && snapshotRef.current) void acceptSnapshot(next).catch(reportError);
+  }), [acceptSnapshot, folder, reportError]);
   const command = useCallback(async (name: string, payload?: unknown) => {
     try {
       const previousDimensionMode = snapshotRef.current?.dimensions?.mode ?? "focused";
@@ -276,18 +287,18 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const chooseTool = useCallback((id: string, origin?: HTMLElement) => { transient.close(false); void command("tool.select", { id }); if (origin?.getAttribute("role") === "menuitem") queueMicrotask(() => document.querySelector<HTMLElement>('[role="application"]')?.focus()); }, [command, transient]);
 
   useEffect(() => {
-    if (!snapshot) return;
+    if (!snapshot || folder) return;
     if (suppressInstalledSnapshotAutosave.current === snapshot) {
       suppressInstalledSnapshotAutosave.current = null;
       return;
     }
     void queueProjectSave("auto", false);
-  }, [queueProjectSave, snapshot?.project.sampleKey, snapshot?.project.title, snapshot?.revision]);
+  }, [folder, queueProjectSave, snapshot?.project.sampleKey, snapshot?.project.title, snapshot?.revision]);
 
   useEffect(() => {
     // A failed/uncertain project restore also protects its separately saved
     // unapplied source. Only a successful explicit save releases that protection.
-    if (!snapshot || !draftStorageSafe) return;
+    if (!snapshot || !draftStorageSafe || folder) return;
     const file = snapshot.source.files.find((candidate) => candidate.path === snapshot.source.selectedPath);
     if (!file || file.readOnly || draft === file.contents) {
       const removed = removeBrowserStorage(DRAFT_KEY, "the unapplied source draft");
@@ -296,7 +307,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     }
     const stored = writeBrowserStorage(DRAFT_KEY, JSON.stringify({ version: 1, title: snapshot.project.title, sampleKey: snapshot.project.sampleKey ?? null, path: file.path, base: file.contents, contents: draft }), "the unapplied source draft");
     if (stored.issue) reportError(stored.issue);
-  }, [draft, draftStorageSafe, reportError, snapshot]);
+  }, [draft, draftStorageSafe, folder, reportError, snapshot]);
 
   useEffect(() => {
     const onWorkspaceKey = (event: KeyboardEvent) => {
@@ -455,12 +466,20 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   };
 
   return (
-    <div className="flex h-dvh min-h-[720px] min-w-[1024px] flex-col overflow-hidden bg-canvas text-foreground">
+    <div className="flex h-dvh min-h-[720px] min-w-[1024px] flex-col overflow-hidden bg-canvas text-foreground" onInputCapture={(event) => {
+      if (event.target instanceof HTMLInputElement) folder?.fieldChanged(event.target.getAttribute("aria-label") ?? "Inspector input", event.target.value);
+    }}>
+      {folder && <div className="flex h-11 min-w-0 shrink-0 items-center gap-2 border-b border-border bg-raised px-3 text-xs" role="region" aria-label="Local folder">
+        <strong className="shrink-0">Local folder · </strong><span className="max-w-[30%] truncate" title={folder.state?.paths.source}>{folder.state?.paths.source}</span>
+        <span className={`min-w-0 flex-1 truncate ${folder.state?.ok ? "" : "text-danger"}`} title={folder.notice} role="status">{folder.notice}</span>
+        <Button className="shrink-0" onClick={() => { void folder.refresh().catch(reportError); }}>Refresh from disk</Button>
+        {folder.pending && <Button className="shrink-0" onClick={() => downloadText("geosolve-pending-intent.json", folder.pending, "application/json")}>Download pending intent</Button>}
+      </div>}
       <input ref={importInputRef} type="file" accept=".json,.txt,application/json,text/plain" hidden onChange={(event) => importSelectedFile(event.currentTarget.files?.[0])} />
       <header className="relative z-50 flex h-11 shrink-0 items-center border-b border-border bg-surface px-2">
         <div className="relative flex items-center gap-1">
           <Button ref={fileButtonRef} aria-label="File menu" aria-haspopup="menu" aria-expanded={transient.active === "file"} size="compact" variant="ghost" onClick={(event) => transient.toggle("file", event.currentTarget)}><Menu className="size-4" />File<ChevronDown className="size-3" /></Button>
-          {transient.active === "file" && <TransientPopover surfaceRef={transient.contentRef} label="File menu" className="left-0 top-9 w-56"><MenuButton icon={<FolderOpen />} label="Open…" shortcut="Ctrl O" onClick={() => { if (fileButtonRef.current) transient.toggle("open", fileButtonRef.current); }} /><MenuButton icon={<Save />} label="Save in browser" shortcut="Ctrl S" onClick={() => { transient.close(); void saveBrowserProject(); }} /><MenuButton icon={<Download />} label="Export canonical project…" onClick={() => { transient.close(); if (localDraftDirty) { reportError("Apply or Revert the current source draft before exporting a canonical project."); return; } void exportProject(adapter).catch(reportError); }} />{selectedFile.path === "sketch.ts" && <MenuButton icon={<Code2 />} label={localDraftDirty || snapshot.source.dirty ? "Download raw draft…" : "Download sketch.ts…"} onClick={() => { transient.close(); downloadText(localDraftDirty || snapshot.source.dirty ? "sketch-draft.ts" : "sketch.ts", draft, "text/typescript"); }} />}<div className="my-1 border-t border-border" /><MenuButton icon={<FileJson />} label="Import project or repro…" onClick={importProject} /></TransientPopover>}
+          {transient.active === "file" && <TransientPopover surfaceRef={transient.contentRef} label="File menu" className="left-0 top-9 w-56"><MenuButton icon={<FolderOpen />} label="Open…" shortcut="Ctrl O" onClick={() => { if (fileButtonRef.current) transient.toggle("open", fileButtonRef.current); }} /><MenuButton icon={<Save />} label={folder ? "Refresh saved file" : "Save in browser"} shortcut="Ctrl S" onClick={() => { transient.close(); void saveBrowserProject(); }} /><MenuButton icon={<Download />} label="Export canonical project…" onClick={() => { transient.close(); if (localDraftDirty) { reportError("Apply or Revert the current source draft before exporting a canonical project."); return; } void exportProject(adapter).catch(reportError); }} />{selectedFile.path === "sketch.ts" && <MenuButton icon={<Code2 />} label={localDraftDirty || snapshot.source.dirty ? "Download raw draft…" : "Download sketch.ts…"} onClick={() => { transient.close(); downloadText(localDraftDirty || snapshot.source.dirty ? "sketch-draft.ts" : "sketch.ts", draft, "text/typescript"); }} />}<div className="my-1 border-t border-border" /><MenuButton icon={<FileJson />} label="Import project or repro…" onClick={importProject} /></TransientPopover>}
           <div className="mx-1 h-5 w-px bg-border" />
           <Button aria-label="Undo" aria-description={historyBlocked ? "Apply or Revert the source draft before moving history." : undefined} disabled={historyBlocked || !snapshot.presentation.canUndo} size="icon" variant="ghost" className="size-8" title={historyBlocked ? "Apply or Revert the source draft before moving history" : snapshot.presentation.canUndo ? "Undo last change" : "Nothing to undo"} onClick={() => void command("history.undo")}><Undo2 className="size-4" /></Button>
           <Button aria-label="Redo" aria-description={historyBlocked ? "Apply or Revert the source draft before moving history." : undefined} disabled={historyBlocked || !snapshot.presentation.canRedo} size="icon" variant="ghost" className="size-8" title={historyBlocked ? "Apply or Revert the source draft before moving history" : snapshot.presentation.canRedo ? "Redo last change" : "Nothing to redo"} onClick={() => void command("history.redo")}><Redo2 className="size-4" /></Button>
@@ -482,7 +501,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
           {explorerOpen && mode !== "code" && <><Panel id="explorer" defaultSize={16} minSize={12} maxSize={26}><Explorer snapshot={snapshot} actions={declarationActions} blockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} /></Panel><ResizeHandle /></>}
           <Panel id="workspace" defaultSize={63} minSize={45}>
             <main className="relative flex h-full min-h-0 flex-col">
-              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={toolCatalog} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} onDimensionMode={(dimensionMode) => void command("dimensions.mode", { mode: dimensionMode })} captured={setCapturedGesture} />} code={<CodeWorkspace mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={setDraft} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
+              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={toolCatalog} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} onDimensionMode={(dimensionMode) => void command("dimensions.mode", { mode: dimensionMode })} captured={setCapturedGesture} />} code={<CodeWorkspace mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={(value) => { folder?.draftChanged(value !== selectedFile.contents); setDraft(value); }} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
               {transient.active === "open" && <div ref={transient.contentRef as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="false" aria-label="Open project" className="absolute inset-5 z-40 overflow-hidden rounded-xl border border-border bg-raised shadow-panel"><OpenSurface recents={recentSamples} onOpen={openSample} onNewSketch={() => replaceProject("project.new", "design")} onNewCode={() => replaceProject("project.new-code", "code")} onImport={importProject} onDismiss={() => transient.close(true)} /></div>}
             </main>
           </Panel>
