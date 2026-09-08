@@ -98,6 +98,38 @@ function pendingManagedMutation(ticketDigit: string): PendingManagedMutation {
 }
 
 describe("M88 workbench interaction contract", () => {
+  it("routes dimension inspection without source, focus or layout changes and saves only persistent display choices", async () => {
+    class DimensionAdapter extends MockWorkbenchAdapter {
+      constructor() {
+        super();
+        this.state.dimensions = { mode: "focused", pinCount: 0, parameters: [{ id: "radius", label: "Corner radius", value: "4", unit: "mm", editable: true }], entries: [{ id: "dimension-width", label: "Channel width", value: "12", unit: "mm", kind: "Distance", reference: false, generated: false, pinned: false, focused: false, visible: true, editable: true }] };
+      }
+    }
+    const adapter = new DimensionAdapter(); const store = new TestProjectStore();
+    const { user } = await ready(adapter, store);
+    const dispatch = vi.spyOn(adapter, "dispatch"); const before = await adapter.snapshot();
+    const saved = store.writes;
+    const inspect = screen.getByRole("button", { name: "Inspect Channel width" });
+    inspect.focus();
+    await user.keyboard("{Enter}");
+    expect(dispatch).toHaveBeenLastCalledWith({ version: 2, command: "dimensions.focus", payload: { id: "dimension-width" } });
+    expect(inspect).toHaveFocus();
+    expect(store.writes).toBe(saved);
+    expect(screen.getByRole("button", { name: /^design$/i })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Pin Channel width" }));
+    await waitFor(() => expect(store.writes).toBeGreaterThan(saved));
+    expect(dispatch).toHaveBeenLastCalledWith({ version: 2, command: "dimensions.pin", payload: { id: "dimension-width", pinned: true } });
+    const afterPin = store.writes;
+    await user.selectOptions(screen.getByRole("combobox", { name: "Dimension display" }), "hidden");
+    await waitFor(() => expect(store.writes).toBeGreaterThan(afterPin));
+    expect(dispatch).toHaveBeenLastCalledWith({ version: 2, command: "dimensions.mode", payload: { mode: "hidden" } });
+    const after = await adapter.snapshot();
+    expect(after.source).toEqual(before.source);
+    expect(after.revision).toBe(before.revision);
+    expect(after.presentation.canUndo).toBe(false);
+    expect(dispatch.mock.calls.some(([call]) => call.command.startsWith("view.") || call.command.startsWith("source."))).toBe(false);
+  });
+
   it("re-clicks, replacement, outside pointer and Escape light-dismiss one transient surface", async () => {
     const { user } = await ready();
     const sketch = screen.getByRole("button", { name: "Sketch" });

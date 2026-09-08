@@ -10,7 +10,9 @@ a separate 12 mm two-bend stair passage and a 2.4 mm silicone groove.
 [M96 goals](docs/M96_GOALS.md) and [implementation evidence](docs/M96_IMPLEMENTATION.md)
 record the custom-patch API, independent geometry checks and editing corrections.
 The supervising user accepted the final amendment and requested closure. No M96 blocker
-or acceptance action remains; the next milestone is not scoped.
+or acceptance action remains. **M97 focused dimensions and stable annotation placement
+is implemented and in qualification**; [M97 goals](docs/M97_GOALS.md) records the
+approved interaction and the reproduced zoom-then-click layout jump.
 
 [M95 qualification](docs/M95_QUALIFICATION.md) and [closure](docs/M95_CLOSURE.md) retain
 the previous accepted checkpoint at `http://100.94.63.83:18100/`. M94 remains at port 18096.

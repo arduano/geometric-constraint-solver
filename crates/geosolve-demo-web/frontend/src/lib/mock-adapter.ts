@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import type { DeclarationCapabilities, DeclarationRow, PointerSample, WorkbenchAdapter, WorkbenchSnapshot } from "./adapter";
+import type { DeclarationCapabilities, DeclarationRow, DimensionDisplayMode, PointerSample, WorkbenchAdapter, WorkbenchSnapshot } from "./adapter";
 import commandsJson from "../data/commands.json";
 import type { ToolCatalog, ToolCommandDefinition } from "./tool-catalog";
 import { assertToolCatalog } from "./tool-catalog";
@@ -98,6 +98,34 @@ export class MockWorkbenchAdapter implements WorkbenchAdapter {
   async snapshot(): Promise<WorkbenchSnapshot> { return structuredClone(this.state); }
   async managedCompilerContext() { return { version: 2 as const, patches: {} }; }
   async dispatch(input: { command: string; payload?: unknown }): Promise<WorkbenchSnapshot> {
+    if (input.command.startsWith("dimensions.")) {
+      const dimensions = this.state.dimensions ??= { mode: "focused", entries: [], parameters: [], pinCount: 0 };
+      if (input.command === "dimensions.mode") dimensions.mode = (input.payload as { mode: DimensionDisplayMode }).mode;
+      if (input.command === "dimensions.clearPins") {
+        dimensions.entries.forEach((entry) => { entry.pinned = false; });
+        dimensions.pinCount = 0;
+      }
+      if (input.command === "dimensions.pin") {
+        const { id, pinned } = input.payload as { id: string; pinned: boolean };
+        const entry = dimensions.entries.find((entry) => entry.id === id);
+        if (entry && entry.pinned !== pinned) {
+          if (pinned && dimensions.pinCount >= 4) throw new Error("Unpin a dimension before adding another.");
+          entry.pinned = pinned;
+          dimensions.pinCount += pinned ? 1 : -1;
+        }
+      }
+      if (input.command === "dimensions.focus") {
+        const id = (input.payload as { id: string }).id;
+        dimensions.entries.forEach((entry) => { entry.focused = entry.id === id; });
+        if (dimensions.mode === "hidden") dimensions.mode = "focused";
+      }
+      if (input.command === "dimensions.edit") {
+        const { id, value } = input.payload as { id: string; value: string };
+        const entry = dimensions.entries.find((entry) => entry.id === id);
+        if (entry?.editable) { entry.value = value; this.state.revision += 1; }
+      }
+      return structuredClone(this.state);
+    }
     if (input.command === "managed.mutation.resolve") {
       const pending = this.state.pendingManagedMutation;
       const receipt = input.payload as {
@@ -227,6 +255,7 @@ export class MockWorkbenchAdapter implements WorkbenchAdapter {
       const edit = input.payload as { id: string; value: string };
       const previous = this.state.parameters.find((parameter) => parameter.id === edit.id)?.value;
       this.state.parameters = this.state.parameters.map((parameter) => parameter.id === edit.id ? { ...parameter, value: edit.value } : parameter);
+      if (this.state.dimensions) this.state.dimensions.parameters = this.state.dimensions.parameters.map((parameter) => parameter.id === edit.id ? { ...parameter, value: edit.value } : parameter);
       if (previous !== undefined) {
         this.state.source.files[0] = { ...this.state.source.files[0], contents: this.state.source.files[0].contents.replace(`radius: mm(${previous})`, `radius: mm(${edit.value})`) };
       }

@@ -105,6 +105,12 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
   async snapshot() { return this.decodeFull(this.required().snapshot()); }
   async dispatch(input: { version: 2; command: string; payload?: unknown }) {
     const next = this.decodeUpdate(this.required().dispatch(JSON.stringify(input)));
+    if (!next && this.current && ["dimensions.navigation.end", "dimensions.hover.clear"].includes(input.command)) {
+      // Native can defer paint-only cleanup while a compiler ticket is pending.
+      // Retain that exact snapshot without starting another UI/compiler update.
+      this.current = markCanvasOnlySnapshot(stampCanvasSnapshot({ ...this.current }, ++this.sequence));
+      return this.current;
+    }
     if (!next) throw new Error("Workbench command returned no snapshot");
     return next;
   }
@@ -130,13 +136,14 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
 
   private decodeUpdate(json: string): WorkbenchSnapshot | null {
     if (json === "null") return null;
-    const value = JSON.parse(json) as { kind?: string; version?: number; revision?: number; frame?: WorkbenchSnapshot["frame"] };
+    const value = JSON.parse(json) as { kind?: string; version?: number; revision?: number; frame?: WorkbenchSnapshot["frame"]; dimensions?: WorkbenchSnapshot["dimensions"] };
     if (value?.kind === "selection") {
       const update = value as typeof value & {
         navigation: NonNullable<WorkbenchSnapshot["navigation"]>;
         selectedDeclarations: string[];
         selection: WorkbenchSnapshot["selection"] | null;
         selectedGeometryRole: WorkbenchSnapshot["presentation"]["selectedGeometryRole"] | null;
+        dimensions?: WorkbenchSnapshot["dimensions"];
       };
       const base = this.current;
       if (!base?.navigation || update.version !== 2 || !Number.isSafeInteger(update.revision) || update.revision !== base.revision
@@ -148,7 +155,8 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
         || !validSelection(update.selection)
         || (update.selectedGeometryRole !== null && !["profile", "construction", "mixed"].includes(update.selectedGeometryRole ?? ""))
         || selectionUpdateFields.some((key) => !Object.hasOwn(update, key))
-        || Object.keys(update).length !== selectionUpdateFields.length) {
+        || (base.dimensions !== undefined && update.dimensions === undefined) || update.dimensions === null
+        || Object.keys(update).some((key) => key !== "dimensions" && !selectionUpdateFields.includes(key as typeof selectionUpdateFields[number]))) {
         throw new Error("Invalid selection update: no matching accepted workbench authority");
       }
       const knownRows = explorerRows(base.explorer);
@@ -170,6 +178,7 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
       };
       const next = assertWorkbenchSnapshot({ ...base, frame: update.frame, navigation: update.navigation,
         explorer: rows(base.explorer), selection: update.selection ?? undefined,
+        dimensions: update.dimensions ?? base.dimensions,
         presentation: { ...base.presentation, selectedGeometryRole: update.selectedGeometryRole ?? undefined },
       });
       if (next.navigation!.rows.some((row) => !knownRows.has(row.id))
@@ -183,11 +192,17 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
       const base = this.current;
       if (!base || value.version !== 2 || !Number.isSafeInteger(value.revision) || value.revision !== base.revision
         || base.pendingManagedMutation || !value.frame || typeof value.frame.ariaLabel !== "string"
-        || Object.keys(value).some((key) => !["version", "kind", "revision", "frame"].includes(key))) {
+        || Object.keys(value).some((key) => !["version", "kind", "revision", "frame", "dimensions"].includes(key))
+        || value.dimensions === null) {
         throw new Error("Invalid canvas update: no matching settled workbench snapshot");
       }
       freezeDrawFrame(value.frame.scene);
-      const next = markCanvasOnlySnapshot(stampCanvasSnapshot({ ...base, frame: value.frame }, ++this.sequence));
+      const dimensionsChanged = value.dimensions !== undefined && JSON.stringify(value.dimensions) !== JSON.stringify(base.dimensions);
+      const next = stampCanvasSnapshot(value.dimensions === undefined ? { ...base, frame: value.frame }
+        : assertWorkbenchSnapshot({ ...base, frame: value.frame, dimensions: value.dimensions }), ++this.sequence);
+      // Only a settled visibility change updates Inspector React state. Ordinary
+      // wheel, pan and hover frames retain the existing canvas-only fast path.
+      if (!dimensionsChanged) markCanvasOnlySnapshot(next);
       this.current = next;
       return next;
     }

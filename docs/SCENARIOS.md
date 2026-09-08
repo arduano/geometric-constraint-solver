@@ -7408,3 +7408,23 @@ product identity; scenario coverage does not imply an unrecorded exhaustive huma
   preserved unique geometry and unchanged positive preference cost. Retain the
   large underconstrained/curvature controls, mixed fixed/free preference motion and
   active-bound fail-closed behavior, and the 12 mm manifold 60→62 mm edit.
+
+## M97 focused dimension scenarios — implementation in progress
+
+- Open the manifold in Focused mode: no unselected ordinary dimension labels.
+  Select a channel group and show at most six callouts while the Inspector retains
+  all related measurements and the public 12 mm width. Generated offsets stay
+  under a collapsed disclosure.
+- Pause over geometry for 250 ms, move to its preview label and select it. Navigation
+  and drawing suppress idle previews. Hidden callouts never win paint or picking.
+- Pin measurements, clear selection, reload and remove pins. Four is the limit;
+  source, accepted geometry, Undo/Redo and manual placements stay unchanged.
+- Edit an exact authored target through the Inspector, Undo/Redo and reload. A
+  generated read-only offset must not acquire source authority. Failed drafts keep
+  accepted measurements and reject stale editing requests.
+- M97-F001: zoom the manifold four times by -90 wheel units, then click empty
+  canvas. Labels retain their projected positions. Repeat with pan, Fit, centering
+  and resize; only affected geometry edits invalidate automatic placements.
+- Check all eight native dimension families, reference notation, bounded automatic
+  displacement, collision suppression and restoration hysteresis. Capture simple,
+  manifold and dense presentations and compare navigation costs before nomination.

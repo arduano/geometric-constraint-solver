@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "M92/M93 retained obligations plus M94 canvas lifecycle and M95 connected-navigation cases; exact selected WASM/performance names",
+  "source": "M92/M93 retained obligations plus M94 canvas, M95 navigation and M97 focused dimensions; exact selected WASM/performance names",
   "stages": {
     "wasm.m70_transition_parity": [
       "m70_transition_oracle_matches_the_cross_target_golden_bytes"
@@ -212,6 +212,21 @@
       "m95-navigation.spec.ts",
       "M95 scale navigation selects generated harness members and their invocation without saving",
       "chromium-memory"
+    ],
+    [
+      "m97-dimensions.spec.ts",
+      "M97 manifold focus limits canvas dimensions and preserves pinned measurements on reload",
+      "chromium"
+    ],
+    [
+      "m97-dimensions.spec.ts",
+      "M97 dimension positions survive zoom followed by a selection-only scene rebuild",
+      "chromium"
+    ],
+    [
+      "m97-dimensions.spec.ts",
+      "M97 contextual dimension edits retain source authority and Undo Redo reload",
+      "chromium"
     ]
   ]
 }

@@ -8415,6 +8415,18 @@ run `20260908T090848-ddc447b8`. The user stated “sounds good yeah, close the
 milestone please”, accepting the amended layout and its documented limits.
 Closure prose preserves those qualified product bytes; no further M96 work is pending.
 
+## M97 — focused dimensions and stable annotation placement
+
+Status: **implemented; qualification in progress.** [M97_GOALS.md](docs/M97_GOALS.md)
+owns the accepted plan; M96 remains the accepted product.
+
+- [x] Regress M97-F001 zoom-then-click layout jumps at the native owner.
+- [x] Implement shared native dimension metadata, relevance, bounded visibility and retained placement.
+- [x] Connect Focused / All / Hidden, contextual Inspector, source parameters and four persisted pins.
+- [x] Verify hover/label transit, native and managed edits, selection/groups, history and reload.
+- [ ] Qualify native/WASM/frontend/golden/browser behavior and navigation performance.
+- [ ] Freeze and present the qualified candidate for supervising-user acceptance.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

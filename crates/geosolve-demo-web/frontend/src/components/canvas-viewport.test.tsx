@@ -8,7 +8,7 @@ import { MockWorkbenchAdapter } from "../lib/mock-adapter";
 import { createCanvasRenderer } from "../lib/canvas-renderer";
 
 vi.mock("../lib/canvas-renderer", () => ({ createCanvasRenderer: vi.fn(() => ({ accept: vi.fn(), resize: vi.fn(), destroy: vi.fn() })) }));
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 async function setup(activeTool = "select", strict = false) {
   const adapter = new MockWorkbenchAdapter(); const snapshot = await adapter.snapshot();
@@ -66,7 +66,120 @@ function animationFrames() {
   };
 }
 
+describe("M97 idle dimension preview", () => {
+  const advance = async (milliseconds: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(milliseconds); }); };
+
+  it("waits for 250 ms of idle Select input and sends only the latest CSS coordinates", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    const dispatch = vi.spyOn(h.adapter, "dispatch");
+    vi.spyOn(h.host, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 50, 900, 700));
+    pointerEvent(h.host, "pointermove", { clientX: 150, clientY: 80 });
+    await frame(); await advance(200);
+    expect(dispatch).not.toHaveBeenCalled();
+    pointerEvent(h.host, "pointermove", { clientX: 175, clientY: 95 });
+    await frame(); await advance(249);
+    expect(dispatch).not.toHaveBeenCalled();
+    await advance(1);
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ version: 2, command: "dimensions.hover", payload: { x: 75, y: 45 } });
+    await advance(2000);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["wheel", "leave", "down", "blur", "unmount", "tool", "hidden"])("cancels the pending preview on %s", async (action) => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    const dispatch = vi.spyOn(h.adapter, "dispatch");
+    pointerEvent(h.host, "pointermove"); await frame(); await advance(100);
+    if (action === "wheel") fireEvent.wheel(h.host, { deltaY: 1 });
+    if (action === "leave") fireEvent.pointerLeave(h.host);
+    if (action === "down") pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    if (action === "blur") fireEvent(window, new Event("blur"));
+    if (action === "unmount") h.view.unmount();
+    if (action === "tool" || action === "hidden") h.view.rerender(<CanvasViewport adapter={h.adapter} snapshot={{ ...h.snapshot, presentation: { ...h.snapshot.presentation, activeTool: action === "tool" ? "line" : "select" }, dimensions: { mode: "hidden", entries: [], parameters: [], pinCount: 0 } }} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
+    await advance(1000);
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ command: "dimensions.hover" }));
+  });
+
+  it("preserves an existing preview during pointer transit and retires it on leave using frame-only transport", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    const dispatch = vi.spyOn(h.adapter, "dispatch").mockImplementation(async () => markCanvasOnlySnapshot({ ...h.snapshot, frame: { ...h.snapshot.frame } }));
+    pointerEvent(h.host, "pointermove"); await frame(); h.onSnapshot.mockClear(); await advance(250);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(h.onSnapshot).not.toHaveBeenCalled();
+    pointerEvent(h.host, "pointermove", { clientX: 50 }); await frame();
+    await advance(100);
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ command: "dimensions.hover.clear" }));
+    fireEvent.pointerLeave(h.host); await advance(1);
+    expect(dispatch).toHaveBeenLastCalledWith({ version: 2, command: "dimensions.hover.clear" });
+    await advance(500);
+    expect(dispatch).toHaveBeenCalledTimes(2);
+  });
+
+  it("serializes preview after pointer work and discards a stale preview queued behind it", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    let release!: () => void;
+    vi.spyOn(h.adapter, "pointer").mockImplementationOnce(() => new Promise<null>((resolve) => { release = () => resolve(null); }));
+    const dispatch = vi.spyOn(h.adapter, "dispatch");
+    pointerEvent(h.host, "pointermove"); await frame(); await advance(250);
+    expect(dispatch).not.toHaveBeenCalled();
+    pointerEvent(h.host, "pointermove", { clientX: 70 });
+    await act(async () => release()); await frame(); await advance(250);
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ version: 2, command: "dimensions.hover", payload: { x: 70, y: 30 } });
+  });
+
+  it("hit-tests a preview label before clearing hover ownership on pointer-down", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    const order: string[] = [];
+    vi.spyOn(h.adapter, "pointer").mockImplementation(async (sample) => { order.push(sample.phase); return null; });
+    vi.spyOn(h.adapter, "dispatch").mockImplementation(async (command) => { order.push(command.command); return markCanvasOnlySnapshot(h.snapshot); });
+    pointerEvent(h.host, "pointermove"); await frame(); await advance(250);
+    pointerEvent(h.host, "pointerdown", { buttons: 1 }); await advance(1);
+    expect(order).toEqual(["move", "dimensions.hover", "down", "dimensions.hover.clear"]);
+  });
+});
+
 describe("canvas input scheduling", () => {
+  it("settles dimensions once after 180 ms without wheel input and paints the frame without a React update", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    const advance = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+    const dispatch = vi.spyOn(h.adapter, "dispatch").mockResolvedValue(markCanvasOnlySnapshot(h.snapshot));
+    const wheel = vi.spyOn(h.adapter, "wheel").mockResolvedValue(null);
+    fireEvent.wheel(h.host, { deltaY: -30 }); await frame(); await advance(120);
+    fireEvent.wheel(h.host, { deltaY: -40 }); await frame(); await advance(179);
+    expect(wheel).toHaveBeenCalledTimes(2); expect(dispatch).not.toHaveBeenCalled();
+    h.onSnapshot.mockClear(); await advance(1);
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ version: 2, command: "dimensions.navigation.end" });
+    expect(h.onSnapshot).not.toHaveBeenCalled();
+    await advance(1000); expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("orders navigation settle behind wheel work and invalidates a queued settle when a new wheel arrives", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    const advance = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+    let release!: () => void; const order: string[] = [];
+    vi.spyOn(h.adapter, "wheel").mockImplementationOnce(() => { order.push("wheel:first"); return new Promise<null>((resolve) => { release = () => resolve(null); }); }).mockImplementation(async () => { order.push("wheel:second"); return null; });
+    vi.spyOn(h.adapter, "dispatch").mockImplementation(async ({ command }) => { order.push(command); return markCanvasOnlySnapshot(h.snapshot); });
+    fireEvent.wheel(h.host, { deltaY: -30 }); await frame(); await advance(180);
+    expect(order).toEqual(["wheel:first"]);
+    fireEvent.wheel(h.host, { deltaY: -40 }); await frame();
+    await act(async () => release());
+    expect(order).toEqual(["wheel:first", "wheel:second"]);
+    await advance(179); expect(order).toHaveLength(2);
+    await advance(1);
+    expect(order).toEqual(["wheel:first", "wheel:second", "dimensions.navigation.end"]);
+  });
+
+  it.each([false, true])("cancels navigation settle on disposal, including an already queued callback (%s)", async (queued) => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    let release!: () => void;
+    vi.spyOn(h.adapter, "wheel").mockImplementation(() => new Promise<null>((resolve) => { release = () => resolve(null); }));
+    const dispatch = vi.spyOn(h.adapter, "dispatch");
+    fireEvent.wheel(h.host, { deltaY: 20 }); await frame();
+    await act(async () => { await vi.advanceTimersByTimeAsync(queued ? 180 : 100); });
+    h.view.unmount();
+    await act(async () => { release(); await vi.advanceTimersByTimeAsync(500); });
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("coalesces Select hover to the newest CSS-local sample once per animation frame", async () => {
     const frame = animationFrames(); const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer");
     vi.spyOn(h.host, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 50, 900, 700));

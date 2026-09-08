@@ -131,6 +131,20 @@ describe("WasmWorkbenchAdapter", () => {
     expect(JSON.parse(request)).toEqual({ version: 2, samples });
   });
 
+  it("retains the current snapshot when native defers late dimension cleanup", async () => {
+    class CleanupHandle extends FakeHandle { override dispatch() { return "null"; } }
+    const adapter = new WasmWorkbenchAdapter(CleanupHandle);
+    const before = await adapter.construct({ version: 2 });
+    for (const command of ["dimensions.navigation.end", "dimensions.hover.clear"]) {
+      const after = await adapter.dispatch({ version: 2, command });
+      expect(after).toEqual(before);
+      expect(after.frame).toBe(before.frame);
+      expect(after.pendingManagedMutation).toBe(before.pendingManagedMutation);
+      expect(isCanvasOnlySnapshot(after)).toBe(true);
+    }
+    await expect(adapter.dispatch({ version: 2, command: "dimensions.edit" })).rejects.toThrow("no snapshot");
+  });
+
   it("publishes selection deltas while retaining source and durable presentation references", async () => {
     const fixture = await new MockWorkbenchAdapter().snapshot();
     fixture.navigation = { authority: "accepted-source-scene", selectionKey: "old-selection", rows: [], sources: [], itemCount: 0, canNavigateSource: true };
@@ -248,6 +262,48 @@ describe("WasmWorkbenchAdapter", () => {
       const current = await adapter.dispatch({ version: 2, command: "navigation.rows.select" });
       expect(getCanvasSnapshotSequence(current)).toBe(++sequence);
       for (const retained of ["source", "project", "parameters", "problems"] as const) expect(current[retained]).toBe(base[retained]);
+    }
+  });
+
+  it("refreshes contextual dimension metadata with selection and rejects missing or malformed replacements", async () => {
+    const fixture = await new MockWorkbenchAdapter().snapshot();
+    fixture.navigation = { authority: "accepted-source-scene", selectionKey: "base", rows: [], sources: [], itemCount: 0, canNavigateSource: true };
+    fixture.dimensions = { mode: "focused", entries: [], parameters: [], pinCount: 0 };
+    let response = "null";
+    class DimensionHandle extends FakeHandle {
+      override snapshot() { return JSON.stringify(fixture); }
+      override dispatch() { return response; }
+    }
+    const adapter = new WasmWorkbenchAdapter(DimensionHandle);
+    const base = await adapter.construct({ version: 2 });
+    const dimensions: NonNullable<WorkbenchSnapshot["dimensions"]> = { ...fixture.dimensions, entries: [{ id: "dimension:1", label: "Width", value: "12", unit: "mm", kind: "Distance", reference: false, generated: false, pinned: false, focused: false, visible: true, editable: true }] };
+    const delta = { version: 2, kind: "selection", revision: fixture.revision, frame: fixture.frame, navigation: fixture.navigation, selectedDeclarations: [], selection: null, selectedGeometryRole: null, dimensions };
+    response = JSON.stringify(delta);
+    const next = await adapter.dispatch({ version: 2, command: "navigation.rows.select" });
+    expect(next.dimensions).toEqual(dimensions);
+    expect(next.source).toBe(base.source);
+    for (const replacement of [undefined, null, { ...dimensions, pinCount: 5 }, { ...dimensions, entries: [{ ...dimensions.entries[0], visible: 1 }] }]) {
+      response = JSON.stringify({ ...delta, dimensions: replacement });
+      await expect(adapter.dispatch({ version: 2, command: "navigation.rows.select" })).rejects.toThrow();
+    }
+    response = JSON.stringify({ version: 2, kind: "frame", revision: fixture.revision, frame: fixture.frame });
+    const hovered = await adapter.dispatch({ version: 2, command: "dimensions.hover", payload: { x: 20, y: 30 } });
+    expect(isCanvasOnlySnapshot(hovered)).toBe(true);
+    expect(hovered.dimensions).toBe(next.dimensions);
+    expect(hovered.source).toBe(base.source);
+    const settledDimensions = { ...dimensions, entries: dimensions.entries.map((entry) => ({ ...entry, visible: false })) };
+    const settledDelta = { version: 2, kind: "frame", revision: fixture.revision, frame: fixture.frame, dimensions: settledDimensions };
+    response = JSON.stringify(settledDelta);
+    const settled = await adapter.dispatch({ version: 2, command: "dimensions.navigation.end" });
+    expect(isCanvasOnlySnapshot(settled)).toBe(false);
+    expect(settled.dimensions).toEqual(settledDimensions);
+    expect(settled.source).toBe(base.source);
+    expect(settled.revision).toBe(base.revision);
+    const unchanged = await adapter.dispatch({ version: 2, command: "dimensions.navigation.end" });
+    expect(isCanvasOnlySnapshot(unchanged)).toBe(true);
+    for (const replacement of [null, { ...settledDimensions, pinCount: 5 }, { ...settledDimensions, entries: [{ ...dimensions.entries[0], visible: 1 }] }]) {
+      response = JSON.stringify({ ...settledDelta, dimensions: replacement });
+      await expect(adapter.dispatch({ version: 2, command: "dimensions.navigation.end" })).rejects.toThrow();
     }
   });
 

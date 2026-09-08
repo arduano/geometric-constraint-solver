@@ -134,6 +134,33 @@ export interface NavigationSnapshot {
   notice?: string;
 }
 
+export type DimensionDisplayMode = "focused" | "all" | "hidden";
+
+/** Accepted native metadata: the frontend does not infer measurement ownership. */
+export interface DimensionEntry {
+  id: string;
+  /** Stable native presentation identity; never used as command authority. */
+  rowKey?: string;
+  label: string;
+  value: string;
+  unit?: string;
+  kind: string;
+  reference: boolean;
+  generated: boolean;
+  pinned: boolean;
+  visible: boolean;
+  focused: boolean;
+  editable: boolean;
+  reason?: string;
+}
+
+export interface DimensionsSnapshot {
+  mode: DimensionDisplayMode;
+  entries: DimensionEntry[];
+  parameters: Array<{ id: string; label: string; value: string; unit?: string; editable: boolean }>;
+  pinCount: number;
+}
+
 export interface WorkbenchSnapshot {
   version: typeof WORKBENCH_PROTOCOL_VERSION;
   revision: number;
@@ -143,6 +170,7 @@ export interface WorkbenchSnapshot {
   source: { selectedPath: string; files: SourceFileSnapshot[]; dirty: boolean };
   explorer: DeclarationRow[];
   navigation?: NavigationSnapshot;
+  dimensions?: DimensionsSnapshot;
   selection?: { id: string; label: string; kind: string; ownership?: string; source?: { path: string; from: number; to: number } };
   parameters: Array<{ id: string; label: string; value: string; unit?: string; editable: boolean }>;
   problems: WorkbenchProblem[];
@@ -209,10 +237,28 @@ export function assertWorkbenchSnapshot(value: WorkbenchSnapshot): WorkbenchSnap
   assertDrawFrame(value.frame.scene);
   const geometryRole = value.presentation?.geometryRole;
   const selectedGeometryRole = value.presentation?.selectedGeometryRole;
-  if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.constructionVisible !== "boolean" || typeof value.presentation?.visibilityRestoreAvailable !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.navigation !== undefined && !validNavigationSnapshot(value.navigation)) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {
+  if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.constructionVisible !== "boolean" || typeof value.presentation?.visibilityRestoreAvailable !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.navigation !== undefined && !validNavigationSnapshot(value.navigation)) || (value.dimensions !== undefined && !validDimensionsSnapshot(value.dimensions)) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {
     throw new Error("Unsupported or malformed workbench snapshot");
   }
   return value;
+}
+
+function validDimensionsSnapshot(value: unknown): value is DimensionsSnapshot {
+  const field = (entry: unknown) => record(entry) && typeof entry.id === "string" && entry.id.length > 0
+    && typeof entry.label === "string" && typeof entry.value === "string"
+    && (entry.unit === undefined || typeof entry.unit === "string") && typeof entry.editable === "boolean";
+  return record(value) && ["focused", "all", "hidden"].includes(String(value.mode))
+    && safeInteger(value.pinCount, 0) && value.pinCount <= 4
+    && Array.isArray(value.parameters) && value.parameters.every(field)
+    && new Set(value.parameters.map((entry) => entry.id)).size === value.parameters.length
+    && Array.isArray(value.entries) && value.entries.every((entry) => field(entry) && record(entry)
+      && (entry.rowKey === undefined || (typeof entry.rowKey === "string" && entry.rowKey.length > 0))
+      && typeof entry.kind === "string" && typeof entry.reference === "boolean"
+      && typeof entry.generated === "boolean" && typeof entry.pinned === "boolean"
+      && typeof entry.visible === "boolean" && typeof entry.focused === "boolean"
+      && (entry.reason === undefined || typeof entry.reason === "string"))
+    && new Set(value.entries.map((entry) => entry.id)).size === value.entries.length
+    && new Set(value.entries.map((entry) => entry.rowKey ?? entry.id)).size === value.entries.length;
 }
 
 function validNavigationSnapshot(value: unknown): value is NavigationSnapshot {

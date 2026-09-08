@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Panel, PanelGroup, PanelResizeHandle, type PanelGroupStorage } from "react-resizable-panels";
 import { Activity, AlertTriangle, ChevronDown, Code2, Download, FileJson, FolderOpen, Focus, Menu, PackageOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Redo2, RotateCcw, Save, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { WorkbenchAdapter, WorkbenchSnapshot, WorkspaceMode } from "./lib/adapter";
+import type { DimensionDisplayMode, WorkbenchAdapter, WorkbenchSnapshot, WorkspaceMode } from "./lib/adapter";
 import { assertWorkbenchSnapshot } from "./lib/adapter";
 import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from "./lib/browser-storage";
 import { createProjectStore, type ProjectStore } from "./lib/project-storage";
@@ -31,7 +31,7 @@ const DRAFT_KEY = "geosolve.source-draft.v1";
 const SPLIT_CODE_DEFAULT_PX = 560;
 const SPLIT_CODE_MINIMUM_PX = 520;
 const DURABLE_REPLACEMENT_COMMANDS = new Set(["project.new", "project.new-code", "project.import", "sample.open"]);
-const PRESENTATION_SAVE_COMMANDS = new Set(["explorer.visibility.set", "explorer.visibility.isolate", "explorer.visibility.restore", "view.construction.toggle"]);
+const PRESENTATION_SAVE_COMMANDS = new Set(["explorer.visibility.set", "explorer.visibility.isolate", "explorer.visibility.restore", "view.construction.toggle", "dimensions.mode", "dimensions.pin", "dimensions.clearPins"]);
 type CodeSurface = "source" | "parameters" | "problems" | "generated" | "artifacts";
 type ProjectSaveIntent = "auto" | "manual" | "replacement";
 
@@ -218,6 +218,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   }, [acceptSnapshot, reportError]);
   const command = useCallback(async (name: string, payload?: unknown) => {
     try {
+      const previousDimensionMode = snapshotRef.current?.dimensions?.mode ?? "focused";
       const next = await adapter.dispatch({ version: 2, command: name, payload });
       if (projectAutosaveSafe.current) setActionError(null);
       const accepted = await acceptSnapshot(next);
@@ -226,7 +227,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
         projectSaveEpoch.current += 1;
         setReplacementFitRequest((request) => request + 1);
         void queueProjectSave("replacement", false);
-      } else if (PRESENTATION_SAVE_COMMANDS.has(name)) {
+      } else if (PRESENTATION_SAVE_COMMANDS.has(name) || (name === "dimensions.focus" && previousDimensionMode !== accepted.dimensions?.mode)) {
         void queueProjectSave("auto", false);
       }
       return accepted;
@@ -481,11 +482,11 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
           {explorerOpen && mode !== "code" && <><Panel id="explorer" defaultSize={16} minSize={12} maxSize={26}><Explorer snapshot={snapshot} actions={declarationActions} blockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} /></Panel><ResizeHandle /></>}
           <Panel id="workspace" defaultSize={63} minSize={45}>
             <main className="relative flex h-full min-h-0 flex-col">
-              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={toolCatalog} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} captured={setCapturedGesture} />} code={<CodeWorkspace mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={setDraft} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
+              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={toolCatalog} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} onDimensionMode={(dimensionMode) => void command("dimensions.mode", { mode: dimensionMode })} captured={setCapturedGesture} />} code={<CodeWorkspace mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={setDraft} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
               {transient.active === "open" && <div ref={transient.contentRef as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="false" aria-label="Open project" className="absolute inset-5 z-40 overflow-hidden rounded-xl border border-border bg-raised shadow-panel"><OpenSurface recents={recentSamples} onOpen={openSample} onNewSketch={() => replaceProject("project.new", "design")} onNewCode={() => replaceProject("project.new-code", "code")} onImport={importProject} onDismiss={() => transient.close(true)} /></div>}
             </main>
           </Panel>
-          {detailsOpen && mode !== "code" && <><ResizeHandle /><Panel id="details" defaultSize={21} minSize={18} maxSize={34}><DetailsPanel snapshot={snapshot} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : historyBlocked ? "Apply or Revert the source draft before navigating between views." : snapshot.navigation && !snapshot.navigation.canNavigateSource ? snapshot.navigation.unavailableReason ?? "Source navigation is unavailable." : undefined} onOpenCode={openSelectionInCode} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} parametersBlocked={localDraftDirty} /></Panel></>}
+          {detailsOpen && mode !== "code" && <><ResizeHandle /><Panel id="details" defaultSize={21} minSize={18} maxSize={34}><DetailsPanel snapshot={snapshot} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : historyBlocked ? "Apply or Revert the source draft before navigating between views." : snapshot.navigation && !snapshot.navigation.canNavigateSource ? snapshot.navigation.unavailableReason ?? "Source navigation is unavailable." : undefined} onOpenCode={openSelectionInCode} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} parametersBlocked={localDraftDirty || snapshot.source.dirty} dimensionInspectionBlocked={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before inspecting dimensions." : undefined} dimensionActions={{ onFocus: (id) => { void command("dimensions.focus", { id }); }, onPin: (id, pinned) => { void command("dimensions.pin", { id, pinned }); }, onClearPins: () => { void command("dimensions.clearPins"); }, onEdit: (id, value) => { if (localDraftDirty || snapshot.source.dirty) return; void command("dimensions.edit", { id, value }); } }} /></Panel></>}
         </PanelGroup>
       </div>
 
@@ -527,7 +528,7 @@ function StableWorkspace({ mode, splitCodeWidth, onSplitCodeWidth, canvas, code 
   </div>;
 }
 
-function DesignWorkspace({ adapter, snapshot, catalog, onSnapshot, onError, activeTool, onFinish, onCancel, onGeometryRole, onViewCommand, captured }: { adapter: WorkbenchAdapter; snapshot: WorkbenchSnapshot; catalog: ToolCatalog; onSnapshot: (snapshot: WorkbenchSnapshot) => void; onError: (error: unknown) => void; activeTool: string; onFinish: () => void; onCancel: () => void; onGeometryRole: (selected: boolean) => void; onViewCommand: (command: "view.grid.toggle" | "view.fit" | "view.origin") => void; captured: (value: boolean) => void }) {
+function DesignWorkspace({ adapter, snapshot, catalog, onSnapshot, onError, activeTool, onFinish, onCancel, onGeometryRole, onViewCommand, onDimensionMode, captured }: { adapter: WorkbenchAdapter; snapshot: WorkbenchSnapshot; catalog: ToolCatalog; onSnapshot: (snapshot: WorkbenchSnapshot) => void; onError: (error: unknown) => void; activeTool: string; onFinish: () => void; onCancel: () => void; onGeometryRole: (selected: boolean) => void; onViewCommand: (command: "view.grid.toggle" | "view.fit" | "view.origin") => void; onDimensionMode: (mode: DimensionDisplayMode) => void; captured: (value: boolean) => void }) {
   const section = toolSection(catalog, activeTool);
   const command = activeTool === catalog.select.toolId ? catalog.select : section?.commands.find((candidate) => candidate.toolId === activeTool) ?? catalog.select;
   const authoring = activeTool !== catalog.select.toolId;
@@ -552,7 +553,7 @@ function DesignWorkspace({ adapter, snapshot, catalog, onSnapshot, onError, acti
     </div>
     <div className="relative min-h-0 flex-1">
       <CanvasViewport adapter={adapter} snapshot={snapshot} onSnapshot={onSnapshot} onCaptureChange={captured} onError={onError} />
-      <CanvasControls gridVisible={snapshot.presentation.gridVisible} onCommand={onViewCommand} />
+      <CanvasControls gridVisible={snapshot.presentation.gridVisible} dimensionMode={snapshot.dimensions?.mode} onDimensionMode={onDimensionMode} onCommand={onViewCommand} />
     </div>
   </section>;
 }

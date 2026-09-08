@@ -15,6 +15,11 @@ class CanvasInputQueue {
   private running = false;
   private disposed = false;
   private generation = 0;
+  private dimensionTimer: ReturnType<typeof setTimeout> | null = null;
+  private dimensionGeneration = 0;
+  private dimensionPreview = false;
+  private navigationTimer: ReturnType<typeof setTimeout> | null = null;
+  private navigationGeneration = 0;
 
   constructor(
     private readonly adapter: WorkbenchAdapter,
@@ -34,6 +39,8 @@ class CanvasInputQueue {
   }
 
   wheel(sample: WheelSample) {
+    this.clearDimensionHover();
+    this.cancelNavigationTimer();
     if (this.pending?.kind !== "wheel") this.flush();
     // Match the bounded native batch. Never add deltas: clamp and changing
     // anchors make the individual ordered zoom operations significant.
@@ -41,6 +48,17 @@ class CanvasInputQueue {
     if (this.pending?.kind === "wheel") this.pending.samples.push(sample);
     else this.pending = { kind: "wheel", samples: [sample] };
     this.schedule();
+    const generation = this.navigationGeneration;
+    this.navigationTimer = setTimeout(() => {
+      this.navigationTimer = null;
+      if (this.disposed || generation !== this.navigationGeneration) return;
+      // Queue after every retained wheel anchor. A new wheel also invalidates
+      // an old settle callback that is waiting behind asynchronous native work.
+      this.flush();
+      this.dispatch(() => generation === this.navigationGeneration
+        ? this.adapter.dispatch({ version: 2, command: "dimensions.navigation.end" })
+        : Promise.resolve(null));
+    }, 180);
   }
 
   flush() {
@@ -68,6 +86,7 @@ class CanvasInputQueue {
   }
 
   discardTransient() {
+    this.cancelDimensionTimer();
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
     this.pending = null;
@@ -76,7 +95,38 @@ class CanvasInputQueue {
 
   activate() { this.disposed = false; }
 
+  dimensionHover(x: number, y: number) {
+    this.cancelDimensionTimer();
+    const generation = this.dimensionGeneration;
+    this.dimensionTimer = setTimeout(() => {
+      this.dimensionTimer = null;
+      if (this.disposed || generation !== this.dimensionGeneration) return;
+      this.flush();
+      this.dispatch(() => {
+        if (generation !== this.dimensionGeneration) return Promise.resolve(null);
+        this.dimensionPreview = true;
+        return this.adapter.dispatch({ version: 2, command: "dimensions.hover", payload: { x, y } });
+      }, true);
+    }, 250);
+  }
+
+  cancelDimensionTimer() {
+    if (this.dimensionTimer !== null) clearTimeout(this.dimensionTimer);
+    this.dimensionTimer = null;
+    this.dimensionGeneration += 1;
+  }
+
+  clearDimensionHover() {
+    this.cancelDimensionTimer();
+    if (!this.dimensionPreview || this.disposed) return;
+    this.dimensionPreview = false;
+    // A clear must survive transient-input pruning: otherwise the last preview
+    // could remain painted after the pointer leaves or the window loses focus.
+    this.dispatch(() => this.adapter.dispatch({ version: 2, command: "dimensions.hover.clear" }));
+  }
+
   dispose() {
+    this.cancelNavigationTimer();
     this.disposed = true;
     this.generation += 1;
     this.running = false;
@@ -86,6 +136,12 @@ class CanvasInputQueue {
 
   private schedule() {
     if (this.frame === null && !this.disposed) this.frame = requestAnimationFrame(() => this.flush());
+  }
+
+  private cancelNavigationTimer() {
+    if (this.navigationTimer !== null) clearTimeout(this.navigationTimer);
+    this.navigationTimer = null;
+    this.navigationGeneration += 1;
   }
 
   private drain() {
@@ -154,11 +210,13 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
 
   const cancelCapturedPointer = (pointerId: number) => {
     if (!retireCapture(pointerId)) return;
+    input.clearDimensionHover();
     input.flush();
     input.dispatch(() => adapter.cancel({ version: 2, reason: "lost-capture" }));
   };
 
   const sendPointer = (event: React.PointerEvent, phase: "down" | "move" | "up") => {
+    input.cancelDimensionTimer();
     // Primary authoring and middle-button camera pan are the only canvas
     // pointer routes. Keep secondary clicks available to the browser instead
     // of turning a context-menu gesture into semantic sketch input.
@@ -186,7 +244,15 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
       // that expected follow-up event is a stale no-op, not a cancellation.
       retireCapture(event.pointerId);
     }
-    input.pointer({ version: 2, phase, pointerId: event.pointerId, x: event.clientX - bounds.left, y: event.clientY - bounds.top, buttons: event.buttons, modifiers: { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey } }, coalesce);
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    input.pointer({ version: 2, phase, pointerId: event.pointerId, x, y, buttons: event.buttons, modifiers: { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey } }, coalesce);
+    // Keep the current preview during geometry-to-label transit. Native picking
+    // decides whether this idle position retains it or reveals another measure.
+    if (phase === "move" && event.buttons === 0 && capturedPointer.current === null && snapshot.presentation.activeTool === "select" && (snapshot.dimensions?.mode ?? "focused") === "focused") input.dimensionHover(x, y);
+    // Hit-test a preview label before retiring hover ownership on pointer-down.
+    // The native selected/editing dimension then owns its continuing visibility.
+    else if (phase === "down") input.clearDimensionHover();
   };
 
   useEffect(() => {
@@ -212,9 +278,9 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
 
   useEffect(() => {
     input.activate();
-    const discardHidden = () => { if (document.hidden) input.discardTransient(); };
-    const discardBlurred = () => input.discardTransient();
-    const flushBeforeCommand = () => input.flush();
+    const discardBlurred = () => { input.discardTransient(); input.clearDimensionHover(); };
+    const discardHidden = () => { if (document.hidden) discardBlurred(); };
+    const flushBeforeCommand = () => { input.cancelDimensionTimer(); input.flush(); };
     // Menu, project and keyboard actions may change the Rust workbench without
     // passing through this component. Drain navigation before those handlers.
     window.addEventListener("pointerdown", flushBeforeCommand, true);
@@ -223,6 +289,7 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
     document.addEventListener("visibilitychange", discardHidden);
     window.addEventListener("blur", discardBlurred);
     return () => {
+      input.clearDimensionHover();
       input.dispose();
       window.removeEventListener("pointerdown", flushBeforeCommand, true);
       window.removeEventListener("click", flushBeforeCommand, true);
@@ -236,6 +303,10 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
   }, [input]);
 
   useEffect(() => {
+    if (snapshot.presentation.activeTool !== "select" || (snapshot.dimensions?.mode ?? "focused") !== "focused") input.clearDimensionHover();
+  }, [input, snapshot.presentation.activeTool, snapshot.dimensions?.mode]);
+
+  useEffect(() => {
     const element = host.current;
     if (!element) return;
     let media: MediaQueryList | null = null;
@@ -243,7 +314,8 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
     const resize = () => {
       const pixelRatio = window.devicePixelRatio || 1;
       renderer.current?.resize({ ...size, pixelRatio });
-      if (size.width <= 0 || size.height <= 0) { input.discardTransient(); return; }
+      if (size.width <= 0 || size.height <= 0) { input.discardTransient(); input.clearDimensionHover(); return; }
+      input.clearDimensionHover();
       input.flush();
       const resized = { version: 2 as const, ...size, pixelRatio };
       input.dispatch(() => adapter.resize(resized), true);
@@ -274,7 +346,7 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
       onPointerDown={(event) => void sendPointer(event, "down")}
       onPointerMove={(event) => void sendPointer(event, "move")}
       onPointerUp={(event) => void sendPointer(event, "up")}
-      onPointerLeave={() => { if (capturedPointer.current === null) input.discardHover(); }}
+      onPointerLeave={() => { input.clearDimensionHover(); if (capturedPointer.current === null) input.discardHover(); }}
       onPointerCancel={(event) => cancelCapturedPointer(event.pointerId)}
       onLostPointerCapture={(event) => cancelCapturedPointer(event.pointerId)}
       onWheel={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); input.wheel({ version: 2, x: event.clientX - bounds.left, y: event.clientY - bounds.top, deltaX: event.deltaX, deltaY: event.deltaY, ctrl: event.ctrlKey }); }}

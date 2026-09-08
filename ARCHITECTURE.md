@@ -2864,3 +2864,23 @@ tools and captured gestures block explicit cross-view selection. M94 pan/zoom an
 routes retain their narrow frame transport. Persisted formats and solver behavior do not change.
 [M95_GOALS.md](docs/M95_GOALS.md), [evidence](docs/M95_IMPLEMENTATION.md) and
 [closure](docs/M95_CLOSURE.md) record the accepted scope and product identity.
+
+## M97 dimension presentation — implementation in progress
+
+`DimensionPresentationState` is a native presentation owner separate from design
+history and manual annotation placement. It resolves Focused, All and Hidden into
+the shared accepted scene before numeric drawing, SVG rendering or annotation
+picking. Standalone scenes retain their previous defaults unless a host applies
+the policy. Complete measurement entries remain available when their callouts are
+hidden; relevance follows direct operands, selected curve endpoints and accepted
+producer ownership.
+
+The workbench supplies accepted ownership and source editing authority, defaults
+to Focused and persists display mode and at most four exact annotation identities.
+Automatic layout is transient retained state. Camera and selection changes reuse
+slots; geometry changes invalidate affected anchors. Bounded placement and a
+six-callout Focused limit keep ordinary navigation readable. The frontend owns
+idle-hover timing and Inspector controls while Rust owns visibility and hit tests.
+Public patch parameters retain their source values and existing edit transaction;
+generated dimensions do not acquire writable authority from their displayed value.
+[M97_GOALS.md](docs/M97_GOALS.md) owns the approved contract and pending qualification.
