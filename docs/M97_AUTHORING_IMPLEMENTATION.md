@@ -135,6 +135,34 @@ CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG_ASSER
 Wave A passes in 5.11 s and wave B in 0.67 s;
 `target/m97/authoring-fabrication-groups.log` retains the exact output.
 
+Run `20260908T224238-9270c86f` on `53ff5d9` passes native/headless, all three
+actual-WASM lifecycle tests, the unchanged 271-case golden, documentation, package,
+license and WASM parity stages. Browser prefixes pass 17/17; the full browser batch
+reports 37 passes and 11 failures. Eight failures use source symbols where authored
+Explorer/parameter labels are now displayed. One reveals the embedded editor SDK
+omitting `presentation.d.ts`; in-memory injection removes all four manifold TypeScript
+errors. The declaration generator and virtual filesystem now include that file, with
+an owning language-service regression accepting metadata and rejecting invalid flags.
+The 11-case language-service suite, `check:language-sdk`, `tsc -b`, and Playwright
+discovery pass. Browser test repairs retain source identity, geometry and exact history
+assertions while resolving labels independently from source declarations.
+
+Two other browser cases time out: Circle source publication and the dense fixture-field
+workflow. The latter's trace shows cumulative time rather than an established Undo
+hang. An isolated exact rerun against the same R3 harness passes in 4.2 minutes with
+the unchanged six-minute limit (`target/m97/authoring-dense-isolated.log`). No performance
+fix or timeout extension is made on that evidence. The updated R6 frontend uses the
+same optimized WASM bytes. All ten affected browser workflows pass in 5.7 minutes
+(`target/m97/authoring-browser-repairs-r1.log`), including Circle creation/radius editing
+(1.3 minutes), robotic-harness two-edit/history/reload (1.4 minutes), and the actual
+editor's zero-TypeScript-error check. R3 remains failed; performance qualification
+has not yet run.
+
+```bash
+nix-shell shell.nix --run 'node crates/geosolve-demo-web/frontend/scripts/build-release-artifacts.mjs --out target/m97/authoring-dev-artifacts-r6 --wasm-package target/release-gate/prepared/7f6a693863d766e3cc4a9a9f2192259c198ab28b529f105a55cc4a56e8ff39ab/wasm'
+GEOSOLVE_E2E_ARTIFACT_MANIFEST=/home/arduano/programming/geometric-constraint-solver/target/m97/authoring-dev-artifacts-r6/harness.json GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome GEOSOLVE_E2E_PORT=18112 nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npx playwright test tests/e2e/workbench.spec.ts tests/e2e/m95-navigation.spec.ts tests/e2e/m92-sample-audit.spec.ts --grep "real WASM opens|click-authored|canonical Jansen|non-axis Parallel|computed Fillet|Cubic Bézier|normal pointer capture|M95 canvas and Explorer|M95 explicit|robotic-harness-backplane" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/authoring-browser-repairs-r1'
+```
+
 Repair the affected owner checks and resume through the integrated release runner.
 Reuse only its authenticated
 unchanged-input evidence. Freeze the qualified production artifact without rebuilding,

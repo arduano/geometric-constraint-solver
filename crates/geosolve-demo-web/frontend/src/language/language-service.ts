@@ -4,6 +4,7 @@ import ts from "typescript";
 import {
   GEOSOLVE_SKETCH_CODE_AUTHORING,
   GEOSOLVE_SKETCH_CODE_INDEX,
+  GEOSOLVE_SKETCH_CODE_PRESENTATION,
   LANGUAGE_SERVICE_TYPESCRIPT_VERSION,
   TYPESCRIPT_STANDARD_LIBRARY,
 } from "./generated/language-service-declarations";
@@ -29,6 +30,7 @@ const STANDARD_LIBRARY = "/lib.es2022.d.ts";
 const SDK_ROOT = "/node_modules/@geosolve/sketch-code";
 const SDK_INDEX = `${SDK_ROOT}/index.d.ts`;
 const SDK_AUTHORING = `${SDK_ROOT}/authoring.d.ts`;
+const SDK_PRESENTATION = `${SDK_ROOT}/presentation.d.ts`;
 const DIAGNOSTIC_LIMIT = 200;
 const COMPLETION_LIMIT = 250;
 
@@ -49,6 +51,7 @@ export class TypeScriptProjectLanguageService {
     [STANDARD_LIBRARY, TYPESCRIPT_STANDARD_LIBRARY],
     [SDK_INDEX, GEOSOLVE_SKETCH_CODE_INDEX],
     [SDK_AUTHORING, GEOSOLVE_SKETCH_CODE_AUTHORING],
+    [SDK_PRESENTATION, GEOSOLVE_SKETCH_CODE_PRESENTATION],
   ]);
   private readonly projectFiles = new Set<string>();
   private readonly compilerOptions: ts.CompilerOptions = {
@@ -83,7 +86,7 @@ export class TypeScriptProjectLanguageService {
       getDirectories: () => [],
       getNewLine: () => "\n",
       getProjectVersion: () => String(this.projectVersion),
-      getScriptFileNames: () => [...this.projectFiles, SDK_INDEX, SDK_AUTHORING],
+      getScriptFileNames: () => [...this.projectFiles, SDK_INDEX, SDK_AUTHORING, SDK_PRESENTATION],
       getScriptSnapshot: (path) => {
         const contents = this.files.get(canonicalPath(path));
         return contents === undefined ? undefined : ts.ScriptSnapshot.fromString(contents);

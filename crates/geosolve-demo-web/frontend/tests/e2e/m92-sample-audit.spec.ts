@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { mkdir, writeFile } from "node:fs/promises";
+import { authoredLabel } from "./source-presentation";
 import { join } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -26,8 +27,8 @@ async function capture(page: Page, info: TestInfo, key: string, stage: string) {
   await writeFile(join(target, `${stage}.ts`), (await acceptedSource(page)) ?? "");
 }
 
-function controlLabel(edit: Edit): string {
-  return edit.path.length ? `${edit.declaration} · ${edit.path.join(".")}` : edit.declaration;
+function controlLabel(edit: Edit, source: string): string {
+  return edit.path.length ? `${edit.declaration} · ${edit.path.join(".")}` : authoredLabel(source, edit.declaration);
 }
 
 async function requireJansenDrag(page: Page, info: TestInfo, originalSource: string, baseline: string) {
@@ -133,14 +134,14 @@ for (const sample of samples) {
       await requireJansenDrag(page, info, original!, baselineGeometry);
     }
     expect(witnesses.secondary_edit, `${key} requires a distinct measured second parameter`).toBeDefined();
-    expect(controlLabel(witnesses.secondary_edit)).not.toBe(controlLabel(witnesses.representative_edit));
+    expect(controlLabel(witnesses.secondary_edit, sample.source)).not.toBe(controlLabel(witnesses.representative_edit, sample.source));
     for (const [index, edit] of [witnesses.representative_edit, witnesses.secondary_edit].entries()) {
       if (index > 0) {
         await page.getByRole("button", { name: "Undo", exact: true }).click();
         await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(original);
       }
       await page.getByRole("tab", { name: "Parameters", exact: true }).click();
-      const control = page.getByRole("textbox", { name: controlLabel(edit), exact: true });
+      const control = page.getByRole("textbox", { name: controlLabel(edit, sample.source), exact: true });
       const value = String(typeof edit.replacement === "number" ? edit.replacement : edit.replacement.value);
       const beforeValue = await control.inputValue();
       expect(beforeValue).not.toBe(value);
@@ -166,7 +167,7 @@ for (const sample of samples) {
       await expect(page.locator("header").getByText(manifest.title, { exact: true })).toBeVisible();
       await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(edited);
       await page.getByRole("tab", { name: "Parameters", exact: true }).click();
-      await expect(page.getByRole("textbox", { name: controlLabel(edit), exact: true })).toHaveValue(value);
+      await expect(page.getByRole("textbox", { name: controlLabel(edit, sample.source), exact: true })).toHaveValue(value);
       expect((await presentedFrame(frame)).items.some((item) => item.layer === "geometry")).toBe(true);
       expectGeometry(await fittedGeometry(page), editedGeometry);
       await capture(page, info, key, `reload-${index + 1}`);

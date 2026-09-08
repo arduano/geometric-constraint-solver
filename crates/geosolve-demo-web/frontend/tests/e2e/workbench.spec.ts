@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
+import { authoredLabel } from "./source-presentation";
 import { FITTED_GEOMETRY_TOLERANCE_PIXELS } from "../fitted-geometry";
 import { canvasFrame, canvasVisualWitness, drawItems, expectDraft, expectItemCount, fractionToClient, presentedFrame, presentedIdentity, settlePresentation } from "./presented-canvas";
 
@@ -398,7 +399,7 @@ test("real WASM source-backs click-authored geometry in a managed sample", async
   );
   await expect(
     page.getByRole("list", { name: "Canvas additions" })
-      .getByRole("button", { name: "segment1", exact: true }),
+      .getByRole("button", { name: authoredLabel(upgradedSource, "segment1"), exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Accepted source", { exact: true })).toBeVisible();
   await expectDraft(canvasFrame(page), false);
@@ -605,8 +606,8 @@ test("canonical Jansen sample Polyline Finish publishes inferred constraints int
 
   const additions = page.getByRole("list", { name: "Canvas additions" });
   await expect(additions).toBeVisible();
-  const geometry = additions.getByRole("button", { name: /^geometry\d+$/ });
-  const constraints = additions.getByRole("button", { name: /^constraint\d+$/ });
+  const geometry = additions.locator(`button[data-navigation-row="managed:${geometryName}"]`);
+  const constraints = additions.locator(constraintDeclarations.map(({ name }) => `button[data-navigation-row="managed:${name}"]`).join(", "));
   await expect(geometry).toHaveCount(1);
   await expect(constraints).toHaveCount(constraintDeclarations.length);
 
@@ -626,12 +627,12 @@ test("canonical Jansen sample Polyline Finish publishes inferred constraints int
     await expect(additions).toBeVisible();
   };
   await openAddedSource(
-    additions.getByRole("button", { name: geometryName, exact: true }),
+    additions.getByRole("button", { name: authoredLabel(publishedSource, geometryName), exact: true }),
     new RegExp(`const ${geometryName} = \\$\\.geometry\\.polyline`, "u"),
   );
   for (const { name, kind } of constraintDeclarations) {
     await openAddedSource(
-      additions.getByRole("button", { name, exact: true }),
+      additions.getByRole("button", { name: authoredLabel(publishedSource, name), exact: true }),
       new RegExp(`const ${name} = \\$\\.constraint\\.${kind}`, "u"),
     );
   }
@@ -795,7 +796,7 @@ test("Cubic Bézier authoring publishes one named typed declaration", async ({ p
   await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
   await expect(
     page.getByRole("list", { name: "Canvas additions" })
-      .getByRole("button", { name: declarationMatch![1], exact: true }),
+      .getByRole("button", { name: authoredLabel(publishedSource, declarationMatch![1]), exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Accepted source", { exact: true })).toBeVisible();
   await expect(page.getByText(
@@ -840,7 +841,7 @@ export default sketch(($) => {
   const publishedSource = `${(await source.locator(".cm-line").allTextContents()).join("\n")}\n`;
   expect(publishedSource).toContain("$.constraint.parallel");
   await expectDraft(canvasFrame(page), false);
-  await expect(page.getByRole("list", { name: "Canvas additions" }).getByRole("button", { name: /^constraint\d+$/ })).toHaveCount(1);
+  await expect(page.getByRole("list", { name: "Canvas additions" }).getByRole("button", { name: "Parallel", exact: true })).toHaveCount(1);
   assertCleanRuntime();
 });
 
@@ -897,13 +898,13 @@ export default sketch(($) => {
   expect(originalPath).not.toBeNull();
 
   const additions = page.getByRole("list", { name: "Canvas additions" });
-  const row = additions.getByRole("button", { name: declarationName, exact: true });
+  const row = additions.getByRole("button", { name: filletLabel, exact: true });
   await expect(row).toHaveCount(1);
   await page.getByRole("button", { name: "Select", exact: true }).click();
   await row.click();
   await page.getByRole("tab", { name: "Inspector" }).click();
   const details = page.getByRole("tabpanel");
-  await expect(details.getByRole("heading", { name: declarationName, exact: true })).toBeVisible();
+  await expect(details.getByRole("heading", { name: filletLabel, exact: true })).toBeVisible();
   await expect(details.getByText("Modifiable in source", { exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "Parameters" }).click();
@@ -935,10 +936,10 @@ export default sketch(($) => {
   expect(sourceAfterRadiusEdit).toContain(`label: "${filletLabel}"`);
 
   await page.getByRole("tab", { name: "Inspector" }).click();
-  await expect(details.getByRole("heading", { name: declarationName, exact: true })).toBeVisible();
+  await expect(details.getByRole("heading", { name: filletLabel, exact: true })).toBeVisible();
   await expect(details.getByText("Modifiable in source", { exact: true })).toBeVisible();
   const actions = additions.getByRole("group", {
-    name: `${declarationName} actions`,
+    name: `${filletLabel} actions`,
     exact: true,
   });
   await expect(actions).toBeVisible();
@@ -1196,12 +1197,12 @@ test("normal pointer capture release commits Circle geometry and edits its compa
   )).toHaveCount(0);
 
   const additions = page.getByRole("list", { name: "Canvas additions" });
-  const compactCircle = additions.getByRole("button", { name: /^geometry\d+$/ });
+  const circleName = circleSource.match(/const (geometry\d+) = \$\.geometry\.centerRadiusCircle/u)?.[1];
+  expect(circleName).toBeDefined();
+  const compactCircle = additions.getByRole("button", { name: authoredLabel(circleSource, circleName!), exact: true });
   await expect(compactCircle).toHaveCount(1);
   await page.getByRole("button", { name: "Select", exact: true }).click();
   await compactCircle.click();
-  const circleName = (await compactCircle.textContent())?.trim() ?? null;
-  expect(circleName).not.toBeNull();
   await page.getByRole("tab", { name: "Parameters" }).click();
   const circleParameters = page.getByRole("tabpanel").locator(`input[aria-label^="${circleName} · "]:not([disabled])`);
   await expect(circleParameters).not.toHaveCount(0);
