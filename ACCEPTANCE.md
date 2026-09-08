@@ -5498,7 +5498,7 @@ The supervising user stated “sounds good yeah, close the milestone please” o
 [M96_CLOSURE.md](docs/M96_CLOSURE.md) records acceptance of the amended 12 mm layout and
 documented scope without asserting an unrecorded exhaustive human replay. M96 is closed.
 
-## M97 focused dimensions acceptance — pending
+## M97 focused dimensions — mechanically qualified, user acceptance pending
 
 [M97_GOALS.md](docs/M97_GOALS.md) requires a quiet default overview, at most six
 relevant canvas dimensions, complete contextual Inspector access, truthful native
@@ -5506,9 +5506,12 @@ and managed editing, and up to four pins persisted outside design history. Publi
 channel widths precede generated offsets. Hidden dimensions must neither paint nor
 intercept clicks; standalone scene defaults remain compatible.
 
-The native regression must reproduce M97-F001 and preserve label positions through
-zoom followed by a selection-only scene rebuild. Bounded automatic placement,
-manual positions, pan/Fit/resize, hover transit, groups, failed drafts, Undo/Redo
-and reload require owning-layer and relevant browser checks. Nomination requires
-the integrated clean-source gate and byte-verified preview. Supervising-user
-acceptance remains pending; M96 is the accepted product.
+The native regression reproduces M97-F001 and verifies retained placement; the
+browser retains all 82 manifold labels within 0.01 CSS pixels after zoom and a
+selection-only rebuild. Bounded placement, manual positions, pan/Fit/resize, hover
+transit, groups, failed drafts, Undo/Redo and reload pass their owning-layer and
+relevant browser checks. Clean-source run `20260908T133354-cff36f90` passes all
+243 obligations on `a39f35ade58c3d5a272899dfb4e616d6578a9d14`; the frozen preview
+at `http://100.94.63.83:18103/` passes exact served-byte and actual-WASM verification.
+[M97 qualification](docs/M97_QUALIFICATION.md) records the evidence and limits.
+Supervising-user acceptance remains pending; M96 is the accepted product.

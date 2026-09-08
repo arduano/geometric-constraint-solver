@@ -2,9 +2,11 @@
 
 # M97 implementation and development evidence
 
-M97 implements the approved [focused dimension contract](M97_GOALS.md). It remains
-in qualification; M96 is the accepted product. This record
-separates provisional development checks from the pending clean-source nomination.
+M97 implements the approved [focused dimension contract](M97_GOALS.md). Clean-source
+qualification and the verified preview pass; supervising-user acceptance remains
+pending and M96 is the accepted product. [Final qualification](M97_QUALIFICATION.md)
+records the candidate identity. This record retains the development checks and
+failed/interrupted attempts separately from that passing nomination.
 
 ## Native presentation and bridge
 
@@ -134,7 +136,9 @@ not a universal performance guarantee. Executed command:
 NAV_OUTPUT=target/m97/optimized-r5 NAV_MANIFEST=target/m97/dev-artifacts-r5/production.json node target/m97/run-navigation-probe.mjs
 ```
 
-Integrated clean-source qualification and the frozen preview remain pending.
+These development measurements precede the integrated nomination. The final
+frozen-artifact measurements and qualification are recorded in
+[M97_QUALIFICATION.md](M97_QUALIFICATION.md).
 
 ## Qualification harness corrections
 
@@ -229,3 +233,18 @@ without failures, skips or retries. Actual discovery through
 `release_browser.validate_discovery` matches all 48 cases, 16 sample workflows
 and one catalog check after all four reviewed project assignments. These focused
 results remain development evidence until replacement integrated qualification.
+
+## Final nomination
+
+Clean source `a39f35ade58c3d5a272899dfb4e616d6578a9d14` passes all 243 obligations
+in `20260908T133354-cff36f90` (38m19s, 243 fresh stages). All 271 golden cases,
+216 frontend tests and the complete 48-case browser inventory pass. There are no
+browser failures, skips or retries. The independent audit authenticates all
+9,881 referenced evidence files. The frozen 12-file production candidate passes
+HTTP bytes/MIME and actual-WASM readiness at `http://100.94.63.83:18103/`.
+
+The final navigation probe passes with exact persistence, zero browser errors and
+zero idle frames on all three samples. Manifold wheel/pan bridge medians improve
+to 7.5/9.4 ms; hover rises to 9.1 ms and dense wheel rises to 7.9 ms. These mixed
+results and the remaining expensive source-publication paths are disclosed in
+[final qualification](M97_QUALIFICATION.md). Acceptance remains pending; M97 is open.

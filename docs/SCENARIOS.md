@@ -7409,7 +7409,13 @@ product identity; scenario coverage does not imply an unrecorded exhaustive huma
   large underconstrained/curvature controls, mixed fixed/free preference motion and
   active-bound fail-closed behavior, and the 12 mm manifold 60→62 mm edit.
 
-## M97 focused dimension scenarios — implementation in progress
+## M97 focused dimension scenarios — qualified, awaiting acceptance
+
+Clean-source run `20260908T133354-cff36f90` passes all 243 obligations, including
+all three M97 browser workflows and the unchanged 271-case golden.
+[M97 qualification](M97_QUALIFICATION.md) records the mechanically verified scope
+and frozen preview at `http://100.94.63.83:18103/`. Supervising-user acceptance
+remains pending; these checks do not imply an unrecorded human replay.
 
 - Open the manifold in Focused mode: no unselected ordinary dimension labels.
   Select a channel group and show at most six callouts while the Inspector retains
@@ -7426,5 +7432,5 @@ product identity; scenario coverage does not imply an unrecorded exhaustive huma
   canvas. Labels retain their projected positions. Repeat with pan, Fit, centering
   and resize; only affected geometry edits invalidate automatic placements.
 - Check all eight native dimension families, reference notation, bounded automatic
-  displacement, collision suppression and restoration hysteresis. Capture simple,
-  manifold and dense presentations and compare navigation costs before nomination.
+  displacement, collision suppression and restoration hysteresis. Simple, manifold
+  and dense presentation captures and navigation comparisons accompany qualification.

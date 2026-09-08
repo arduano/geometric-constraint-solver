@@ -2865,7 +2865,7 @@ routes retain their narrow frame transport. Persisted formats and solver behavio
 [M95_GOALS.md](docs/M95_GOALS.md), [evidence](docs/M95_IMPLEMENTATION.md) and
 [closure](docs/M95_CLOSURE.md) record the accepted scope and product identity.
 
-## M97 dimension presentation — implementation in progress
+## M97 dimension presentation — qualified, awaiting acceptance
 
 `DimensionPresentationState` is a native presentation owner separate from design
 history and manual annotation placement. It resolves Focused, All and Hidden into
@@ -2883,4 +2883,7 @@ six-callout Focused limit keep ordinary navigation readable. The frontend owns
 idle-hover timing and Inspector controls while Rust owns visibility and hit tests.
 Public patch parameters retain their source values and existing edit transaction;
 generated dimensions do not acquire writable authority from their displayed value.
-[M97_GOALS.md](docs/M97_GOALS.md) owns the approved contract and pending qualification.
+[M97_GOALS.md](docs/M97_GOALS.md) owns the approved contract.
+[M97 qualification](docs/M97_QUALIFICATION.md) records the passing clean-source gate
+and verified preview at `http://100.94.63.83:18103/`. Supervising-user acceptance
+remains pending; no solver equations or branch semantics changed.

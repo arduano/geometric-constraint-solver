@@ -8417,15 +8417,23 @@ Closure prose preserves those qualified product bytes; no further M96 work is pe
 
 ## M97 — focused dimensions and stable annotation placement
 
-Status: **implemented; qualification in progress.** [M97_GOALS.md](docs/M97_GOALS.md)
+Status: **qualified; awaiting supervising-user acceptance.** [M97_GOALS.md](docs/M97_GOALS.md)
 owns the accepted plan; M96 remains the accepted product.
 
 - [x] Regress M97-F001 zoom-then-click layout jumps at the native owner.
 - [x] Implement shared native dimension metadata, relevance, bounded visibility and retained placement.
 - [x] Connect Focused / All / Hidden, contextual Inspector, source parameters and four persisted pins.
 - [x] Verify hover/label transit, native and managed edits, selection/groups, history and reload.
-- [ ] Qualify native/WASM/frontend/golden/browser behavior and navigation performance.
-- [ ] Freeze and present the qualified candidate for supervising-user acceptance.
+- [x] Qualify native/WASM/frontend/golden/browser behavior and navigation performance.
+- [x] Freeze and present the qualified candidate for supervising-user acceptance.
+- [ ] Obtain supervising-user acceptance and close M97.
+
+Source `a39f35ade58c3d5a272899dfb4e616d6578a9d14` passes all 243 integrated obligations
+in `20260908T133354-cff36f90` (38m18.9s), including the unchanged 271-case golden
+and complete browser inventory. The frozen preview at `http://100.94.63.83:18103/`
+passes exact served-byte and actual-WASM verification.
+[M97 qualification](docs/M97_QUALIFICATION.md) records evidence and remaining
+performance limits. M97 remains open for acceptance; M96 remains accepted.
 
 ## Explicit non-goals
 
