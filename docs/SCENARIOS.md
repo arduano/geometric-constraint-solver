@@ -7417,10 +7417,15 @@ all three M97 browser workflows and the unchanged 271-case golden.
 and frozen preview at `http://100.94.63.83:18103/`. Supervising-user acceptance
 remains pending; these checks do not imply an unrecorded human replay.
 
-- Open the manifold in Focused mode: no unselected ordinary dimension labels.
-  Select a channel group and show at most six callouts while the Inspector retains
-  all related measurements and the public 12 mm width. Generated offsets stay
-  under a collapsed disclosure.
+- Open the manifold in Focused mode: curated envelope/reservoir and representative
+  bore/fastener dimensions remain eligible without selection. Public 12 mm channel
+  and 2.4 mm groove widths are available in the default Inspector. Select a channel
+  group to reveal up to six contextual callouts alongside readable priorities.
+  Generated offsets stay under a collapsed disclosure.
+- Open Gridfinity in Focused mode: all 20 authored measurements are default
+  priorities, including reference and construction projection dimensions.
+  Collision handling may omit canvas labels; all priority rows remain in the
+  Inspector and can be explicitly inspected. Hidden suppresses all canvas labels.
 - Pause over geometry for 250 ms, move to its preview label and select it. Navigation
   and drawing suppress idle previews. Hidden callouts never win paint or picking.
 - Pin measurements, clear selection, reload and remove pins. Four is the limit;

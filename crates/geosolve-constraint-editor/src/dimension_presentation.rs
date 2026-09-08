@@ -24,6 +24,9 @@ pub struct DimensionPresentationContext {
     pub selection: Vec<SelectionItem>,
     pub hovered: Option<SelectionItem>,
     pub generated: BTreeSet<SelectionItem>,
+    /// Design-intent measurements eligible for unselected Focused presentation.
+    /// This affects annotation visibility only, never solver priority.
+    pub default_priority: BTreeSet<SelectionItem>,
     pub navigation_active: bool,
     /// A dimension currently being authored or edited, including in Hidden mode.
     pub active: Option<SelectionItem>,
@@ -45,6 +48,7 @@ pub struct SceneDimensionEntry {
     pub suppressed: bool,
     pub related: bool,
     pub generated: bool,
+    pub default_priority: bool,
     pub visible: bool,
     pub pinned: bool,
     pub focused: bool,
@@ -103,6 +107,7 @@ pub struct DimensionPresentationState {
     interest: Option<DimensionPresentationInterest>,
     last_viewport: Option<Viewport>,
     navigation_seen: bool,
+    reconsider_hidden: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -133,8 +138,17 @@ struct RetainedDimension {
 }
 
 impl DimensionPresentationState {
+    /// Ordinary Focused candidate budget. Default priorities remain eligible
+    /// beyond this budget; every candidate still needs a readable layout slot.
     pub const MAX_VISIBLE: usize = 6;
     pub const MAX_PINS: usize = 4;
+
+    /// Requests one bounded placement search for hidden dimensions on the next
+    /// idle application, for example after an explicit Fit action. Visible
+    /// placements remain retained; ordinary camera navigation never requests this.
+    pub fn reconsider_hidden_dimensions(&mut self) {
+        self.reconsider_hidden = true;
+    }
 
     /// Resolves the complete dimension policy into the shared scene used by paint
     /// and picking. Accepted geometry, source and design history are unchanged.
@@ -228,6 +242,7 @@ impl DimensionPresentationState {
                 .and_then(|annotation| annotation.visible_text.clone());
             entry.related = related(entry, &expanded_selection);
             entry.generated = context.generated.contains(&entry.key.item);
+            entry.default_priority = context.default_priority.contains(&entry.key.item);
             entry.pinned = self.pins.contains(&entry.key);
             entry.focused = self.focus == Some(entry.key);
         }
@@ -243,8 +258,14 @@ impl DimensionPresentationState {
             || self
                 .last_viewport
                 .is_some_and(|viewport| viewport != scene.viewport);
+        let reconsider_hidden =
+            !context.navigation_active && std::mem::take(&mut self.reconsider_hidden);
+        if reconsider_hidden {
+            self.retained.retain(|_, retained| retained.visible);
+        }
         let may_restore = changed_geometry
             || changed_visibility
+            || reconsider_hidden
             || (!navigation_change && self.interest.as_ref() != Some(&interest));
         self.navigation_seen = context.navigation_active;
         self.last_viewport = Some(scene.viewport);
@@ -269,6 +290,7 @@ impl DimensionPresentationState {
                                 || entry.focused
                                 || entry.pinned
                                 || entry.related
+                                || entry.default_priority
                                 || hover_key == Some(entry.key)
                         }
                     }
@@ -281,33 +303,41 @@ impl DimensionPresentationState {
                     1
                 } else if hover_key == Some(entry.key) {
                     2
-                } else if entry.generated {
-                    4
-                } else {
+                } else if entry.related && !entry.generated {
                     3
+                } else if entry.related {
+                    4
+                } else if entry.default_priority || !entry.generated {
+                    5
+                } else {
+                    6
                 };
                 (rank, entry.key.source)
             });
+            let mut ordinary = 0;
             self.candidates = ranked
                 .into_iter()
-                .take(if self.mode == DimensionDisplayMode::All {
-                    usize::MAX
-                } else {
-                    Self::MAX_VISIBLE
+                .filter(|entry| {
+                    if self.mode == DimensionDisplayMode::All || entry.default_priority {
+                        return true;
+                    }
+                    ordinary += 1;
+                    ordinary <= Self::MAX_VISIBLE
                 })
                 .map(|entry| entry.key)
                 .collect();
         }
         self.candidates.retain(|key| valid.contains(key));
         if context.navigation_active && self.mode == DimensionDisplayMode::Focused {
-            // Navigation retains selected and pinned callouts, but idle hover
-            // previews end as soon as a camera gesture takes ownership.
+            // Navigation retains selected, pinned and default-priority callouts.
+            // Idle hover previews end as soon as a camera gesture takes ownership.
             self.candidates.retain(|key| {
                 entries.iter().any(|entry| {
                     entry.key == *key
                         && (entry.related
                             || entry.pinned
                             || entry.focused
+                            || entry.default_priority
                             || context.active == Some(key.item))
                 })
             });
@@ -324,7 +354,16 @@ impl DimensionPresentationState {
             .collect();
         // Manual positions reserve space first, independent of source order.
         let mut candidates = self.candidates.clone();
-        candidates.sort_by_key(|key| manual_layout.get(*key).is_none());
+        candidates.sort_by_key(|key| {
+            (
+                manual_layout.get(*key).is_none(),
+                reconsider_hidden
+                    && !self
+                        .retained
+                        .get(key)
+                        .is_some_and(|retained| retained.visible),
+            )
+        });
         let mut visible = BTreeSet::new();
         for key in candidates {
             let Some(base) = raw.get(&key).cloned() else {
@@ -551,6 +590,7 @@ fn dimension_entries(scene: &EditorScene) -> Vec<SceneDimensionEntry> {
                 suppressed: dimension.suppressed,
                 related: false,
                 generated: false,
+                default_priority: false,
                 visible: false,
                 pinned: false,
                 focused: false,

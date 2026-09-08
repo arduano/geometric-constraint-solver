@@ -1233,6 +1233,7 @@ impl WorkbenchBridge {
         // the user's center and CSS-pixel zoom level.
         if !self.host_size_received {
             let _ = fit_projectional_camera_to_authority(&mut self.camera, &self.authority);
+            self.reconsider_hidden_dimensions();
         }
         self.host_size = screen_size;
         self.host_size_received = true;
@@ -2318,6 +2319,7 @@ impl WorkbenchBridge {
     fn fit_canvas(&mut self) -> Result<(), String> {
         self.cancel_active_gesture(None)?;
         let _ = fit_projectional_camera_to_authority(&mut self.camera, &self.authority);
+        self.reconsider_hidden_dimensions();
         self.retained_scene = None;
         self.notice = "Canvas fitted to accepted geometry".into();
         Ok(())

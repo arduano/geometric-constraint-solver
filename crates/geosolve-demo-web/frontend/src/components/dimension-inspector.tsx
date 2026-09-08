@@ -22,8 +22,8 @@ export function DimensionInspector({ dimensions, actions, onParameterEdit, editi
   const mode = dimensions?.mode ?? "focused";
   const pinCount = dimensions?.pinCount ?? 0;
   const visible = entries.filter((entry) => entry.visible).length;
-  const primary = entries.filter((entry) => !entry.generated);
-  const generated = entries.filter((entry) => entry.generated);
+  const primary = entries.filter((entry) => !entry.generated || entry.defaultPriority);
+  const generated = entries.filter((entry) => entry.generated && !entry.defaultPriority);
   const hasGeneratedPins = generated.some((entry) => entry.pinned);
   const [generatedOpen, setGeneratedOpen] = useState(hasGeneratedPins);
   // Keep pins reachable on restoration without moving their DOM rows, focus or
@@ -32,9 +32,9 @@ export function DimensionInspector({ dimensions, actions, onParameterEdit, editi
   const renderEntries = (rows: DimensionEntry[]) => <ul className="grid min-w-0 gap-2">{rows.map((entry) => <DimensionRow key={entry.rowKey ?? entry.id} entry={entry} actions={actions} pinCount={pinCount} editingBlocked={editingBlocked ?? inspectionBlocked} inspectionBlocked={inspectionBlocked} />)}</ul>;
   return <section aria-label="Dimensions" className="mt-5 min-w-0 border-t border-border pt-3">
     <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold text-foreground">Dimensions</h3><span className="text-[10px] tabular-nums text-muted">{pinCount}/4 pinned</span></div>
-    <p className="mt-1 text-[11px] leading-relaxed text-muted">{mode === "hidden" ? "Canvas dimensions are hidden. Choose a measurement to inspect it." : entries.length ? `${visible} of ${entries.length} related measurements shown on canvas.` : "Select geometry or pause over it to see measurements. Pin a dimension to keep it in view."}</p>
+    <p className="mt-1 text-[11px] leading-relaxed text-muted">{mode === "hidden" ? "Canvas dimensions are hidden. Choose a measurement to inspect it." : entries.length ? `${visible} of ${entries.length} measurements shown on canvas.` : "Select geometry or pause over it to see measurements. Pin a dimension to keep it in view."}</p>
     {pinCount > 0 && <button type="button" onClick={actions.onClearPins} disabled={Boolean(inspectionBlocked)} title={inspectionBlocked} className="mt-1 rounded text-[11px] text-accent outline-none hover:underline focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40">Clear pins</button>}
-    {parameters.length > 0 && <div className="mt-3 grid gap-2" role="group" aria-label="Dimensional parameters">{parameters.map((parameter) => <div key={parameter.id} className="rounded border border-border bg-raised/40 p-2"><p className="mb-1.5 truncate text-xs font-medium text-foreground" title={parameter.label}>{parameter.label}</p><DimensionValue label={parameter.label} value={parameter.value} unit={parameter.unit} editable={parameter.editable} blockedReason={editingBlocked ?? inspectionBlocked} onEdit={(value) => onParameterEdit(parameter.id, value)} /></div>)}</div>}
+    {parameters.length > 0 && <div className="mt-3 grid gap-2" role="group" aria-label="Dimensional parameters">{parameters.map((parameter) => <div key={parameter.id} className="rounded border border-border bg-raised/40 p-2"><p className="mb-1.5 truncate text-xs font-medium text-foreground" title={parameter.label}>{parameter.label}</p>{parameter.defaultPriority && <p className="mb-1.5 text-[10px] text-muted">Key dimension</p>}<DimensionValue label={parameter.label} value={parameter.value} unit={parameter.unit} editable={parameter.editable} blockedReason={editingBlocked ?? inspectionBlocked} onEdit={(value) => onParameterEdit(parameter.id, value)} /></div>)}</div>}
     {primary.length > 0 && <div className="mt-3">{renderEntries(primary)}</div>}
     {generated.length > 0 && <details className="mt-3" open={generatedOpen} onToggle={(event) => setGeneratedOpen(event.currentTarget.open)}><summary className="cursor-pointer rounded py-1 text-[11px] text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent">Generated dimensions <span className="tabular-nums">({generated.length})</span></summary><div className="mt-2">{renderEntries(generated)}</div></details>}
   </section>;
@@ -46,7 +46,7 @@ function DimensionRow({ entry, actions, pinCount, editingBlocked, inspectionBloc
     <div className="flex min-w-0 items-start gap-1">
       <button type="button" aria-label={`Inspect ${entry.label}`} aria-pressed={entry.focused} disabled={Boolean(inspectionBlocked)} title={inspectionBlocked ?? `${entry.label} · ${entry.kind}${entry.reference ? " · Reference" : ""}`} onClick={() => actions.onFocus(entry.id)} className="min-w-0 flex-1 rounded text-left outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40">
         <span className="block truncate text-xs font-medium text-foreground hover:text-accent">{entry.label}</span>
-        <span className="mt-0.5 block text-[10px] text-muted">{entry.reference ? "Reference" : entry.editable ? "Editable" : "Read only"} · {entry.visible ? "On canvas" : "In Inspector"}</span>
+        <span className="mt-0.5 block text-[10px] text-muted">{entry.defaultPriority && "Key dimension · "}{entry.reference ? "Reference" : entry.editable ? "Editable" : "Read only"} · {entry.visible ? "On canvas" : "In Inspector"}</span>
       </button>
       <button type="button" aria-label={`${entry.pinned ? "Unpin" : "Pin"} ${entry.label}`} aria-pressed={entry.pinned} disabled={Boolean(pinBlocked)} title={pinBlocked ?? (entry.pinned ? "Remove this pin" : "Keep this dimension visible when selection changes")} onClick={() => actions.onPin(entry.id, !entry.pinned)} className={`grid size-6 shrink-0 place-items-center rounded outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-30 ${entry.pinned ? "text-accent" : "text-muted"}`}>{entry.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}</button>
     </div>

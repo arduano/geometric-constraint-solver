@@ -2879,7 +2879,14 @@ The workbench supplies accepted ownership and source editing authority, defaults
 to Focused and persists display mode and at most four exact annotation identities.
 Automatic layout is transient retained state. Camera and selection changes reuse
 slots; geometry changes invalidate affected anchors. Bounded placement and a
-six-callout Focused limit keep ordinary navigation readable. The frontend owns
+six-callout contextual Focused limit keep ordinary navigation readable. The
+default-priority amendment adds catalog-owned declaration and parameter selectors:
+all Gridfinity measurements and curated design sizes in other samples stay
+eligible beyond that contextual limit, subject to the same collision policy.
+Accepted provenance resolves selectors; defaults do not consume pins or enter
+design history. New/imported sketches retain up to six authored defaults.
+Explicit Fit and first host measurement retry hidden slots after reserving
+visible placements; ordinary navigation never requests that reconsideration. The frontend owns
 idle-hover timing and Inspector controls while Rust owns visibility and hit tests.
 Public patch parameters retain their source values and existing edit transaction;
 generated dimensions do not acquire writable authority from their displayed value.

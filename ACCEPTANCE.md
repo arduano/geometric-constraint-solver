@@ -5500,8 +5500,9 @@ documented scope without asserting an unrecorded exhaustive human replay. M96 is
 
 ## M97 focused dimensions — mechanically qualified, user acceptance pending
 
-[M97_GOALS.md](docs/M97_GOALS.md) requires a quiet default overview, at most six
-relevant canvas dimensions, complete contextual Inspector access, truthful native
+[M97_GOALS.md](docs/M97_GOALS.md) requires a readable default overview, at most six
+contextual canvas dimensions plus curated default priorities, complete Inspector
+access to those priorities and related measurements, truthful native
 and managed editing, and up to four pins persisted outside design history. Public
 channel widths precede generated offsets. Hidden dimensions must neither paint nor
 intercept clicks; standalone scene defaults remain compatible.
@@ -5515,3 +5516,9 @@ relevant browser checks. Clean-source run `20260908T133354-cff36f90` passes all
 at `http://100.94.63.83:18103/` passes exact served-byte and actual-WASM verification.
 [M97 qualification](docs/M97_QUALIFICATION.md) records the evidence and limits.
 Supervising-user acceptance remains pending; M96 is the accepted product.
+
+The 2026-09-08 default-priority amendment must preserve all 20 Gridfinity
+measurement rows, keep curated manifold dimensions eligible without selection,
+show truthful 12 mm/2.4 mm public widths in the default Inspector, and retain
+Hidden, pins, selection access and stable navigation. Replacement qualification
+is pending.

@@ -20,6 +20,7 @@ const explorer = (page: Page) => page.getByRole("complementary", { name: "Explor
 const dimensionTexts = async (page: Page) => (await presentedFrame(canvasFrame(page))).items.filter(
   (item) => item.kind === "text" && item.id.startsWith("dimension:"),
 );
+const dimensionIds = async (page: Page) => (await dimensionTexts(page)).map((item) => item.id).sort();
 const geometry = async (page: Page) => (await presentedFrame(canvasFrame(page))).items.filter(
   (item) => ["geometry", "computed"].includes(item.layer),
 ).map((item) => ({ id: item.id, geometry: itemGeometry(item) }));
@@ -35,17 +36,25 @@ async function emptyClick(page: Page) {
 test("M97 manifold focus limits canvas dimensions and preserves pinned measurements on reload", async ({ page }, info) => {
   await openManifold(page);
   await expect(page.getByRole("combobox", { name: "Dimension display" })).toHaveValue("focused");
-  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(0);
+  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBeGreaterThan(0);
+  expect((await dimensionTexts(page)).length).toBeLessThanOrEqual(6);
+  await expect(inspector(page).getByRole("listitem")).toHaveCount(6);
+  await expect(inspector(page).getByRole("listitem").filter({ hasText: "Key dimension" })).toHaveCount(6);
+  await expect(inspector(page).getByRole("textbox", { name: "plateWidth value", exact: true })).toHaveValue("240");
+  await expect(inspector(page).getByRole("textbox", { name: "reservoirWidth value", exact: true })).toHaveValue("60");
+  await expect(inspector(page).getByRole("textbox", { name: "channelWidth value", exact: true })).toHaveValue("12");
+  await expect(inspector(page).getByRole("textbox", { name: "commonSealGroove · width value", exact: true })).toHaveValue("2.4");
   await page.screenshot({ path: info.outputPath("focused-overview.png") });
   const source = await acceptedSource(page);
   const baseline = await geometry(page);
   await explorer(page).getByRole("button", { name: "Upper channel circuit", exact: true }).click();
   await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBeGreaterThan(0);
-  expect((await dimensionTexts(page)).length).toBeLessThanOrEqual(6);
+  expect((await dimensionTexts(page)).length).toBeLessThanOrEqual(12);
   await expect(inspector(page).getByRole("group", { name: "Dimensional parameters" })).toBeVisible();
   await expect(inspector(page).getByText(/Generated dimensions/)).toBeVisible();
   await page.screenshot({ path: info.outputPath("focused-channel.png") });
-  const pin = inspector(page).getByRole("listitem").filter({ hasText: "On canvas" }).getByRole("button", { name: /^Pin / }).first();
+  await inspector(page).getByRole("button", { name: "Inspect upperCenterLength1", exact: true }).click();
+  const pin = inspector(page).getByRole("listitem").filter({ hasText: "On canvas", hasNotText: "Key dimension" }).getByRole("button", { name: /^Pin / }).first();
   await expect(pin).toBeEnabled();
   const label = (await pin.getAttribute("aria-label"))!.slice(4);
   await pin.click();
@@ -61,29 +70,43 @@ test("M97 manifold focus limits canvas dimensions and preserves pinned measureme
   await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBeGreaterThan(0);
   await page.screenshot({ path: info.outputPath("focused-pin.png") });
   await inspector(page).getByRole("button", { name: "Clear pins", exact: true }).click();
-  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(0);
-  const frame = await presentedFrame(canvasFrame(page));
-  const bore = frame.items.find((item) => item.layer === "geometry" && item.kind === "polyline"
+  await expect(inspector(page).getByText("0/4 pinned")).toBeVisible();
+  await expect(inspector(page).getByRole("listitem")).toHaveCount(6);
+  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBeGreaterThan(0);
+  expect((await dimensionTexts(page)).length).toBeLessThanOrEqual(6);
+  // Resolve a known nonpriority bore through its ordinary Explorer selection.
+  // The selected native circle identifies the exact geometry for the hover probe.
+  await explorer(page).getByRole("button", { name: "middleOutlet", exact: true }).click();
+  const selected = await presentedFrame(canvasFrame(page));
+  const bores = selected.items.filter((item) => item.layer === "geometry" && item.kind === "polyline"
+    && item.style.stroke === "#efb856" && item.style.shadow !== null
     && item.points.length > 12 && Math.hypot(item.points[0][0] - item.points.at(-1)![0], item.points[0][1] - item.points.at(-1)![1]) < 0.01);
-  if (!bore || bore.kind !== "polyline") throw Error("Expected an accepted circular bore");
+  expect(bores).toHaveLength(1);
+  await emptyClick(page);
+  const overview = await dimensionIds(page);
+  const bore = (await presentedFrame(canvasFrame(page))).items.find((item) => item.id === bores[0].id);
+  if (!bore || bore.kind !== "polyline") throw Error("Expected the accepted middle outlet bore");
   const box = (await canvasFrame(page).boundingBox())!;
   const point = bore.points[Math.floor(bore.points.length / 8)];
   await page.mouse.move(box.x + point[0], box.y + point[1]);
-  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(1);
+  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(overview.length + 1);
+  expect(await dimensionIds(page)).toEqual(expect.arrayContaining(overview));
   await page.mouse.down({ button: "middle" });
-  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(0);
+  await expect.poll(() => dimensionIds(page)).toEqual(overview);
   await page.mouse.up({ button: "middle" });
   await page.mouse.move(box.x + point[0] + 0.2, box.y + point[1]);
-  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(1);
-  const preview = (await dimensionTexts(page))[0];
-  if (preview.kind !== "text") throw Error("Expected hovered dimension label");
+  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(overview.length + 1);
+  const preview = (await dimensionTexts(page)).find((item) => !overview.includes(item.id));
+  if (!preview || preview.kind !== "text") throw Error("Expected the nonpriority hovered dimension label");
   await page.mouse.move(box.x + preview.position[0], box.y + preview.position[1], { steps: 6 });
   await page.waitForTimeout(300);
   expect((await dimensionTexts(page)).map((item) => item.id)).toContain(preview.id);
   await page.mouse.click(box.x + preview.position[0], box.y + preview.position[1]);
   await expect.poll(() => inspector(page).getByRole("button", { name: /^Inspect / }).count()).toBeGreaterThan(0);
   await emptyClick(page);
-  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(0);
+  await expect.poll(() => dimensionIds(page)).toEqual(overview);
+  expect(await acceptedSource(page)).toBe(source);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
 });
 
 test("M97 dimension positions survive zoom followed by a selection-only scene rebuild", async ({ page }, info) => {
@@ -109,6 +132,45 @@ test("M97 dimension positions survive zoom followed by a selection-only scene re
   await page.getByRole("combobox", { name: "Dimension display" }).selectOption("hidden");
   await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(0);
   await page.screenshot({ path: info.outputPath("hidden-overview.png") });
+
+  await page.getByRole("button", { name: "File menu" }).click();
+  await page.getByRole("menuitem", { name: /Open/ }).click();
+  await page.getByPlaceholder(/Search \d+ samples/).fill("gridfinity");
+  await page.getByRole("button", { name: "Gridfinity plan and 3U section", exact: false }).click();
+  await page.getByRole("button", { name: "design", exact: true }).click();
+  await page.getByRole("button", { name: "Fit sketch" }).click();
+  await page.getByRole("combobox", { name: "Dimension display" }).selectOption("focused");
+  await expect(inspector(page).getByRole("listitem")).toHaveCount(20);
+  await expect(inspector(page).getByRole("listitem").filter({ hasText: "Key dimension" })).toHaveCount(20);
+  await expect.poll(() => acceptedSource(page)).toContain("const baseBottomWidth");
+  const gridfinitySource = await acceptedSource(page);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+  // The complete standard-dimension set is eligible; it is never reduced to
+  // the ordinary six related callouts. Zoom may omit labels outside the view.
+  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBeGreaterThan(6);
+  await page.screenshot({ path: info.outputPath("gridfinity-key-overview.png") });
+  const gridBox = (await canvasFrame(page).boundingBox())!;
+  await page.mouse.move(gridBox.x + gridBox.width / 2, gridBox.y + gridBox.height / 2);
+  for (let i = 0; i < 4; i++) { await page.mouse.wheel(0, -90); await page.waitForTimeout(150); }
+  await page.mouse.move(gridBox.x - 5, gridBox.y - 5);
+  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBeGreaterThan(0);
+  expect((await dimensionTexts(page)).length).toBeLessThanOrEqual(20);
+  const gridfinityOverview = await dimensionTexts(page);
+  await page.screenshot({ path: info.outputPath("gridfinity-key-dimensions.png") });
+  await page.getByRole("combobox", { name: "Dimension display" }).selectOption("hidden");
+  await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBe(0);
+  await expect(inspector(page).getByRole("listitem")).toHaveCount(20);
+  await page.getByRole("combobox", { name: "Dimension display" }).selectOption("focused");
+  await expect.poll(() => dimensionIds(page)).toEqual(expect.arrayContaining(gridfinityOverview.map((item) => item.id)));
+  const restored = await dimensionTexts(page);
+  expect(restored.length).toBeLessThanOrEqual(20);
+  for (const before of gridfinityOverview) {
+    const after = restored.find((item) => item.id === before.id);
+    if (before.kind !== "text" || after?.kind !== "text") throw Error("Expected retained priority text");
+    expect(Math.hypot(after.position[0] - before.position[0], after.position[1] - before.position[1])).toBeLessThan(0.01);
+  }
+  expect(await acceptedSource(page)).toBe(gridfinitySource);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
 });
 
 test("M97 contextual dimension edits retain source authority and Undo Redo reload", async ({ page }, info) => {

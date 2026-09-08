@@ -16,6 +16,7 @@ describe("focused dimension inspection", () => {
     const view = render(<CanvasControls gridVisible onCommand={onCommand} onDimensionMode={onDimensionMode} />);
     const display = screen.getByRole("combobox", { name: "Dimension display" });
     expect(display).toHaveValue("focused");
+    expect(display).toHaveAttribute("title", expect.stringContaining("Focused shows key dimensions"));
     await user.selectOptions(display, "all");
     expect(onDimensionMode).toHaveBeenLastCalledWith("all");
     view.rerender(<CanvasControls gridVisible dimensionMode="all" onCommand={onCommand} onDimensionMode={onDimensionMode} />);
@@ -28,7 +29,7 @@ describe("focused dimension inspection", () => {
   it("puts public parameters first, keeps generated rows collapsed and exposes every contextual measurement", async () => {
     const user = userEvent.setup(); const handlers = actions();
     render(<DimensionInspector dimensions={state()} actions={handlers} onParameterEdit={vi.fn()} />);
-    expect(screen.getByText("1 of 3 related measurements shown on canvas.")).toBeVisible();
+    expect(screen.getByText("1 of 3 measurements shown on canvas.")).toBeVisible();
     const parameter = screen.getByRole("textbox", { name: "Channel width value" });
     const width = screen.getByRole("button", { name: "Inspect Width" });
     expect(parameter.compareDocumentPosition(width) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -39,6 +40,27 @@ describe("focused dimension inspection", () => {
     await user.click(generated);
     expect(handlers.onFocus).toHaveBeenCalledWith("Half width");
     expect(generated).toHaveFocus();
+  });
+
+  it("keeps key measurements and public parameters accessible when their canvas labels are suppressed", () => {
+    const handlers = actions();
+    render(<DimensionInspector dimensions={state({
+      entries: [dimension("Width", { defaultPriority: true }), dimension("Patch pitch", { defaultPriority: true, generated: true }), dimension("Half width", { generated: true })],
+      parameters: [{ id: "channel-width", label: "Channel width", value: "12", unit: "mm", editable: true, defaultPriority: true }],
+    })} actions={handlers} onParameterEdit={vi.fn()} />);
+    expect(screen.getByText("0 of 3 measurements shown on canvas.")).toBeVisible();
+    expect(screen.getByText("0/4 pinned")).toBeVisible();
+    const width = screen.getByRole("button", { name: "Inspect Width" });
+    const pitch = screen.getByRole("button", { name: "Inspect Patch pitch" });
+    expect(width).toBeVisible();
+    expect(width).toHaveTextContent("Key dimension · Editable · In Inspector");
+    expect(pitch).toBeVisible();
+    expect(pitch).toHaveTextContent("Key dimension");
+    expect(screen.getByRole("button", { name: "Inspect Half width" })).not.toBeVisible();
+    const parameters = within(screen.getByRole("group", { name: "Dimensional parameters" }));
+    expect(parameters.getByText("Key dimension")).toBeVisible();
+    expect(parameters.getByRole("textbox", { name: "Channel width value" })).toHaveValue("12");
+    expect(handlers.onPin).not.toHaveBeenCalled();
   });
 
   it("edits accepted values once per submission and cancels drafts without changing focus", async () => {

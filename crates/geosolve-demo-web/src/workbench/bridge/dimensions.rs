@@ -80,6 +80,7 @@ struct DimensionEntry {
     kind: &'static str,
     reference: bool,
     generated: bool,
+    default_priority: bool,
     pinned: bool,
     visible: bool,
     focused: bool,
@@ -89,6 +90,7 @@ struct DimensionEntry {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DimensionalParameter {
     id: String,
     label: String,
@@ -96,6 +98,7 @@ struct DimensionalParameter {
     #[serde(skip_serializing_if = "Option::is_none")]
     unit: Option<String>,
     editable: bool,
+    default_priority: bool,
 }
 
 #[derive(Clone)]
@@ -116,6 +119,7 @@ struct DimensionMetadata {
     label: String,
     edit: DimensionEdit,
     generated: bool,
+    default_priority: bool,
 }
 
 #[derive(Default)]
@@ -123,6 +127,7 @@ struct ManagedDimensionProvenance {
     generated: BTreeSet<NodeId>,
     labels: BTreeMap<NodeId, String>,
     patch_controls: BTreeSet<String>,
+    priority: BTreeSet<NodeId>,
 }
 
 #[derive(Default)]
@@ -220,6 +225,13 @@ impl WorkbenchBridge {
                 .iter()
                 .filter_map(|(item, metadata)| metadata.generated.then_some(*item))
                 .collect(),
+            default_priority: self
+                .dimensions
+                .cache
+                .dimensions
+                .iter()
+                .filter_map(|(item, metadata)| metadata.default_priority.then_some(*item))
+                .collect(),
             navigation_active: self.dimensions.navigation_active,
             active,
         };
@@ -248,7 +260,7 @@ impl WorkbenchBridge {
             .cache
             .parameters
             .iter()
-            .filter(|(_, owners)| !owners.is_disjoint(&selected_owners))
+            .filter(|(row, owners)| row.default_priority || !owners.is_disjoint(&selected_owners))
             .map(|(row, _)| row.clone())
             .collect();
         self.dimensions.entries = entries
@@ -296,6 +308,7 @@ impl WorkbenchBridge {
                     kind: dimension_kind(entry.kind),
                     reference: entry.reference,
                     generated: entry.generated,
+                    default_priority: entry.default_priority,
                     pinned: entry.pinned,
                     visible: entry.visible,
                     focused: entry.focused,
@@ -321,7 +334,11 @@ impl WorkbenchBridge {
                 .entries
                 .iter()
                 .filter(|(entry, _)| {
-                    entry.related || entry.pinned || entry.focused || entry.visible
+                    entry.default_priority
+                        || entry.related
+                        || entry.pinned
+                        || entry.focused
+                        || entry.visible
                 })
                 .map(|(_, row)| row.clone())
                 .collect(),
@@ -380,6 +397,11 @@ impl WorkbenchBridge {
 
     pub(super) fn clear_dimension_focus(&mut self) {
         self.dimensions.native.focus = None;
+    }
+
+    pub(super) fn reconsider_hidden_dimensions(&mut self) {
+        self.set_dimension_navigation(false);
+        self.dimensions.native.reconsider_hidden_dimensions();
     }
 
     pub(super) fn set_dimension_navigation(&mut self, active: bool) {
@@ -737,8 +759,27 @@ impl WorkbenchBridge {
                         .unwrap_or_else(|| dimension.label.clone()),
                     edit,
                     generated: owner.is_some_and(|owner| managed.generated.contains(&owner)),
+                    default_priority: owner.is_some_and(|owner| managed.priority.contains(&owner)),
                 },
             );
+        }
+        // A new or imported sketch has no catalog curation. Keep a small set of
+        // its directly authored measurements visible by default; never promote
+        // generated patch implementation details through this fallback.
+        if self
+            .code_project
+            .as_ref()
+            .and_then(CodeProjectWorkbench::sample_key)
+            .is_none()
+        {
+            for metadata in cache
+                .dimensions
+                .values_mut()
+                .filter(|metadata| !metadata.generated)
+                .take(DimensionPresentationState::MAX_VISIBLE)
+            {
+                metadata.default_priority = true;
+            }
         }
         distinguish_dimension_names(&mut cache.dimensions);
         let authored_controls: BTreeSet<_> = cache
@@ -780,11 +821,23 @@ impl WorkbenchBridge {
             .collect();
         let panel = code.declaration_panel_projection(self.editor());
         let declarations = flattened_declarations(&panel.declarations);
+        let priorities = code
+            .sample_key()
+            .and_then(geosolve_sketch_code::bundled_sample)
+            .map(|sample| &sample.dimension_presentation);
         let mut managed = ManagedDimensionProvenance::default();
         for declaration in &declarations {
             if let Some(owned) = nodes.get(declaration.id.as_str()) {
                 for node in owned {
                     managed.labels.insert(*node, declaration.label.clone());
+                }
+                if declaration.kind.starts_with("dimension.")
+                    && priorities.is_some_and(|policy| {
+                        policy.all_authored
+                            || policy.dimensions.contains(&declaration.symbol.0.as_str())
+                    })
+                {
+                    managed.priority.extend(owned);
                 }
             }
             for member in &declaration.generated {
@@ -850,6 +903,13 @@ impl WorkbenchBridge {
             if owners.is_empty() {
                 continue;
             }
+            let default_priority = priorities.is_some_and(|policy| policy.parameters.iter().any(|parameter| {
+                parameter.declaration == control.source.declaration.0
+                    && parameter.path.len() == control.source.path.0.len()
+                    && parameter.path.iter().zip(&control.source.path.0).all(|(field, segment)| {
+                        matches!(segment, geosolve_sketch_code::ManagedPathSegment::Field(actual) if field == actual)
+                    })
+            }));
             cache.parameters.push((
                 DimensionalParameter {
                     id: control.id.0.clone(),
@@ -858,6 +918,7 @@ impl WorkbenchBridge {
                     unit,
                     editable: panel.blocked_reason.is_none()
                         && matches!(control.access, ManagedControlAccess::Editable { .. }),
+                    default_priority,
                 },
                 owners,
             ));

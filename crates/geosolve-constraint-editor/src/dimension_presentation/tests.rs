@@ -9,10 +9,17 @@ use geosolve_sketch::{
 };
 
 fn fixture(count: usize) -> (RetainedSketchDocumentSession, Vec<SelectionItem>) {
+    fixture_with_spacing(count, 1.25)
+}
+
+fn fixture_with_spacing(
+    count: usize,
+    spacing: f64,
+) -> (RetainedSketchDocumentSession, Vec<SelectionItem>) {
     let mut document = SketchDocument::new(100.0).expect("document");
     let mut curves = Vec::new();
     for index in 0..count {
-        let y = f64::from(u32::try_from(index).expect("small fixture")) * 1.25;
+        let y = f64::from(u32::try_from(index).expect("small fixture")) * spacing;
         let first = document
             .add_point(format!("a{index}"), [-10.0, y])
             .expect("point");
@@ -308,6 +315,352 @@ fn m97_pin_focus_and_active_hidden_dimension_have_stable_exact_identities() {
     );
     assert_eq!(active.iter().filter(|row| row.visible).count(), 1);
     assert!(active[6].visible);
+}
+
+#[test]
+fn m97_default_priorities_exceed_ordinary_cap_without_displacing_inspection_or_pins() {
+    let (session, curves) = fixture_with_spacing(14, 6.0);
+    let mut scene = scene(&session, 8.0);
+    scene
+        .reproject_viewport(Viewport::new([1000.0, 1000.0], [0.0, 39.0], 8.0).unwrap())
+        .unwrap();
+    let accepted_before = scene.accepted_document.clone();
+    let design_before = session.design_document().clone();
+    let identity_before = (scene.accepted_revision, scene.design_identity);
+    let mut state = DimensionPresentationState {
+        mode: DimensionDisplayMode::Focused,
+        ..DimensionPresentationState::default()
+    };
+    let manual = AnnotationLayoutState::default();
+    let initial = state.apply(
+        &mut scene,
+        &manual,
+        &DimensionPresentationContext::default(),
+    );
+    let keys: Vec<_> = initial.iter().map(|row| row.key).collect();
+    let mut context = DimensionPresentationContext {
+        default_priority: keys[..10].iter().map(|key| key.item).collect(),
+        generated: keys[..2].iter().map(|key| key.item).collect(),
+        ..DimensionPresentationContext::default()
+    };
+    let rows = state.apply(&mut scene, &manual, &context);
+    assert_eq!(rows.iter().filter(|row| row.visible).count(), 10);
+    assert!(rows[..2].iter().all(|row| row.generated));
+    assert!(
+        rows[..10]
+            .iter()
+            .all(|row| row.default_priority && !row.related)
+    );
+    assert!(
+        rows[10..]
+            .iter()
+            .all(|row| !row.default_priority && !row.visible)
+    );
+    assert_eq!(state.candidates, keys[..10]);
+
+    state.focus = Some(keys[13]);
+    state.pins = vec![keys[10], keys[11]];
+    context.hovered = Some(curves[12]);
+    let inspected = state.apply(&mut scene, &manual, &context);
+    assert_eq!(
+        state.candidates[..4],
+        [keys[13], keys[10], keys[11], keys[12]]
+    );
+    assert!(inspected.iter().all(|row| row.visible));
+    assert!(inspected[13].focused);
+    assert!(inspected[10].pinned && inspected[11].pinned);
+
+    context.navigation_active = true;
+    let navigation = state.apply(&mut scene, &manual, &context);
+    assert!(navigation[..12].iter().all(|row| row.visible));
+    assert!(
+        !navigation[12].visible,
+        "hover-only preview retires during pan"
+    );
+    assert!(navigation[13].visible);
+    assert_eq!(scene.accepted_document, accepted_before);
+    assert_eq!(session.design_document(), &design_before);
+    assert_eq!(
+        (scene.accepted_revision, scene.design_identity),
+        identity_before
+    );
+    assert!(manual.entries().is_empty());
+}
+
+#[test]
+fn m97_selected_priorities_do_not_consume_contextual_measurement_budget() {
+    let (session, curves) = fixture_with_spacing(14, 6.0);
+    let mut scene = scene(&session, 8.0);
+    scene
+        .reproject_viewport(Viewport::new([1000.0, 1000.0], [0.0, 39.0], 8.0).unwrap())
+        .unwrap();
+    let mut state = DimensionPresentationState {
+        mode: DimensionDisplayMode::Focused,
+        ..DimensionPresentationState::default()
+    };
+    let manual = AnnotationLayoutState::default();
+    let initial = state.apply(
+        &mut scene,
+        &manual,
+        &DimensionPresentationContext::default(),
+    );
+    let keys: Vec<_> = initial.iter().map(|row| row.key).collect();
+    let rows = state.apply(
+        &mut scene,
+        &manual,
+        &DimensionPresentationContext {
+            selection: curves,
+            default_priority: keys[..6].iter().map(|key| key.item).collect(),
+            ..DimensionPresentationContext::default()
+        },
+    );
+    assert_eq!(state.candidates, keys[..12]);
+    assert!(rows[..12].iter().all(|row| row.related && row.visible));
+    assert!(rows[12..].iter().all(|row| row.related && !row.visible));
+}
+
+#[test]
+fn m97_selected_generated_measurements_precede_idle_default_priorities() {
+    let (session, curves) = fixture_with_spacing(8, 6.0);
+    let mut scene = scene(&session, 8.0);
+    let mut state = DimensionPresentationState {
+        mode: DimensionDisplayMode::Focused,
+        ..DimensionPresentationState::default()
+    };
+    let manual = AnnotationLayoutState::default();
+    let initial = state.apply(
+        &mut scene,
+        &manual,
+        &DimensionPresentationContext::default(),
+    );
+    let keys: Vec<_> = initial.iter().map(|row| row.key).collect();
+    let context = DimensionPresentationContext {
+        default_priority: keys[..6].iter().map(|key| key.item).collect(),
+        generated: keys[6..].iter().map(|key| key.item).collect(),
+        ..DimensionPresentationContext::default()
+    };
+    state.apply(&mut scene, &manual, &context);
+    assert_eq!(state.candidates, keys[..6]);
+    let selected = state.apply(
+        &mut scene,
+        &manual,
+        &DimensionPresentationContext {
+            selection: curves[6..].to_vec(),
+            ..context
+        },
+    );
+    assert_eq!(state.candidates[..2], keys[6..]);
+    assert!(
+        selected[..6]
+            .iter()
+            .all(|row| row.default_priority && row.visible)
+    );
+    assert!(
+        selected[6..]
+            .iter()
+            .all(|row| row.generated && row.related && row.visible)
+    );
+}
+
+#[test]
+fn m97_explicit_fit_reconsiders_hidden_slots_without_moving_visible_dimensions() {
+    let (session, _) = fixture(12);
+    let mut scene = scene(&session, 8.0);
+    let initial_viewport = scene.viewport;
+    let accepted_before = scene.accepted_document.clone();
+    let mut state = DimensionPresentationState {
+        mode: DimensionDisplayMode::Focused,
+        ..DimensionPresentationState::default()
+    };
+    let context = DimensionPresentationContext {
+        default_priority: scene
+            .annotations
+            .iter()
+            .map(|annotation| annotation.item)
+            .collect(),
+        ..DimensionPresentationContext::default()
+    };
+    let manual = AnnotationLayoutState::default();
+    let visible_positions = |scene: &EditorScene| {
+        scene
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.visibility == SceneAnnotationVisibility::Always)
+            .map(|annotation| (annotation.item, anchor(annotation)))
+            .collect::<BTreeMap<_, _>>()
+    };
+    state.apply(&mut scene, &manual, &context);
+    let initial = visible_positions(&scene);
+    let candidates = state.candidates.clone();
+    assert!(!initial.is_empty());
+    assert!(initial.len() < candidates.len());
+
+    let expanded = Viewport::new([1600.0, 1000.0], [1.0, 4.0], 50.0).unwrap();
+    scene.reproject_viewport(expanded).unwrap();
+    state.apply(&mut scene, &manual, &context);
+    let zoomed = visible_positions(&scene);
+    assert!(
+        zoomed.keys().all(|key| initial.contains_key(key)),
+        "ordinary zoom cannot promote hidden dimensions"
+    );
+
+    state.reconsider_hidden_dimensions();
+    state.apply(
+        &mut scene,
+        &manual,
+        &DimensionPresentationContext {
+            navigation_active: true,
+            ..context.clone()
+        },
+    );
+    assert_eq!(
+        visible_positions(&scene),
+        zoomed,
+        "pending Fit waits for camera navigation to finish"
+    );
+    state.apply(&mut scene, &manual, &context);
+    let fitted = visible_positions(&scene);
+    assert!(
+        fitted.len() > zoomed.len(),
+        "explicit Fit searches newly readable bounded slots"
+    );
+    assert_eq!(state.candidates, candidates);
+    for (key, position) in zoomed {
+        assert!(
+            position.distance(fitted[&key]) < 1e-8,
+            "previously visible dimensions retain their exact projected slots"
+        );
+    }
+
+    scene.reproject_viewport(initial_viewport).unwrap();
+    state.apply(&mut scene, &manual, &context);
+    let crowded = visible_positions(&scene);
+    assert!(crowded.len() < fitted.len());
+    scene.reproject_viewport(expanded).unwrap();
+    state.apply(&mut scene, &manual, &context);
+    assert!(
+        visible_positions(&scene)
+            .keys()
+            .all(|key| crowded.contains_key(key)),
+        "Fit reconsideration is consumed once; subsequent zoom cannot promote dimensions"
+    );
+    assert_eq!(scene.accepted_document, accepted_before);
+    assert!(manual.entries().is_empty());
+}
+
+#[test]
+fn m97_hidden_ignores_default_priorities_but_keeps_active_dimension_feedback() {
+    let (session, _) = fixture(8);
+    let mut scene = scene(&session, 18.0);
+    let mut state = DimensionPresentationState {
+        mode: DimensionDisplayMode::Focused,
+        ..DimensionPresentationState::default()
+    };
+    let manual = AnnotationLayoutState::default();
+    let context = DimensionPresentationContext {
+        default_priority: scene
+            .annotations
+            .iter()
+            .map(|annotation| annotation.item)
+            .collect(),
+        ..DimensionPresentationContext::default()
+    };
+    let rows = state.apply(&mut scene, &manual, &context);
+    assert!(rows.iter().all(|row| row.default_priority));
+    assert!(rows.iter().any(|row| row.visible));
+    state.pins = vec![rows[0].key];
+    state.focus = Some(rows[1].key);
+    state.mode = DimensionDisplayMode::Hidden;
+    let hidden = state.apply(&mut scene, &manual, &context);
+    assert!(
+        hidden
+            .iter()
+            .all(|row| row.default_priority && !row.visible)
+    );
+    assert!(state.candidates.is_empty());
+    let active = state.apply(
+        &mut scene,
+        &manual,
+        &DimensionPresentationContext {
+            active: Some(rows[7].key.item),
+            ..context
+        },
+    );
+    assert_eq!(active.iter().filter(|row| row.visible).count(), 1);
+    assert!(active[7].visible);
+}
+
+#[test]
+fn m97_default_priorities_keep_navigation_membership_and_cold_rebuild_positions() {
+    let (session, _) = fixture(12);
+    let mut retained_scene = scene(&session, 8.0);
+    let mut state = DimensionPresentationState {
+        mode: DimensionDisplayMode::Focused,
+        ..DimensionPresentationState::default()
+    };
+    let manual = AnnotationLayoutState::default();
+    let context = DimensionPresentationContext {
+        default_priority: retained_scene
+            .annotations
+            .iter()
+            .map(|annotation| annotation.item)
+            .collect(),
+        ..DimensionPresentationContext::default()
+    };
+    let first = state.apply(&mut retained_scene, &manual, &context);
+    let visible_keys = |rows: &[SceneDimensionEntry]| {
+        rows.iter()
+            .filter(|row| row.visible)
+            .map(|row| row.key)
+            .collect::<BTreeSet<_>>()
+    };
+    let initially_visible = visible_keys(&first);
+    let candidates = state.candidates.clone();
+    assert_eq!(candidates.len(), 12);
+    assert!(!initially_visible.is_empty());
+    assert!(
+        initially_visible.len() < candidates.len(),
+        "crowded priorities still require layout clearance"
+    );
+    let viewport = Viewport::new([1600.0, 1000.0], [1.0, 4.0], 50.0).unwrap();
+    retained_scene.reproject_viewport(viewport).unwrap();
+    let navigation = state.apply(
+        &mut retained_scene,
+        &manual,
+        &DimensionPresentationContext {
+            navigation_active: true,
+            ..context.clone()
+        },
+    );
+    assert_eq!(state.candidates, candidates);
+    assert_eq!(visible_keys(&navigation), initially_visible);
+    let settled = state.apply(&mut retained_scene, &manual, &context);
+    assert!(visible_keys(&settled).is_subset(&initially_visible));
+    let positions: BTreeMap<_, _> = retained_scene
+        .annotations
+        .iter()
+        .map(|annotation| (annotation.item, anchor(annotation)))
+        .collect();
+    let mut cold = scene(&session, 50.0);
+    cold.reproject_viewport(viewport).unwrap();
+    let rebuilt = state.apply(&mut cold, &manual, &context);
+    assert_eq!(state.candidates, candidates);
+    assert_eq!(visible_keys(&rebuilt), visible_keys(&settled));
+    for annotation in &cold.annotations {
+        assert!(anchor(annotation).distance(positions[&annotation.item]) < 1e-8);
+    }
+    // An explicit overview request may use newly available space, while the
+    // ordinary zoom and cold rebuilding above must never promote measurements.
+    let before_fit = visible_keys(&rebuilt);
+    state.reconsider_hidden_dimensions();
+    let fitted = state.apply(&mut cold, &manual, &context);
+    assert!(visible_keys(&fitted).len() > before_fit.len());
+    for annotation in &cold.annotations {
+        let key = annotation.layout_key(cold.accepted_document.id(), None);
+        if before_fit.contains(&key) {
+            assert!(anchor(annotation).distance(positions[&annotation.item]) < 1e-8);
+        }
+    }
 }
 
 #[test]

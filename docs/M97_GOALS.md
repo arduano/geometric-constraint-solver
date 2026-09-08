@@ -9,8 +9,14 @@ filling general navigation with dimension widgets.
 ## Approved interaction
 
 - Canvas control: Dimensions **Focused / All / Hidden**; Focused is the default.
-- Without selection, Focused shows only pins. A selected object reveals related
-  measurements, with no more than six ordinary canvas callouts in total.
+- Focused keeps sample design-intent priorities eligible without selection.
+  Gridfinity prioritizes all 20 authored measurements; the manifold prioritizes
+  plate/reservoir sizes and representative outlet/fastener sizes. Other samples
+  curate a small overview set. New/imported sketches default to up to six directly
+  authored measurements. These defaults do not consume user pins.
+- A selected object reveals related measurements, with no more than six ordinary
+  contextual callouts plus the default priorities. Every callout still needs a
+  readable retained slot; crowded priority measurements remain in the Inspector.
 - A 250 ms stationary geometry hover previews one related measurement and retains
   the geometry-to-label transit corridor. Pan, zoom and drawing suppress hover previews.
 - Inspector Dimensions lists every related measurement, even if not drawn. Rows
@@ -18,10 +24,13 @@ filling general navigation with dimension widgets.
   its callout and supported edits use the existing owner transaction.
 - At most four pins survive selection changes and reload, outside design history.
   Individual unpin and Clear pins actions remain available.
-- Priority: actively inspected/edited item, pins, authored related dimensions,
-  then generated dimensions. Stable source order breaks ties; groups retain the cap.
+- Priority: actively inspected/edited item, pins, hovered measurement, selected
+  authored/generated measurements, then idle defaults. Stable source order breaks
+  ties; explicit contextual interest remains reachable among default priorities.
 - Patch public dimensional parameters precede a collapsed Generated dimensions
-  disclosure. A 12 mm channel parameter must not be presented as a 6 mm offset.
+  disclosure. The manifold's full 12 mm channel width and 2.4 mm groove width are
+  default Inspector parameters. A 12 mm
+  channel parameter must not be presented as a 6 mm offset.
 - Fixed-size readable text and subdued lines retain existing selection and
   reference notation. All is deliberate full inspection; Hidden preserves only
   necessary active authoring feedback.
@@ -40,7 +49,13 @@ invalidate affected positions. Manual positions have priority. Automatic displac
 is bounded to 96 CSS pixels; a measurement without a readable slot remains in the
 Inspector. Navigation freezes membership and slots; lower-priority overlaps are
 suppressed after navigation, with 6 px separation and 12 px restoration clearance.
-Zoom alone does not promote additional measurements.
+Zoom alone does not promote additional measurements. Explicit Fit and the first
+measured host layout reconsider hidden callouts, reserving existing visible
+positions before a bounded search for newly readable measurements.
+
+Sample manifests own checked declaration/parameter selectors for design-intent
+priorities. Rust resolves them through accepted declaration and control provenance,
+never rendered labels. Default priorities stay in the Inspector even when occluded.
 
 Mode and pins are presentation preferences. Older workspaces default to Focused
 while preserving manual placements; stale identities must never retarget another
@@ -63,3 +78,11 @@ native and source editing, groups, failed drafts and reload. Capture simple/mani
 dense screenshots and compare navigation performance. Run the integrated clean-source
 gate once at nomination, authenticating reuse under RELEASE_QUALIFICATION.md; review
 any golden changes individually. Final supervising-user acceptance remains pending.
+
+## Default-priority amendment
+
+On 2026-09-08 the supervising user approved the general direction and requested
+important shape-intent measurements by default, explicitly including every
+Gridfinity measurement. This amendment changes presentation only. Qualification
+of the prior preview remains historical evidence until the amended product is
+qualified; M97 is open.

@@ -11,9 +11,10 @@ a separate 12 mm two-bend stair passage and a 2.4 mm silicone groove.
 record the custom-patch API, independent geometry checks and editing corrections.
 The supervising user accepted the final amendment and requested closure. No M96 blocker
 or acceptance action remains. **M97 focused dimensions and stable annotation placement
-is qualified and awaiting supervising-user acceptance.** The verified preview is
+has a qualified preview; the requested default-priority amendment is in progress.** The verified preview is
 `http://100.94.63.83:18103/`; [M97 qualification](docs/M97_QUALIFICATION.md) is the
-current continuation point. Source `a39f35ade58c3d5a272899dfb4e616d6578a9d14` passes
+prior qualification point. [The default-priority amendment](docs/M97_PRIORITY_DIMENSIONS.md)
+is the active continuation point. Source `a39f35ade58c3d5a272899dfb4e616d6578a9d14` passes
 all 243 obligations in `20260908T133354-cff36f90`, with exact served-byte and actual-WASM
 verification. [M97 goals](docs/M97_GOALS.md) records the approved interaction and
 the repaired zoom-then-click layout jump. M96 remains the accepted product.

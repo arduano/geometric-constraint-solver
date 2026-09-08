@@ -17,7 +17,10 @@ fn m97_dimension_overview_and_pins_preserve_design_and_reload_exactly() {
         .unwrap()
         .to_persistence_json()
         .unwrap();
-    assert!(bridge.dimensions_snapshot().entries.is_empty());
+    let overview = bridge.dimensions_snapshot();
+    assert!(!overview.entries.is_empty());
+    assert!(overview.entries.iter().all(|row| row.default_priority));
+    assert_eq!(overview.pin_count, 0);
     assert!(bridge.dimensions.entries.len() >= 5);
     let ids: Vec<_> = bridge
         .dimensions
@@ -116,7 +119,7 @@ fn m97_selected_channel_exposes_full_width_and_all_related_measurements() {
         snapshot
             .entries
             .iter()
-            .filter(|entry| entry.visible)
+            .filter(|entry| entry.visible && !entry.default_priority)
             .count()
             <= 6
     );
@@ -166,6 +169,154 @@ fn m97_selected_channel_exposes_full_width_and_all_related_measurements() {
         .unwrap();
     bridge.refresh_current_scene();
     assert_eq!(bridge.dimensions.entries.len(), all);
+}
+
+#[test]
+fn m97_priority_gridfinity_preserves_every_authored_measurement_and_hidden_mode() {
+    let mut bridge = sample("gridfinity-bin-section");
+    let before = bridge
+        .code_project
+        .as_ref()
+        .unwrap()
+        .to_persistence_json()
+        .unwrap();
+    let snapshot = bridge.dimensions_snapshot();
+    assert_eq!(snapshot.entries.len(), 20);
+    assert!(
+        snapshot
+            .entries
+            .iter()
+            .all(|row| row.default_priority && !row.generated && !row.pinned)
+    );
+    assert!(snapshot.entries.iter().any(|row| row.visible));
+    assert!(snapshot.entries.iter().any(|row| row.reference));
+    assert_eq!(snapshot.pin_count, 0);
+    let keys: Vec<_> = bridge
+        .dimensions
+        .entries
+        .iter()
+        .map(|(entry, _)| entry.key)
+        .collect();
+    bridge
+        .dispatch_dimensions("dimensions.mode", serde_json::json!({"mode":"hidden"}))
+        .unwrap();
+    bridge.refresh_current_scene();
+    let hidden = bridge.dimensions_snapshot();
+    assert_eq!(
+        hidden.entries.len(),
+        20,
+        "occluded/hidden priorities stay inspectable"
+    );
+    assert!(hidden.entries.iter().all(|row| !row.visible));
+    assert_eq!(
+        bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .to_persistence_json()
+            .unwrap(),
+        before
+    );
+    let persistence: serde_json::Value =
+        serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
+    let mut restored = WorkbenchBridge::construct_json(
+        &serde_json::json!({"version":2, "persistedProject":persistence["contents"]}).to_string(),
+    )
+    .unwrap();
+    restored.refresh_current_scene();
+    assert!(matches!(
+        restored.dimensions_snapshot().mode,
+        DisplayMode::Hidden
+    ));
+    assert_eq!(restored.dimensions_snapshot().entries.len(), 20);
+    assert_eq!(
+        restored
+            .dimensions
+            .entries
+            .iter()
+            .map(|(entry, _)| entry.key)
+            .collect::<Vec<_>>(),
+        keys
+    );
+    restored
+        .dispatch_dimensions("dimensions.mode", serde_json::json!({"mode":"focused"}))
+        .unwrap();
+    restored.refresh_current_scene();
+    assert!(
+        restored
+            .dimensions_snapshot()
+            .entries
+            .iter()
+            .any(|row| row.visible)
+    );
+    assert!(restored.dimension_persistence().pins.is_empty());
+}
+
+#[test]
+fn m97_priority_manifold_keeps_design_sizes_and_truthful_public_widths() {
+    let mut bridge = sample("pc-water-manifold");
+    let before = bridge
+        .code_project
+        .as_ref()
+        .unwrap()
+        .to_persistence_json()
+        .unwrap();
+    let snapshot = bridge.dimensions_snapshot();
+    assert_eq!(snapshot.entries.len(), 6);
+    assert!(
+        snapshot
+            .entries
+            .iter()
+            .all(|row| row.default_priority && !row.generated && !row.pinned)
+    );
+    for (label, value) in [
+        ("plateWidth", "240"),
+        ("plateHeight", "120"),
+        ("reservoirWidth", "60"),
+        ("reservoirHeight", "84"),
+    ] {
+        assert!(
+            snapshot
+                .entries
+                .iter()
+                .any(|row| row.label == label && row.value == value),
+            "{label}: {snapshot:?}"
+        );
+    }
+    assert!(
+        snapshot
+            .parameters
+            .iter()
+            .any(|row| row.label == "channelWidth"
+                && row.value == "12"
+                && row.default_priority
+                && row.editable)
+    );
+    assert!(
+        snapshot
+            .parameters
+            .iter()
+            .any(|row| row.label == "commonSealGroove · width"
+                && row.value == "2.4"
+                && row.default_priority
+                && row.editable)
+    );
+    assert_eq!(snapshot.pin_count, 0);
+    assert!(snapshot.entries.iter().any(|row| row.visible));
+    bridge
+        .dispatch_dimensions("dimensions.clearPins", serde_json::Value::Null)
+        .unwrap();
+    bridge.refresh_current_scene();
+    assert_eq!(bridge.dimensions_snapshot().entries.len(), 6);
+    assert_eq!(
+        bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .to_persistence_json()
+            .unwrap(),
+        before
+    );
 }
 
 #[test]
@@ -236,6 +387,16 @@ fn m97_native_dimension_edit_uses_inspector_history_and_invalidates_old_tokens()
     // Exercise the supported plain projectional host, without managed source.
     bridge.code_project = None;
     bridge.refresh_current_scene();
+    assert_eq!(
+        bridge
+            .dimensions_snapshot()
+            .entries
+            .iter()
+            .filter(|row| row.default_priority)
+            .count(),
+        DimensionPresentationState::MAX_VISIBLE,
+        "ordinary native sketches retain a bounded authored overview"
+    );
     let before = bridge.editor().coordinator().intent().identity();
     let revision_before = bridge.revision;
     let (key, row) = bridge

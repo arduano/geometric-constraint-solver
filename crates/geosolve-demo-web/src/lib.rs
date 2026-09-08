@@ -603,10 +603,43 @@ mod wasm {
                 let mut dimensions =
                     geosolve_constraint_editor::DimensionPresentationState::default();
                 dimensions.mode = geosolve_constraint_editor::DimensionDisplayMode::Focused;
+                let policy = &geosolve_sketch_code::bundled_sample(key)
+                    .expect("registered sample")
+                    .dimension_presentation;
+                let panel = code_project.declaration_panel_projection(&editor);
+                let navigation = code_project.navigation_index(&editor);
+                let priority_nodes = panel
+                    .declarations
+                    .iter()
+                    .filter(|row| {
+                        row.kind.starts_with("dimension.")
+                            && (policy.all_authored
+                                || policy.dimensions.contains(&row.symbol.0.as_str()))
+                    })
+                    .flat_map(|row| {
+                        navigation
+                            .entries
+                            .iter()
+                            .filter(move |entry| entry.id == row.id)
+                    })
+                    .flat_map(|entry| entry.nodes.iter().copied());
+                let context = geosolve_constraint_editor::DimensionPresentationContext {
+                    default_priority: editor
+                        .navigation_selection_items(priority_nodes)
+                        .into_iter()
+                        .filter(|item| {
+                            matches!(
+                                item,
+                                geosolve_constraint_editor::SelectionItem::Dimension(_)
+                            )
+                        })
+                        .collect(),
+                    ..geosolve_constraint_editor::DimensionPresentationContext::default()
+                };
                 dimensions.apply(
                     &mut scene,
                     &geosolve_constraint_editor::AnnotationLayoutState::default(),
-                    &geosolve_constraint_editor::DimensionPresentationContext::default(),
+                    &context,
                 );
                 let accepted = editor
                     .presentation_session()

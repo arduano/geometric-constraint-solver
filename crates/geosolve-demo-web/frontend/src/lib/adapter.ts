@@ -147,6 +147,8 @@ export interface DimensionEntry {
   kind: string;
   reference: boolean;
   generated: boolean;
+  /** Native design-intent priority, independent of the user's pins. */
+  defaultPriority?: boolean;
   pinned: boolean;
   visible: boolean;
   focused: boolean;
@@ -157,7 +159,7 @@ export interface DimensionEntry {
 export interface DimensionsSnapshot {
   mode: DimensionDisplayMode;
   entries: DimensionEntry[];
-  parameters: Array<{ id: string; label: string; value: string; unit?: string; editable: boolean }>;
+  parameters: Array<{ id: string; label: string; value: string; unit?: string; editable: boolean; defaultPriority?: boolean }>;
   pinCount: number;
 }
 
