@@ -14,6 +14,15 @@
     "Crank input",
     "Coupled leg"
   ],
+  "dimension_presentation": {
+    "dimensions": [
+      "crankLength",
+      "upperRockerLength",
+      "lowerRockerLength",
+      "lowerCrankCouplerLength",
+      "upperFootLinkLength"
+    ]
+  },
   "provenance": [
     {
       "relationship": "dimensions_only",

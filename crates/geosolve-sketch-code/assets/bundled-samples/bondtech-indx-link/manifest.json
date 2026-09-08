@@ -7,6 +7,9 @@
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
   "groups": ["Tool-link envelope", "Three-point coupling", "Link-board interface"],
+  "dimension_presentation": {
+    "all_authored": true
+  },
   "provenance": [
     {
       "relationship": "dimensions_only",

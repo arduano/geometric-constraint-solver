@@ -7,6 +7,16 @@
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
   "groups": ["Fixture envelope", "Gasket groove", "Vacuum distribution grid", "Workholding pattern"],
+  "dimension_presentation": {
+    "dimensions": [
+      "plateWidth",
+      "plateHeight",
+      "gasketWidth",
+      "gasketHeight",
+      "centerPortRadius",
+      "holeNeRadius"
+    ]
+  },
   "provenance": [
     {
       "relationship": "original",

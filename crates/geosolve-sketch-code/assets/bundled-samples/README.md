@@ -12,6 +12,22 @@ The manifest format is `geosolve-bundled-sample-v1`. It owns `ordinal`, `key`, `
 `effective_dof`; raw DOF is both numerical right nullity and equality DOF, while effective DOF is
 bidirectional bounded DOF.
 
+Optional `dimension_presentation` records the measurements that explain a sample
+in the workbench's default Focused overview. `all_authored: true` includes every
+authored dimension, including reference measurements. Otherwise, `dimensions`
+lists exact authored declaration symbols. Generated dimensions remain contextual.
+`parameters` lists exact source selectors as `{ "declaration": "channelWidth",
+"path": [] }` or `{ "declaration": "commonSealGroove", "path": ["width"] }`.
+These expose public dimensional source values in the overview Inspector; they
+do not relabel generated offsets or manufacture canvas measurements.
+
+The build authenticates explicit selectors against the compiled source IR. A host
+must resolve them against current accepted ownership and controls before applying
+presentation priority. Gridfinity includes all twenty standard measurements;
+larger studies keep a smaller set of envelope, interface or operating dimensions.
+Presets do not change the solver, source, editing authority or the host's collision
+and navigation policy.
+
 Provenance entries use relationship `original`, `dimensions_only`, or `adapted`, plus `name`,
 `url`, immutable `revision`, `path`, `licence`, `scope`, and `notice_required`. External
 relationships require the URL, revision, and path fields. Original relationships omit them.

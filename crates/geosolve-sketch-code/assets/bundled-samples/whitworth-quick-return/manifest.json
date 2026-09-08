@@ -7,5 +7,8 @@
   "category": "mechanism",
   "expected": { "raw_dof": 1, "effective_dof": 1 },
   "groups": ["Ground pivots", "Crank and slot", "Quick-return ram"],
+  "dimension_presentation": {
+    "all_authored": true
+  },
   "provenance": []
 }

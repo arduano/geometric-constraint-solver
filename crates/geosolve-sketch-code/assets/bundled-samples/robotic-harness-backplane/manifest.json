@@ -15,5 +15,17 @@
     "Sensor harnesses",
     "Tooling vision and service harnesses"
   ],
+  "dimension_presentation": {
+    "parameters": [
+      {
+        "declaration": "clipRadius",
+        "path": []
+      },
+      {
+        "declaration": "bendRadius",
+        "path": []
+      }
+    ]
+  },
   "provenance": []
 }

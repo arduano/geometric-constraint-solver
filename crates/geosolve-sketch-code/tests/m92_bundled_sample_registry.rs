@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use geosolve_sketch_code::{SampleCategory, bundled_sample, bundled_sample_catalog};
+use geosolve_sketch_code::{
+    KeyedReconcileState, ManagedPathSegment, ManagedStatement, ManagedValue, SampleCategory,
+    bundled_sample, bundled_sample_catalog, expand_code_project, managed_control_manifest,
+    required_generated_members,
+};
+use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -102,5 +107,100 @@ fn every_compiler_envelope_reconstructs_and_authenticates_its_project() {
             "{}",
             sample.key
         );
+    }
+}
+
+#[test]
+fn dimension_presets_cover_gridfinity_standards_and_curated_manifold_intent() {
+    let gridfinity = bundled_sample("gridfinity-bin-section").unwrap();
+    assert!(gridfinity.dimension_presentation.all_authored);
+    let project = gridfinity.project();
+    let compiled = project.managed.compiled.as_deref().unwrap();
+    let authored: Vec<_> = compiled
+        .ir
+        .statements
+        .iter()
+        .filter_map(|statement| match statement {
+            ManagedStatement::Declaration {
+                symbol,
+                builder_path,
+                ..
+            } if builder_path
+                .first()
+                .is_some_and(|family| family == "dimension") =>
+            {
+                Some(symbol)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(authored.len(), 20);
+    assert!(authored.iter().any(|symbol| symbol.as_str() == "planWidth"));
+    assert!(
+        authored
+            .iter()
+            .any(|symbol| symbol.as_str() == "lowerChamferXLength")
+    );
+
+    let manifold = bundled_sample("pc-water-manifold").unwrap();
+    assert!(!manifold.dimension_presentation.all_authored);
+    assert_eq!(
+        manifold.dimension_presentation.dimensions,
+        [
+            "plateWidth",
+            "plateHeight",
+            "reservoirWidth",
+            "reservoirHeight",
+            "upperOutletRadius",
+            "screwNwOuterDiameter",
+        ]
+    );
+}
+
+#[test]
+fn overview_parameter_selectors_resolve_authenticated_public_source_controls() {
+    for sample in bundled_sample_catalog()
+        .iter()
+        .filter(|sample| !sample.dimension_presentation.parameters.is_empty())
+    {
+        let project = sample.project();
+        let generated = KeyedReconcileState::empty()
+            .plan(
+                required_generated_members(&project).unwrap(),
+                &BTreeSet::new(),
+            )
+            .unwrap()
+            .into_staged();
+        let intent = IntentSession::with_id(IntentSessionId::from_raw(0x97_01)).unwrap();
+        let expansion = expand_code_project(&project, &generated, intent.identity()).unwrap();
+        let controls = managed_control_manifest(&project, &expansion).unwrap();
+        let mut values = Vec::new();
+        for selector in sample.dimension_presentation.parameters {
+            let matches: Vec<_> = controls
+                .controls
+                .iter()
+                .filter(|control| {
+                    control.source.declaration.0 == selector.declaration
+                        && control.source.path.0.len() == selector.path.len()
+                        && control.source.path.0.iter().zip(selector.path).all(|(actual, expected)| {
+                                matches!(actual, ManagedPathSegment::Field(field) if field.as_str() == *expected)
+                        })
+                })
+                .collect();
+            assert_eq!(matches.len(), 1, "{}: {selector:?}", sample.key);
+            let ManagedValue::Unit(value) = &matches[0].value else {
+                panic!("overview parameter must retain its dimensional source value");
+            };
+            assert_eq!(value.unit, "mm");
+            assert!(matches[0].token().is_some());
+            values.push(value.value);
+        }
+        if sample.key == "pc-water-manifold" {
+            assert_eq!(
+                values,
+                [12.0, 2.4],
+                "full widths, never generated half offsets"
+            );
+        }
     }
 }

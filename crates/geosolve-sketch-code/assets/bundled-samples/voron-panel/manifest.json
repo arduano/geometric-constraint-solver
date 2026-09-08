@@ -14,6 +14,9 @@
     "Central motor passage",
     "Side-notch references"
   ],
+  "dimension_presentation": {
+    "all_authored": true
+  },
   "provenance": [
     {
       "relationship": "dimensions_only",

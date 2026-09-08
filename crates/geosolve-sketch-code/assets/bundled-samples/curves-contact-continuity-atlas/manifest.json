@@ -15,5 +15,8 @@
     "Explicit rolling contact",
     "Parametric C2 continuity"
   ],
+  "dimension_presentation": {
+    "all_authored": true
+  },
   "provenance": []
 }

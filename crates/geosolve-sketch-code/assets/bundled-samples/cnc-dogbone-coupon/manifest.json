@@ -7,6 +7,15 @@
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
   "groups": ["Female coupon blank", "Relational station datums", "Press-fit station", "Nominal-fit station", "Loose-fit station"],
+  "dimension_presentation": {
+    "dimensions": [
+      "pressMortiseHeight",
+      "nominalMortiseHeight",
+      "looseMortiseHeight",
+      "nominalTabThickness",
+      "cutterRadius"
+    ]
+  },
   "provenance": [
     {
       "relationship": "original",

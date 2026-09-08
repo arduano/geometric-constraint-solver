@@ -7,6 +7,9 @@
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
   "groups": ["3U material section", "Section standard dimensions", "Section projection datums", "1 x 1 plan study"],
+  "dimension_presentation": {
+    "all_authored": true
+  },
   "provenance": [
     {
       "relationship": "dimensions_only",

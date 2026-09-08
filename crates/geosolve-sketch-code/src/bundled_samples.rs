@@ -220,6 +220,27 @@ fn decompress_bundled_compiler_envelope(
     String::from_utf8(output).map_err(|_| BundledEnvelopeError::InvalidUtf8)
 }
 
+/// One authored dimensional source value included in the sample overview.
+///
+/// This selector uses an exact source declaration and object-field path, never
+/// a display label. The host resolves it against accepted managed controls.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SampleDimensionParameter {
+    pub declaration: &'static str,
+    pub path: &'static [&'static str],
+}
+
+/// Curated design measurements visible by default in Focused presentation.
+///
+/// These are presentation candidates only: they do not affect solver priority,
+/// dimension targets or editing authority. Hosts still apply layout clearance.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SampleDimensionPresentation {
+    pub all_authored: bool,
+    pub dimensions: &'static [&'static str],
+    pub parameters: &'static [SampleDimensionParameter],
+}
+
 /// Complete immutable authority for one bundled source-defined sample.
 #[derive(Debug)]
 pub struct BundledSampleSpec {
@@ -230,6 +251,7 @@ pub struct BundledSampleSpec {
     pub summary: &'static str,
     pub expected: SampleExpected,
     pub functional_groups: &'static [&'static str],
+    pub dimension_presentation: SampleDimensionPresentation,
     pub provenance: &'static [SampleProvenance],
     manifest_json: &'static str,
     managed_source: &'static str,
@@ -252,6 +274,7 @@ impl BundledSampleSpec {
         summary: &'static str,
         expected: SampleExpected,
         functional_groups: &'static [&'static str],
+        dimension_presentation: SampleDimensionPresentation,
         provenance: &'static [SampleProvenance],
         manifest_json: &'static str,
         managed_source: &'static str,
@@ -268,6 +291,7 @@ impl BundledSampleSpec {
             summary,
             expected,
             functional_groups,
+            dimension_presentation,
             provenance,
             manifest_json,
             managed_source,

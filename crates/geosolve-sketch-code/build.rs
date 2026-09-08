@@ -107,6 +107,25 @@ struct ManifestProvenance {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ManifestDimensionParameter {
+    declaration: String,
+    #[serde(default)]
+    path: Vec<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ManifestDimensionPresentation {
+    #[serde(default)]
+    all_authored: bool,
+    #[serde(default)]
+    dimensions: Vec<String>,
+    #[serde(default)]
+    parameters: Vec<ManifestDimensionParameter>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SampleManifest {
     format: String,
     ordinal: usize,
@@ -116,6 +135,8 @@ struct SampleManifest {
     category: ManifestCategory,
     expected: ManifestExpected,
     groups: Vec<String>,
+    #[serde(default)]
+    dimension_presentation: ManifestDimensionPresentation,
     provenance: Vec<ManifestProvenance>,
 }
 
@@ -271,6 +292,7 @@ fn validate_sample(directory: PathBuf) -> ValidatedSample {
     });
     let compiled: Value = read_json(&compiled_path, "bundled-sample compiler envelope");
     validate_compiler_envelope(&manifest, &source, &compiled);
+    validate_dimension_presentation(&manifest, &compiled);
 
     let witnesses: Value = read_json(&witnesses_path, "bundled-sample witnesses");
     assert_eq!(
@@ -523,6 +545,78 @@ fn validate_canonical_projection(compiled: &Value, field: &str, canonical: &str,
         .unwrap_or_else(|error| panic!("{key} `{canonical}` is invalid JSON: {error}"));
 }
 
+fn validate_dimension_presentation(manifest: &SampleManifest, compiled: &Value) {
+    let presentation = &manifest.dimension_presentation;
+    assert!(
+        !presentation.all_authored || presentation.dimensions.is_empty(),
+        "{} must use all_authored or an explicit dimension list",
+        manifest.key
+    );
+    let statements = compiled
+        .pointer("/ir/statements")
+        .and_then(Value::as_array)
+        .expect("validated compiler envelope has IR statements");
+    let mut seen = BTreeSet::new();
+    for dimension in &presentation.dimensions {
+        assert!(
+            seen.insert(dimension),
+            "{} repeats priority dimension `{dimension}`",
+            manifest.key
+        );
+        assert!(
+            statements.iter().any(|statement| {
+                statement.get("symbol").and_then(Value::as_str) == Some(dimension)
+                    && statement.pointer("/builder_path/0").and_then(Value::as_str)
+                        == Some("dimension")
+            }),
+            "{} priority dimension `{dimension}` must name an authored dimension",
+            manifest.key
+        );
+    }
+    let mut seen_parameters = BTreeSet::new();
+    for parameter in &presentation.parameters {
+        assert!(
+            seen_parameters.insert((&parameter.declaration, &parameter.path)),
+            "{} repeats a priority parameter selector",
+            manifest.key
+        );
+        let value = statements.iter().find_map(|statement| {
+            if statement.get("symbol").and_then(Value::as_str) == Some(&parameter.declaration) {
+                statement.get("arguments")
+            } else if statement.get("statement").and_then(Value::as_str) == Some("binding")
+                && statement.get("variable").and_then(Value::as_str) == Some(&parameter.declaration)
+            {
+                statement.get("value")
+            } else {
+                None
+            }
+        });
+        let value = parameter.path.iter().fold(value, |value, field| {
+            value?
+                .get("fields")?
+                .as_array()?
+                .iter()
+                .find(|candidate| candidate.get("name").and_then(Value::as_str) == Some(field))?
+                .get("value")
+        });
+        assert!(
+            value.is_some_and(|value| {
+                value.get("kind").and_then(Value::as_str) == Some("call")
+                    && value
+                        .get("callee")
+                        .and_then(Value::as_str)
+                        .is_some_and(|callee| {
+                            matches!(callee, "mm" | "cm" | "m" | "inch" | "deg" | "rad")
+                        })
+            }),
+            "{} priority parameter `{}.{}` must name an authored dimensional source value",
+            manifest.key,
+            parameter.declaration,
+            parameter.path.join(".")
+        );
+    }
+}
+
 fn validate_functional_groups(manifest: &SampleManifest, compiled: &Value) {
     assert!(
         !manifest.groups.is_empty(),
@@ -716,6 +810,7 @@ fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
         .map(|group| RustString(group).to_string())
         .collect::<Vec<_>>()
         .join(", ");
+    let dimension_presentation = generated_dimension_presentation(&manifest.dimension_presentation);
     let provenance = manifest
         .provenance
         .iter()
@@ -769,7 +864,9 @@ fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
     write!(
         generated,
         "    BundledSampleSpec::new(\n        {ordinal}, {key}, {title}, {category}, {summary},\n        \
-         SampleExpected::new({raw}, {effective}),\n        &[{groups}],\n        &[{provenance}],\n        \
+         SampleExpected::new({raw}, {effective}),\n        &[{groups}],\n        \
+         {dimension_presentation},\n        \
+         &[{provenance}],\n        \
          include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \
          \"/assets/bundled-samples/{raw_key}/manifest.json\")),\n        \
          include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \
@@ -787,6 +884,36 @@ fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
         patches = patches,
     )
     .expect("writing generated Rust to a String cannot fail");
+}
+
+fn generated_dimension_presentation(presentation: &ManifestDimensionPresentation) -> String {
+    let dimensions = presentation
+        .dimensions
+        .iter()
+        .map(|dimension| RustString(dimension).to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let parameters = presentation
+        .parameters
+        .iter()
+        .map(|parameter| {
+            let path = parameter
+                .path
+                .iter()
+                .map(|field| RustString(field).to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "SampleDimensionParameter {{ declaration: {}, path: &[{path}] }}",
+                RustString(&parameter.declaration),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "SampleDimensionPresentation {{ all_authored: {}, dimensions: &[{dimensions}], parameters: &[{parameters}] }}",
+        presentation.all_authored,
+    )
 }
 
 fn generate_frontend_manifest(samples: &[ValidatedSample], output_dir: &Path) {

@@ -29,8 +29,9 @@ pub use artifact::{
     ValidatedPatchModuleArtifact,
 };
 pub use bundled_samples::{
-    BundledSampleSpec, SampleCategory, SampleExpected, SampleProvenance,
-    SampleProvenanceRelationship, bundled_sample, bundled_sample_catalog,
+    BundledSampleSpec, SampleCategory, SampleDimensionParameter, SampleDimensionPresentation,
+    SampleExpected, SampleProvenance, SampleProvenanceRelationship, bundled_sample,
+    bundled_sample_catalog,
 };
 pub use composition::{
     CodeCompositionError, MaterializedCodeProject, MaterializedFilletOutput,

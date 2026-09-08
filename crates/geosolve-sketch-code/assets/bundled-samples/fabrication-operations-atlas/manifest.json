@@ -17,5 +17,15 @@
     "Constraint and metrology bench",
     "Fabrication annotations"
   ],
+  "dimension_presentation": {
+    "dimensions": [
+      "baselineLength",
+      "uprightHeight",
+      "datumAngle",
+      "inspectionDiameter",
+      "comparisonRadius",
+      "seedChord"
+    ]
+  },
   "provenance": []
 }

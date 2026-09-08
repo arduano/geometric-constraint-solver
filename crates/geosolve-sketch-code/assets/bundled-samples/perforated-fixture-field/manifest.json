@@ -16,5 +16,8 @@
     "Southern mounting bank",
     "Fixture pitch annotations"
   ],
+  "dimension_presentation": {
+    "all_authored": true
+  },
   "provenance": []
 }
