@@ -135,3 +135,47 @@ NAV_OUTPUT=target/m97/optimized-r5 NAV_MANIFEST=target/m97/dev-artifacts-r5/prod
 ```
 
 Integrated clean-source qualification and the frozen preview remain pending.
+
+## Qualification harness corrections
+
+The initial clean nomination `20260908T114541-82fb60fa` stopped at three
+warnings-denied `float_cmp` assertions in the exact-value editor regression.
+Commit `d097c24` preserves exact equality by comparing floating-point bits.
+The resumed run `20260908T115102-41556b3b` passed workspace Clippy, all native
+workspace and separate headless sample/edit/history checks, WASM and browser
+preparation, artifact transport, Rust documentation and benchmark preparation.
+It remains a failed attempt: two optimized-WASM lifecycle cases and 46 full
+browser cases passed, while one lifecycle and one browser case failed.
+
+Both failures are `HARNESS_ERROR`, with their original evidence retained:
+
+- The independent WASM frame composer retained standalone All defaults while the
+  production workbench deliberately defaults to Focused. For the first Jansen
+  mismatch, all non-dimension drawing items are exactly equal; the expected frame
+  alone includes 77 dimension primitives. The composer now explicitly applies
+  Focused through the public native presentation owner and asserts the workbench
+  mode. Full-frame equality, including provenance and geometry, is preserved.
+- The first-shader context-recovery screenshot placed the Y datum glyph beneath
+  the wider Dimensions toolbar, leaving exactly two colored pixels. The harness
+  now centers the camera through the ordinary control and independently requires
+  both glyph sampling rectangles to clear that toolbar. Both original colored
+  glyph assertions and the line-interior pixel threshold remain unchanged. The
+  focused browser case passes against the same prepared artifact.
+
+The failed runs do not qualify a release. The replacement nomination must use
+authenticated unchanged-input evidence through the integrated runner and execute
+every affected obligation again. No production renderer, geometry or solver
+behavior changed in these harness corrections.
+
+Focused correction checks passed:
+
+```bash
+cargo fmt --all -- --check
+CARGO_BUILD_JOBS=4 CARGO_PROFILE_RELEASE_INCREMENTAL=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked --release -p geosolve-demo-web --lib actual_wasm_all_bundled_samples_match_independently_composed_production_frames --target wasm32-unknown-unknown
+node_modules/.bin/playwright test tests/e2e/canvas-renderer.spec.ts --grep "context loss retains" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/browser-glyph-focused
+```
+
+The WASM command passes its one all-sample case; the browser command passes its
+one case in 10.8 seconds. The latter uses the resumed gate's prepared harness
+`4814c5b3d8e08cb4b7a696c4f7fc1a889be875e368a092185c8da95fb8f42fef`,
+port 18102 and the Nix Chromium path through the same environment variables above.

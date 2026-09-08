@@ -595,6 +595,19 @@ mod wasm {
                     .unwrap_or_else(|error| panic!("{key} direct fitted scene: {error}"));
                 scene.set_annotations_visible(true);
                 scene.set_show_all_constraint_annotations(false);
+                // The production workbench defaults to Focused; standalone
+                // native scenes retain All until the host applies its policy.
+                // Compose that policy through the public native owner, keeping
+                // the full frame comparison independent of WorkbenchBridge.
+                assert_eq!(snapshot["dimensions"]["mode"], "focused", "{key}");
+                let mut dimensions =
+                    geosolve_constraint_editor::DimensionPresentationState::default();
+                dimensions.mode = geosolve_constraint_editor::DimensionDisplayMode::Focused;
+                dimensions.apply(
+                    &mut scene,
+                    &geosolve_constraint_editor::AnnotationLayoutState::default(),
+                    &geosolve_constraint_editor::DimensionPresentationContext::default(),
+                );
                 let accepted = editor
                     .presentation_session()
                     .and_then(

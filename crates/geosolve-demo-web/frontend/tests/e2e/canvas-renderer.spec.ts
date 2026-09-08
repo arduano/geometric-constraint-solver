@@ -284,6 +284,8 @@ async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
   const canvas = await openJansen(page);
   await expect.poll(() => page.evaluate(() => Reflect.get(globalThis, "__m94FirstShaderLoss")))
     .toEqual({ injected: 1, restored: 1 });
+  // Keep both datum glyph witnesses clear of the overlaid canvas controls.
+  await page.getByRole("button", { name: "Center on origin", exact: true }).click();
   await page.mouse.move(0, 0);
   await settlePresentation(page);
   const scene = await presentedFrame(canvas);
@@ -291,6 +293,7 @@ async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
   await info.attach("first-shader-loss-pixels", { body: screenshot, contentType: "image/png" });
   const pixels = decodeScreenshot(screenshot);
   const box = (await canvas.boundingBox())!;
+  const controls = (await page.getByRole("toolbar", { name: "Canvas view" }).boundingBox())!;
   const scaleX = pixels.width / box.width; const scaleY = pixels.height / box.height;
   const countColor = (bounds: { x: number; y: number; width: number; height: number }, color: string) => {
     const target = color.match(/[a-f\d]{2}/gi)!.map((component) => Number.parseInt(component, 16));
@@ -317,7 +320,13 @@ async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
   const textPixels = labels.map((item) => {
     if (item.kind !== "text" || !item.style.fill) throw Error("Expected colored datum text");
     const size = item.style.fontSize;
-    const count = countColor({ x: item.position[0], y: item.position[1] - size * 1.5, width: size * 1.5, height: size * 1.8 }, item.style.fill);
+    const bounds = { x: item.position[0], y: item.position[1] - size * 1.5, width: size * 1.5, height: size * 1.8 };
+    const unobstructed = box.x + bounds.x + bounds.width <= controls.x
+      || box.x + bounds.x >= controls.x + controls.width
+      || box.y + bounds.y + bounds.height <= controls.y
+      || box.y + bounds.y >= controls.y + controls.height;
+    expect(unobstructed, `glyph ${item.text} pixel witness must clear the canvas controls`).toBe(true);
+    const count = countColor(bounds, item.style.fill);
     expect(count, `restored glyph ${item.text} must have actual colored text pixels`).toBeGreaterThan(2);
     return { id: item.id, count };
   });
