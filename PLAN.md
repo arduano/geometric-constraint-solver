@@ -8468,6 +8468,18 @@ Status: **PROTOTYPE_READY_FOR_UAT**, not accepted or release-qualified. Pinned t
 
 No solver math, primitive or M97 implementation changes; no other checkout/service touched.
 
+### M98-B — bounded baked-profile data follow-up
+
+Status: **PROTOTYPE_READY_FOR_UAT**; [contract](docs/M98_BAKE_CONTRACT.md) and
+[actual exports, checks and handoff](docs/M98_BAKE_HANDOFF.md).
+
+- [x] Headless `bake` from current accepted disk source through Rust production topology/sampling.
+- [x] Real Pi footprint and circle/arc fixtures, source-hash and private dimension-change proof.
+- [x] Focused exporter/native checks and preserved 14/14 actual-browser file-sync regressions.
+
+Consumer import/STL validation is independently owned. No solid kernel, case design, M97 closure
+or production release qualification is included.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:
