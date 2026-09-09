@@ -23,6 +23,7 @@ import { DeclarationPanel, DetailsPanel, Explorer, ParametersView, ProblemsView,
 import { CodeEditor, type EditorNavigation } from "./components/code-editor";
 import { OpenSurface, type SampleEntry } from "./components/open-surface";
 import type { ToolCatalog } from "./lib/tool-catalog";
+import { AuthoringEditContext } from "./lib/authoring-edit";
 import type { FolderWorkbenchAdapter } from "./lib/folder-adapter";
 import { toolLabel, toolSection } from "./lib/tool-catalog";
 
@@ -157,6 +158,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       const checked = await resolveAdapterSnapshot(next);
       const catalog = await adapter.toolCatalog();
       if (startupRequest.current !== request) return false;
+      if (folder && !folder.installSnapshot(checked)) return false;
       snapshotRef.current = checked;
       suppressInstalledSnapshotAutosave.current = checked;
       setSnapshot(checked);
@@ -222,6 +224,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const acceptSnapshot = useCallback(async (next: WorkbenchSnapshot) => {
     const checked = await resolveAdapterSnapshot(next);
     const before = snapshotRef.current;
+    if (folder && !folder.installSnapshot(checked)) return before ?? checked;
     const beforeFile = before?.source.files.find((file) => file.path === before.source.selectedPath);
     const localDirty = Boolean(beforeFile && draftRef.current !== beforeFile.contents);
     const nextFile = checked.source.files.find((file) => file.path === checked.source.selectedPath) ?? checked.source.files[0];
@@ -229,7 +232,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     snapshotRef.current = checked;
     setSnapshot(checked);
     return checked;
-  }, [resolveAdapterSnapshot]);
+  }, [folder, resolveAdapterSnapshot]);
   const acceptCanvasSnapshot = useCallback((next: WorkbenchSnapshot) => {
     void acceptSnapshot(next).catch(reportError);
   }, [acceptSnapshot, reportError]);
@@ -495,9 +498,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   };
 
   return (
-    <div className="flex h-dvh min-h-[720px] min-w-[1024px] flex-col overflow-hidden bg-canvas text-foreground" onInputCapture={(event) => {
-      if (event.target instanceof HTMLInputElement) folder?.fieldChanged(event.target.getAttribute("aria-label") ?? "Inspector input", event.target.value);
-    }}>
+    <AuthoringEditContext.Provider value={folder}><div className="flex h-dvh min-h-[720px] min-w-[1024px] flex-col overflow-hidden bg-canvas text-foreground">
       {folder && <div className="flex h-11 min-w-0 shrink-0 items-center gap-2 border-b border-border bg-raised px-3 text-xs" role="region" aria-label="Local folder">
         <strong className="shrink-0">Local folder · </strong><span className="max-w-[30%] truncate" title={folder.state?.paths.source}>{folder.state?.paths.source}</span>
         <span className={`min-w-0 flex-1 truncate ${folder.state?.ok ? "" : "text-danger"}`} title={folder.notice} role="status">{folder.notice}</span>
@@ -539,7 +540,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       </div>
 
       <ReproDialog adapter={adapter} open={reproOpen} onOpenChange={setReproOpen} onError={reportError} />
-    </div>
+    </div></AuthoringEditContext.Provider>
   );
 }
 

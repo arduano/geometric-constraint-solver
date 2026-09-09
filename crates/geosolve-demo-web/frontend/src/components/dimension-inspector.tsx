@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import { useAuthoringEdit } from "../lib/authoring-edit";
 import { Pin, PinOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { DimensionEntry, DimensionsSnapshot } from "../lib/adapter";
@@ -64,19 +65,21 @@ function DimensionRow({ entry, actions, pinCount, editingBlocked, inspectionBloc
 }
 
 function DimensionValue({ label, value, unit, editable, reference, blockedReason, onFocus, onEdit }: { label: string; value: string; unit?: string; editable: boolean; reference?: boolean; blockedReason?: string; onFocus?: () => void; onEdit: (value: string) => void }) {
+  const editing = useAuthoringEdit(`${label} value`);
   const [draft, setDraft] = useState(value);
   const lastSubmitted = useRef(value);
-  useEffect(() => { setDraft(value); lastSubmitted.current = value; }, [value]);
+  useEffect(() => { editing.cancel(); setDraft(value); lastSubmitted.current = value; }, [value]);
   const submit = (next: string) => {
+    if (next === value) editing.cancel();
     if (next === lastSubmitted.current || !editable || blockedReason) return;
     lastSubmitted.current = next;
-    onEdit(next);
+    editing.commit(() => onEdit(next));
   };
   if (!editable) return <p aria-label={`${label} value`} className="text-right text-sm tabular-nums text-foreground">{reference ? `(${value}${unit ? ` ${unit}` : ""})` : `${value}${unit ? ` ${unit}` : ""}`}</p>;
   return <span className="flex min-w-0">
-    <input aria-label={`${label} value`} value={draft} disabled={Boolean(blockedReason)} title={blockedReason} onFocus={onFocus} onChange={(event) => setDraft(event.target.value)} onBlur={(event) => submit(event.currentTarget.value)} onKeyDown={(event) => {
+    <input aria-label={`${label} value`} value={draft} disabled={Boolean(blockedReason)} title={blockedReason} onFocus={() => { editing.begin(); onFocus?.(); }} onChange={(event) => { editing.change(event.target.value); setDraft(event.target.value); }} onBlur={(event) => submit(event.currentTarget.value)} onKeyDown={(event) => {
       if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); submit(event.currentTarget.value); }
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setDraft(value); lastSubmitted.current = value; }
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); editing.cancel(); setDraft(value); lastSubmitted.current = value; }
     }} className="h-7 min-w-0 flex-1 rounded-l border border-border bg-canvas px-2 text-right text-xs tabular-nums text-foreground outline-none focus:border-accent disabled:opacity-40" />
     <span className="flex h-7 items-center rounded-r border border-l-0 border-border bg-raised px-2 text-[10px] text-muted">{unit}</span>
   </span>;

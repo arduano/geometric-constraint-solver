@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { assertWorkbenchSnapshot, stampCanvasSnapshot, type WorkbenchAdapter, type WorkbenchSnapshot, type PointerSample, type WheelSample } from "./adapter";
+import { assertWorkbenchSnapshot, getCanvasSnapshotSequence, stampCanvasSnapshot, type WorkbenchAdapter, type WorkbenchSnapshot, type PointerSample, type WheelSample } from "./adapter";
 import type { ToolCatalog } from "./tool-catalog";
 
 export interface FolderState {
@@ -18,9 +18,13 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   notice = "Connecting to local folder…";
   pending = "";
   private hash: string | null = null;
+  private installedSequence = -1;
+  private readonly snapshotHashes = new WeakMap<object, string | null>();
+  private readonly fields = new Map<string, { base: string | null; label: string; value: string }>();
+  private committingField?: string;
   private draftBase: string | null | undefined;
-  private fieldBase: string | null | undefined;
-  private fieldDraft = "";
+  private get fieldBase() { return this.fields.values().next().value?.base; }
+  private get fieldDraft() { return JSON.stringify([...this.fields.values()], null, 2); }
   private retainedError = "";
   private tail: Promise<unknown> = Promise.resolve();
   private sequence = 0;
@@ -32,9 +36,11 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
     try { this.pending = sessionStorage.getItem("geosolve.folder.pending") ?? ""; } catch { /* In-memory intent remains available. */ }
   }
   private rpc<T>(method: string, input?: unknown): Promise<T> {
-    const expected = method === "dispatch" && (input as { command?: string })?.command === "source.prepare"
-      ? this.draftBase ?? this.hash : method === "dispatch" && /(?:edit|set)$/.test((input as { command?: string })?.command ?? "")
-        ? this.fieldBase ?? this.hash : this.hash;
+    // Capture intent authority when enqueued, never from a later disk observation.
+    const field = this.committingField;
+    const fieldIntent = field ? this.fields.get(field) : undefined;
+    const expected = method === "dispatch" && (input as { command?: string })?.command === "source.prepare" && this.draftBase !== undefined
+      ? this.draftBase : this.fieldBase !== undefined ? this.fieldBase : this.hash;
     const run = this.tail.then(async () => {
       const response = await fetch("/api/rpc", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
@@ -42,9 +48,6 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
       });
       const body = await response.json() as { result: T; state?: FolderState; error?: string; pendingSource?: string };
       if (body.state) this.state = body.state;
-      if (response.ok && method === "dispatch" && /(?:edit|set)$/.test((input as { command?: string })?.command ?? "")
-        && body.result && typeof body.result === "object" && "source" in body.result
-        && !(body.result as unknown as WorkbenchSnapshot).source.dirty && (body.result as unknown as WorkbenchSnapshot).project.status === "accepted") this.fieldBase = undefined;
       if (this.fieldBase !== undefined && this.fieldBase !== this.state?.currentHash && this.fieldDraft) {
         this.pending = this.fieldDraft;
         try { sessionStorage.setItem("geosolve.folder.pending", this.pending); } catch { /* Download remains available. */ }
@@ -59,8 +62,12 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
         this.listener?.();
         throw Error(this.notice);
       }
-      // Only snapshots advance the client's displayed-source CAS token.
-      if (body.result && typeof body.result === "object" && "frame" in body.result) this.hash = this.state?.currentHash ?? null;
+      // Fetching is observation. Only the host can acknowledge installation.
+      if (body.result && typeof body.result === "object" && "frame" in body.result) {
+        this.snapshotHashes.set(body.result, body.state?.currentHash ?? null);
+        const result = body.result as unknown as WorkbenchSnapshot;
+        if (field && this.fields.get(field) === fieldIntent && !result.source.dirty && result.project.status === "accepted") this.fields.delete(field);
+      }
       this.notice = this.retainedError || (this.fieldBase !== undefined && this.fieldBase !== this.state?.currentHash
         ? "Disk changed while an Inspector edit is pending. Your input is retained; applying it will report a conflict."
         : this.state?.ok ? "Saved to disk" : `Last accepted geometry retained — ${this.state?.status}: ${this.state?.diagnostics.map((item) => item.detail).join("; ")}`);
@@ -81,7 +88,6 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   async dispatch(input: { version: 2; command: string; payload?: unknown }) {
     const result = this.checked(await this.rpc<WorkbenchSnapshot>("dispatch", input));
     if (["source.prepare", "source.revert"].includes(input.command) && !result.source.dirty) this.draftBase = undefined;
-    if (/(?:edit|set)$/.test(input.command) && !result.source.dirty && result.project.status === "accepted") this.fieldBase = undefined;
     return result;
   }
   async managedCompilerContext(): Promise<{ version: 2; patches: Record<string, unknown> }> { throw Error("Folder compiler transactions settle in the local Rust bridge."); }
@@ -99,10 +105,29 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
     if (dirty && this.draftBase === undefined) this.draftBase = this.hash;
     if (!dirty) this.draftBase = undefined;
   }
-  fieldChanged(label: string, value: string) {
-    if (this.fieldBase === undefined) this.fieldBase = this.hash;
-    this.fieldDraft = JSON.stringify({ label, value, baseHash: this.fieldBase }, null, 2);
+  /** Called after host validation and immediately before replacing displayed state. */
+  installSnapshot(snapshot: WorkbenchSnapshot): boolean {
+    if (!this.snapshotHashes.has(snapshot)) throw Error("Folder snapshot has no transport authority");
+    const sequence = getCanvasSnapshotSequence(snapshot)!;
+    if (sequence < this.installedSequence) return false;
+    const hash = this.snapshotHashes.get(snapshot)!;
+    if ((this.fieldBase !== undefined && this.fieldBase !== hash) || (this.draftBase !== undefined && this.draftBase !== hash)) return false;
+    this.hash = hash;
+    this.installedSequence = sequence;
+    return true;
   }
+  beginFieldEdit(id: string, label: string) {
+    if (!this.fields.has(id)) this.fields.set(id, { base: this.hash, label, value: "" });
+  }
+  changeFieldEdit(id: string, label: string, value: string) {
+    this.beginFieldEdit(id, label);
+    this.fields.set(id, { ...this.fields.get(id)!, value });
+  }
+  commitFieldEdit(id: string, action: () => void) {
+    this.committingField = id;
+    try { action(); } finally { this.committingField = undefined; }
+  }
+  cancelFieldEdit(id: string) { this.fields.delete(id); }
   subscribe(listener: (snapshot?: WorkbenchSnapshot) => void) {
     this.listener = listener;
     const events = new EventSource(`/api/events?token=${encodeURIComponent(this.token)}`);
@@ -119,10 +144,10 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   async refresh(explicit = true) {
     if (explicit) {
       if (this.fieldBase !== undefined) this.pending = this.fieldDraft;
-      this.fieldBase = undefined;
+      this.fields.clear();
       this.retainedError = "";
     }
-    try { const snapshot = await this.snapshot(); if (this.fieldBase === undefined) this.listener?.(snapshot); return snapshot; }
+    try { const snapshot = await this.snapshot(); if (this.fieldBase === undefined && this.draftBase === undefined) this.listener?.(snapshot); return snapshot; }
     catch (error) { this.notice = `Refresh failed; pending intent retained: ${String(error)}`; this.listener?.(); throw error; }
   }
 }

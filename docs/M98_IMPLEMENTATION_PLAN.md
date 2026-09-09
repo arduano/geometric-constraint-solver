@@ -33,7 +33,7 @@ and closed; M98 stays open until integrated qualification and supervising-user a
 ## Ordered work
 
 - [x] Merge accepted M97 descendant into the existing M98 worktree without rewriting history.
-- [ ] Freeze and fix stale installed-vs-observed authority and broken-derived-cache startup.
+- [x] Freeze and fix stale installed-vs-observed authority and broken-derived-cache startup.
 - [ ] Add SDK runtime recorder and separate validated generator-program admission.
 - [ ] Extract shared headless engine/native session and dedicated WASM/TS package.
 - [ ] Add complete project loading/watching and packaged CLI inspect/set/apply/status/recovery.
@@ -93,6 +93,11 @@ bytes; do not promise atomic CAS against uncooperative external writers holding 
   requires row-by-row review and owning-layer defects use the hardening skill.
 
 ## Evidence ledger
+
+[M98-F001/F002 focused hardening](M98_HARDENING.md) records the reproduced
+failures, transport/cache fixes and passing owner checks. Integrated qualification
+and the broader persistence/session guarantees remain pending.
+
 
 Merge `1584a5a` integrates M97 `3152f33` with the earlier M98 prototype. It resolves additive
 bridge modules, preserves folder draft tracking and M97 metadata controls, and imports accepted

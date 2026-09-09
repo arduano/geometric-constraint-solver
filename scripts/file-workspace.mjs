@@ -97,14 +97,11 @@ export async function openProject(folder, { cache = true } = {}) {
   let candidateSince = 0;
   let notify = () => {};
   const lastGoodPath = resolve(cachePath, "last-good.ts");
-  if (cache && existsSync(lastGoodPath)) {
-    const previous = readSource(lastGoodPath);
-    if (await apply(previous)) { acceptedHash = hash(previous); acceptedRevision = sourceRevision; }
-  }
+  const warnings = [];
   const sourceOf = (value) => value.source.files.find((file) => file.path === "sketch.ts")?.contents;
   const state = () => ({
     format: "geosolve-folder-status-v1", ok: !ioError && currentHash === acceptedHash && !snapshot.source.dirty && snapshot.project.status === "accepted",
-    sequence, revision: sourceRevision, acceptedRevision, workbenchRevision: snapshot.revision, currentHash, acceptedHash,
+    warnings, sequence, revision: sourceRevision, acceptedRevision, workbenchRevision: snapshot.revision, currentHash, acceptedHash,
     status: ioError ? "error" : currentHash !== acceptedHash ? "stale" : snapshot.source.dirty ? "unsaved" : "saved",
     diagnostics: ioError ? [{ path: "sketch.ts", detail: ioError }] : snapshot.problems,
     paths: { folder, source: sourcePath, manifest: manifestPath }, externalApplies, writes,
@@ -133,7 +130,10 @@ export async function openProject(folder, { cache = true } = {}) {
       if (accepted) {
         acceptedHash = digest;
         acceptedRevision = sourceRevision;
-        if (cache) atomicWrite(lastGoodPath, text);
+        if (cache) {
+          try { atomicWrite(lastGoodPath, text); }
+          catch (error) { warnings.push(`Derived cache update failed: ${error}`); }
+        }
       }
       publish();
     } catch (error) {
@@ -141,7 +141,26 @@ export async function openProject(folder, { cache = true } = {}) {
       if (ioError !== detail) { ioError = detail; publish(); }
     }
   }
+  // Current authored files are primary. Read optional cache only after current
+  // reconstruction fails, and never let malformed derived bytes block opening.
   await scan(true);
+  if (acceptedHash === null && cache && existsSync(lastGoodPath)) {
+    const rejected = (await adapter.persistProject()).contents;
+    try {
+      const previous = readSource(lastGoodPath);
+      if (await apply(previous)) {
+        acceptedHash = hash(previous);
+        acceptedRevision = 0;
+        if (currentHash !== null) await apply(readSource(sourcePath));
+      } else {
+        snapshot = await adapter.construct({ version: 2, persistedProject: rejected });
+        warnings.push("Derived last-good cache is invalid; current source diagnostics retained.");
+      }
+    } catch (error) {
+      snapshot = await adapter.construct({ version: 2, persistedProject: rejected });
+      warnings.push(`Derived last-good cache ignored: ${error}`);
+    }
+  }
   await adapter.dispatch({ version: 2, command: "view.fit" });
   snapshot = await adapter.snapshot();
 
@@ -189,7 +208,7 @@ export async function openProject(folder, { cache = true } = {}) {
       candidate = null;
       if (cache) {
         try { atomicWrite(lastGoodPath, after); }
-        catch (error) { ioError = `Source saved, but derived last-good cache failed: ${error}`; }
+        catch (error) { warnings.push(`Source saved, but derived last-good cache failed: ${error}`); }
       }
       publish();
     }
