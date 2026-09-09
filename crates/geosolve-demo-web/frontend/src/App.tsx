@@ -115,9 +115,12 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   }), [reportError]);
 
   const resolveAdapterSnapshot = useCallback((next: WorkbenchSnapshot) => {
-    const resolve = () => resolvePendingManagedMutationSnapshot(adapter, next);
+    const resolve = async () => {
+      const snapshot = await resolvePendingManagedMutationSnapshot(adapter, next);
+      return folder ? folder.prepareSnapshot(snapshot) : snapshot;
+    };
     return next.pendingManagedMutation && adapter.activity ? adapter.activity.track(resolve) : resolve();
-  }, [adapter]);
+  }, [adapter, folder]);
 
   const queueProjectSave = useCallback((intent: ProjectSaveIntent, clearError: boolean) => {
     if (folder) return folder.refresh().then(() => undefined).catch(reportError);
@@ -616,8 +619,8 @@ function DesignWorkspace({ adapter, snapshot, catalog, editingBlockedReason, onS
     </div>
     <div className="relative min-h-0 flex-1">
       <CanvasViewport adapter={adapter} snapshot={snapshot} onSnapshot={onSnapshot} onCaptureChange={captured} onError={onError} />
-      <CanvasControls disabled={busy} gridVisible={snapshot.presentation.gridVisible} dimensionMode={snapshot.dimensions?.mode} onDimensionMode={onDimensionMode} onCommand={onViewCommand} />
-      {busy && <SolvingIndicator />}
+      <CanvasControls disabled={busy && !adapter.responsiveCanvas} gridVisible={snapshot.presentation.gridVisible} dimensionMode={snapshot.dimensions?.mode} onDimensionMode={onDimensionMode} onCommand={onViewCommand} />
+      {busy && <SolvingIndicator navigable={adapter.responsiveCanvas} />}
     </div>
   </section>;
 }

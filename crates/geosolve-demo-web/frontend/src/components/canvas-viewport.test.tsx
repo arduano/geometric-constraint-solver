@@ -53,6 +53,23 @@ describe("canvas host lifecycle", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(cancel).toHaveBeenCalledExactlyOnceWith({ version: 2, reason: "lost-capture" });
   });
+  it("keeps local hover, selection and wheel responsive during remote solving", async () => {
+    vi.useFakeTimers();
+    const h = await setup();
+    Object.assign(h.adapter, { responsiveCanvas: true });
+    const pointer = vi.spyOn(h.adapter, "pointer"), wheel = vi.spyOn(h.adapter, "wheel");
+    const finish = h.adapter.activity.begin();
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    pointerEvent(h.host, "pointermove");
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    pointerEvent(h.host, "pointerup");
+    fireEvent.wheel(h.host, { deltaY: -90 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(pointer.mock.calls.map(([sample]) => sample.phase)).toEqual(["move", "down", "up"]);
+    expect(wheel).toHaveBeenCalledOnce();
+    expect(h.host).toHaveAttribute("aria-busy", "true");
+    await act(async () => { finish(); });
+  });
   it("preserves CSS-local pointer input and normal pointer-up capture retirement", async () => {
     const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer"); const cancel = vi.spyOn(h.adapter, "cancel");
     vi.spyOn(h.host, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 50, 2000, 700));

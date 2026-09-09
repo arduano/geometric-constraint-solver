@@ -16,6 +16,8 @@ async function mount() {
     sessionStorage.setItem("geosolve.folder.token", token);
     history.replaceState(null, "", location.pathname + location.search);
     folder = new FolderWorkbenchAdapter(token);
+    const folderSession = folder;
+    window.addEventListener("pagehide", (event) => { if (!event.persisted) folderSession.dispose(); });
     adapter = folder;
   } else if (import.meta.env.PROD && import.meta.env.VITE_GEOSOLVE_MOCK !== "1") {
     const worker = new WorkerWorkbenchAdapter();
