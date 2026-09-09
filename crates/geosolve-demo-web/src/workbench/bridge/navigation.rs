@@ -94,7 +94,7 @@ struct SourceRequest {
 }
 
 impl WorkbenchBridge {
-    fn navigation_geometry_key(&self) -> String {
+    pub(super) fn navigation_geometry_key(&self) -> String {
         // All values are small authority tokens or bounded presentation state.
         // Camera and selection are deliberately absent from the index lifetime.
         serde_json::json!({

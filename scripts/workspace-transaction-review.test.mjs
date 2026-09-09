@@ -75,7 +75,7 @@ async function directFixture(t, { fault = () => {}, populate } = {}) {
   t.after(async () => { await project.dispose(); lock.release(); rmSync(folder, { recursive: true, force: true }); });
   const clientId = "direct-review";
   await project.request("session.join", undefined, undefined, { clientId });
-  const request = (method, input, operationId, basis = project.state(clientId)) => project.request(method, input, basis.currentHash, { clientId, authority: basis.authority, operationId });
+  const request = (method, input, operationId, basis = project.state(clientId), extension = {}) => project.request(method, input, basis.currentHash, { clientId, authority: basis.authority, operationId, ...extension });
   return { folder, storage, get project() { return project; }, request, state: () => project.state(clientId), source: () => readFileSync(resolve(folder, "sketch.ts"), "utf8"),
     restart: async () => { await project.dispose(); project = await openProject(folder, { storage }); await project.request("session.join", undefined, undefined, { clientId }); } };
 }
@@ -83,6 +83,60 @@ async function directFixture(t, { fault = () => {}, populate } = {}) {
 function sourceEdit(source, radius) {
   return { version: 2, command: "source.prepare", payload: { path: "sketch.ts", contents: source.replace("value: mm(10)", `value: mm(${radius})`) } };
 }
+
+test("local interaction cannot change native state before file transaction validation", async (t) => {
+  const f = await directFixture(t);
+  const source = f.source();
+  const before = await f.project.adapter.bakeProfile(0.02);
+  const basis = f.state();
+  const calls = [];
+  f.project.adapter.interactionApply = async (state) => { calls.push(state); throw Error("must not apply interaction"); };
+  const extension = { localInteraction: true, interaction: { opaque: "selection" } };
+  for (const [input, expected] of [
+    [{}, /candidate file contents/],
+    [{ files: {} }, /candidate file contents/],
+    [{ files: { "outside.ts": "unreferenced source" } }, /dependency graph/],
+    [{ files: { "geosolve.json": JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "generator" }) } }, /mode|restart/],
+  ]) await assert.rejects(f.request("files.apply", input, "invalid-local-file-edit", basis, extension), expected);
+  await assert.rejects(f.request("files.apply", { files: { "sketch.ts": source } }, "stale-local-file-edit", { ...basis, currentHash: "stale" }, extension), /Conflict/);
+  assert.deepEqual(calls, []);
+  assert.equal(f.source(), source);
+  assert.equal(f.state().writes, basis.writes);
+  assert.deepEqual((await f.project.adapter.bakeProfile(0.02)).regions, before.regions);
+});
+
+test("local interaction and the following source edit remain inside publication rollback", async (t) => {
+  let armed = false;
+  const order = [];
+  const f = await directFixture(t, { fault: (point) => {
+    if (armed && point === "staged") { order.push("publication-failed"); throw Error("injected local interaction publication failure"); }
+  } });
+  const source = f.source();
+  const before = await f.project.adapter.bakeProfile(0.02);
+  const basis = f.state();
+  const persist = f.project.adapter.persistProject;
+  const dispatch = f.project.adapter.dispatch;
+  f.project.adapter.persistProject = async () => { order.push("rollback-captured"); return persist(); };
+  f.project.adapter.dispatch = async (input) => { order.push(input.command); return dispatch(input); };
+  f.project.adapter.interactionApply = async (state) => {
+    order.push("interaction-applied");
+    assert.deepEqual(state, { opaque: "native-prediction" });
+    return f.project.adapter.resize({ version: 2, width: 737, height: 480, pixelRatio: 1 });
+  };
+  armed = true;
+  await assert.rejects(f.request("dispatch", sourceEdit(source, 12), "local-interaction-publication-failure", basis,
+    { localInteraction: true, interaction: { opaque: "native-prediction" } }), /injected local interaction publication failure/);
+  f.project.adapter.persistProject = persist;
+  f.project.adapter.dispatch = dispatch;
+  assert.deepEqual(order, ["rollback-captured", "interaction-applied", "source.prepare", "publication-failed", "workspace.checkpoint.restore"]);
+  assert.equal(f.source(), source);
+  assert.deepEqual((await f.project.adapter.bakeProfile(0.02)).regions, before.regions);
+  assert.equal(f.state().acceptedHash, basis.acceptedHash);
+  assert.equal(f.state().writes, basis.writes);
+  assert.equal(f.storage.outcome("local-interaction-publication-failure").state, "conflict");
+  assert.equal((await f.project.adapter.snapshot()).frame.scene.viewBox[2], 737,
+    "failed authoring preserves the user's current camera under the existing rollback contract");
+});
 
 test("storage staging failure restores native accepted geometry and authored bytes", async (t) => {
   let armed = false;

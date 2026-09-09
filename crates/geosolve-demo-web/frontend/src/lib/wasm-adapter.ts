@@ -8,6 +8,8 @@ import { assertToolCatalog } from "./tool-catalog";
 /** Structural view of the generated wasm-bindgen handle, kept out of generated source. */
 export interface JsonWorkbenchHandle {
   snapshot(): string;
+  interactionSnapshot?(): string;
+  interactionApply?(request: string): string;
   toolCatalog(): string;
   dispatch(request: string): string;
   managedCompilerContext(): string;
@@ -105,6 +107,26 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
     return this.catalog;
   }
   async snapshot() { return this.decodeFull(this.required().snapshot()); }
+  async interactionSnapshot(): Promise<{ snapshot: WorkbenchSnapshot; seed: Record<string, unknown> }> {
+    const handle = this.required();
+    if (!handle.interactionSnapshot) throw Error("Local interaction export requires the current WASM build");
+    const exported = JSON.parse(handle.interactionSnapshot()) as { snapshot?: WorkbenchSnapshot; seed?: unknown } | null;
+    if (!exported || typeof exported !== "object" || Array.isArray(exported)
+      || Object.keys(exported).some((key) => !["snapshot", "seed"].includes(key))
+      || !exported.seed || typeof exported.seed !== "object" || Array.isArray(exported.seed)
+      || !exported.snapshot) throw Error("Malformed native interaction export");
+    // Native captures the seed and chrome together. Keep seed contents opaque;
+    // install the full validated chrome as the next incremental-frame base.
+    const snapshot = assertWorkbenchSnapshot(exported.snapshot);
+    freezeDrawFrame(snapshot.frame.scene);
+    this.current = stampCanvasSnapshot(snapshot, ++this.sequence);
+    return { snapshot: this.current, seed: exported.seed as Record<string, unknown> };
+  }
+  async interactionApply(input: Record<string, unknown>): Promise<WorkbenchSnapshot> {
+    const handle = this.required();
+    if (!handle.interactionApply) throw Error("Local interaction apply requires the current WASM build");
+    return this.decodeFull(handle.interactionApply(JSON.stringify(input)));
+  }
   async dispatch(input: { version: 2; command: string; payload?: unknown }) {
     const next = this.decodeUpdate(this.required().dispatch(JSON.stringify(input)));
     if (!next && this.current && ["dimensions.navigation.end", "dimensions.hover.clear"].includes(input.command)) {

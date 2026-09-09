@@ -63,6 +63,61 @@ mod workbench;
 mod wasm {
     use wasm_bindgen::prelude::*;
 
+    /// Browser-local accepted presentation. It has no solver, source or persistence owner.
+    #[wasm_bindgen]
+    pub struct InteractionHandle {
+        local: crate::workbench::bridge::local_interaction::LocalInteraction,
+    }
+    impl std::fmt::Debug for InteractionHandle {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter
+                .debug_struct("InteractionHandle")
+                .finish_non_exhaustive()
+        }
+    }
+    #[wasm_bindgen]
+    impl InteractionHandle {
+        #[wasm_bindgen(constructor)]
+        pub fn new(seed: &str) -> Result<InteractionHandle, JsValue> {
+            crate::workbench::bridge::local_interaction::LocalInteraction::new(seed)
+                .map(|local| Self { local })
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn state(&self) -> Result<String, JsValue> {
+            self.local.state_json().map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn replace(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .replace_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn pointer(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .pointer_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn wheel(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .wheel_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn resize(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .resize_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn cancel(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .cancel_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn dispatch(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .dispatch_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+    }
+
     /// Instance-scoped, DOM-free workbench authority for presentation hosts.
     #[wasm_bindgen]
     pub struct WorkbenchHandle {
@@ -91,6 +146,22 @@ mod wasm {
             self.bridge
                 .snapshot_json()
                 .map_err(|error| JsValue::from_str(&error))
+        }
+
+        /// Exports accepted presentation without granting client edit authority.
+        #[wasm_bindgen(js_name = interactionSnapshot)]
+        pub fn interaction_snapshot(&mut self) -> Result<String, JsValue> {
+            self.bridge
+                .interaction_snapshot_json()
+                .map_err(|e| JsValue::from_str(&e))
+        }
+
+        /// Applies a revision-bound local view before an authoritative command.
+        #[wasm_bindgen(js_name = interactionApply)]
+        pub fn interaction_apply(&mut self, request: &str) -> Result<String, JsValue> {
+            self.bridge
+                .interaction_apply_json(request)
+                .map_err(|e| JsValue::from_str(&e))
         }
 
         /// Returns the immutable CAD command/icon catalog for this host.

@@ -627,39 +627,12 @@ impl WorkbenchBridge {
         let Some(scene) = self.retained_scene.as_ref() else {
             return Ok(());
         };
-        let interaction = self.editor().editor();
-        if let Some(hit) = scene.annotation_hit_test(
+        self.dimensions.hover = geosolve_constraint_editor::dimension_hover_target(
+            scene,
+            self.editor().editor(),
+            self.dimensions.hover,
             position,
-            PickTolerance::default(),
-            interaction.selection(),
-            interaction.hovered(),
-            &[],
-        ) && matches!(hit.item, SelectionItem::Dimension(_))
-        {
-            self.dimensions.hover = Some((hit.item, position));
-            return Ok(());
-        }
-        if let Some((_, origin)) = self.dimensions.hover
-            && scene
-                .annotations
-                .iter()
-                .filter(|annotation| {
-                    self.dimensions
-                        .entries
-                        .iter()
-                        .any(|(entry, _)| entry.visible && entry.key.item == annotation.item)
-                })
-                .any(|annotation| annotation.context_hit_test(position, origin, 12.0))
-        {
-            return Ok(());
-        }
-        self.dimensions.hover = scene
-            .hit_test_with_policy(
-                position,
-                PickTolerance::default(),
-                interaction.geometry_interaction_policy(),
-            )
-            .map(|hit| (hit.item, position));
+        );
         Ok(())
     }
 
@@ -1095,3 +1068,67 @@ struct HoverPayload {
 
 #[cfg(test)]
 mod tests;
+
+impl WorkbenchBridge {
+    pub(super) fn local_dimension_seed(&self) -> super::local_interaction::LocalDimensionSeed {
+        super::local_interaction::LocalDimensionSeed {
+            state: self.dimensions.native.clone(),
+            layout: self.editor().editor().annotation_layout_for_scene(),
+            context: DimensionPresentationContext {
+                selection: self.editor().editor().selection().to_vec(),
+                generated: self
+                    .dimensions
+                    .cache
+                    .dimensions
+                    .iter()
+                    .filter_map(|(item, metadata)| metadata.generated.then_some(*item))
+                    .collect(),
+                default_priority: self
+                    .dimensions
+                    .cache
+                    .dimensions
+                    .iter()
+                    .filter_map(|(item, metadata)| metadata.default_priority.then_some(*item))
+                    .collect(),
+                ..DimensionPresentationContext::default()
+            },
+            ids: self
+                .dimensions
+                .entries
+                .iter()
+                .map(|(entry, row)| (row.id.clone(), entry.key))
+                .collect(),
+        }
+    }
+    pub(super) fn validate_local_dimension_pins(&self, pins: &[String]) -> Result<(), String> {
+        if pins
+            .iter()
+            .any(|id| !self.dimensions.entries.iter().any(|(_, row)| &row.id == id))
+        {
+            return Err("Local dimension pin belongs to a stale scene".into());
+        }
+        Ok(())
+    }
+    pub(super) fn apply_local_dimension_preferences(
+        &mut self,
+        mode: DimensionDisplayMode,
+        pins: &[String],
+        focus: Option<&str>,
+    ) {
+        self.dimensions.native.mode = mode;
+        self.dimensions.native.focus = focus.and_then(|id| {
+            self.dimensions
+                .entries
+                .iter()
+                .find(|(_, row)| row.id == id)
+                .map(|(entry, _)| entry.key)
+        });
+        self.dimensions.native.pins = self
+            .dimensions
+            .entries
+            .iter()
+            .filter(|(_, row)| pins.contains(&row.id))
+            .map(|(entry, _)| entry.key)
+            .collect();
+    }
+}

@@ -14,6 +14,8 @@ parentPort.on("message", (message) => {
     try {
       let result = await adapter[message.method](message.input);
       if (result?.frame) result = await resolvePendingManagedMutationSnapshot(adapter, result);
+      // interactionSnapshot returns its matching chrome/seed pair from one
+      // native call. Keep it opaque and inside this ordered worker turn.
       parentPort.postMessage({ id: message.id, ok: true, result });
     } catch (error) { parentPort.postMessage({ id: message.id, ok: false, error: String(error) }); }
   };

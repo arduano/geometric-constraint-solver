@@ -22,6 +22,7 @@ use navigation::{NavigationSnapshot, NavigationState};
 #[cfg(test)]
 mod dimension_navigation_tests;
 mod dimensions;
+pub(crate) mod local_interaction;
 use dimensions::{DimensionBridgeState, DimensionPersistence, DimensionsSnapshot};
 
 use geosolve_constraint_editor::{

@@ -16,6 +16,11 @@ parentPort.on("message", ({ id, method, input }) => {
     if (input.hang) { while (true) {} }
     value = input.command === "workspace.checkpoint.restore" ? input.payload.contents : input.value;
   }
+  if (method === "interactionApply") value = input.opaque;
+  if (method === "interactionSnapshot") {
+    parentPort.postMessage({ id, ok: true, result: { snapshot: { value }, seed: { opaque: value } } });
+    return;
+  }
   parentPort.postMessage({ id, ok: true, result: method === "persistProject" ? { contents: value } : { value } });
 });`)}`);
 
@@ -34,6 +39,23 @@ for (const [name, input, pattern] of [
   await adapter.dispatch({ value: "next" });
   assert.deepEqual(await adapter.persistProject(), { contents: "next" });
   assert.deepEqual(await adapter.snapshot(), { value: "next" });
+});
+
+test("interaction transport preserves an atomic opaque snapshot/seed pair and ordered application", { timeout: 10000 }, async (t) => {
+  const adapter = await createWorkspaceWorkbench({ workerUrl, timeoutMs: 1000 });
+  t.after(() => adapter.dispose());
+  await adapter.construct({ version: 2, persistedProject: "accepted" });
+  const initial = await adapter.interactionSnapshot();
+  assert.deepEqual(initial, { snapshot: { value: "accepted" }, seed: { opaque: "accepted" } });
+  const calls = [adapter.interactionApply({ opaque: "selected" }), adapter.interactionSnapshot(), adapter.dispatch({ value: "edited" }), adapter.interactionSnapshot()];
+  assert.deepEqual(await Promise.all(calls), [
+    { value: "selected" }, { snapshot: { value: "selected" }, seed: { opaque: "selected" } },
+    { value: "edited" }, { snapshot: { value: "edited" }, seed: { opaque: "edited" } },
+  ]);
+  assert.deepEqual(initial, { snapshot: { value: "accepted" }, seed: { opaque: "accepted" } });
+  await assert.rejects(adapter.dispatch({ crash: 7 }), /exited/);
+  assert.deepEqual(await adapter.interactionSnapshot(), { snapshot: { value: "accepted" }, seed: { opaque: "accepted" } },
+    "transient interaction cannot replace the worker's accepted recovery checkpoint");
 });
 
 test("queued calls preserve order and disposal settles every caller", { timeout: 10000 }, async () => {

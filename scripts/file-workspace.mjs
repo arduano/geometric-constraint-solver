@@ -401,6 +401,19 @@ export async function openProject(folder, { cache = true, storage } = {}) {
 
     const allowed = new Set(["snapshot", "toolCatalog", "dispatch", "pointer", "wheel", "wheelBatch", "resize", "cancel", "exportProject", "exportReproduction", "exportInteractionTrace"]);
     async function request(method, input, baseHash, context) {
+      const result = await requestOperation(method, input, baseHash, context);
+      if (context?.localInteraction === true && result?.frame) {
+        // One native call captures mutually matching chrome and interaction
+        // geometry, still inside the HTTP operation's serial authority scope.
+        const exported = await adapter.interactionSnapshot();
+        snapshot = exported.snapshot;
+        return { ...snapshot, localInteraction: exported.seed };
+      }
+      return result;
+    }
+    async function requestOperation(method, input, baseHash, context) {
+      const interaction = context?.localInteraction === true ? context.interaction : undefined;
+      const interactionSync = method === "interaction.sync" && context?.localInteraction === true && interaction !== undefined;
       if (method === "operation.outcome") return storage?.outcome(input?.operationId) ?? null;
       if (method === "recovery.inspect") return storage?.list() ?? [];
       if (method === "recovery.resolve") {
@@ -420,14 +433,16 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         publish();
         return snapshot ?? adapter.snapshot();
       }
-      if (!["files.apply", "inputs.set"].includes(method) && !allowed.has(method)) throw Error("Unsupported workspace method");
+      if (!interactionSync && !["files.apply", "inputs.set"].includes(method) && !allowed.has(method)) throw Error("Unsupported workspace method");
       if (method === "toolCatalog" || method.startsWith("export")) return adapter[method]();
       if (method === "snapshot") return adapter.snapshot();
       if (method === "dispatch" && ["workspace.project.apply", "workspace.generator.apply", "workspace.checkpoint.restore", "project.new", "project.new-code", "project.import", "sample.open"].includes(input?.command)) {
         throw Error("Folder mode keeps this project's sketch.ts open. Use the ordinary demo URL for New, samples or project import.");
       }
       const operationId = context?.operationId ?? randomBytes(16).toString("hex");
-      const requestDigest = hash(JSON.stringify({ method, input, baseHash, clientId: context?.clientId }));
+      const requestDigest = hash(JSON.stringify({ method, input, baseHash, clientId: context?.clientId,
+        ...(interaction !== undefined ? { interaction } : {}),
+      }));
       const previousOperation = storage?.outcome(operationId);
       if (previousOperation) {
         if (previousOperation.requestDigest !== requestDigest) throw Error("Operation ID already belongs to different intent");
@@ -462,6 +477,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         const previous = { snapshot, acceptedCompilation, acceptedDesign, acceptedProject };
         let publishedSnapshot;
         try {
+          if (interaction !== undefined) snapshot = await adapter.interactionApply(interaction);
           await apply(candidate.files.find((file) => file.path === entry).contents, candidate, basis.revision);
           if (mode === "editable") {
             const bytes = acceptedDesign + "\n";
@@ -508,13 +524,17 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       const navigation = isWorkspaceNavigation(method, input, snapshot)
         || method === "pointer" && ["move", "up"].includes(input?.phase)
           && session.isNavigationGesture(context?.clientId, input?.pointerId);
-      const authoredMutation = !navigation && !isWorkspacePresentation(method, input);
-      if (context && navigation && !session.state(context.clientId).editor.canEdit) return adapter.snapshot();
+      const authoredMutation = !interactionSync && !navigation && !isWorkspacePresentation(method, input);
+      if (context && navigation && interaction === undefined && !session.state(context.clientId).editor.canEdit) return adapter.snapshot();
       if (context) {
+        // A predicted selection is target-bearing even when the following
+        // command only changes the camera. It cannot borrow navigation's
+        // relaxed interaction-revision check.
+        if (interaction !== undefined) session.verify(context.clientId, context.authority);
         if (method === "pointer" && input.phase === "down") session.beginGesture(context.clientId, context.authority, input.pointerId, { navigation });
         else session.verify(context.clientId, context.authority, { navigation, pointerId: method === "pointer" ? input.pointerId : undefined });
       }
-      if (mode === "generator" && !navigation && !(
+      if (mode === "generator" && !navigation && !interactionSync && !(
         method === "pointer" && !(input.buttons & 1 && input.phase === "move")
         || method === "dispatch" && ["selection.select", "declaration.select", "navigation.rows.select", "dimensions.focus"].includes(input?.command)
         || method === "dispatch" && input?.command === "tool.select" && input.payload?.id === "select"
@@ -526,7 +546,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         error.conflict = true;
         throw error;
       }
-      if (!navigation && (baseHash !== currentHash || diskIdentity() !== baseHash)) {
+      if ((!navigation || interaction !== undefined) && (baseHash !== currentHash || diskIdentity() !== baseHash)) {
         await scan(true);
         const error = Error("Conflict: disk changed since this edit began. Disk and pending intent were retained. Refresh from disk, then retry explicitly.");
         error.conflict = true;
@@ -543,7 +563,9 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       const previousAccepted = { acceptedCompilation, acceptedDesign, acceptedProject, inputsSnapshot,
         acceptedHash, currentHash, sourceHash, sourceRevision, acceptedRevision };
       try {
-        const next = await adapter[method](input);
+        const applied = interaction !== undefined ? await adapter.interactionApply(interaction) : null;
+        if (applied) snapshot = applied;
+        const next = interactionSync ? applied : (await adapter[method](input)) ?? applied;
         if (!next) {
           if (method === "cancel" || (method === "pointer" && input.phase === "up")) { session.endGesture(); gestureRollback = null; }
           return null;
@@ -736,7 +758,8 @@ export async function serveProject(folder, { port = 0 } = {}) {
         for await (const chunk of request) { body += chunk; if (Buffer.byteLength(body) > sourceLimit + 65536) throw Error("Request too large"); }
         const rpc = JSON.parse(body);
         await serial(async () => {
-          try { const result = await project.request(rpc.method, rpc.input, rpc.baseHash, { clientId: rpc.clientId, authority: rpc.authority, operationId: rpc.operationId }); sendRpc(request, response, { result, state: project.state(rpc.clientId) }); }
+          try { const result = await project.request(rpc.method, rpc.input, rpc.baseHash, { clientId: rpc.clientId, authority: rpc.authority, operationId: rpc.operationId,
+            localInteraction: rpc.localInteraction === true, interaction: rpc.interaction }); sendRpc(request, response, { result, state: project.state(rpc.clientId) }); }
           catch (error) { send(response, error.conflict ? 409 : 400, { error: String(error), pendingSource: error.pendingSource, state: project.state(rpc.clientId) }); }
         }); return;
       }

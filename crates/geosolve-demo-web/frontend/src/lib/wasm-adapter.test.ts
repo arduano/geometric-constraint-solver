@@ -40,6 +40,60 @@ class FakeHandle implements JsonWorkbenchHandle {
 }
 
 describe("WasmWorkbenchAdapter", () => {
+  it("installs interaction export/apply snapshots as complete sequenced bases while forwarding opaque state", async () => {
+    const exported = { ...snapshot, revision: 7, project: { title: "Exported", status: "accepted" as const } };
+    const applied = { ...snapshot, revision: 8, project: { title: "Applied", status: "accepted" as const } };
+    const seed = { format: "opaque-rust-seed", scene: "do not parse", state: { arbitrary: [1, "token"] } };
+    let exportResponse = JSON.stringify({ snapshot: exported, seed });
+    let applyResponse = JSON.stringify(applied);
+    let frameRevision = 7;
+    const calls: string[] = [];
+    class InteractionHandle extends FakeHandle {
+      interactionSnapshot() { return exportResponse; }
+      interactionApply(input: string) { calls.push(input); return applyResponse; }
+      override wheel() { return JSON.stringify({ version: 2, kind: "frame", revision: frameRevision, frame: snapshot.frame }); }
+    }
+    const adapter = new WasmWorkbenchAdapter(InteractionHandle);
+    const original = await adapter.construct({ version: 2 });
+    const result = await adapter.interactionSnapshot();
+    expect(result.seed).toEqual(seed);
+    expect(result.snapshot).toEqual(exported);
+    expect(getCanvasSnapshotSequence(result.snapshot)).toBe(getCanvasSnapshotSequence(original)! + 1);
+    expect(isCanvasOnlySnapshot(result.snapshot)).toBe(false);
+    expect(Object.isFrozen(result.snapshot.frame.scene.items)).toBe(true);
+    const afterExport = (await adapter.wheelBatch([]))!;
+    expect(afterExport.project).toBe(result.snapshot.project);
+    expect(isCanvasOnlySnapshot(afterExport)).toBe(true);
+
+    const state = { sceneKey: "opaque identity", selection: ["native target"], view: [11, 12] };
+    const updated = await adapter.interactionApply(state);
+    expect(calls).toEqual([JSON.stringify(state)]);
+    expect(updated).toEqual(applied);
+    expect(isCanvasOnlySnapshot(updated)).toBe(false);
+    expect(getCanvasSnapshotSequence(updated)).toBe(getCanvasSnapshotSequence(afterExport)! + 1);
+    frameRevision = 8;
+    expect((await adapter.wheelBatch([]))!.project).toBe(updated.project);
+
+    for (const invalid of [{ snapshot: exported }, { snapshot: exported, seed: null }, { snapshot: exported, seed: [] }, { snapshot: {}, seed }, { snapshot: exported, seed, extra: true }]) {
+      exportResponse = JSON.stringify(invalid);
+      await expect(adapter.interactionSnapshot()).rejects.toThrow();
+    }
+    applyResponse = JSON.stringify({ ...applied, frame: { ...applied.frame, scene: { ...applied.frame.scene, viewBox: [0, 0, null, 700] } } });
+    await expect(adapter.interactionApply(state)).rejects.toThrow("finite typed primitives");
+    const afterRejection = (await adapter.wheelBatch([]))!;
+    expect(afterRejection.project).toBe(updated.project);
+    expect(result.snapshot.project.title).toBe("Exported");
+    expect(original.project.title).toBe("Bridge");
+  });
+
+  it("requires explicit native interaction support without replacing the existing snapshot", async () => {
+    const adapter = new WasmWorkbenchAdapter(FakeHandle);
+    await adapter.construct({ version: 2 });
+    await expect(adapter.interactionSnapshot()).rejects.toThrow("current WASM build");
+    await expect(adapter.interactionApply({})).rejects.toThrow("current WASM build");
+    expect((await adapter.snapshot()).project.title).toBe("Bridge");
+  });
+
   it("keeps the wasm bridge instance-scoped and forwards versioned JSON", async () => {
     FakeHandle.requests = [];
     FakeHandle.catalogReads = 0;
