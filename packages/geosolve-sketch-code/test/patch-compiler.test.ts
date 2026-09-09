@@ -564,3 +564,15 @@ test("patch dimensional schema presentation travels in authenticated interface m
   assert.notEqual(first.artifact.interface_digest, second.artifact.interface_digest);
   assert.deepEqual(first.artifact.templates, second.artifact.templates);
 });
+
+
+test("local patch modules support ordinary filenames while rejecting traversal and remote paths", () => {
+  const patch = definePatch({}, (p) => ({ origin: p.geometry.centerRadiusCircle("origin", { center: [0, 0], radius: mm(1) }) }));
+  for (const moduleSpecifier of ["./channel.ts", "./parts/groove.mts", "./parts/channel.js"]) {
+    const compiled = compilePatchArtifact({ patch, moduleSpecifier, exportName: "channel", source: "local module" });
+    assert.equal(compiled.artifact.module_specifier, moduleSpecifier);
+  }
+  for (const moduleSpecifier of ["../channel.ts", "./../channel.ts", "/channel.ts", "./parts//channel.ts", "./parts/./channel.ts", "./channel.json", "https://site/channel.ts", "./C:/channel.ts", "./parts\\channel.ts", "./bad\nchannel.ts"]) {
+    assert.throws(() => compilePatchArtifact({ patch, moduleSpecifier, exportName: "channel", source: "local module" }), /module specifier/);
+  }
+});

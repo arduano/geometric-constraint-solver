@@ -12,6 +12,8 @@ import type { PresentationOptions, ParameterOptions, SketchOptions } from "./pre
 export type { PresentationOptions, ParameterOptions, SketchOptions } from "./presentation.js";
 
 import {
+  authoringPatchRuntime,
+  authoringSchemaRuntime,
   registerAuthoringSchema,
   registerPatchRuntime,
 } from "./authoring-private.js";
@@ -19,6 +21,9 @@ import {
   AUTHORING_METHOD_CATALOG,
   DECLARATION_RESULT_CATALOG,
 } from "./generated-declaration-results.js";
+import { GENERATED_SKETCH_ARTIFACT_FORMAT, GENERATED_SKETCH_SDK_ABI } from "./generated.js";
+import type { GeneratedApplication, GeneratedDeclaration, GeneratedIdentity, GeneratedSketchArtifact, GeneratedValue } from "./generated.js";
+export type { GeneratedSketchArtifact } from "./generated.js";
 
 declare const projectBrand: unique symbol;
 declare const referenceBrand: unique symbol;
@@ -35,6 +40,8 @@ const referenceRuntime = Symbol("geosolve.authoring.reference");
 const sketchRuntime = Symbol("geosolve.authoring.sketch");
 const patchRuntime = Symbol("geosolve.authoring.patch");
 const schemaRuntime = Symbol("geosolve.authoring.schema");
+const referenceRuntimes = new WeakMap<object, ReferenceRuntime>();
+const sketchArtifacts = new WeakMap<object, GeneratedSketchArtifact>();
 
 const SKETCH_PROJECT_NAME = "__geosolve_sketch_execution__" as const;
 const PATCH_PROJECT_NAME = "__geosolve_patch_execution__" as const;
@@ -1338,7 +1345,7 @@ export interface Sketch<Result> {
   readonly [sketchBrand]: Result;
 }
 
-/** Execute the equation-free callback and retain its ordinary nested result. */
+/** Execute ordinary TypeScript and retain both its result and an evaluated declaration program. */
 export function sketch<Result>(build: (builder: SketchBuilder<SketchExecutionProject>) => Result): Sketch<Result>;
 export function sketch<Result>(options: SketchOptions, build: (builder: SketchBuilder<SketchExecutionProject>) => Result): Sketch<Result>;
 export function sketch<Result>(
@@ -1348,12 +1355,40 @@ export function sketch<Result>(
   const build = typeof optionsOrBuild === "function" ? optionsOrBuild : callback;
   if (typeof optionsOrBuild !== "function") validateSketchOptions(optionsOrBuild);
   if (typeof build !== "function") throw new TypeError("sketch requires a builder callback");
-  const result = build(createSketchBuilder());
-  return Object.freeze({ output: result, [sketchRuntime]: result }) as unknown as Sketch<Result>;
+  const recorder = new GeneratedRecorder();
+  const document = copyData(typeof optionsOrBuild === "function" ? {} : optionsOrBuild);
+  let result: Result;
+  try {
+    result = build(createSketchBuilder(recorder));
+  } finally {
+    recorder.active = false;
+  }
+  const artifact = freezeData({
+    format: GENERATED_SKETCH_ARTIFACT_FORMAT,
+    sdk_abi: GENERATED_SKETCH_SDK_ABI,
+    declarations: recorder.declarations,
+    applications: recorder.applications,
+    parameters: recorder.parameters,
+    groups: recorder.groups,
+    suppressions: recorder.suppressions,
+    document,
+    output: result === undefined ? { kind: "null" as const } : recorder.value(result),
+  });
+  if (new TextEncoder().encode(JSON.stringify(artifact)).length > 16 * 1024 * 1024) throw new TypeError("generated sketch exceeds its 16 MiB artifact limit");
+  const authored = Object.freeze({ output: result, [sketchRuntime]: result }) as unknown as Sketch<Result>;
+  sketchArtifacts.set(authored, artifact);
+  return authored;
+}
+
+/** Read immutable recorded data; no lexical source sites or source-write capabilities are present. */
+export function recordedSketch<Result>(authored: Sketch<Result>): GeneratedSketchArtifact {
+  const artifact = sketchArtifacts.get(authored);
+  if (artifact === undefined) throw new TypeError("expected a sketch created by this GeoSolve SDK instance");
+  return artifact;
 }
 
 interface ReferenceRuntime {
-  readonly project: string;
+  readonly project: object;
   /** Opaque declaration/application/local/member identity segments. */
   readonly identity: readonly SemanticMemberKey[];
   readonly declaration: string;
@@ -1366,8 +1401,10 @@ interface ReferenceRuntime {
 function makeReference<Project, Kind extends FeatureKind>(
   runtime: ReferenceRuntime,
 ): OutputRef<Project, Kind> {
+  freezeData(runtime);
   const value = Object.create(null) as Record<PropertyKey, unknown>;
   Object.defineProperty(value, referenceRuntime, { value: runtime });
+  referenceRuntimes.set(value, runtime);
   return Object.freeze(value) as unknown as OutputRef<Project, Kind>;
 }
 
@@ -1375,11 +1412,12 @@ function lazyReference<Project>(
   runtime: ReferenceRuntime,
   members: Readonly<Record<PropertyKey, unknown>> = {},
 ): object {
+  freezeData(runtime);
   const target = Object.create(null) as Record<PropertyKey, unknown>;
   Object.defineProperty(target, referenceRuntime, { value: runtime });
   Object.assign(target, members);
   Object.freeze(target);
-  return new Proxy(target, {
+  const result = new Proxy(target, {
     get: (value, property, receiver) => {
       if (Reflect.has(value, property)) return Reflect.get(value, property, receiver);
       if (typeof property !== "string") return Reflect.get(value, property, receiver);
@@ -1391,6 +1429,8 @@ function lazyReference<Project>(
       });
     },
   });
+  referenceRuntimes.set(result, runtime);
+  return result;
 }
 
 function inferredOutputKind(property: string): FeatureKind {
@@ -1495,9 +1535,10 @@ function shapedReference<Project>(runtime: ReferenceRuntime, shape: RuntimeShape
 }
 
 function lazySequenceReference<Project>(runtime: ReferenceRuntime): readonly unknown[] {
+  freezeData(runtime);
   const target: unknown[] = [];
   Object.defineProperty(target, referenceRuntime, { value: runtime });
-  return new Proxy(target, {
+  const result = new Proxy(target, {
     get: (value, property, receiver) => {
       if (Reflect.has(value, property)) return Reflect.get(value, property, receiver);
       if (typeof property !== "string" || !/^(?:0|[1-9][0-9]*)$/u.test(property)) {
@@ -1510,6 +1551,8 @@ function lazySequenceReference<Project>(runtime: ReferenceRuntime): readonly unk
       });
     },
   });
+  referenceRuntimes.set(result, runtime);
+  return result;
 }
 
 function declarationRuntime(
@@ -1522,7 +1565,7 @@ function declarationRuntime(
 ): ReferenceRuntime {
   requireId(id, "declaration ID");
   return {
-    project: project.name,
+    project,
     identity: [...identityPrefix, id],
     declaration: id,
     namespace,
@@ -1674,11 +1717,13 @@ function namespaceProxy<Project>(
   identityPrefix:
     | readonly SemanticMemberKey[]
     | (() => readonly SemanticMemberKey[]) = [],
+  recorder?: GeneratedRecorder,
 ): object {
   return new Proxy(Object.create(null) as object, {
     get: (_target, property) => {
       if (typeof property !== "string") return undefined;
       return (id: string, values: Readonly<Record<string, unknown>>) => {
+        recorder?.requireActive();
         requireAuthoringFamily(namespace, property, scope);
         requireId(id, "declaration ID");
         const prefix = typeof identityPrefix === "function" ? identityPrefix() : identityPrefix;
@@ -1686,8 +1731,8 @@ function namespaceProxy<Project>(
         if (usedIds.has(occurrence)) {
           throw new TypeError(`duplicate declaration ID ${JSON.stringify(id)}`);
         }
-        usedIds.add(occurrence);
         validateAuthoringValues(namespace, property, values);
+        const argumentsValue = recorder?.value(values);
         const family = `${namespace}.${property}`;
         const catalog = catalogRuntimeEntry(family);
         const runtime = declarationRuntime(
@@ -1698,6 +1743,7 @@ function namespaceProxy<Project>(
           catalog?.feature_kind ?? rootKind,
           prefix,
         );
+        const result = (() => {
         if (namespace === "geometry" && property === "polyline") {
           return managedPolyline(runtime, values as unknown as PolylineValues<Project, string>);
         }
@@ -1754,38 +1800,66 @@ function namespaceProxy<Project>(
         return catalog === undefined
           ? lazyReference<Project>(runtime)
           : shapedReference<Project>(runtime, runtimeShape(catalog.outputs));
+        })();
+        usedIds.add(occurrence);
+        if (recorder !== undefined && argumentsValue !== undefined) {
+          recorder.requireCapacity();
+          recorder.declarations.push({ identity: runtime.identity.map(String), family, arguments: argumentsValue });
+          recorder.identities.add(occurrence);
+        }
+        return result;
       };
     },
   });
 }
 
-function createSketchBuilder(): SketchBuilder<SketchExecutionProject> {
-  const project = Object.freeze({ name: SKETCH_PROJECT_NAME }) as SketchExecutionProject;
+function createSketchBuilder(recorder: GeneratedRecorder): SketchBuilder<SketchExecutionProject> {
+  const project = recorder.project;
   const usedIds = new Set<string>();
   return Object.freeze({
-    geometry: namespaceProxy(project, "geometry", "feature", usedIds, "sketch"),
-    constraint: namespaceProxy(project, "constraint", "constraint", usedIds, "sketch"),
-    dimension: namespaceProxy(project, "dimension", "dimension", usedIds, "sketch"),
-    operation: namespaceProxy(project, "operation", "operation", usedIds, "sketch"),
-    aggregate: namespaceProxy(project, "aggregate", "feature", usedIds, "sketch"),
-    computed: namespaceProxy(project, "computed", "feature", usedIds, "sketch"),
+    geometry: namespaceProxy(project, "geometry", "feature", usedIds, "sketch", [], recorder),
+    constraint: namespaceProxy(project, "constraint", "constraint", usedIds, "sketch", [], recorder),
+    dimension: namespaceProxy(project, "dimension", "dimension", usedIds, "sketch", [], recorder),
+    operation: namespaceProxy(project, "operation", "operation", usedIds, "sketch", [], recorder),
+    aggregate: namespaceProxy(project, "aggregate", "feature", usedIds, "sketch", [], recorder),
+    computed: namespaceProxy(project, "computed", "feature", usedIds, "sketch", [], recorder),
     use: <Schemas extends InputSchemas, Result>(
       id: string,
       patch: PatchDefinition<Schemas, Result>,
       inputs: PatchInvocationInputs<Schemas, SketchExecutionProject>,
       options?: PresentationOptions,
     ): PatchApplication<SketchExecutionProject, Result> => {
+      recorder.requireActive();
       if (options !== undefined) validatePresentation(options);
       requireId(id, "patch application ID");
       if (usedIds.has(JSON.stringify([id]))) throw new TypeError(`duplicate declaration ID ${JSON.stringify(id)}`);
-      usedIds.add(JSON.stringify([id]));
-      const builder = createPatchBuilder(project, [id]);
-      return patch[patchRuntime].build(
-        builder as unknown as PatchBuilder<PatchProject>,
-        inputs as unknown as PatchInputs<Schemas, PatchProject>,
-      ) as PatchApplication<SketchExecutionProject, Result>;
+      const runtime = authoringPatchRuntime(patch);
+      const recordedInputs = recorder.value(inputs);
+      if (recordedInputs.kind !== "object" || Object.keys(recordedInputs.value).length !== Object.keys(runtime.inputs).length || Object.keys(runtime.inputs).some((name) => !Object.hasOwn(recordedInputs.value, name))) throw new TypeError("patch inputs must exactly match the declared input schema");
+      for (const [name, schema] of Object.entries(runtime.inputs)) validatePatchInput(schema, inputs[name as keyof typeof inputs], name);
+      const inputPresentation = Object.fromEntries(Object.entries(runtime.inputs).flatMap(([name, schema]) => {
+        const presentation = authoringSchemaRuntime(schema).presentation;
+        return presentation === undefined ? [] : [[name, copyData(presentation)]];
+      }));
+      const builder = createPatchBuilder(project, [id], recorder);
+      const firstDeclaration = recorder.declarations.length;
+      try {
+        const result = runtime.build(
+          builder as unknown as PatchBuilder<PatchProject>,
+          inputs as unknown as PatchInputs<Schemas, PatchProject>,
+        );
+        recorder.requireCapacity();
+        recorder.applications.push({ identity: [id], declarations: recorder.declarations.slice(firstDeclaration).map((declaration) => declaration.identity), inputs: recordedInputs, input_presentation: inputPresentation, presentation: copyData(options ?? {}), output: result === undefined ? { kind: "null" } : recorder.value(result) });
+        usedIds.add(JSON.stringify([id]));
+        if (typeof result === "object" && result !== null) recorder.applicationResults.set(result, [id]);
+        return result as PatchApplication<SketchExecutionProject, Result>;
+      } catch (error) {
+        for (const declaration of recorder.declarations.splice(firstDeclaration)) recorder.identities.delete(JSON.stringify(declaration.identity));
+        throw error;
+      }
     },
     parameter: <Value extends number | UnitLiteral>(id: string, value: Value, options?: ParameterOptions): Value => {
+      recorder.requireActive();
       requireId(id, "parameter ID");
       if (usedIds.has(JSON.stringify([id]))) throw new TypeError(`duplicate declaration ID ${JSON.stringify(id)}`);
       if (options !== undefined) validatePresentation(options, "isKeyParameter");
@@ -1793,13 +1867,21 @@ function createSketchBuilder(): SketchBuilder<SketchExecutionProject> {
       else if (typeof value === "object" && value !== null && ["mm", "cm", "m", "inch", "deg", "rad"].includes(value.unit)) requireFinite(value.value, "parameter value");
       else throw new TypeError("parameter requires a finite number or unit literal");
       usedIds.add(JSON.stringify([id]));
+      recorder.requireCapacity();
+      recorder.parameters.push({ id, value: recorder.value(value), presentation: copyData(options ?? {}) });
       return value;
     },
-    group: (label: string) => {
-      if (label.length === 0) throw new TypeError("group label cannot be empty");
+    group: (label: string, declarations: readonly unknown[]) => {
+      recorder.requireActive();
+      if (typeof label !== "string" || label.length === 0 || new TextEncoder().encode(label).length > 16384) throw new TypeError("group label must be nonempty and bounded");
+      if (!Array.isArray(declarations)) throw new TypeError("group requires an array of declarations");
+      recorder.requireCapacity();
+      recorder.groups.push({ name: label, declarations: declarations.map((value) => recorder.declarationIdentity(value, true)) });
     },
     suppress: (declaration: OutputRef<SketchExecutionProject, FeatureKind>) => {
-      referenceData(declaration);
+      recorder.requireActive();
+      recorder.requireCapacity();
+      recorder.suppressions.push(recorder.declarationIdentity(declaration, false));
     },
   }) as unknown as SketchBuilder<SketchExecutionProject>;
 }
@@ -1807,17 +1889,18 @@ function createSketchBuilder(): SketchBuilder<SketchExecutionProject> {
 function createPatchBuilder<Project>(
   project: { readonly name: string },
   identityPrefix: readonly SemanticMemberKey[],
+  recorder?: GeneratedRecorder,
 ): PatchBuilder<Project> {
   const usedIds = new Set<string>();
   let memberIdentity: readonly SemanticMemberKey[] = [];
   const prefix = () => [...identityPrefix, ...memberIdentity];
   return Object.freeze({
-    geometry: namespaceProxy(project, "geometry", "feature", usedIds, "patch", prefix),
-    constraint: namespaceProxy(project, "constraint", "constraint", usedIds, "patch", prefix),
-    dimension: namespaceProxy(project, "dimension", "dimension", usedIds, "patch", prefix),
-    operation: namespaceProxy(project, "operation", "operation", usedIds, "patch", prefix),
-    aggregate: namespaceProxy(project, "aggregate", "feature", usedIds, "patch", prefix),
-    computed: namespaceProxy(project, "computed", "feature", usedIds, "patch", prefix),
+    geometry: namespaceProxy(project, "geometry", "feature", usedIds, "patch", prefix, recorder),
+    constraint: namespaceProxy(project, "constraint", "constraint", usedIds, "patch", prefix, recorder),
+    dimension: namespaceProxy(project, "dimension", "dimension", usedIds, "patch", prefix, recorder),
+    operation: namespaceProxy(project, "operation", "operation", usedIds, "patch", prefix, recorder),
+    aggregate: namespaceProxy(project, "aggregate", "feature", usedIds, "patch", prefix, recorder),
+    computed: namespaceProxy(project, "computed", "feature", usedIds, "patch", prefix, recorder),
     each: <Key extends PropertyKey, Value, Result>(
       collection: KeyedFeatureCollection<Key, Value>,
       build: (value: Value & { readonly key: Key }) => Result,
@@ -1830,7 +1913,10 @@ function createPatchBuilder<Project>(
         const prior = memberIdentity;
         memberIdentity = [...prior, String(key)];
         try {
-          return build(Object.freeze({ ...value, key }));
+          const member = Object.freeze({ ...value, key });
+          const reference = referenceRuntimes.get(value);
+          if (reference !== undefined) referenceRuntimes.set(member, reference);
+          return build(member);
         } finally {
           memberIdentity = prior;
         }
@@ -1855,10 +1941,146 @@ function createPatchBuilder<Project>(
 }
 
 function referenceData(value: unknown): ReferenceRuntime {
-  if (typeof value !== "object" || value === null || !(referenceRuntime in value)) {
+  const runtime = typeof value === "object" && value !== null ? referenceRuntimes.get(value) : undefined;
+  if (runtime === undefined) {
     throw new TypeError("expected a typed GeoSolve output reference");
   }
-  return (value as { readonly [referenceRuntime]: ReferenceRuntime })[referenceRuntime];
+  return runtime;
+}
+
+/** The recorder records data, never geometric calculations or writable source receipts. */
+class GeneratedRecorder {
+  readonly project = Object.freeze({ name: SKETCH_PROJECT_NAME });
+  readonly declarations: GeneratedDeclaration[] = [];
+  readonly applications: GeneratedApplication[] = [];
+  readonly parameters: Array<GeneratedSketchArtifact["parameters"][number]> = [];
+  readonly groups: Array<GeneratedSketchArtifact["groups"][number]> = [];
+  readonly suppressions: GeneratedIdentity[] = [];
+  readonly identities = new Set<string>();
+  readonly applicationResults = new WeakMap<object, GeneratedIdentity>();
+  active = true;
+  private valueNodes = 0;
+
+  requireActive(): void {
+    if (!this.active) throw new TypeError("sketch builders are valid only during their synchronous callback");
+  }
+  requireCapacity(): void {
+    if (this.declarations.length + this.applications.length + this.parameters.length + this.groups.length + this.suppressions.length >= 65536) throw new TypeError("generated sketch exceeds its declaration limit");
+  }
+  declarationIdentity(value: unknown, allowApplication: boolean): GeneratedIdentity {
+    const application = typeof value === "object" && value !== null ? this.applicationResults.get(value) : undefined;
+    if (allowApplication && application !== undefined) return [...application];
+    const reference = referenceData(value);
+    this.checkReference(reference);
+    if (reference.path.length !== 0) throw new TypeError("group and suppression require a whole declaration, not one of its outputs");
+    return reference.identity.map(String);
+  }
+  private checkReference(reference: ReferenceRuntime): void {
+    if (reference.project !== this.project || !this.identities.has(JSON.stringify(reference.identity))) throw new TypeError("reference belongs to another sketch or an unrecorded declaration");
+    if (reference.path.length > 64) throw new TypeError("generated reference path exceeds its limit");
+  }
+  value(value: unknown, ancestors = new Set<object>(), depth = 0): GeneratedValue {
+    this.valueNodes += 1;
+    if (depth > 64 || this.valueNodes > 262144) throw new TypeError("generated sketch value exceeds its nesting or node limit");
+    if (value === null) return { kind: "null" };
+    if (typeof value === "boolean") return { kind: "bool", value };
+    if (typeof value === "number") {
+      requireFinite(value, "generated value");
+      return { kind: "number", value };
+    }
+    if (typeof value === "string") {
+      if (new TextEncoder().encode(value).length > 16384) throw new TypeError("generated string exceeds its 16384 byte limit");
+      return { kind: "string", value };
+    }
+    if (typeof value !== "object") throw new TypeError("generated sketches require finite data or typed references; undefined, functions and promises are unsupported");
+    const reference = referenceRuntimes.get(value);
+    if (reference !== undefined) {
+      this.checkReference(reference);
+      return { kind: "reference", value: { identity: reference.identity.map(String), path: reference.path.map((segment) => typeof segment === "object" ? { member: String(segment.member) } : segment), kind: reference.kind } };
+    }
+    if (ancestors.has(value)) throw new TypeError("generated sketches cannot contain cyclic values");
+    ancestors.add(value);
+    try {
+      if (Array.isArray(value)) {
+        if (Object.keys(value).length !== value.length || Reflect.ownKeys(value).some((key) => typeof key !== "string" || (key !== "length" && !/^(?:0|[1-9][0-9]*)$/u.test(key)))) throw new TypeError("generated arrays must be dense ordinary arrays");
+        return { kind: "array", value: Array.from({ length: value.length }, (_, index) => {
+          const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+          if (descriptor === undefined || !("value" in descriptor)) throw new TypeError("generated values cannot contain getters");
+          return this.value(descriptor.value, ancestors, depth + 1);
+        }) };
+      }
+      if (![Object.prototype, null].includes(Object.getPrototypeOf(value))) throw new TypeError("generated sketches require plain data objects, not class instances or promises");
+      const entries = Reflect.ownKeys(value).map((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+        if (typeof key !== "string" || !("value" in descriptor) || !descriptor.enumerable) throw new TypeError("generated values require ordinary enumerable string-keyed fields");
+        if (new TextEncoder().encode(key).length > 16384) throw new TypeError("generated property exceeds its byte limit");
+        return [key, descriptor.value] as const;
+      });
+      const fields = Object.fromEntries(entries);
+      if (entries.length === 2 && Object.hasOwn(fields, "unit") && Object.hasOwn(fields, "value") && ["mm", "cm", "m", "inch", "deg", "rad"].includes(fields.unit as string)) {
+        if (typeof fields.value !== "number") throw new TypeError("unit value must be finite");
+        requireFinite(fields.value, "unit value");
+        return { kind: "unit", value: { unit: fields.unit as SupportedUnit, value: fields.value } };
+      }
+      return { kind: "object", value: Object.fromEntries(entries.map(([key, child]) => [key, this.value(child, ancestors, depth + 1)])) };
+    } finally {
+      ancestors.delete(value);
+    }
+  }
+}
+
+function copyData<Value>(value: Value): Value {
+  return JSON.parse(JSON.stringify(value)) as Value;
+}
+
+function validatePatchInput(schema: object, value: unknown, name: string): void {
+  const runtime = authoringSchemaRuntime(schema);
+  const fail = (): never => { throw new TypeError(`patch input ${name} does not match its ${runtime.kind} schema`); };
+  if (runtime.kind === "length" || runtime.kind === "angle") {
+    const literal = value as UnitLiteral | undefined;
+    if (!literal || !(runtime.kind === "length" ? ["mm", "cm", "m", "inch"] : ["deg", "rad"]).includes(literal.unit)) fail();
+    return;
+  }
+  if (runtime.kind === "keyed") {
+    const collection = value as KeyedFeatureCollection<string, unknown> | undefined;
+    if (!collection || !Array.isArray(collection.keys) || !collection.byKey || !runtime.element || new Set(collection.keys).size !== collection.keys.length || Object.keys(collection.byKey).length !== collection.keys.length) fail();
+    for (const key of collection!.keys) {
+      if (typeof key !== "string" && typeof key !== "number") fail();
+      if (!Object.hasOwn(collection!.byKey, key)) fail();
+      validatePatchInput(runtime.element!, collection!.byKey[key], `${name}.${key}`);
+    }
+    return;
+  }
+  if (runtime.kind === "record") {
+    if (!value || typeof value !== "object" || Array.isArray(value) || !runtime.element) fail();
+    for (const [key, member] of Object.entries(value!)) validatePatchInput(runtime.element!, member, `${name}.${key}`);
+    return;
+  }
+  const reference = typeof value === "object" && value !== null ? referenceRuntimes.get(value) : undefined;
+  if (!reference) fail();
+  if (runtime.kind === "feature") {
+    const methods: Readonly<Record<string, readonly string[]>> = {
+      sketchPoint: ["sketchPoint"], segment: ["segment", "midpointLine"], polyline: ["polyline"],
+      rectangle: ["twoPointAlignedRectangle", "threePointCornerRectangle", "centerRectangle", "threePointCenterRectangle"],
+      circle: ["centerRadiusCircle", "twoPointDiameterCircle", "threePointCircle"], arc: ["centerArc", "threePointArc", "tangentArc"],
+      ellipse: ["centerAxesEllipse", "axisEndpointsEllipse"], ellipticalArc: ["centerAxesEllipticalArc", "axisEndpointsEllipticalArc"],
+      quadraticBezier: ["quadraticBezier"], cubicBezier: ["cubicBezier"], conic: ["rationalQuadraticConic"],
+      parabola: ["parabola"], hyperbola: ["hyperbola"], bspline: ["openControlBSpline", "periodicControlBSpline"],
+      nurbs: ["openControlNurbs", "periodicControlNurbs"], fillet: ["fillet", "associativeFillet"], filletSet: ["filletSet"],
+    };
+    if (reference!.path.length !== 0 || !methods[runtime.feature ?? ""]?.includes(reference!.method)) fail();
+  } else {
+    const kind = runtime.kind === "corner" ? "feature_corner" : runtime.kind === "curveSpan" ? "curve_span" : runtime.kind;
+    if (reference!.kind !== kind) fail();
+  }
+}
+
+function freezeData<Value>(value: Value): Value {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) freezeData(child);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 function requireId(value: string, description: string): void {

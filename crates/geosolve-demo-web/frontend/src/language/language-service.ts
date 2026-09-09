@@ -5,6 +5,8 @@ import {
   GEOSOLVE_SKETCH_CODE_AUTHORING,
   GEOSOLVE_SKETCH_CODE_INDEX,
   GEOSOLVE_SKETCH_CODE_PRESENTATION,
+  GEOSOLVE_SKETCH_CODE_GENERATED,
+  GEOSOLVE_SKETCH_CODE_GENERATOR,
   LANGUAGE_SERVICE_TYPESCRIPT_VERSION,
   TYPESCRIPT_STANDARD_LIBRARY,
 } from "./generated/language-service-declarations";
@@ -52,6 +54,8 @@ export class TypeScriptProjectLanguageService {
     [SDK_INDEX, GEOSOLVE_SKETCH_CODE_INDEX],
     [SDK_AUTHORING, GEOSOLVE_SKETCH_CODE_AUTHORING],
     [SDK_PRESENTATION, GEOSOLVE_SKETCH_CODE_PRESENTATION],
+    [`${SDK_ROOT}/generated.d.ts`, GEOSOLVE_SKETCH_CODE_GENERATED],
+    [`${SDK_ROOT}/generator.d.ts`, GEOSOLVE_SKETCH_CODE_GENERATOR],
   ]);
   private readonly projectFiles = new Set<string>();
   private readonly compilerOptions: ts.CompilerOptions = {

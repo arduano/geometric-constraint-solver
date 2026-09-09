@@ -1321,8 +1321,9 @@ function sha256(bytes: Uint8Array): string {
 }
 
 function requireModuleSpecifier(value: string): void {
-  if (!value.startsWith("./patches/") || !value.endsWith(".patch.ts")
-      || value.includes("..") || value.includes("\\")) {
+  const path = value.startsWith("./") ? value.slice(2) : "";
+  if (!path || new TextEncoder().encode(path).length > 1024 || !/\.(?:ts|js|mts|mjs|cts|cjs)$/u.test(path)
+      || /[\\:\p{Cc}]/u.test(path) || path.split("/").some((part) => !part || part === "." || part === ".." || new TextEncoder().encode(part).length > 256)) {
     throw new TypeError(`invalid custom patch module specifier ${JSON.stringify(value)}`);
   }
 }
