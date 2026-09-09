@@ -4,7 +4,7 @@ import test from "node:test";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { initProject, openProject, serveProject } from "./file-workspace.mjs";
+import { hash, initProject, openProject, serveProject } from "./file-workspace.mjs";
 import { acquireWorkspaceLock, createWorkspaceStorage } from "./workspace-storage.mjs";
 import { evaluateWorkspaceSnapshot, readWorkspaceSnapshot } from "./workspace-loader.mjs";
 import { engineModuleUrl } from "./workspace-runtime-paths.mjs";
@@ -83,6 +83,52 @@ async function directFixture(t, { fault = () => {}, populate } = {}) {
 function sourceEdit(source, radius) {
   return { version: 2, command: "source.prepare", payload: { path: "sketch.ts", contents: source.replace("value: mm(10)", `value: mm(${radius})`) } };
 }
+
+test("canvas-authored polyline Undo/Redo restores exact source and accepted project", async (t) => {
+  const f = await directFixture(t);
+  const initialSource = f.source();
+  const initialWrites = f.state().writes;
+  await f.request("resize", { version: 2, width: 1000, height: 700, pixelRatio: 1 });
+  await f.request("dispatch", { version: 2, command: "view.fit" });
+  await f.request("dispatch", { version: 2, command: "tool.select", payload: { id: "polyline" } });
+  for (const [x, y] of [[180, 130], [320, 170], [400, 110]]) {
+    for (const [phase, buttons] of [["move", 0], ["down", 1], ["up", 0]]) {
+      await f.request("pointer", { version: 2, phase, pointerId: 1, x, y, buttons,
+        modifiers: { alt: false, ctrl: false, meta: false, shift: false } });
+    }
+    assert.equal(f.source(), initialSource, "unfinished canvas authoring must not write source");
+  }
+  await f.request("dispatch", { version: 2, command: "tool.finish" }, "polyline-finish");
+  const authoredSource = f.source();
+  assert.match(authoredSource, /\$\.geometry\.polyline/);
+  assert.equal(f.state().writes, initialWrites + 1);
+  const authoredProject = (await f.project.adapter.exportProject()).contents;
+  const authoredDesign = await f.project.adapter.exportWorkspaceDesign();
+  await f.request("dispatch", { version: 2, command: "tool.select", payload: { id: "select" } });
+  await f.request("dispatch", { version: 2, command: "history.undo" }, "polyline-undo");
+  assert.equal(f.source(), initialSource);
+  await f.request("dispatch", { version: 2, command: "history.redo" }, "polyline-redo");
+  assert.equal(f.source(), authoredSource);
+  assert.equal((await f.project.adapter.exportProject()).contents, authoredProject);
+  assert.deepEqual(await f.project.adapter.exportWorkspaceDesign(), authoredDesign);
+  assert.equal(f.state().writes, initialWrites + 3);
+  assert.equal(f.state().ok, true);
+  await f.restart();
+  assert.equal(f.state().ok, true, "derived history must restore an authored project");
+  await f.request("dispatch", { version: 2, command: "history.undo" }, "polyline-reopened-undo");
+  assert.equal(f.source(), initialSource, "reopened Undo restores original shorthand exports and preamble");
+  await f.request("dispatch", { version: 2, command: "tool.select", payload: { id: "polyline" } });
+  for (const [x, y] of [[160, 100], [310, 130]]) {
+    for (const [phase, buttons] of [["down", 1], ["up", 0]]) {
+      await f.request("pointer", { version: 2, phase, pointerId: 1, x, y, buttons,
+        modifiers: { alt: false, ctrl: false, meta: false, shift: false } });
+    }
+  }
+  await f.request("dispatch", { version: 2, command: "tool.finish" }, "polyline-after-undo");
+  assert.match(f.source(), /const geometry2 = \$\.geometry\.polyline/,
+    "source-history comparison must not reset the native declaration allocator");
+  assert.doesNotMatch(f.source(), /const geometry1 =/);
+});
 
 test("local interaction cannot change native state before file transaction validation", async (t) => {
   const f = await directFixture(t);
@@ -227,6 +273,39 @@ test("corrupt cached helper hashes cannot make Undo publish geometry without its
   assert.equal(actual.regions.length, 1);
   assert.ok(actual.regions[0].outer.every(([x, y]) => Math.abs(Math.hypot(x - center, y) - radius) < 1e-7),
     `accepted geometry must match disk center ${center} radius ${radius}`);
+});
+
+test("historical source bytes with forged hashes cannot replace accepted Undo authority", async (t) => {
+  const f = await directFixture(t);
+  const initialSource = f.source();
+  await f.request("dispatch", sourceEdit(initialSource, 12), "history-source-edit");
+  const acceptedSource = f.source();
+  const acceptedProject = (await f.project.adapter.exportProject()).contents;
+  const acceptedDesign = await f.project.adapter.exportWorkspaceDesign();
+  const path = resolve(f.folder, ".geosolve/derived-session.json");
+  const derived = JSON.parse(readFileSync(path, "utf8"));
+  let poisoned = 0;
+  for (const [, snapshot] of derived.sources) {
+    const source = snapshot.files.find((file) => file.path === "sketch.ts");
+    if (source.contents !== initialSource) continue;
+    source.contents = initialSource.replace("value: mm(10)", "value: mm(13)");
+    source.sha256 = hash(source.contents);
+    poisoned++;
+  }
+  assert.ok(poisoned > 0, "fixture must replace a real historical source snapshot");
+  writeFileSync(path, JSON.stringify(derived));
+  await f.restart();
+  const before = f.state();
+  assert.equal((await f.project.adapter.snapshot()).presentation.canUndo, true,
+    "valid current checkpoint still loads; historical bytes remain untrusted candidates");
+  await assert.rejects(f.request("dispatch", { version: 2, command: "history.undo" }, "poisoned-source-undo"),
+    /Historical dependency bytes do not match/);
+  assert.equal(f.source(), acceptedSource);
+  assert.equal((await f.project.adapter.exportProject()).contents, acceptedProject);
+  assert.deepEqual(await f.project.adapter.exportWorkspaceDesign(), acceptedDesign);
+  assert.equal(f.state().writes, before.writes);
+  assert.equal(f.state().acceptedHash, before.acceptedHash);
+  assert.equal(f.state().ok, true);
 });
 
 for (const mode of ["editable", "generator"]) test(`external ${mode} save during native evaluation cannot install stale geometry`, async (t) => {

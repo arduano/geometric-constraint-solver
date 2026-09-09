@@ -78,14 +78,28 @@ export function preserveSourcePreamble(original, normalized) {
   return prefix && !normalized.startsWith(prefix) ? prefix + normalized : normalized;
 }
 
+/** Name allocation belongs to the retained session, not the printed source.
+ * Rust preserves its high-water mark through Undo, so it cannot identify a
+ * historical file graph. All compiled source/dependency authority remains in
+ * this key; the native project's allocator is never changed here. */
+function sourceHistoryKey(projectJson) {
+  const project = JSON.parse(projectJson);
+  delete project.managed.declaration_name_high_water;
+  return hash(JSON.stringify(project));
+}
+
 /** Both wires were independently admitted by Rust. Raw pre-normalization input
  * hashes can differ when the managed compiler retains a normalized receipt while
- * the folder preserves its original licence preamble. All source/IR/patch bytes
- * and authority-bearing fields must still agree. No receipt is modified or reused. */
+ * the folder preserves its original licence preamble. The retained declaration
+ * allocator is likewise not reconstructed by source compilation (matching Rust's
+ * CodeProject::validate projection). All source/IR/patch bytes and compiler
+ * authority must still agree. No receipt or native allocator is modified/reused. */
 function sameCompiledProject(left, right) {
   const a = JSON.parse(left), b = JSON.parse(right);
   delete a.managed.compiled.inputSourceDigest;
   delete b.managed.compiled.inputSourceDigest;
+  delete a.managed.declaration_name_high_water;
+  delete b.managed.declaration_name_high_water;
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
@@ -127,7 +141,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
   const designPath = ".geosolve/design.json";
   const rememberSources = (projectJson, captured) => {
     if (!projectJson || !captured) return;
-    sourceHistory.set(hash(projectJson), captured);
+    sourceHistory.set(sourceHistoryKey(projectJson), captured);
     while (sourceHistory.size > 64) sourceHistory.delete(sourceHistory.keys().next().value);
   };
   const cachePath = resolve(folder, ".geosolve");
@@ -322,15 +336,19 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       try {
         const derived = JSON.parse(readSource(derivedPath));
         if (derived.format !== "geosolve-derived-session-v1" || derived.revision !== acceptedHash || derived.runtime !== runtimeIdentity
-          || derived.project !== acceptedProject || derived.design !== acceptedDesign) return;
+          || !sameCompiledProject(derived.project, acceptedProject) || derived.design !== acceptedDesign) return;
         const restored = await adapter.construct({ version: 2, persistedProject: derived.contents });
+        const restoredProject = (await adapter.exportProject()).contents;
         if (restored.project.status !== "accepted" || restored.source.dirty || restored.pendingManagedMutation
-          || (await adapter.exportProject()).contents !== acceptedProject
+          || restoredProject !== derived.project
           || JSON.stringify(await adapter.exportWorkspaceDesign()) !== acceptedDesign) throw Error("Derived session does not reconstruct the current source and design");
         if (!Array.isArray(derived.sources) || derived.sources.length > 64) throw Error("Derived dependency history exceeds its bound");
         // Historical bytes are only candidates. Undo/Redo recompiles them against the
         // independently restored canonical project before any disk publication.
         for (const [key, captured] of derived.sources) if (typeof key === "string" && /^[a-f0-9]{64}$/.test(key)) sourceHistory.set(key, captured);
+        // Retain the independently restored allocator/history, rather than the
+        // cold source compiler's zero high-water mark, after exact cache admission.
+        acceptedProject = restoredProject;
         snapshot = restored;
       } catch (error) {
         snapshot = await adapter.construct({ version: 2, persistedProject: current });
@@ -344,7 +362,9 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         const derived = JSON.parse(readSource(derivedPath));
         if (derived.format !== "geosolve-derived-session-v1" || derived.runtime !== runtimeIdentity
           || typeof derived.project !== "string" || !Array.isArray(derived.sources) || derived.sources.length > 64) throw Error("Invalid previous-source cache");
-        const recorded = derived.sources.find(([key]) => key === hash(derived.project))?.[1];
+        // Previous runtimes stored the complete project hash, including allocator state.
+        const recorded = derived.sources.find(([key]) => key === sourceHistoryKey(derived.project))?.[1]
+          ?? derived.sources.find(([key]) => key === hash(derived.project))?.[1];
         if (!recorded || !Array.isArray(recorded.files)) throw Error("Previous source graph is unavailable");
         const captured = readWorkspaceSnapshot(folder, { fileOverrides: Object.fromEntries(recorded.files.map((file) => [file.path, file.contents])) });
         if (captured.revision !== derived.revision || captured.entry !== entry || captured.mode !== mode) throw Error("Previous source identities do not match their recorded revision");
@@ -586,7 +606,8 @@ export async function openProject(folder, { cache = true, storage } = {}) {
             const files = [];
             if (!multi) files.push({ path: entry, expectedHash: baseHash, bytes: after });
             else {
-              const history = method === "dispatch" && ["history.undo", "history.redo"].includes(input.command) ? sourceHistory.get(hash(settledProject)) : null;
+              const history = method === "dispatch" && ["history.undo", "history.redo"].includes(input.command)
+                ? sourceHistory.get(sourceHistoryKey(settledProject)) ?? sourceHistory.get(hash(settledProject)) : null;
               if (changedSource) files.push({ path: entry, expectedHash: sourceHash, bytes: history?.files.find((file) => file.path === entry)?.contents ?? after });
               if (history) {
                 const historical = readWorkspaceSnapshot(folder, { fileOverrides: Object.fromEntries(history.files.map((file) => [file.path, file.contents])) });
