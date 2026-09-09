@@ -62,6 +62,24 @@ exactly the existing three cases, captures its runtime/package environment, and 
 WASM in an immutable preparation directory. The pinned runner executes those same cases as a bounded
 memory stage alongside independent suites. Build and execution receipts remain separate.
 
+M98 adds `prepare.m98` after strict Clippy and the demo WASM preparation. It builds the dedicated
+engine WASM, TypeScript engine package and Node workbench adapter, then captures source, fixtures,
+generated SDK/engine modules and the exact prepared demo WASM. The captured tree and installed
+dependency bytes are authenticated inputs. Its consumers retain the shared build lock; no new
+overlap or equivalence boundary is implied. The existing native workspace discovery covers both
+engine crates, and `wasm.engine` separately runs strict Clippy for the dedicated WASM target.
+
+The deferred M98 inventory expands into `engine.node`, `folder.node`, `folder.browser`,
+`example.generator`, `example.browser` and `package.m98`. Every discovered owning test file is an
+explicit case obligation, with required engine/workspace families checked before expansion.
+Folder browser tests consume the prepared harness distribution; clean-install package tests
+consume the exact prepared production distribution. Each group runs in a private captured-tree
+copy so examples, caches and package staging cannot rewrite prepared source. Node execution must
+finish a nonempty inventory without failed, skipped, cancelled or todo cases; runtime/dependency
+hashes are checked before and after execution. TAP, coverage, screenshots, profiles and package
+evidence survive disposal of the private copy. Targeting these stages remains development evidence,
+and a missing package test, preparation or unexpanded group prevents integrated completion.
+
 Native workspace and default-feature headless preparations have separate identities and captured
 CLI binaries. Every native test executable is also copied into its preparation directory, using
 a verified reflink or byte copy, never a hard link. Original Cargo paths remain provenance.

@@ -26,7 +26,7 @@ class ReleaseProfileTests(unittest.TestCase):
         policy_path = self.root / gate.POLICY_PATH
         policy_path.parent.mkdir(parents=True)
         policy_path.write_text(json.dumps(self.policy))
-        for package in ("geosolve-headless", "geosolve-demo-web"):
+        for package in ("geosolve-headless", "geosolve-demo-web", "geosolve-sketch-engine-wasm"):
             crate = self.root / "crates" / package
             (crate / "src").mkdir(parents=True)
             (crate / "Cargo.toml").write_text(f'[package]\nname="{package}"\nversion="0.1.0"\n')

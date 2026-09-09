@@ -44,7 +44,9 @@
     "scripts/tests/test_release_gate_native.py",
     "scripts/release_gate_runtime.py",
     "scripts/tests/test_release_pipeline.py",
-    "scripts/tests/test_release_runtime.py"
+    "scripts/tests/test_release_runtime.py",
+    "scripts/release_gate_m98.py",
+    "scripts/tests/test_release_m98.py"
   ],
   "owned": [
     "crates/*/src/**",
@@ -57,7 +59,14 @@
     "crates/geosolve-demo-web/frontend/**",
     "packages/geosolve-intent/**",
     "packages/geosolve-sketch-code/**",
-    "scripts/verify-geosolve-sketch-code-package.sh"
+    "scripts/verify-geosolve-sketch-code-package.sh",
+    "packages/geosolve-engine/**",
+    "packages/geosolve-cli/**",
+    "scripts/workspace-*.mjs",
+    "scripts/file-workspace*.mjs",
+    "scripts/geosolve-cli.mjs",
+    "scripts/package-m98*.mjs",
+    "examples/**"
   ],
   "workers": 3,
   "memory_heavy_workers": 2,

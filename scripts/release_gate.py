@@ -838,9 +838,18 @@ def rust_inputs(root):
 
 def preparation_modes(patterns):
     if not patterns:
-        return {"workspace", "headless", "wasm", "browser", "lifecycle"}
+        return {"workspace", "headless", "wasm", "browser", "lifecycle", "m98"}
     modes = set()
+    import release_gate_m98
     for pattern in patterns:
+        selected_m98 = {name for name in release_gate_m98.GROUPS if fnmatch.fnmatchcase(name, pattern)}
+        if selected_m98:
+            modes.update(("wasm", "m98"))
+            if selected_m98 & {"folder.browser", "package.m98"}:
+                modes.add("browser")
+            # Wildcards can still select existing native/browser obligations.
+            if pattern in selected_m98 or pattern.split(".")[0] in {"engine", "folder", "example"}:
+                continue
         if pattern.startswith("workspace."):
             modes.add("workspace")
         elif pattern.startswith("headless."):
@@ -854,7 +863,7 @@ def preparation_modes(patterns):
             # No direct native executable or prepared browser is consumed.
             continue
         else:
-            return {"workspace", "headless", "wasm", "browser", "lifecycle"}
+            return {"workspace", "headless", "wasm", "browser", "lifecycle", "m98"}
     return modes
 
 
@@ -880,9 +889,9 @@ def build_overlap_reviewed(root, scope, snapshot, policy):
 
 
 def preparation_stages(runner, modes=None):
-    modes = {"workspace", "headless", "wasm", "browser", "lifecycle"} if modes is None else modes
+    modes = {"workspace", "headless", "wasm", "browser", "lifecycle", "m98"} if modes is None else modes
     stages, prepared = [], {}
-    for mode in ("workspace", "headless", "wasm", "browser", "lifecycle"):
+    for mode in ("workspace", "headless", "wasm", "browser", "lifecycle", "m98"):
         if mode not in modes:
             continue
         if mode in {"workspace", "headless"}:
@@ -893,12 +902,16 @@ def preparation_stages(runner, modes=None):
         elif mode == "wasm":
             inputs = (*crate_inputs(runner.root, "geosolve-demo-web", include_tests=False),
                       FRONTEND + "/scripts/build-wasm.mjs")
+        elif mode == "m98":
+            import release_gate_m98
+            inputs = (*crate_inputs(runner.root, "geosolve-sketch-engine-wasm", include_tests=False),
+                      *release_gate_m98.SOURCE_INPUTS)
         else:
             inputs = (FRONTEND + "/**", "packages/**", "LICENSE", "THIRD_PARTY_LICENSES.md", "docs/API_COMPATIBILITY.md")
         identity = digest({"inputs": stage_inputs(Stage("identity", (cmd("identity"),), inputs=inputs),
                                                  runner.snapshot, runner.policy),
                            "tools": runner.tools, "environment": runner.environment,
-                           "wasm": prepared.get("wasm") if mode == "browser" else None})
+                           "wasm": prepared.get("wasm") if mode in {"browser", "m98"} else None})
         out = f"target/release-gate/prepared/{identity}/{mode}"
         prepared[mode] = out
         if mode in {"workspace", "headless"}:
@@ -907,9 +920,11 @@ def preparation_stages(runner, modes=None):
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-lifecycle", "--output", out)
         elif mode == "wasm":
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-wasm", "--output", out)
+        elif mode == "m98":
+            command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-m98", "--wasm-package", prepared["wasm"], "--output", out)
         else:
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-browser", "--wasm-package", prepared["wasm"], "--output", out)
-        dependencies = ("preflight.clippy",) + (("prepare.wasm",) if mode == "browser" else ())
+        dependencies = ("preflight.clippy",) + (("prepare.wasm",) if mode in {"browser", "m98"} else ())
         # Only this prepared-package path is frontend-only. Its sole writer is
         # ordered after all installs and prepare.wasm; standalone WASM fallback
         # retains its compiler work. An unreviewed concurrent body/writer restores
@@ -919,7 +934,9 @@ def preparation_stages(runner, modes=None):
         stages.append(Stage(f"prepare.{mode}", (command,), inputs=inputs,
                             dependencies=dependencies, build_lock=not frontend_overlap,
                             resource="memory" if mode == "browser" else "normal", timeout=2400,
-                            outputs=(out,), kind="build"))
+                            outputs=(out,), kind="build",
+                            artifacts=(*release_gate_m98.DEPENDENCIES, *release_gate_m98.GENERATED[:2], prepared["wasm"])
+                                if mode == "m98" else ()))
     return stages, prepared
 
 
@@ -999,6 +1016,9 @@ def qualification_stages(root, prepared, jobs):
               cases=tuple(case for case, _ in golden_oracle.inventory())),
         Stage("wasm.check", (cmd("cargo", "check", "--locked", "-p", "geosolve-demo-web", "--all-features", "--target", "wasm32-unknown-unknown"),),
               inputs=all_rust, dependencies=built, resource="exclusive"),
+        Stage("wasm.engine", (cmd("cargo", "clippy", "--locked", "-p", "geosolve-sketch-engine-wasm", "--all-targets",
+                                  "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"),),
+              inputs=crate_inputs(root, "geosolve-sketch-engine-wasm"), dependencies=built, resource="exclusive"),
         Stage("package.contents", (cmd(sys.executable, "scripts/release_gate.py", "--check-packages"),),
               inputs=(*all_rust, "scripts/verify-geosolve-sketch-code-package.sh"), dependencies=built, resource="exclusive"),
         Stage("package.archive", (cmd("bash", "scripts/verify-geosolve-sketch-code-package.sh"),),
@@ -1059,9 +1079,41 @@ def qualification_stages(root, prepared, jobs):
                                                      "--output", "{scratch}/transport.json"),),
                         inputs=(FRONTEND + "/scripts/**",), dependencies=built, resource="memory", reusable=False, timeout=180,
                         artifacts=(str(browser_path / "geosolve-production"),)))
+    if "m98" in prepared:
+        result.extend(m98_stages(root, prepared))
     # Start browser and prepared lifecycle work alongside native suites;
     # Resource admission preserves the configured total and memory-stage caps.
     return sorted(result, key=lambda stage: 0 if stage.id in {"browser", "wasm.lifecycle"} else 1)
+
+
+def m98_stages(root, prepared):
+    import release_gate_m98
+    captured = root / prepared["m98"]
+    metadata = read_json(captured / "prepared.json")
+    if metadata.get("schema") != "geosolve-m98-runtime-v1" or set(metadata.get("tests", {})) != set(release_gate_m98.GROUPS):
+        raise ValueError("M98 preparation lacks complete owning test inventory")
+    stages = []
+    for name in release_gate_m98.GROUPS:
+        needs_browser = name in {"folder.browser", "package.m98"}
+        if needs_browser and "browser" not in prepared:
+            continue
+        cases = tuple(release_gate_m98.inventory(captured / "repository", name))
+        if list(cases) != metadata["tests"][name]:
+            raise ValueError("M98 prepared owning test inventory changed")
+        command = cmd(sys.executable, "scripts/release_gate.py", "--run-m98", str(captured),
+                      "--m98-group", name, "--output", "{scratch}/m98")
+        artifacts = (str(captured), *release_gate_m98.DEPENDENCIES)
+        dependencies = ("prepare.m98",)
+        if needs_browser:
+            flavor = "geosolve-production" if name == "package.m98" else "geosolve-harness"
+            browser = str(root / prepared["browser"] / flavor)
+            command += ("--browser-package", browser)
+            artifacts += (browser,)
+            dependencies += ("prepare.browser",)
+        stages.append(Stage(name, (command,), inputs=release_gate_m98.SOURCE_INPUTS,
+                            dependencies=dependencies, artifacts=artifacts, cases=cases,
+                            build_lock=True, resource="memory", timeout=2100))
+    return stages
 
 
 def pipeline_stages(root, prepared, jobs, patterns):
@@ -1081,13 +1133,15 @@ def pipeline_stages(root, prepared, jobs, patterns):
                       resource="exclusive" if stage.id == "performance" else "memory" if stage.id == "golden" else "normal"))
 
     deferred = []
-    for mode in ("workspace", "headless", "browser", "lifecycle"):
+    for mode in ("workspace", "headless", "browser", "lifecycle", "m98"):
         if mode not in prepared:
             continue
         dependencies = ("prepare." + mode,) + (("prepare.wasm",) if mode == "browser" else ())
         def factory(mode=mode):
             if mode in {"workspace", "headless"}:
                 stages = native_stages(root, {mode: prepared[mode]})
+            elif mode == "m98":
+                stages = m98_stages(root, prepared)
             else:
                 own = {mode: prepared[mode]}
                 if mode == "browser":
@@ -1211,7 +1265,8 @@ def verify_production(manifest, output):
 def check_packages():
     packages = ["geosolve-geometry", "geosolve-core", "geosolve-sketch", "geosolve-linkage", "geosolve-sketch-features",
                 "geosolve-sketch-intent", "geosolve-sketch-ops", "geosolve-sketch-topology", "geosolve-constraint-editor",
-                "geosolve-sketch-code", "geosolve-sketch-render", "geosolve-headless"]
+                "geosolve-sketch-code", "geosolve-sketch-render", "geosolve-headless",
+                "geosolve-sketch-engine", "geosolve-sketch-engine-wasm"]
     for package in packages:
         contents = capture(["cargo", "package", "--locked", "--allow-dirty", "--list", "-p", package]).splitlines()
         if not {"LICENSE", "README.md"} <= set(contents):
@@ -1306,6 +1361,10 @@ def main():
     parser.add_argument("--check-packages", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--prepare-native", choices=("workspace", "headless"), help=argparse.SUPPRESS)
     parser.add_argument("--prepare-wasm", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--prepare-m98", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--run-m98", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--m98-group", help=argparse.SUPPRESS)
+    parser.add_argument("--browser-package", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--prepare-lifecycle", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--wasm-package", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--prepare-browser", action="store_true", help=argparse.SUPPRESS)
@@ -1335,6 +1394,14 @@ def main():
             subprocess.run(["npm", "run", "wasm:release"], cwd=ROOT / FRONTEND, check=True)
             shutil.copytree(ROOT / FRONTEND / "src/generated", out)
         prepare_output(args.output, build_wasm)
+        return 0
+    if args.prepare_m98:
+        import release_gate_m98
+        prepare_output(args.output, lambda out: release_gate_m98.prepare(ROOT, args.wasm_package.resolve(), out))
+        return 0
+    if args.run_m98:
+        import release_gate_m98
+        release_gate_m98.run(ROOT, args.run_m98, args.m98_group, args.output, args.browser_package)
         return 0
     if args.prepare_browser:
         wasm_args = ["--wasm-package", str(args.wasm_package.resolve())] if args.wasm_package else []
