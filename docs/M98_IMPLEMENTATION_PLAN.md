@@ -106,7 +106,8 @@ M97 docs. This is integration source, not new qualification. The accepted M97 ar
 
 The checked implementation items have focused owner evidence, not milestone acceptance.
 Native/session/profile implementation is recorded in [M98_ENGINE_IMPLEMENTATION.md](M98_ENGINE_IMPLEMENTATION.md).
-The current transaction/worker/cache findings and exact regressions are recorded in
+The [authoring quickstart](M98_AUTHORING_QUICKSTART.md) provides a complete agent handoff/edit/retry
+workflow and a small generator host. The current transaction/worker/cache findings and exact regressions are recorded in
 [M98_HARDENING.md](M98_HARDENING.md). Package smoke installs all three archives offline
 and runs a browser application using only the installed SDK/engine. Navigation measurements are recorded in [M98_NAVIGATION.md](M98_NAVIGATION.md). Browser/HTTP
 migration is complete, including source-draft downloads, actual failed-write recovery, invalid

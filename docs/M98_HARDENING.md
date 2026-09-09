@@ -251,3 +251,46 @@ including actual manifold GUI widths 12→10→11, independent sidecar reconstru
 18 regions at every width with all five 3 mm bores retained. Evidence:
 `target/m98/workspace-transaction-review-final-r2.log` and `topology-f007-wasm-r1.log`.
 No solver equation or golden oracle bytes changed.
+
+## M98-F014 — offline CLI packaged a recursive bundler launcher
+
+Clean `e0c2167` failed integrated `package.m98` in run
+`20260909T132628-47a2b33d`: the installed generator-circle `check` exceeded the
+unchanged 90-second command bound. The initialized editable check had passed because
+its source needed no bundling. Installing the exact retained archives into a new
+empty-cache consumer independently reproduced the timeout in 91.1 seconds. Captured
+stderr showed the loader's own 15-second timeout; inherited subprocess pipes kept the
+outer process alive.
+
+Release preflight installs esbuild without running its install script, leaving
+`bin/esbuild` as a 9,351-byte JavaScript forwarding launcher. The packager copied that
+launcher into esbuild's native fallback location. Its checkout `--version` check passed
+by locating the optional platform dependency. In the installed CLI, it instead found
+itself and recursively launched copies. Both archive inspection and a bounded direct
+fallback invocation independently confirm the packaging error.
+
+The correction belongs to archive preparation: resolve the actual matching Linux
+platform executable, verify ELF identity and version with a bounded invocation, and
+ship it beside unchanged upstream esbuild JavaScript. The offline installed-package
+regression must verify that executable before checking the generated circle and custom
+website. Existing timeouts and geometry assertions remain unchanged; no native engine,
+worker authority, solver equation or golden bytes need modification. Focused and final
+qualification results are recorded after the repair below.
+
+Correction `72f03b2` passes the full offline smoke **2/2 in 19.1 seconds**, including
+empty-cache installation, editable and generator CLI checks/bake, installed engine,
+folder status and exact production index bytes, and Chromium using the clean-installed
+SDK/engine website. Regression-first execution against the original gate archives fails
+on executable magic in 2.1 seconds before recursion. Syntax and diff checks pass.
+
+Executed focused command (from this worktree):
+
+```bash
+env -u NODE_OPTIONS -u NODE_PATH -u GEOSOLVE_DIST -u GEOSOLVE_M98_PACKAGES \
+  GEOSOLVE_M98_PACKAGE_OUT="$PWD/target/m98/package-fixed-e0c2167" \
+  GEOSOLVE_M98_DIST="$PWD/target/release-gate/prepared/f862ad58f8fc7bb4ed341d7ca820326b75fe2a655217065d40f0d7fb56985f8e/browser/geosolve-production" \
+  node --test --test-concurrency=1 --test-reporter=tap scripts/package-m98.test.mjs
+```
+
+Final integrated replacement qualification remains required; this focused result does
+not convert the failed run into a release pass.
