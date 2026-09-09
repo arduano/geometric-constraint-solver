@@ -138,7 +138,14 @@ impl ConstraintEditor {
         scene: &EditorScene,
         state: SelectionPresentationState,
     ) -> Result<(), SelectionPresentationError> {
-        if self.active_pointer_gesture().is_some() || self.geometry_draft_status().is_some() {
+        // GeometryDraftStatus also describes an armed, empty tool. Only live
+        // draft/commit state prevents a new presentation handoff after navigation.
+        if self.active_pointer_gesture().is_some()
+            || self.draft.is_some()
+            || self.draft_status_candidate.is_some()
+            || self.draft_issue.is_some()
+            || self.pending_construction_commit.is_some()
+        {
             return Err(SelectionPresentationError::ActiveInteraction);
         }
         state.validate(scene)?;
@@ -154,5 +161,87 @@ impl ConstraintEditor {
             .map(|pick| (pick.span, pick.origin))
             .collect();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{EditorTool, GeometryToolVariant, Modifiers, PointerInput, Viewport};
+    use geosolve_sketch::{
+        DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument, SolverConfig,
+    };
+
+    #[test]
+    fn selection_handoff_allows_armed_mode_but_rejects_live_draft_and_pending_commit() {
+        let mut document = SketchDocument::new(10.0).unwrap();
+        let point = document.add_point("selection anchor", [0.0, 0.0]).unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let accepted = session.accepted_state_for_current_input().unwrap();
+        let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).unwrap();
+        let scene = EditorScene::from_accepted(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            viewport,
+            0.5,
+        )
+        .unwrap()
+        .with_retained_session(&session)
+        .unwrap();
+        let selected = SelectionPresentationState {
+            items: vec![SelectionItem::Point(point)],
+            curve_picks: vec![],
+        };
+        let mut editor = ConstraintEditor::default();
+        editor
+            .restore_selection_presentation(&scene, selected.clone())
+            .unwrap();
+        assert_eq!(editor.tool(), EditorTool::Select);
+        editor.activate_geometry_tool(GeometryToolVariant::Segment);
+        assert!(editor.draft.is_none());
+        assert_eq!(editor.geometry_draft_status().unwrap().completed_stages, 0);
+        editor
+            .restore_selection_presentation(&scene, selected.clone())
+            .unwrap();
+        assert_eq!(editor.tool(), EditorTool::Line);
+        let pointer = |position| PointerInput {
+            pointer_id: 815,
+            position: viewport.model_to_screen(position),
+            modifiers: Modifiers::default(),
+        };
+        editor.pointer_down(&scene, pointer([2.0, 1.0]));
+        assert_eq!(editor.geometry_draft_status().unwrap().completed_stages, 1);
+        let draft = editor.geometry_draft_status();
+        assert_eq!(
+            editor.restore_selection_presentation(&scene, selected.clone()),
+            Err(SelectionPresentationError::ActiveInteraction)
+        );
+        assert_eq!(editor.geometry_draft_status(), draft);
+        assert_eq!(editor.selection_presentation_state(), selected);
+        editor.cancel();
+        assert_eq!(editor.tool(), EditorTool::Line);
+        assert!(editor.draft.is_none());
+        editor
+            .restore_selection_presentation(&scene, selected.clone())
+            .unwrap();
+        editor.activate_geometry_tool(GeometryToolVariant::SketchPoint);
+        editor
+            .restore_selection_presentation(&scene, selected.clone())
+            .unwrap();
+        editor.pointer_down(&scene, pointer([2.0, 1.0]));
+        assert!(editor.draft.is_none());
+        assert!(editor.pending_construction_commit.is_some());
+        assert_eq!(
+            editor.restore_selection_presentation(&scene, selected.clone()),
+            Err(SelectionPresentationError::ActiveInteraction)
+        );
+        assert_eq!(editor.selection_presentation_state(), selected);
+        assert_eq!(scene.presentation_document(), accepted.document());
     }
 }

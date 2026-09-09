@@ -922,4 +922,101 @@ mod tests {
         assert_eq!(update["serverFrameCompatible"], false);
         assert_eq!(local.camera, camera);
     }
+    #[test]
+    fn local_canvas_navigation_handoff_preserves_armed_tool_and_uses_new_camera() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        bridge
+            .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
+            .unwrap();
+        let before = bridge.export_project_json().unwrap();
+        bridge
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"segment"}}"#)
+            .unwrap();
+        bridge
+            .cancel_json(r#"{"version":2,"reason":"lost-capture"}"#)
+            .unwrap();
+        let pair: serde_json::Value =
+            serde_json::from_str(&bridge.interaction_snapshot_json().unwrap()).unwrap();
+        let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
+        let wheel = r#"{"version":2,"x":300.0,"y":250.0,"deltaX":0.0,"deltaY":-80.0,"ctrl":false}"#;
+        local.wheel_json(wheel).unwrap();
+        assert_ne!(bridge.camera, local.camera);
+        bridge
+            .interaction_apply_json(&local.state_json().unwrap())
+            .unwrap();
+        assert_eq!(bridge.active_tool, "segment");
+        assert_eq!(bridge.camera, local.camera);
+        assert_eq!(bridge.export_project_json().unwrap(), before);
+        let pointer = |phase, buttons, position: [f64; 2]| {
+            serde_json::json!({
+            "version":2,"phase":phase,"pointerId":816,"x":position[0],"y":position[1],"buttons":buttons,
+            "modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}
+        }).to_string()
+        };
+        bridge
+            .pointer_json(&pointer("down", 1, [245.3, 236.2]))
+            .unwrap();
+        bridge
+            .pointer_json(&pointer("up", 0, [245.3, 236.2]))
+            .unwrap();
+        assert_eq!(
+            bridge
+                .editor()
+                .editor()
+                .geometry_draft_status()
+                .unwrap()
+                .completed_stages,
+            1
+        );
+        let staged = bridge.editor().editor().geometry_draft_status();
+        assert!(
+            bridge
+                .interaction_apply_json(&local.state_json().unwrap())
+                .is_err()
+        );
+        assert_eq!(bridge.editor().editor().geometry_draft_status(), staged);
+        bridge
+            .cancel_json(r#"{"version":2,"reason":"lost-capture"}"#)
+            .unwrap();
+        local.wheel_json(wheel).unwrap();
+        bridge
+            .interaction_apply_json(&local.state_json().unwrap())
+            .unwrap();
+        assert_eq!(bridge.active_tool, "segment");
+        assert_eq!(
+            bridge
+                .editor()
+                .editor()
+                .geometry_draft_status()
+                .unwrap()
+                .completed_stages,
+            0
+        );
+        let positions = [[333.1, 232.6], [642.3, 423.4]];
+        let expected = positions.map(|[x, y]| {
+            local
+                .camera
+                .viewport()
+                .screen_to_model(ScreenPoint { x, y })
+        });
+        for position in positions {
+            bridge.pointer_json(&pointer("down", 1, position)).unwrap();
+            bridge.pointer_json(&pointer("up", 0, position)).unwrap();
+        }
+        let document = bridge
+            .editor()
+            .coordinator()
+            .presentation_session()
+            .unwrap()
+            .design_document();
+        assert_eq!(document.curves().len(), 1);
+        assert_eq!(document.points().len(), 2);
+        for (point, expected) in document.points().iter().zip(expected) {
+            assert!((point.position[0] - expected[0]).abs() < 1.0e-10);
+            assert!((point.position[1] - expected[1]).abs() < 1.0e-10);
+        }
+        assert_eq!(bridge.camera, local.camera);
+        assert_eq!(bridge.active_tool, "segment");
+        assert!(bridge.last_error.is_none());
+    }
 }
