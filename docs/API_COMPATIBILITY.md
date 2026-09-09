@@ -453,3 +453,27 @@ atomically and older request versions reject. This presentation change does not 
 persisted workbench/project, document, history or reproduction contents. Tool catalogs and the
 intent/code-control RPCs retain their separately owned protocols. geosolve-sketch-render exposes
 finite presentation-only draw-frame types while preserving native SVG and PNG export interfaces.
+
+
+## M98 detached canvas interaction
+
+`EditorScene::to_detached_json`, `from_detached_json` and `replace_detached_json` transport
+presentation data for hosts with remote sketch editing. The bounded format retains native
+analytic curves and explicit computed geometry, plus annotations and camera context. Import
+never creates an accepted session, prepared input, solver certificate or publication authority;
+the detached marker survives reprojection and prohibits upgrading the scene through session
+binding. It is a transient versioned transport, not a persisted project or document format.
+
+`ConstraintEditor::select_at` shares ordinary Select picking without starting a drag.
+`SelectionPresentationState` retains ordered semantic selection and exact curve pick
+parameters/origins; restore validates membership and visible occurrence against the current
+scene before publication. `ProjectionalEditorSession::restore_selection_presentation` also
+checks scene authority and projects selected declaration ownership. The shared
+`dimension_hover_target` retains geometry-to-label movement under the existing 12 CSS px rule.
+
+The application-only WASM `InteractionHandle` runs detached navigation in a dedicated worker;
+`WorkbenchHandle.interactionSnapshot` and `interactionApply` connect it to server-owned
+edits. JS/WASM ship together. Folder requests opt into `localInteraction: true`; existing
+clients retain their current protocol. Local view state binds the installed scene identity,
+and server source, epoch, lease and revision guards remain mandatory. No persisted schema,
+solver equations, branch state or hard/soft priority semantics change.

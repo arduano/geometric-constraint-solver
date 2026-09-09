@@ -2961,3 +2961,21 @@ The [M98 loading-feedback amendment](docs/M98_LOADING_FEEDBACK.md) adds presenta
 activity counting, delayed canvas feedback and named folder SSE activity. Standalone WASM
 runs the existing adapter in an ordered module worker, preserving immutable snapshot
 sequence and canvas-only fast paths across transport. Activity grants no scene authority.
+
+
+The authorized [local canvas amendment](docs/M98_LOCAL_CANVAS.md) is under implementation.
+Folder navigation moves into a dedicated Rust/WASM presentation worker over a bounded
+`EditorScene` transport. The imported scene retains analytic geometry, computed boundaries
+and dimension placement, with a permanent detached marker and no prepared or accepted-input
+capability. Camera, picking, selection and dimension disclosure use shared Rust semantics;
+ordinary pointer hover, wheel and resize require no HTTP request and publish canvas-only
+frames. Native selection metadata retains picked curve occurrences and parameters for the
+server's later constraint and Fillet authoring.
+
+Server sketch commands carry the installed scene identity and absolute local presentation.
+Source/epoch/lease/revision guards and transaction rollback remain server-owned. A new scene
+preserves the latest camera and reconciles surviving selections. Selection Inspector chrome
+may settle in the background; acknowledgement must not rewind later clicks. During slow
+server edits the delayed veil remains visible while local navigation works. Exact server
+construction/inference frames are retained only when their viewport and selection match the
+current client; navigation uses the detached accepted scene instead of reusing stale pixels.

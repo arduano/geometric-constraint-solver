@@ -8468,6 +8468,10 @@ merge or qualify that product.
 
 ## M98 — reliable project authoring and embeddable TypeScript engine
 
+- [x] Implement the authorized [local canvas boundary](docs/M98_LOCAL_CANVAS.md): local
+  accepted-scene navigation/picking/selection, server sketch edits and exact reconciliation.
+- [ ] Qualify stalled-server responsiveness, shared native prediction parity and replacement delivery.
+
 - [x] Reproduce M98-F016 delayed hover/zoom/click under asynchronous navigation and add
   exact scheduler regressions; preserve gesture terminals, semantic samples and wheel anchors.
 - [x] Qualify the navigation queue/transfer repair and refresh the existing previews.

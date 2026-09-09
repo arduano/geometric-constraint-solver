@@ -403,3 +403,51 @@ folder React publication remain; no client-side camera or solver equations are a
 
 Focused qualification and replacement preview evidence are tracked in
 [M98 navigation latency](M98_NAVIGATION_LATENCY.md). M98 acceptance remains open.
+
+
+## M98-F017 — folder navigation waited for server execution and full UI publication
+
+The user reports folder interaction remains substantially slower than M97 after qualified
+F016 product `b1243a6`, and explicitly authorizes local navigation, picking, selection and
+highlighting with server-owned sketch edits. Private-copy Chromium reproduction in
+`target/m98/navigation-path-comparison.json` confirms every folder navigation update still
+crosses serialized HTTP, while the standalone path uses local WASM. At 100 ms simulated
+latency and 512 KiB/s, folder response time is 236–243 ms and its final frame arrives 710 ms
+after input stops. Native frame deltas also lose their canvas-only marker through the folder
+transport, unnecessarily refreshing React source, Explorer and Inspector state.
+
+This is distinct from F016's bounded input queue: retaining fewer queued requests cannot
+remove a network round trip from each visible response. The owning boundary is detached
+Rust interaction plus browser routing. The authorized repair exports bounded accepted
+presentation data to a dedicated browser WASM worker that shares exact camera, reprojection,
+picking, dimension and ordered selection behavior. Authoritative edits remain serialized
+on the server and validate source, epoch, lease, revision and accepted scene identity.
+Transported geometry confers no solver or edit authority.
+
+[Local canvas implementation and qualification](M98_LOCAL_CANVAS.md) tracks focused native,
+transport and browser evidence. This amendment is not yet qualified or delivered.
+
+## M98-F018 — Redo rejected a canvas-authored polyline's historical project
+
+During F017 browser qualification on development r2, Polyline previews, three clicks,
+Finish with one source write, local navigation and Undo succeeded. Redo returned HTTP 400:
+`Historical dependency bytes do not match the accepted Undo/Redo project`. The transaction
+retained the previous accepted model and source. Exact evidence is
+`target/m98/local-canvas-authoring-r2b/local-folder-authoring-debug.json`.
+
+The backend-owner regression reproduces the same failure through public `openProject`
+requests with local interaction disabled, establishing that the folder-history failure is
+independent of the new client routing. The historical source graph is independently compiled
+before acceptance; that comparison must retain its dependency and authoring invariants.
+The native canvas authoring project raises `declaration_name_high_water`, a monotonic
+name allocator intentionally absent from printed source. Undo preserves that counter,
+so hashing it also prevented recovery of the exact original source snapshot. Source-history
+identity now excludes this single lifecycle field; comparison retains every compiled source,
+IR, custom-file, artifact and lock field. Native restored projects must still exactly match
+the recorded project before their allocator/history is admitted. The counter itself is never
+lowered or rewritten by this comparison.
+
+The focused real polyline backend regression passes exact original-source Undo, authored
+project/design Redo, reopen/Undo and subsequent `geometry2` allocation. Forged historical
+source, including matching forged hashes, remains subject to independent compilation.
+Integrated qualification remains required.

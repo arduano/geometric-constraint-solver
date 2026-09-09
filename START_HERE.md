@@ -22,6 +22,11 @@ record the accepted scope and limits. No M97 blocker or acceptance action remain
 The previous M97 previews remain documented at ports 18104 and 18103; M96's accepted
 channel checkpoint remains in [M96_CLOSURE.md](docs/M96_CLOSURE.md).
 
+**Active amendment: [local canvas interaction](docs/M98_LOCAL_CANVAS.md) passes focused checks; integrated qualification is pending.**
+The user requires responsive local navigation, selection and highlighting with server-owned
+sketch edits. The previous queue/transfer fix remains qualified and served below; it did not
+restore the original local interaction boundary. Work only in the existing M98 worktree.
+
 **M98-F016 navigation latency repair is mechanically qualified and delivered.**
 Clean candidate `b1243a6` passes all 261 obligations in
 `20260909T221531-9189674e` (11 fresh, 250 authenticated reused results; 16m14.099s).

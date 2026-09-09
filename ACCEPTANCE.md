@@ -5559,6 +5559,11 @@ limits without claiming an unrecorded exhaustive human replay. No M97 blocker re
 
 ## M98 real-world authoring and embedding — mechanical qualification complete
 
+The authorized [local canvas amendment](docs/M98_LOCAL_CANVAS.md), M98-F017, passes focused native and browser checks; integrated qualification is pending.
+Its new qualification requirements are local responsiveness during stalled server execution,
+exact native selection/camera/dimension parity, semantic edit handoff and stale reply retention.
+The previously qualified previews below remain served until replacement checks pass.
+
 M98-F016 navigation latency repair is mechanically qualified and delivered from `b1243a6` in
 `20260909T221531-9189674e`: all 261 obligations pass (11 fresh, 250 authenticated reused).
 [Latency evidence](docs/M98_NAVIGATION_LATENCY.md) records exact input preservation,
