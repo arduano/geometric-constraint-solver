@@ -13,6 +13,7 @@ mod declaration_catalog;
 mod document_export;
 mod editor_insertion;
 mod expansion;
+mod generated;
 mod managed;
 mod managed_control;
 mod model;
@@ -67,6 +68,12 @@ pub use expansion::{
     GeneratedIntentProvenance, KeyedFilletHostRequest, direct_declaration_intent_symbol,
     expand_code_project, expand_code_project_for_structural_edit, expand_code_project_with_overlay,
     required_generated_members, stage_point_drags,
+};
+pub use generated::{
+    GENERATED_SKETCH_ARTIFACT_FORMAT, GENERATED_SKETCH_ARTIFACT_LIMIT, GeneratedApplication,
+    GeneratedDeclaration, GeneratedGroup, GeneratedParameter, GeneratedReference,
+    GeneratedSketchArtifact, GeneratedValidationError, GeneratedValue, ValidatedGeneratedSketch,
+    materialize_generated_sketch_cold,
 };
 pub use managed::{
     CompiledManagedSource, EXECUTED_SKETCH_ARTIFACT_FORMAT, ExecutedConsumerTarget,

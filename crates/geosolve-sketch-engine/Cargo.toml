@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[package]
+name = "geosolve-sketch-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+readme = "README.md"
+description = "Headless managed and generated sketch evaluation over independently validated GeoSolve domains"
+
+[dependencies]
+geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+geosolve-sketch-code = { version = "0.2.0", path = "../geosolve-sketch-code" }
+geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
+geosolve-sketch-intent = { version = "0.2.0", path = "../geosolve-sketch-intent" }
+geosolve-sketch-topology = { version = "0.2.0", path = "../geosolve-sketch-topology" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

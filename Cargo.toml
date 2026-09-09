@@ -8,6 +8,8 @@ members = [
     "crates/geosolve-linkage",
     "crates/geosolve-sketch",
     "crates/geosolve-sketch-code",
+    "crates/geosolve-sketch-engine",
+    "crates/geosolve-sketch-engine-wasm",
     "crates/geosolve-sketch-features",
     "crates/geosolve-sketch-intent",
     "crates/geosolve-sketch-ops",

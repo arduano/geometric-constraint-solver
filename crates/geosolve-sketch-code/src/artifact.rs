@@ -269,10 +269,10 @@ fn validate_artifact(artifact: &PatchModuleArtifact) -> Result<(), ArtifactValid
     }
     validate_digest("source", &artifact.source_digest)?;
     validate_digest("interface", &artifact.interface_digest)?;
-    if !artifact.module_specifier.starts_with("./patches/")
-        || !artifact.module_specifier.ends_with(".patch.ts")
-        || artifact.module_specifier.contains("..")
-        || artifact.module_specifier.contains('\\')
+    if !artifact
+        .module_specifier
+        .strip_prefix("./")
+        .is_some_and(crate::project::valid_custom_module_path)
     {
         return Err(ArtifactValidationError::InvalidModuleSpecifier(
             artifact.module_specifier.clone(),

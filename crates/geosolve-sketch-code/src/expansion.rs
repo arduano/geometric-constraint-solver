@@ -994,6 +994,14 @@ struct InvocationPlan {
     synthetic_outputs: TemplateOutputPlan,
 }
 
+/// Common evaluated recipe ownership; neither templates nor generators need to
+/// manufacture the other admission path's authority to use native recipes.
+struct RecipeOwner<'a> {
+    declaration: &'a AuthoringDeclaration,
+    arguments: &'a ManagedValue,
+    digest: &'a str,
+}
+
 struct ExpansionBuilder {
     project: ProjectKey,
     source_suppressions: ManagedSuppressionProjection,
@@ -1360,7 +1368,7 @@ fn semantic_reference_paths_equivalent(
 pub fn required_generated_members(
     project: &CodeProject,
 ) -> Result<Vec<GeneratedMemberAddress>, CodeExpansionError> {
-    let mut addresses = direct_generated_members(project)?;
+    let mut addresses = direct_generated_members(&project.managed.program)?;
     if project
         .managed
         .program
@@ -1399,11 +1407,19 @@ pub fn required_generated_members(
 }
 
 fn direct_generated_members(
-    project: &CodeProject,
+    program: &crate::AuthoringProgram,
 ) -> Result<Vec<GeneratedMemberAddress>, CodeExpansionError> {
     let mut addresses = Vec::new();
-    for declaration in &project.managed.program.declarations {
+    for declaration in &program.declarations {
         if declaration.patch.is_some() {
+            continue;
+        }
+        if let Some(outputs) = evaluated_recipe_outputs(declaration) {
+            addresses.extend(
+                outputs
+                    .into_iter()
+                    .map(|(path, _)| evaluated_recipe_address(declaration, &path)),
+            );
             continue;
         }
         let Some((family, namespace, method)) = named_family_parts(declaration) else {
@@ -1606,8 +1622,37 @@ pub(crate) fn expand_code_project_with_overlay_and_planner(
     overlay.validate()?;
     validate_suppression_authority(project, overlay)?;
     validate_supported_overrides(reconciliation)?;
-    let (mut builder, plans) = prepare(project, Some(reconciliation), overlay, operation_planner)?;
-    let required = direct_generated_members(project)?
+    let (builder, plans) = prepare(project, Some(reconciliation), overlay, operation_planner)?;
+    finish_expansion(
+        &project.project,
+        &project.managed.program,
+        reconciliation,
+        overlay,
+        expected,
+        operation_planner,
+        builder,
+        plans,
+        &[],
+    )
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "shared completion preserves one lowering, reference validation and expansion digest"
+)]
+fn finish_expansion(
+    project: &ProjectKey,
+    program: &crate::AuthoringProgram,
+    reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
+    expected: IntentSessionIdentity,
+    operation_planner: &mut dyn CodeOperationPlanner,
+    mut builder: ExpansionBuilder,
+    plans: Vec<InvocationPlan>,
+    reference_claims: &[(SemanticSymbol, SemanticOutputPath, FeatureKind)],
+) -> Result<ExpandedCodeProject, CodeExpansionError> {
+    let required = direct_generated_members(program)?
         .into_iter()
         .chain(
             plans
@@ -1638,15 +1683,26 @@ pub(crate) fn expand_code_project_with_overlay_and_planner(
         )?;
     }
     lower_remaining_named_declarations(
-        project,
+        program,
         &mut builder,
         reconciliation,
         overlay,
         operation_planner,
     )?;
 
+    for (declaration, path, expected_kind) in reference_claims {
+        let actual = builder.resolve(declaration, path)?.kind();
+        if actual != *expected_kind {
+            return Err(CodeExpansionError::KindMismatch {
+                reference: format!("{}:{path:?}", declaration.0),
+                expected: *expected_kind,
+                actual,
+            });
+        }
+    }
+
     let mut semantic_outputs = BTreeMap::new();
-    for output in &project.managed.program.outputs {
+    for output in &program.outputs {
         let value = builder.resolve(&output.declaration, &output.path)?;
         if semantic_outputs.len() >= MAX_EXPANDED_OUTPUTS {
             return Err(CodeExpansionError::ResourceLimit {
@@ -1660,7 +1716,7 @@ pub(crate) fn expand_code_project_with_overlay_and_planner(
             output.name.clone(),
             ExpandedSemanticOutput {
                 reference: OutputRef {
-                    project: project.project.clone(),
+                    project: project.clone(),
                     declaration: output.declaration.clone(),
                     output: output.path.clone(),
                     expected_kind: value.kind(),
@@ -1719,6 +1775,207 @@ pub(crate) fn expand_code_project_with_overlay_and_planner(
         operation_plans: builder.operation_plans,
         digest: intent_content_digest(&digest_bytes).to_string(),
     })
+}
+
+/// Separate generator admission uses shared lowering without source ownership.
+pub(crate) fn expand_generated_with_planner(
+    sketch: &crate::ValidatedGeneratedSketch,
+    expected: IntentSessionIdentity,
+    operation_planner: &mut dyn CodeOperationPlanner,
+) -> Result<ExpandedCodeProject, CodeExpansionError> {
+    let members = direct_generated_members(&sketch.program)?;
+    let mut reconciliation = KeyedReconcileState::default();
+    let plan = reconciliation.plan(members, &BTreeSet::new())?;
+    reconciliation.commit(plan)?;
+    let project = ProjectKey(format!("generator.{}", sketch.digest()));
+    let mut builder = ExpansionBuilder::new(
+        project.clone(),
+        ManagedSuppressionProjection {
+            declarations: sketch.suppressions.clone(),
+            generated_members: BTreeSet::new(),
+        },
+    );
+    let overlay = CodeInteractionOverlay::empty();
+    for declaration in &sketch.program.declarations {
+        if evaluated_recipe_outputs(declaration).is_some() {
+            lower_evaluated_recipe(
+                &mut builder,
+                declaration,
+                sketch.digest(),
+                &reconciliation,
+                &overlay,
+                operation_planner,
+            )?;
+        } else {
+            lower_named_declaration(
+                &mut builder,
+                declaration,
+                Some(&reconciliation),
+                &overlay,
+                operation_planner,
+            )?;
+        }
+    }
+    builder.writable_points.clear();
+    finish_expansion(
+        &project,
+        &sketch.program,
+        &reconciliation,
+        &overlay,
+        expected,
+        operation_planner,
+        builder,
+        Vec::new(),
+        &sketch.references,
+    )
+}
+
+fn evaluated_recipe_outputs(
+    declaration: &AuthoringDeclaration,
+) -> Option<Vec<(SemanticOutputPath, FeatureKind)>> {
+    let family = declaration.builder_path.join(".");
+    match family.as_str() {
+        "computed.polylineChannel" => Some(
+            [
+                ("left", FeatureKind::Feature),
+                ("right", FeatureKind::Feature),
+                ("startLeft", FeatureKind::Point),
+                ("startRight", FeatureKind::Point),
+                ("endLeft", FeatureKind::Point),
+                ("endRight", FeatureKind::Point),
+            ]
+            .into_iter()
+            .map(|(name, kind)| (fields_path(&[name]), kind))
+            .collect(),
+        ),
+        "computed.fillet" => Some(vec![(fields_path(&["arc"]), FeatureKind::CurveSpan)]),
+        "computed.roundedRectangleProfile" => Some(
+            std::iter::once((fields_path(&["profile"]), FeatureKind::Profile))
+                .chain(
+                    ["ne", "nw", "se", "sw"]
+                        .into_iter()
+                        .map(|key| (fields_path(&["mounts", key]), FeatureKind::Point)),
+                )
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+fn evaluated_recipe_address(
+    declaration: &AuthoringDeclaration,
+    path: &SemanticOutputPath,
+) -> GeneratedMemberAddress {
+    GeneratedMemberAddress::new(
+        declaration.symbol.0.clone(),
+        ["evaluated", "recipe"],
+        ["self"],
+        path.0.iter().map(|part| match part {
+            ManagedPathSegment::Field(field) => field.clone(),
+            _ => unreachable!("recipe outputs have fixed field paths"),
+        }),
+    )
+}
+
+fn lower_evaluated_recipe(
+    builder: &mut ExpansionBuilder,
+    declaration: &AuthoringDeclaration,
+    digest: &str,
+    reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
+    planner: &mut dyn CodeOperationPlanner,
+) -> Result<(), CodeExpansionError> {
+    let outputs = evaluated_recipe_outputs(declaration)
+        .expect("evaluated recipe")
+        .into_iter()
+        .map(|(path, kind)| {
+            let address = evaluated_recipe_address(declaration, &path);
+            let identity = reconciliation
+                .active()
+                .get(&address)
+                .copied()
+                .ok_or_else(|| {
+                    CodeExpansionError::ReconciliationMismatch(address.display_path())
+                })?;
+            Ok((path, kind, address, identity))
+        })
+        .collect::<Result<Vec<_>, CodeExpansionError>>()?;
+    let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
+    let direct = arguments
+        .iter()
+        .filter(|(_, value)| {
+            matches!(
+                value,
+                ManagedValue::Reference { .. } | ManagedValue::Number(_) | ManagedValue::Unit(_)
+            )
+        })
+        .map(|(name, value)| {
+            Ok((
+                name.clone(),
+                builder.resolve_managed(value, &SemanticOutputPath::default(), name)?,
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, CodeExpansionError>>()?;
+    let bindings = ResolvedTemplateBindings {
+        arguments: declaration.arguments.clone(),
+        direct,
+        temporary: Vec::new(),
+    };
+    let owner = RecipeOwner {
+        declaration,
+        arguments: &declaration.arguments,
+        digest,
+    };
+    let operation_start = builder.operations.len();
+    let host_start = builder.host_requests.len();
+    let paths = match declaration.builder_path.join(".").as_str() {
+        "computed.polylineChannel" => {
+            channel::lower(builder, &owner, &outputs, &bindings, overlay, planner)?
+        }
+        "computed.fillet" => lower_generated_fillet(
+            builder,
+            &owner,
+            &["self".into()],
+            &outputs,
+            &bindings.direct,
+        )?,
+        "computed.roundedRectangleProfile" => {
+            lower_generated_rectangle(builder, &owner, &outputs, overlay)?
+        }
+        _ => unreachable!("evaluated recipe"),
+    };
+    if builder.suppresses_declaration(&declaration.symbol) {
+        builder.suppress_lowered_member_since(operation_start, host_start);
+    }
+    let mut members = BTreeMap::new();
+    for (path, value) in &paths {
+        let fields = path
+            .0
+            .iter()
+            .map(|part| match part {
+                ManagedPathSegment::Field(field) => field.clone(),
+                _ => unreachable!("recipe fields"),
+            })
+            .collect::<Vec<_>>();
+        insert_nested_root_member(&mut members, &fields, value.clone(), &declaration.symbol)?;
+    }
+    let alias = semantic_alias("recipe", &builder.project, &declaration.symbol, &[])?;
+    for (path, _, address, identity) in &outputs {
+        builder.add_provenance(
+            address,
+            *identity,
+            &declaration.symbol,
+            Some(digest.into()),
+            &paths[path],
+        )?;
+    }
+    builder.insert_declaration(
+        declaration.symbol.clone(),
+        SemanticDeclaration {
+            root: SemanticValue::Feature { alias, members },
+            paths,
+        },
+    )
 }
 
 /// Expands an explicit structural edit while deterministically pruning the
@@ -4774,7 +5031,7 @@ fn named_literal(
     }
 }
 
-fn convert_named_unit(
+pub(crate) fn convert_named_unit(
     value: &UnitLiteral,
     expected: IntentUnit,
     label: &str,
@@ -4834,13 +5091,13 @@ fn semantic_output_path(path: &IntentProjectionPath) -> SemanticOutputPath {
 }
 
 fn lower_remaining_named_declarations(
-    project: &CodeProject,
+    program: &crate::AuthoringProgram,
     builder: &mut ExpansionBuilder,
     reconciliation: &KeyedReconcileState,
     overlay: &CodeInteractionOverlay,
     operation_planner: &mut dyn CodeOperationPlanner,
 ) -> Result<(), CodeExpansionError> {
-    for declaration in &project.managed.program.declarations {
+    for declaration in &program.declarations {
         if declaration.patch.is_some() || builder.declarations.contains_key(&declaration.symbol) {
             continue;
         }
@@ -6822,16 +7079,31 @@ fn lower_template_family(
     overlay: &CodeInteractionOverlay,
     operation_planner: &mut dyn CodeOperationPlanner,
 ) -> Result<BTreeMap<SemanticOutputPath, SemanticValue>, CodeExpansionError> {
+    let owner = RecipeOwner {
+        declaration: &plan.declaration,
+        arguments: &plan
+            .declaration
+            .patch
+            .as_ref()
+            .expect("patch plan")
+            .arguments,
+        digest: &plan.pinned.digest,
+    };
     let lowered = match template.declaration_family.as_str() {
         "computed.roundedRectangleProfile" => {
-            lower_generated_rectangle(builder, plan, outputs, overlay)
+            lower_generated_rectangle(builder, &owner, outputs, overlay)
         }
         "computed.fillet" => {
-            lower_generated_fillet(builder, plan, member_key, outputs, &bindings.direct)
+            lower_generated_fillet(builder, &owner, member_key, outputs, &bindings.direct)
         }
-        "computed.polylineChannel" => {
-            channel::lower(builder, plan, outputs, bindings, overlay, operation_planner)
-        }
+        "computed.polylineChannel" => channel::lower(
+            builder,
+            &owner,
+            outputs,
+            bindings,
+            overlay,
+            operation_planner,
+        ),
         _ => lower_catalog_template(
             builder,
             plan,
@@ -6924,7 +7196,7 @@ fn template_declaration_symbol(
 )]
 fn lower_generated_rectangle(
     builder: &mut ExpansionBuilder,
-    plan: &InvocationPlan,
+    plan: &RecipeOwner<'_>,
     outputs: &[PlannedTemplateOutput],
     overlay: &CodeInteractionOverlay,
 ) -> Result<BTreeMap<SemanticOutputPath, SemanticValue>, CodeExpansionError> {
@@ -7016,7 +7288,7 @@ fn lower_generated_rectangle(
                 radius,
                 corners,
                 suppressed_children: BTreeSet::new(),
-                artifact_digest: plan.pinned.digest.clone(),
+                artifact_digest: plan.digest.to_owned(),
             });
     }
     // Mounting outputs are independent authored points, not aliases of the
@@ -7024,15 +7296,7 @@ fn lower_generated_rectangle(
     // `mounts.{nw,ne,se,sw}` type, this keeps hole centers free of the
     // profile's endpoint topology and gives every mount its own reconciled
     // native point identity.
-    let arguments = object(
-        &plan
-            .declaration
-            .patch
-            .as_ref()
-            .expect("rectangle template belongs to a patch invocation")
-            .arguments,
-        &plan.declaration.symbol.0,
-    )?;
+    let arguments = object(plan.arguments, &plan.declaration.symbol.0)?;
     let mounting_centers = derived_mounting_centers(arguments, &plan.declaration.symbol.0)?;
     outputs
         .iter()
@@ -7090,7 +7354,7 @@ fn lower_generated_rectangle(
 
 fn lower_generated_fillet(
     builder: &mut ExpansionBuilder,
-    plan: &InvocationPlan,
+    plan: &RecipeOwner<'_>,
     member_key: &[String],
     outputs: &[PlannedTemplateOutput],
     bindings: &BTreeMap<String, SemanticValue>,
@@ -7130,7 +7394,7 @@ fn lower_generated_fillet(
                 identity: *identity,
                 radius: radius.clone(),
                 corner: corner.clone(),
-                artifact_digest: plan.pinned.digest.clone(),
+                artifact_digest: plan.digest.to_owned(),
                 suppressed: false,
             }));
         result.insert(
@@ -7491,16 +7755,8 @@ fn insert_nested_root_member(
     insert_nested_root_member(children, tail, value, declaration)
 }
 
-fn invocation_number(plan: &InvocationPlan, name: &str) -> Result<f64, CodeExpansionError> {
-    let arguments = object(
-        &plan
-            .declaration
-            .patch
-            .as_ref()
-            .expect("patch plan")
-            .arguments,
-        &plan.declaration.symbol.0,
-    )?;
+fn invocation_number(plan: &RecipeOwner<'_>, name: &str) -> Result<f64, CodeExpansionError> {
+    let arguments = object(plan.arguments, &plan.declaration.symbol.0)?;
     let value = required(arguments, name, &plan.declaration.symbol.0)?;
     match value {
         ManagedValue::Number(value) => Ok(*value),
@@ -7513,18 +7769,10 @@ fn invocation_number(plan: &InvocationPlan, name: &str) -> Result<f64, CodeExpan
 }
 
 fn invocation_unit(
-    plan: &InvocationPlan,
+    plan: &RecipeOwner<'_>,
     names: &[&str],
 ) -> Result<UnitLiteral, CodeExpansionError> {
-    let arguments = object(
-        &plan
-            .declaration
-            .patch
-            .as_ref()
-            .expect("patch plan")
-            .arguments,
-        &plan.declaration.symbol.0,
-    )?;
+    let arguments = object(plan.arguments, &plan.declaration.symbol.0)?;
     for name in names {
         if let Some(value) = arguments.get(*name) {
             return match value {

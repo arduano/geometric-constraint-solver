@@ -264,6 +264,28 @@ pub fn materialize_code_project_cold_with_overlay(
     )
 }
 
+pub(crate) fn materialize_generated_cold(
+    sketch: &crate::ValidatedGeneratedSketch,
+    intent_session: IntentSessionId,
+    document: DocumentId,
+    model_scale: f64,
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
+    let intent = fresh_intent_session(intent_session)?;
+    let expansion = crate::expansion::expand_generated_with_planner(
+        sketch,
+        intent.identity(),
+        &mut NativeCodeOperationPlanner {
+            expected: intent.identity(),
+            document,
+            model_scale,
+        },
+    )?;
+    Ok(
+        materialize_expanded_code_project_cold(expansion, intent, document, model_scale)?
+            .into_public(),
+    )
+}
+
 fn fresh_intent_session(
     intent_session: IntentSessionId,
 ) -> Result<IntentSession, CodeCompositionError> {

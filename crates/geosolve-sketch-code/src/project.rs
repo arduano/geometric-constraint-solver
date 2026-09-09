@@ -146,7 +146,7 @@ impl CodeProject {
             )));
         }
         for (path, file) in &self.custom_files {
-            if path != &file.path || file.managed || !valid_patch_path(path) {
+            if path != &file.path || file.managed || !valid_custom_module_path(path) {
                 return Err(CodeProjectError::InvalidProject(format!(
                     "invalid custom patch path `{path}`"
                 )));
@@ -258,20 +258,17 @@ impl CodeProject {
     }
 }
 
-fn valid_patch_path(path: &str) -> bool {
+pub(crate) fn valid_custom_module_path(path: &str) -> bool {
     if path.len() > MAX_PROJECT_PATH_BYTES
-        || !path.starts_with("patches/")
-        || !path.ends_with(".patch.ts")
-        || path.contains('\\')
+        || ![".ts", ".js", ".mts", ".mjs", ".cts", ".cjs"]
+            .iter()
+            .any(|extension| path.ends_with(extension))
+        || path.contains(['\\', ':'])
         || path.chars().any(char::is_control)
     {
         return false;
     }
-    let mut segments = path.split('/');
-    if segments.next() != Some("patches") {
-        return false;
-    }
-    segments.all(|segment| {
+    path.split('/').all(|segment| {
         !segment.is_empty()
             && segment != "."
             && segment != ".."

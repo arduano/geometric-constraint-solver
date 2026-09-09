@@ -9,8 +9,8 @@
 use super::{
     AuthoringDeclaration, BTreeMap, CodeExpansionError, CodeHostRequest, CodeInteractionOverlay,
     CodeOperationPlanner, ExpandedFeatureCorner, ExpandedPort, ExpansionBuilder, FeatureKind,
-    IntentPatchOperation, IntentPortKind, IntentUnit, InvocationPlan, KeyedFilletHostRequest,
-    ManagedValue, PlannedTemplateOutput, ResolvedTemplateBindings, SemanticOutputPath,
+    IntentPatchOperation, IntentPortKind, IntentUnit, KeyedFilletHostRequest, ManagedValue,
+    PlannedTemplateOutput, RecipeOwner, ResolvedTemplateBindings, SemanticOutputPath,
     SemanticPathMap, SemanticSymbol, SemanticValue, UnitLiteral, convert_named_unit, fields_path,
     index_path, intent_content_digest, lower_named_declaration, object, required,
     select_planned_outputs, string, unit_direction,
@@ -30,7 +30,7 @@ struct Source {
 
 struct Recipe<'a> {
     builder: &'a mut ExpansionBuilder,
-    plan: &'a InvocationPlan,
+    plan: &'a RecipeOwner<'a>,
     overlay: &'a CodeInteractionOverlay,
     planner: &'a mut dyn CodeOperationPlanner,
     anchor: &'a PlannedTemplateOutput,
@@ -41,7 +41,7 @@ struct Recipe<'a> {
 
 pub(super) fn lower(
     builder: &mut ExpansionBuilder,
-    plan: &InvocationPlan,
+    plan: &RecipeOwner<'_>,
     outputs: &[PlannedTemplateOutput],
     bindings: &ResolvedTemplateBindings,
     overlay: &CodeInteractionOverlay,
@@ -153,7 +153,7 @@ fn scalar(
 fn source(
     builder: &ExpansionBuilder,
     bindings: &ResolvedTemplateBindings,
-    plan: &InvocationPlan,
+    plan: &RecipeOwner<'_>,
 ) -> Result<Source, CodeExpansionError> {
     let value = bindings.direct.get("polyline").ok_or_else(|| {
         CodeExpansionError::Unsupported("channel polyline binding is missing".into())
@@ -487,7 +487,7 @@ impl Recipe<'_> {
                         incoming,
                         outgoing,
                     },
-                    artifact_digest: self.plan.pinned.digest.clone(),
+                    artifact_digest: self.plan.digest.to_owned(),
                     suppressed: false,
                 }));
         }
@@ -572,7 +572,7 @@ impl Recipe<'_> {
 fn offset_seeds(
     source: &Source,
     distance: f64,
-    plan: &InvocationPlan,
+    plan: &RecipeOwner<'_>,
 ) -> Result<Vec<[f64; 2]>, CodeExpansionError> {
     let count = source.vertices.len();
     let directions = (0..source.spans.len())
@@ -640,7 +640,7 @@ fn reference(symbol: &SemanticSymbol, path: SemanticOutputPath) -> ManagedValue 
         path,
     }
 }
-fn fail<T>(plan: &InvocationPlan, message: &str) -> Result<T, CodeExpansionError> {
+fn fail<T>(plan: &RecipeOwner<'_>, message: &str) -> Result<T, CodeExpansionError> {
     Err(CodeExpansionError::InvalidDeclaration {
         declaration: plan.declaration.symbol.0.clone(),
         message: message.to_owned(),

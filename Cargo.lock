@@ -841,6 +841,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "geosolve-sketch-engine"
+version = "0.2.0"
+dependencies = [
+ "geosolve-constraint-editor",
+ "geosolve-sketch",
+ "geosolve-sketch-code",
+ "geosolve-sketch-features",
+ "geosolve-sketch-intent",
+ "geosolve-sketch-topology",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "geosolve-sketch-engine-wasm"
+version = "0.2.0"
+dependencies = [
+ "console_error_panic_hook",
+ "geosolve-sketch-code",
+ "geosolve-sketch-engine",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "geosolve-sketch-features"
 version = "0.2.0"
 dependencies = [
