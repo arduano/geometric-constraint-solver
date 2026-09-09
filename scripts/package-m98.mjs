@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -89,8 +90,15 @@ function stageCli(output, sdk, engine, dist) {
   // Enable ordinary Node package self-reference from a vendor directory. This
   // keeps esbuild's JS unmodified while its own binary fallback resolves itself.
   json(resolve(runtime, "vendor/esbuild/package.json"), { ...readJson(resolve(esbuild, "package.json")), exports: { ".": "./lib/main.js" } });
-  const binary = resolve(esbuild, "bin/esbuild");
-  const binaryVersion = spawnSync(binary, ["--version"], { encoding: "utf8" });
+  // npm ci --ignore-scripts leaves bin/esbuild as a JS launcher. Resolve the
+  // native optional package (or esbuild's native fallback), never that launcher:
+  // putting the launcher in its own fallback slot would recursively execute it.
+  const platformPackage = `@esbuild/linux-${process.arch}`;
+  let binary;
+  try { binary = createRequire(resolve(esbuild, "package.json")).resolve(`${platformPackage}/bin/esbuild`); }
+  catch { binary = resolve(esbuild, `lib/downloaded-@esbuild-linux-${process.arch}-esbuild`); }
+  if (!existsSync(binary) || readFileSync(binary).subarray(0, 4).toString("hex") !== "7f454c46") throw Error("Prepared esbuild must include its native Linux ELF executable");
+  const binaryVersion = spawnSync(binary, ["--version"], { encoding: "utf8", timeout: 5000 });
   if (binaryVersion.status !== 0 || binaryVersion.stdout.trim() !== readJson(resolve(esbuild, "package.json")).version) throw Error("Prepared esbuild binary does not match its JavaScript package");
   // esbuild's documented package fallback works without installation scripts or
   // fetching optional dependencies. Keep the binary with its original JS package.

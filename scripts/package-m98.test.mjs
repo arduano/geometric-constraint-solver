@@ -16,7 +16,7 @@ export default defineGenerator({ radius: { type: "number", default: 5, min: 1, m
 
 function run(command, args, options) {
   const result = spawnSync(command, args, { encoding: "utf8", timeout: 90000, maxBuffer: 8 * 1024 * 1024, ...options });
-  assert.equal(result.status, 0, `${command} ${args.join(" ")} failed: ${result.error ?? result.stderr ?? result.stdout}`);
+  assert.equal(result.status, 0, `${command} ${args.join(" ")} failed: ${result.error ?? ""}\n${result.stderr ?? ""}\n${result.stdout ?? ""}`);
   return result.stdout;
 }
 
@@ -39,6 +39,10 @@ test("three offline archives install into an empty cache and run the actual SDK,
   const environment = { ...process.env, NODE_PATH: "", NODE_OPTIONS: "", npm_config_cache: resolve(temporary, "empty-cache"), npm_config_audit: "false", npm_config_fund: "false", npm_config_update_notifier: "false" };
   delete environment.GEOSOLVE_DIST;
   run("npm", ["install", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", ...archives], { cwd: installed, env: environment });
+  const nativeEsbuild = resolve(installed, `node_modules/@geosolve/cli/runtime/vendor/esbuild/lib/downloaded-@esbuild-linux-${process.arch}-esbuild`);
+  assert.equal(readFileSync(nativeEsbuild).subarray(0, 4).toString("hex"), "7f454c46", "vendored esbuild must be the native ELF executable, not npm's forwarding launcher");
+  const esbuildPackage = JSON.parse(readFileSync(resolve(installed, "node_modules/@geosolve/cli/runtime/vendor/esbuild/package.json"), "utf8"));
+  assert.equal(run(nativeEsbuild, ["--version"], { cwd: installed, env: environment, timeout: 5000 }).trim(), esbuildPackage.version);
   const sdkPackage = JSON.parse(readFileSync(resolve(installed, "node_modules/@geosolve/sketch-code/package.json"), "utf8"));
   assert.equal(sdkPackage.dependencies.typescript, "5.9.2");
   assert.equal(sdkPackage.dependencies["@geosolve/intent"], "0.2.0");
