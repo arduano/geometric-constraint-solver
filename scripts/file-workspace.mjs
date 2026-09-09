@@ -13,9 +13,25 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, lstatSync, realpath
   renameSync, linkSync, unlinkSync, openSync, fsyncSync, closeSync } from "node:fs";
 import { resolve, dirname, basename, extname, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { gzipSync } from "node:zlib";
 
 const sourceLimit = 4 * 1024 * 1024;
 export const hash = (text) => createHash("sha256").update(text).digest("hex");
+
+function acceptsGzip(header = "") {
+  let gzip, wildcard;
+  for (const entry of header.split(",")) {
+    const [coding, ...parameters] = entry.trim().toLowerCase().split(";").map((part) => part.trim());
+    if (!["gzip", "*"].includes(coding)) continue;
+    // Explicit refusal wins over wildcard and contradictory duplicate entries.
+    // Malformed preferences fall back to the unchanged identity representation.
+    const match = parameters.length === 1 ? /^q=(0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.exec(parameters[0]) : null;
+    const quality = parameters.length === 0 ? 1 : match ? Number(match[1]) : 0;
+    if (coding === "gzip") gzip = Math.min(gzip ?? 1, quality);
+    else wildcard = Math.min(wildcard ?? 1, quality);
+  }
+  return (gzip ?? wildcard ?? 0) > 0;
+}
 
 function regular(path) {
   const stat = lstatSync(path);
@@ -680,6 +696,19 @@ export async function serveProject(folder, { port = 0 } = {}) {
   project.setNotify((sequence) => { for (const client of clients) client.write(`data: ${sequence}\n\n`); });
   let origin;
   const send = (response, status, value) => { response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" }); response.end(JSON.stringify(value)); };
+  const sendRpc = (request, response, value) => {
+    let body = Buffer.from(JSON.stringify(value));
+    const headers = { "Content-Type": "application/json", "Cache-Control": "no-store", Vary: "Accept-Encoding" };
+    // Bound synchronous compression work. Larger exports retain identity bytes;
+    // ordinary canvas snapshots use level 1 to keep the serial bridge responsive.
+    if (body.length >= 16 * 1024 && body.length <= sourceLimit && acceptsGzip(request.headers["accept-encoding"])) {
+      body = gzipSync(body, { level: 1 });
+      headers["Content-Encoding"] = "gzip";
+    }
+    headers["Content-Length"] = body.length;
+    response.writeHead(200, headers);
+    response.end(body);
+  };
   const server = createServer(async (request, response) => {
     try {
       if (request.headers.host !== new URL(origin).host || (request.headers.origin && request.headers.origin !== origin)) {
@@ -707,7 +736,7 @@ export async function serveProject(folder, { port = 0 } = {}) {
         for await (const chunk of request) { body += chunk; if (Buffer.byteLength(body) > sourceLimit + 65536) throw Error("Request too large"); }
         const rpc = JSON.parse(body);
         await serial(async () => {
-          try { const result = await project.request(rpc.method, rpc.input, rpc.baseHash, { clientId: rpc.clientId, authority: rpc.authority, operationId: rpc.operationId }); send(response, 200, { result, state: project.state(rpc.clientId) }); }
+          try { const result = await project.request(rpc.method, rpc.input, rpc.baseHash, { clientId: rpc.clientId, authority: rpc.authority, operationId: rpc.operationId }); sendRpc(request, response, { result, state: project.state(rpc.clientId) }); }
           catch (error) { send(response, error.conflict ? 409 : 400, { error: String(error), pendingSource: error.pendingSource, state: project.state(rpc.clientId) }); }
         }); return;
       }

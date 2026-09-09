@@ -22,6 +22,12 @@ record the accepted scope and limits. No M97 blocker or acceptance action remain
 The previous M97 previews remain documented at ports 18104 and 18103; M96's accepted
 channel checkpoint remains in [M96_CLOSURE.md](docs/M96_CLOSURE.md).
 
+**Active follow-up: M98-F016 navigation latency repair is being qualified.**
+[Reproduction and implementation](docs/M98_NAVIGATION_LATENCY.md) records stale asynchronous
+hover/wheel queues and oversized folder responses. The preceding loading product remains
+the qualified baseline until replacement evidence is recorded below. Work only in the
+existing M98 worktree; preserve the user's manifold and M97 preview.
+
 **Current status: the M98 loading-feedback amendment is implemented, qualified and delivered;
 acceptance and closure remain open.** [The amendment](docs/M98_LOADING_FEEDBACK.md) adds a
 500 ms delayed canvas veil/spinner and responsive standalone WASM transport. Clean candidate

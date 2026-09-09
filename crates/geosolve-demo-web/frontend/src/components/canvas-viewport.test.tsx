@@ -225,6 +225,127 @@ describe("canvas input scheduling", () => {
     await frame(); expect(pointer).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps only the latest queued hover across animation frames before an exact click", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    let release!: () => void;
+    const pointer = vi.spyOn(h.adapter, "pointer").mockResolvedValue(null)
+      .mockImplementationOnce(() => new Promise<null>((resolve) => { release = () => resolve(null); }));
+    pointerEvent(h.host, "pointermove", { clientX: 25 }); await frame();
+    for (let x = 30; x <= 220; x += 10) {
+      pointerEvent(h.host, "pointermove", { clientX: x }); await frame();
+    }
+    pointerEvent(h.host, "pointerdown", { buttons: 1, clientX: 230 });
+    pointerEvent(h.host, "pointerup", { clientX: 230 });
+    expect(pointer).toHaveBeenCalledTimes(1);
+    await act(async () => release());
+    expect(pointer.mock.calls.map(([sample]) => [sample.phase, sample.x])).toEqual([
+      ["move", 25], ["move", 220], ["down", 230], ["up", 230],
+    ]);
+  });
+
+  it("coalesces pending middle pan across frames without crossing its release or a new gesture", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    let release!: () => void;
+    const pointer = vi.spyOn(h.adapter, "pointer").mockResolvedValue(null)
+      .mockImplementationOnce(() => new Promise<null>((resolve) => { release = () => resolve(null); }));
+    pointerEvent(h.host, "pointerdown", { button: 1, buttons: 4 });
+    for (const x of [30, 40, 50]) {
+      pointerEvent(h.host, "pointermove", { buttons: 4, clientX: x }); await frame();
+    }
+    pointerEvent(h.host, "pointerup", { button: 1, clientX: 60 });
+    pointerEvent(h.host, "pointerdown", { button: 1, buttons: 4, clientX: 70 });
+    for (const x of [80, 90]) {
+      pointerEvent(h.host, "pointermove", { buttons: 4, clientX: x }); await frame();
+    }
+    pointerEvent(h.host, "pointerup", { button: 1, clientX: 100 });
+    expect(h.onCaptureChange.mock.calls).toEqual([[true], [false], [true], [false]]);
+    await act(async () => release());
+    expect(pointer.mock.calls.map(([sample]) => [sample.phase, sample.x])).toEqual([
+      ["down", 20], ["move", 50], ["up", 60], ["down", 70], ["move", 90], ["up", 100],
+    ]);
+  });
+
+  it("preserves pointer identity and modifier transitions between queued hover groups", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    let release!: () => void;
+    const pointer = vi.spyOn(h.adapter, "pointer").mockResolvedValue(null)
+      .mockImplementationOnce(() => new Promise<null>((resolve) => { release = () => resolve(null); }));
+    pointerEvent(h.host, "pointermove"); await frame();
+    for (const [x, pointerId, shiftKey] of [[30, 7, false], [40, 7, false], [50, 7, true], [60, 7, true], [70, 8, true], [80, 8, true]] as const) {
+      pointerEvent(h.host, "pointermove", { clientX: x, pointerId, shiftKey }); await frame();
+    }
+    await act(async () => release());
+    expect(pointer.mock.calls.map(([sample]) => sample.x)).toEqual([20, 40, 60, 80]);
+  });
+
+  it("drops hover already waiting behind asynchronous work when the pointer leaves", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    let release!: () => void;
+    const pointer = vi.spyOn(h.adapter, "pointer").mockResolvedValue(null)
+      .mockImplementationOnce(() => new Promise<null>((resolve) => { release = () => resolve(null); }));
+    pointerEvent(h.host, "pointermove"); await frame();
+    pointerEvent(h.host, "pointermove", { clientX: 40 }); await frame();
+    pointerEvent(h.host, "pointerout");
+    await act(async () => release());
+    expect(pointer).toHaveBeenCalledTimes(1);
+  });
+
+  it("merges adjacent queued wheel frames within the native bound and retains every anchor before click", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    let release!: () => void; const batches: WheelSample[][] = []; const order: string[] = [];
+    (h.adapter as WorkbenchAdapter).wheelBatch = vi.fn((samples: WheelSample[]) => {
+      batches.push(samples); order.push(`wheel:${samples.length}`);
+      return batches.length === 1 ? new Promise<null>((resolve) => { release = () => resolve(null); }) : Promise.resolve(null);
+    });
+    vi.spyOn(h.adapter, "pointer").mockImplementation(async (sample) => { order.push(sample.phase); return null; });
+    const expected: WheelSample[] = [];
+    for (let x = 0; x <= 520; x += 1) {
+      const input = { version: 2 as const, x, y: 20 + x % 7, deltaX: x % 3 - 1, deltaY: x % 2 ? 10000 : -10000, ctrl: x % 3 === 0 };
+      expected.push(input);
+      fireEvent.wheel(h.host, { clientX: input.x, clientY: input.y, deltaX: input.deltaX, deltaY: input.deltaY, ctrlKey: input.ctrl }); await frame();
+    }
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    pointerEvent(h.host, "pointerup");
+    expect(batches).toHaveLength(1);
+    await act(async () => release());
+    expect(batches.map((samples) => samples.length)).toEqual([1, 256, 256, 8]);
+    expect(batches.flat()).toEqual(expected);
+    expect(order).toEqual(["wheel:1", "wheel:256", "wheel:256", "wheel:8", "down", "up"]);
+  });
+
+  it("keeps wheel, hover and click barriers between separately coalesced navigation groups", async () => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup();
+    let release!: () => void; const order: string[] = [];
+    const pointer = vi.spyOn(h.adapter, "pointer").mockImplementation(async (sample) => { order.push(`${sample.phase}:${sample.x}`); return null; });
+    pointer.mockImplementationOnce((sample) => { order.push(`${sample.phase}:${sample.x}`); return new Promise<null>((resolve) => { release = () => resolve(null); }); });
+    (h.adapter as WorkbenchAdapter).wheelBatch = vi.fn(async (samples: WheelSample[]) => { order.push(`wheel:${samples.map((sample) => sample.x)}`); return null; });
+    pointerEvent(h.host, "pointermove"); await frame();
+    for (const x of [30, 40]) { pointerEvent(h.host, "pointermove", { clientX: x }); await frame(); }
+    for (const x of [50, 60]) { fireEvent.wheel(h.host, { clientX: x, deltaY: 10 }); await frame(); }
+    for (const x of [70, 80]) { pointerEvent(h.host, "pointermove", { clientX: x }); await frame(); }
+    pointerEvent(h.host, "pointerdown", { clientX: 90, buttons: 1 });
+    pointerEvent(h.host, "pointerup", { clientX: 90 });
+    for (const x of [100, 110]) { fireEvent.wheel(h.host, { clientX: x, deltaY: -10 }); await frame(); }
+    await act(async () => release());
+    expect(order).toEqual(["move:20", "move:40", "wheel:50,60", "move:80", "down:90", "up:90", "wheel:100,110"]);
+  });
+
+  it.each(["select", "line"])("retains every %s semantic move across frames behind pending work", async (tool) => {
+    vi.useFakeTimers(); const frame = animationFrames(); const h = await setup(tool);
+    let release!: () => void;
+    const pointer = vi.spyOn(h.adapter, "pointer").mockResolvedValue(null)
+      .mockImplementationOnce(() => new Promise<null>((resolve) => { release = () => resolve(null); }));
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    for (const x of [30, 40, 50, 60]) {
+      pointerEvent(h.host, "pointermove", { clientX: x, buttons: tool === "select" ? 1 : 0 }); await frame();
+    }
+    pointerEvent(h.host, "pointerup", { clientX: 70 });
+    await act(async () => release());
+    expect(pointer.mock.calls.map(([sample]) => [sample.phase, sample.x])).toEqual([
+      ["down", 20], ["move", 30], ["move", 40], ["move", 50], ["move", 60], ["up", 70],
+    ]);
+  });
+
   it("drains newest middle pan before exact release while retiring capture immediately", async () => {
     const frame = animationFrames(); const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer");
     pointerEvent(h.host, "pointerdown", { button: 1, buttons: 4 });

@@ -41,6 +41,81 @@ const status=async(fixture)=>{
 };
 function curveWidth(items){const points=items.find((item)=>item.kind==="polyline"&&item.points.length>12)?.points;assert.ok(points,"real presented circle has sampled points");return Math.max(...points.map(([x])=>x))-Math.min(...points.map(([x])=>x));}
 
+test("M98-F016 delayed folder navigation coalesces hover and preserves exact wheel samples before click",{timeout:60000},async(t)=>{
+  const f=await setup(t),{folder,page,errors}=f;
+  const host=page.getByRole("application"),box=await host.boundingBox();assert.ok(box);
+  await page.mouse.move(box.x+20,box.y+20);
+  await expect(host).toHaveAttribute("aria-busy","false");
+  await page.waitForTimeout(300);
+  await expect(host).toHaveAttribute("aria-busy","false");
+  const beforeGeometry=await geometry(page),beforeState=await status(f),beforeSource=readSource(folder);
+  const beforeDesign=await f.bridge.project.adapter.exportWorkspaceDesign();
+  const beforeProject=await f.bridge.project.adapter.exportProject();
+  // The clock controls separate browser animation frames, keeping the artificial
+  // transport stall below the loading veil's 500 ms input barrier deterministically.
+  await page.clock.install();await page.clock.pauseAt(new Date());
+  let method="pointer",held=false,entered=Promise.withResolvers(),release=Promise.withResolvers();
+  const requests=[],responses=[];
+  await page.route("**/api/rpc",async(route)=>{
+    const request=route.request().postDataJSON();requests.push({method:request.method,input:request.input});
+    if(request.method===method&&!held){held=true;entered.resolve();await release.promise;}
+    await route.continue();
+  });
+  page.on("response",(response)=>{
+    if(new URL(response.url()).pathname!=="/api/rpc")return;
+    responses.push((async()=>({status:response.status(),encoding:response.headers()["content-encoding"],body:await response.json()}))());
+  });
+  const hover=async(x)=>{
+    await host.evaluate((element,x)=>{const box=element.getBoundingClientRect();element.dispatchEvent(new PointerEvent("pointermove",{
+      bubbles:true,pointerId:1,pointerType:"mouse",isPrimary:true,clientX:box.x+x,clientY:box.y+20,buttons:0,
+    }));},x);
+    await page.clock.runFor(16);
+  };
+  const click=async()=>{await page.mouse.down();await page.mouse.up();};
+  const idle=async()=>{await expect(host).toHaveAttribute("aria-busy","false");await page.clock.runFor(32);};
+  try{
+    await hover(30);await entered.promise;
+    for(let x=32;x<=70;x+=2)await hover(x);
+    await click();
+    assert.equal(requests.filter((request)=>request.method==="pointer").length,1,"only one pointer request may be in flight");
+    release.resolve();
+    await expect.poll(()=>requests.filter((request)=>request.method==="pointer").at(-1)?.input.phase).toBe("up");await idle();
+    const pointerRequests=requests.filter((request)=>request.method==="pointer");
+    assert.deepEqual(pointerRequests.map(({input})=>[input.phase,input.x,input.y]),[["move",30,20],["move",70,20],["down",20,20],["up",20,20]]);
+    assert.deepEqual(await geometry(page),beforeGeometry,"hover and empty clicks retain the actual painted geometry");
+    const hovered=await status(f);
+    for(const key of ["authority","currentHash","acceptedHash","sourceHash","revision","acceptedRevision","writes","externalApplies"])assert.deepEqual(hovered[key],beforeState[key],key);
+
+    method="wheelBatch";held=false;entered=Promise.withResolvers();release=Promise.withResolvers();requests.length=0;
+    const expected=[];
+    for(let index=0;index<20;index++){
+      const pair=Math.floor(index/2),input={version:2,x:20+pair*3,y:20+pair*2,deltaX:0,deltaY:index%2?12:-12,ctrl:index%4<2};
+      // WheelEvent may quantize CSS client coordinates; retain the actual event
+      // anchors as the independent ordered input oracle at this browser boundary.
+      expected.push(await host.evaluate((element,input)=>{const box=element.getBoundingClientRect();const event=new WheelEvent("wheel",{
+        bubbles:true,clientX:box.x+input.x,clientY:box.y+input.y,deltaX:input.deltaX,deltaY:input.deltaY,ctrlKey:input.ctrl,
+      });element.dispatchEvent(event);return {...input,x:event.clientX-box.x,y:event.clientY-box.y};},input));
+      await page.clock.runFor(16);if(index===0)await entered.promise;
+    }
+    await click();release.resolve();
+    await expect.poll(()=>requests.filter((request)=>request.method==="pointer").at(-1)?.input.phase).toBe("up");await idle();
+    const wheels=requests.filter((request)=>request.method==="wheelBatch");
+    assert.deepEqual(wheels.map(({input})=>input.length),[1,19]);assert.deepEqual(wheels.flatMap(({input})=>input),expected);
+    assert.deepEqual(requests.filter(({method})=>["wheelBatch","pointer"].includes(method)).map(({method,input})=>method==="pointer"?input.phase:method),["wheelBatch","wheelBatch","down","up"]);
+    const afterGeometry=await geometry(page);
+    assert.ok(afterGeometry.every((item)=>(item.points??[item.center]).filter(Boolean).flat().every(Number.isFinite)),"presented geometry stays finite after browser gzip decoding");
+    assert.ok(Math.abs(curveWidth(afterGeometry)/curveWidth(beforeGeometry)-1)<1e-9,"opposite ordered wheel samples return to the original camera scale");
+    assert.equal(readSource(folder),beforeSource);assert.deepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(),beforeDesign);
+    assert.deepEqual(await f.bridge.project.adapter.exportProject(),beforeProject);
+    const afterState=await status(f);
+    for(const key of ["authority","currentHash","acceptedHash","sourceHash","revision","acceptedRevision","writes","externalApplies"])assert.deepEqual(afterState[key],beforeState[key],key);
+    const delivered=await Promise.all(responses);
+    assert.ok(delivered.some(({encoding,body})=>encoding==="gzip"&&body.result?.frame),"Chromium decoded and installed a real compressed canvas snapshot");
+    assert.ok(delivered.every(({status,body})=>status===200&&!body.error));assert.deepEqual(errors,[]);
+    writeFileSync(resolve(evidence,"queued-folder-navigation.json"),JSON.stringify({pointerRequests,wheelBatchSizes:wheels.map(({input})=>input.length),wheelSamples:expected,compressedFrames:delivered.filter(({encoding,body})=>encoding==="gzip"&&body.result?.frame).length,unchangedAuthority:afterState.authority},null,2));
+  }finally{release.resolve();await page.unroute("**/api/rpc");}
+});
+
 test("external rename updates the open canvas once, invalid text retains it, and browser storage remains separate",{timeout:120000},async(t)=>{
   const f=await setup(t,undefined,{initScript:()=>{
     localStorage.setItem("geosolve.project.v1","unrelated browser project");

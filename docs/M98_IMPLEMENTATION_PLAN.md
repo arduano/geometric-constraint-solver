@@ -44,6 +44,9 @@ and closed; M98 stays open until integrated qualification and supervising-user a
 - [x] Register all new owning-layer/package/browser tests in integrated release qualification.
 - [x] Qualify clean candidate, freeze production bytes and verify a reviewable preview.
 - [x] Qualify the requested 500 ms canvas loading-feedback amendment and refresh previews.
+- [x] Reproduce and repair M98-F016 asynchronous navigation backlog with owning regressions
+  and exact-response negotiated compression.
+- [ ] Qualify and deliver the [navigation latency repair](M98_NAVIGATION_LATENCY.md).
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Stages may develop independently behind their explicit APIs, with focused verification before

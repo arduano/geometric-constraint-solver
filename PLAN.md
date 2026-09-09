@@ -8468,6 +8468,11 @@ merge or qualify that product.
 
 ## M98 — reliable project authoring and embeddable TypeScript engine
 
+- [x] Reproduce M98-F016 delayed hover/zoom/click under asynchronous navigation and add
+  exact scheduler regressions; preserve gesture terminals, semantic samples and wheel anchors.
+- [ ] Qualify the navigation queue/transfer repair and refresh the existing previews.
+  [Latency repair evidence](docs/M98_NAVIGATION_LATENCY.md).
+
 Status: **implementation and loading-feedback amendment mechanically qualified and delivered;
 supervising-user acceptance open**. [Amendment scope and evidence](docs/M98_LOADING_FEEDBACK.md).
 The amendment passes 261/261 obligations on `a68fffa` in `20260909T173058-0f35c852`.

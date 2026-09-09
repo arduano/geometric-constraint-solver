@@ -369,3 +369,37 @@ browser synchronization, unchanged golden, native/WASM parity and performance. F
 production and installed-folder previews pass fresh transport/readiness checks.
 [M98 qualification](M98_QUALIFICATION.md) records final authority, exact evidence and the
 separate transient preflight `/proc` harness race. Supervising-user acceptance remains open.
+
+## M98-F016 — asynchronous canvas navigation replayed stale input
+
+Reported on loading-amendment source `bf417de` / qualified product `a68fffa`: hover,
+zoom and clicks took 2–5 seconds to register. No user payload or exact endpoint was
+supplied. Private browser copies preserved the current manifold's seven authored
+files; neither the user's editable session nor accepted M97 was used for mutation.
+
+Independent Chromium reproduction retained 79 pointer requests from 90 mouse samples
+under 40 ms simulated network latency. Requests finished 2.866 seconds after movement
+stopped. Twelve wheel samples over 192 ms at 100 ms latency and 4 Mbps kept painting
+successive zoom frames for over 14.6 seconds after input stopped; the final request was
+still outstanding at the 15-second observation bound. The preceding pre-loading product
+also reproduced these folder delays. This finding establishes an asynchronous input
+queue defect, without attributing the user's entire reported regression to loading.
+Local standalone hover/wheel and deferred dimension updates took tens of milliseconds.
+
+`CanvasInputQueue` coalesced samples inside a single animation frame, then appended
+one operation every frame even while the previous worker/HTTP request was pending.
+Its owning regression holds one request, feeds 20 separate frames and clicks: the
+original implementation delivered 23 pointer calls instead of first/latest/down/up.
+Pending adjacent idle Select hover and fixed-origin middle pan now retain the newest
+sample across frames. Pointer identity, buttons, modifiers and intervening commands
+remain barriers. Wheel batches retain every ordered delta and anchor, with the native
+256-sample bound. Semantic drag/authoring samples, click/release/cancellation ordering,
+disposal generation checks and retained scene authority remain intact.
+
+Folder responses also transport about 634 KB for each changed manifold frame. Standard
+negotiated JSON compression is included in this repair to reduce transfer cost without
+changing the decoded snapshot/authority protocol. Full snapshot transport and broader
+folder React publication remain; no client-side camera or solver equations are added.
+
+Focused qualification and replacement preview evidence are tracked in
+[M98 navigation latency](M98_NAVIGATION_LATENCY.md). M98 acceptance remains open.

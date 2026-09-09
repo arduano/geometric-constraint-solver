@@ -6,13 +6,20 @@ import { useWorkbenchBusy } from "../hooks/use-workbench-busy";
 
 type CanvasOperation = () => Promise<WorkbenchSnapshot | null>;
 type PendingInput = { kind: "move"; sample: PointerSample } | { kind: "wheel"; samples: WheelSample[] };
+type QueuedOperation = { kind: "operation"; run: CanvasOperation; transient: boolean } | (PendingInput & { transient: true });
 
 // Retain every semantic sample and every wheel anchor. Only idle Select hover
-// and fixed-origin middle pan may replace an earlier movement in the same RAF.
+// and fixed-origin middle pan may replace adjacent movement waiting for the owner.
+function sameMovement(left: PointerSample, right: PointerSample) {
+  return left.pointerId === right.pointerId && left.buttons === right.buttons
+    && left.modifiers.alt === right.modifiers.alt && left.modifiers.ctrl === right.modifiers.ctrl
+    && left.modifiers.meta === right.modifiers.meta && left.modifiers.shift === right.modifiers.shift;
+}
+
 class CanvasInputQueue {
   private pending: PendingInput | null = null;
   private frame: number | null = null;
-  private operations: Array<{ run: CanvasOperation; transient: boolean }> = [];
+  private operations: QueuedOperation[] = [];
   private running = false;
   private disposed = false;
   private generation = 0;
@@ -34,7 +41,7 @@ class CanvasInputQueue {
       this.dispatch(() => this.adapter.pointer(sample));
       return;
     }
-    if (this.pending?.kind !== "move" || this.pending.sample.pointerId !== sample.pointerId) this.flush();
+    if (this.pending?.kind !== "move" || !sameMovement(this.pending.sample, sample)) this.flush();
     this.pending = { kind: "move", sample };
     this.schedule();
   }
@@ -68,18 +75,18 @@ class CanvasInputQueue {
     const pending = this.pending;
     this.pending = null;
     if (!pending) return;
-    if (pending.kind === "move") this.dispatch(() => this.adapter.pointer(pending.sample), true);
-    else if (this.adapter.wheelBatch) this.dispatch(() => this.adapter.wheelBatch!(pending.samples), true);
+    if (pending.kind === "move" || this.adapter.wheelBatch) this.enqueueInput(pending);
     else for (const sample of pending.samples) this.dispatch(() => this.adapter.wheel(sample), true);
   }
 
   dispatch(run: CanvasOperation, transient = false) {
     if (this.disposed) return;
-    this.operations.push({ run, transient });
+    this.operations.push({ kind: "operation", run, transient });
     this.drain();
   }
 
   discardHover() {
+    this.operations = this.operations.filter((operation) => operation.kind !== "move" || operation.sample.buttons !== 0);
     if (this.pending?.kind !== "move" || this.pending.sample.buttons !== 0) return;
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
@@ -145,6 +152,22 @@ class CanvasInputQueue {
     this.navigationGeneration += 1;
   }
 
+  private enqueueInput(input: PendingInput) {
+    if (this.disposed) return;
+    const last = this.operations.at(-1);
+    if (input.kind === "move") {
+      if (last?.kind === "move" && sameMovement(last.sample, input.sample)) last.sample = input.sample;
+      else this.operations.push({ ...input, transient: true });
+    } else {
+      // Adjacent batches may span several animation frames while a worker or
+      // HTTP request is pending. Preserve each anchor/delta and the native bound.
+      const available = last?.kind === "wheel" ? 256 - last.samples.length : 0;
+      if (available > 0 && last?.kind === "wheel") last.samples.push(...input.samples.slice(0, available));
+      if (input.samples.length > available) this.operations.push({ kind: "wheel", samples: input.samples.slice(available), transient: true });
+    }
+    this.drain();
+  }
+
   private drain() {
     if (this.running || this.disposed) return;
     const operation = this.operations.shift();
@@ -152,7 +175,10 @@ class CanvasInputQueue {
     this.running = true;
     const generation = this.generation;
     let result: Promise<WorkbenchSnapshot | null>;
-    try { result = operation.run(); }
+    try {
+      result = operation.kind === "move" ? this.adapter.pointer(operation.sample)
+        : operation.kind === "wheel" ? this.adapter.wheelBatch!(operation.samples) : operation.run();
+    }
     catch (error) { result = Promise.reject(error); }
     void result.then((next) => {
       if (next && !this.disposed && generation === this.generation) this.accept(next);

@@ -5559,6 +5559,10 @@ limits without claiming an unrecorded exhaustive human replay. No M97 blocker re
 
 ## M98 real-world authoring and embedding — mechanical qualification complete
 
+M98-F016 navigation latency follow-up is under repair/qualification; the preceding
+loading product below remains the qualified baseline. [Latency evidence](docs/M98_NAVIGATION_LATENCY.md)
+separates reproduced queue delays from local solve time. Human acceptance remains open.
+
 The supervising user's requested [loading-feedback amendment](docs/M98_LOADING_FEEDBACK.md)
 is qualified and delivered from `a68fffa` in `20260909T173058-0f35c852`: all 261 obligations
 pass, including delayed feedback, retained geometry and refreshed static/folder previews.

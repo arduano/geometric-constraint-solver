@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chmodSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { gunzipSync } from "node:zlib";
 import { initProject, serveProject } from "./file-workspace.mjs";
 
 async function setup(t,prepare) {
@@ -27,6 +29,7 @@ async function eventStream(t,bridge) {
   const controller=new AbortController();
   const response=await fetch(`${bridge.origin}/api/events?token=${bridge.token}`,{signal:controller.signal});
   assert.equal(response.status,200);
+  assert.equal(response.headers.get("content-encoding"),null,"SSE activity remains an uncompressed stream");
   const events=[];
   const reader=response.body.getReader(),decoder=new TextDecoder();
   const reading=(async()=>{
@@ -50,6 +53,64 @@ async function waitFor(predicate,label) {
   const deadline=Date.now()+10000;
   while(!predicate()) {assert.ok(Date.now()<deadline,label);await delay(10);}
 }
+
+test("M98-F016 large authenticated RPC snapshots negotiate gzip without changing accepted state or files",{timeout:30000},async(t)=>{
+  const f=await setup(t),initial=await f.rpc("session.join");
+  const persistence=await f.bridge.project.adapter.persistProject();
+  const disk=(directory=f.folder)=>readdirSync(directory).sort().flatMap((name)=>{
+    const path=resolve(directory,name),stat=lstatSync(path,{bigint:true});
+    return stat.isDirectory()?disk(path):[{path,ino:stat.ino,mtime:stat.mtimeNs,ctime:stat.ctimeNs,contents:readFileSync(path)}];
+  });
+  const before=disk();
+  const raw=(encoding,method="snapshot",authorized=true)=>new Promise((done,reject)=>{
+    const request=httpRequest(`${f.bridge.origin}/api/rpc`,{method:"POST",headers:{
+      "Content-Type":"application/json",...(authorized?{Authorization:`Bearer ${f.bridge.token}`}:{ }),
+      ...(encoding===undefined?{}:{"Accept-Encoding":encoding}),
+    }},(response)=>{
+      const chunks=[];response.on("data",(chunk)=>chunks.push(chunk));response.on("error",reject);
+      response.on("end",()=>done({status:response.statusCode,headers:response.headers,bytes:Buffer.concat(chunks)}));
+    });
+    request.on("error",reject);request.end(JSON.stringify({method,clientId:"http-migration"}));
+  });
+  const identity=await raw(undefined);
+  assert.equal(identity.status,200);
+  assert.ok(identity.bytes.length>16*1024,"fixture exercises a real large native snapshot");
+  assert.equal(identity.headers["content-encoding"],undefined);
+  for(const encoding of ["gzip","br, gzip;q=0.5","*;q=1","GZip;Q=1.000"]) {
+    const compressed=await raw(encoding);
+    assert.equal(compressed.status,200);
+    assert.equal(compressed.headers["content-encoding"],"gzip",encoding);
+    assert.equal(compressed.headers.vary,"Accept-Encoding");
+    assert.equal(Number(compressed.headers["content-length"]),compressed.bytes.length);
+    assert.ok(compressed.bytes.length<identity.bytes.length/2,"actual snapshot transport is materially smaller");
+    assert.deepEqual(gunzipSync(compressed.bytes),identity.bytes,"compression preserves every snapshot and authority byte");
+  }
+  for(const encoding of ["identity","br","gzip;q=0","gzip;q=0, *;q=1","*;q=0","gzip;q=0.000, gzip;q=1","gzip;q=invalid, *;q=1"]) {
+    const fallback=await raw(encoding);
+    assert.equal(fallback.headers["content-encoding"],undefined,encoding);
+    assert.equal(fallback.headers.vary,"Accept-Encoding");
+    assert.deepEqual(fallback.bytes,identity.bytes);
+  }
+  const small=await raw("gzip","recovery.inspect");
+  assert.equal(small.status,200);
+  assert.equal(small.headers["content-encoding"],undefined,"small successful responses stay uncompressed");
+  for(const error of [await raw("gzip","unsupported.method"),await raw("gzip","snapshot",false)]) {
+    assert.ok(error.status>=400);
+    assert.equal(error.headers["content-encoding"],undefined,"errors stay uncompressed");
+  }
+  // The real HTTP transport must bound synchronous compression even when an
+  // export owner returns more than an ordinary scene. It cannot truncate bytes.
+  const large={version:2,filename:"large.json",contents:"x".repeat(4*1024*1024)};
+  t.mock.method(f.bridge.project.adapter,"exportReproduction",async()=>large);
+  const bounded=await raw("gzip","exportReproduction");
+  assert.equal(bounded.status,200);
+  assert.equal(bounded.headers["content-encoding"],undefined,"oversized exports keep bounded compression work");
+  assert.deepEqual(JSON.parse(bounded.bytes).result,large);
+  assert.deepEqual(disk(),before,"negotiation and serialization perform no file writes");
+  assert.deepEqual(await f.bridge.project.adapter.persistProject(),persistence,"accepted source and history remain exact");
+  for(const key of ["writes","externalApplies","currentHash","acceptedHash","sourceHash","revision","acceptedRevision"])
+    assert.deepEqual(f.bridge.project.state()[key],initial.state[key],key);
+});
 
 test("SSE reports background evaluation, reconnects while busy, and clears after rejection without idle scan chatter",{timeout:30000},async(t)=>{
   const source='import {sketch,mm} from "@geosolve/sketch-code";export default sketch(($)=>({port:$.geometry.centerRadiusCircle("port",{center:[0,0],radius:mm(6)})}));';
