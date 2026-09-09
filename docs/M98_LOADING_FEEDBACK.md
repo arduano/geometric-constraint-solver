@@ -110,3 +110,31 @@ unchanged prepared harness, including manifold Segment/Cubic/Circle publication,
 Fillet history, pins, reloads and both large fixture workflows. Exact invocation is
 retained in `target/m98/loading-harness-commands.txt`; output and traces are
 `target/m98/loading-browser-r2.log` and `target/m98/loading-browser-r2-results/`.
+
+### Second integrated attempt: full browser pass and folder paint synchronization
+
+Harness candidate `f4a2012` ran
+`nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260909T160542-79b4d8a4'`.
+Run `20260909T165704-00d40529` remains failed (31m55.5s), with unchanged clean source.
+All 17 opening prefixes and all 49 full browser workflows pass without skips/retries.
+Artifact transport/readiness, 299 frontend tests, 100 folder Node tests, engine tests,
+native/headless reused evidence, documentation and completed WASM/package stages pass.
+
+The folder browser stage passes seven of eight cases, including slow external loading,
+rejected-geometry retention and complete manifold export. Its first external-rename case
+reads the old canvas immediately after the parameter field shows the newly accepted value.
+The field is published before the renderer's next animation frame. The focused replay
+confirms a 1.2 width ratio at unchanged camera scale; the repaired test polls for the changed
+presented geometry before retaining the original exact ratio, history, source and invalid-text
+retention assertions. No product files change. Failed evidence is retained in that run's
+`stages/folder.browser/output.log`.
+
+Focused command against the same frozen harness:
+
+```bash
+nix-shell shell.nix --run 'GEOSOLVE_DIST=target/release-gate/prepared/021e46ed7e514f33084e7d2b6e8937bf1e10ea3c1f4c42bff25829d07ae9922d/browser/geosolve-harness GEOSOLVE_BROWSER_EVIDENCE=target/m98/folder-paint-fixed node --test --test-name-pattern="external rename updates" scripts/workspace-browser.test.mjs'
+```
+
+The focused external-rename workflow passes in 7.5 seconds, including rejected text,
+GUI source writeback, restart and independent camera-scale checks
+(`target/m98/folder-paint-fixed.log`).

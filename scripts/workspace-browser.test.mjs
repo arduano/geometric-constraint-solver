@@ -55,7 +55,10 @@ test("external rename updates the open canvas once, invalid text retains it, and
   const external=readSource(folder).replace("value: mm(10)","value: mm(12)");
   replaceSource(folder,external);
   await expect(radiusField(page)).toHaveValue("12");
-  const elapsed=Date.now()-start,after=await geometry(page);
+  const elapsed=Date.now()-start;
+  // Inspector publication can precede the renderer's next animation frame.
+  await expect.poll(()=>geometry(page),{message:"external radius edit must reach the presented canvas"}).not.toEqual(before);
+  const after=await geometry(page);
   assert.notDeepEqual(after,before);
   assert.ok(Math.abs(curveWidth(after)/curveWidth(before)-1.2)<0.01,"external radius edit preserves the camera scale");
   assert.equal(await page.evaluate(()=>window.m98PageIdentity),"same open page");
