@@ -1,0 +1,12 @@
+{
+  "name": "@geosolve/cli",
+  "version": "0.1.0",
+  "description": "Offline local-folder GeoSolve authoring and engine tools",
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "engines": { "node": ">=22" },
+  "os": ["linux"],
+  "bin": { "geosolve": "bin/geosolve.mjs" },
+  "files": ["bin", "runtime", "README.md", "LICENSE", "THIRD_PARTY_LICENSES.md"],
+  "dependencies": { "@geosolve/sketch-code": "0.2.0", "@geosolve/engine": "0.1.0" }
+}
