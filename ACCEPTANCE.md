@@ -5559,24 +5559,28 @@ limits without claiming an unrecorded exhaustive human replay. No M97 blocker re
 
 ## M98 real-world authoring and embedding — mechanical qualification complete
 
-The authorized [local canvas amendment](docs/M98_LOCAL_CANVAS.md), M98-F017, passes focused native and browser checks; integrated qualification is pending.
-Its new qualification requirements are local responsiveness during stalled server execution,
-exact native selection/camera/dimension parity, semantic edit handoff and stale reply retention.
-The previously qualified previews below remain served until replacement checks pass.
+The [local canvas amendment](docs/M98_LOCAL_CANVAS.md), M98-F017, is mechanically
+qualified and delivered from `d5f9e40` in `20260910T022428-a1d7c652`: all 261 obligations
+pass (23 fresh, 238 authenticated reused; 31m30.382s). Required stalled-server responsiveness,
+shared native camera/selection/dimension behavior, semantic handoff and stale-reply retention
+pass. All 17 sample-opening checks and 49 standalone workflows pass without retries or skips;
+110 folder Node cases and 11 folder browser workflows pass. Exact original-source Undo/Redo
+also qualifies the independent M98-F018 history repair.
 
-M98-F016 navigation latency repair is mechanically qualified and delivered from `b1243a6` in
-`20260909T221531-9189674e`: all 261 obligations pass (11 fresh, 250 authenticated reused).
-[Latency evidence](docs/M98_NAVIGATION_LATENCY.md) records exact input preservation,
-bounded pending navigation, compressed-response equality and browser synchronization.
-Both replacement previews pass served-byte and browser checks, preserving all seven
-original manifold files and leaving the new editing lease unclaimed. Final evidence is
-`target/m98/latency-preview-verification.json` and
-`target/m98/latency-static-preview-verification.json`. Human acceptance and M98 closure remain open.
+[Final qualification](docs/M98_QUALIFICATION.md#qualified-local-canvas-boundary) records
+frozen static and editable-folder Tailscale previews, 14 verified HTTP routes each, actual-WASM
+readiness and completed local navigation with zero navigation RPCs. All seven original
+manifold files remain unchanged and the editing lease stays unclaimed by verification.
+Evidence is `target/m98/local-canvas-preview-verification.json` and
+`target/m98/local-canvas-static-preview-verification.json`. Local zoom is observed at
+133.4 ms during a 1,580.4 ms held server edit; installed-manifold zoom/pan observations are
+302.9/219.4 ms including Playwright and software rendering. No 60 Hz claim is made.
 
-The preceding [loading-feedback amendment](docs/M98_LOADING_FEEDBACK.md) was qualified and
-delivered from `a68fffa` in `20260909T173058-0f35c852`: all 261 obligations passed, including
-delayed feedback and retained geometry. That loading behavior remains in the current product.
-The following original qualification and delivery evidence is historical.
+The preceding M98-F016 queue/transfer repair (`b1243a6`) and loading-feedback amendment
+(`a68fffa`) remain qualified historical evidence. The canvas still dims after 500 ms of
+remote work while local navigation continues. Inspector details and semantic edits may
+await the server. Human acceptance and M98 closure remain open. The following original
+qualification and delivery evidence is historical.
 
 Clean source `6509e9c160a74c499668b63a5ef9bddefa593223` passes all 261 obligations in
 `20260909T144235-377abb33`, with 23 fresh and 238 authenticated unchanged-input results.
@@ -5598,4 +5602,6 @@ manifold Fit/history costs and Linux/worker/topology limitations remain explicit
 - [x] Loading-feedback amendment qualified and preview refreshed.
 - [x] Navigation latency repair mechanically qualified.
 - [x] Navigation latency replacement previews verified.
+- [x] Local canvas boundary, stalled-server behavior and native prediction parity qualified.
+- [x] Local canvas replacement previews and original manifold preservation verified.
 - [ ] M98 milestone closure after acceptance.

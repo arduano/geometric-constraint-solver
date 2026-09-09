@@ -8470,21 +8470,24 @@ merge or qualify that product.
 
 - [x] Implement the authorized [local canvas boundary](docs/M98_LOCAL_CANVAS.md): local
   accepted-scene navigation/picking/selection, server sketch edits and exact reconciliation.
-- [ ] Qualify stalled-server responsiveness, shared native prediction parity and replacement delivery.
+- [x] Qualify stalled-server responsiveness, shared native prediction parity and replacement delivery.
 
 - [x] Reproduce M98-F016 delayed hover/zoom/click under asynchronous navigation and add
   exact scheduler regressions; preserve gesture terminals, semantic samples and wheel anchors.
 - [x] Qualify the navigation queue/transfer repair and refresh the existing previews.
   [Latency repair evidence](docs/M98_NAVIGATION_LATENCY.md).
 
-Status: **implementation, loading feedback and navigation latency repair mechanically qualified
-and delivered; supervising-user acceptance remains open**.
-Candidate `b1243a6` passes 261/261 obligations in `20260909T221531-9189674e`
-(11 fresh, 250 authenticated reused; 16m14.099s). The navigation repair coalesces pending
-hover/pan and preserves exact wheel samples while reducing folder response size. Both
-replacement previews pass served-byte and browser verification, preserving all seven existing
-manifold files and leaving the new editing lease unclaimed.
-Fast work does not flash; slow work dims the accepted canvas after 500 ms.
+Status: **implementation and local canvas boundary mechanically qualified and delivered;
+supervising-user acceptance remains open**.
+Candidate `d5f9e40` passes 261/261 obligations in `20260910T022428-a1d7c652`
+(23 fresh, 238 authenticated reused; 31m30.382s). Browser Rust owns navigation, picking,
+selection and dimension presentation; the server retains solving, edits and persistence.
+All 17 sample-opening checks and 49 standalone workflows pass, alongside 110 folder Node
+cases and 11 folder browser workflows. Stalled-server navigation, exact native prediction,
+semantic handoff and retained local view/selection pass. Both replacement previews pass
+served-byte and actual-WASM checks with zero navigation RPCs, preserving all seven existing
+manifold files and leaving the editing lease unclaimed. Fast work does not flash; slow
+server work dims the accepted canvas after 500 ms while local browsing continues.
 M97 is accepted and merged into this worktree.
 [Approved scope and ordered checklist](docs/M98_IMPLEMENTATION_PLAN.md) owns implementation,
 hardening and qualification. The user selected complete project support,
@@ -8496,11 +8499,11 @@ revision-checked CLI, one-editor bridge, publication journal/design sidecar and 
 computed-profile export are implemented with focused tests. Offline archives and the
 standalone generator website pass clean-install/browser smoke checks. Transaction/worker
 hardening, navigation measurements and browser migration pass the clean integrated gate.
-[Qualification and preview](docs/M98_QUALIFICATION.md) records current source `b1243a6`, all 261 obligations
-(11 fresh, 250 authenticated reused), and replacement verification for static
+[Qualification and preview](docs/M98_QUALIFICATION.md) records current source `d5f9e40`, all 261 obligations
+(23 fresh, 238 authenticated reused), and replacement verification for static
 `http://100.94.63.83:18106/` and the installed manifold folder on Tailscale port 18108.
-Final delivery evidence is `target/m98/latency-preview-verification.json` and
-`target/m98/latency-static-preview-verification.json`. [Implementation findings](docs/M98_HARDENING.md)
+Final delivery evidence is `target/m98/local-canvas-preview-verification.json` and
+`target/m98/local-canvas-static-preview-verification.json`. [Implementation findings](docs/M98_HARDENING.md)
 records exact reproductions and repairs; no supervising-user acceptance or closure is implied.
 
 ### Historical fast-track prototype

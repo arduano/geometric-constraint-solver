@@ -12,6 +12,8 @@ and closed; M98 stays open until integrated qualification and supervising-user a
   source edits in both directions, structured diagnostics and revision-checked agent edits.
 - Existing workbench with one bridge owner per canonical folder and one active UI editor;
   explicit handoff, exact pending-edit authority, recovery and capabilities before interaction.
+- Local Rust/WASM canvas navigation, picking, selection and dimension presentation over
+  detached accepted scenes, with server-owned sketch edits and exact state reconciliation.
 - A headless TypeScript engine usable in Node and browsers without React/demo dependencies,
   plus a dedicated pure Rust WASM adapter over shared validated domain APIs.
 - Editable managed source retains its strict compiler/receipt contract. Generator mode uses
@@ -47,13 +49,15 @@ and closed; M98 stays open until integrated qualification and supervising-user a
 - [x] Reproduce and repair M98-F016 asynchronous navigation backlog with owning regressions
   and exact-response negotiated compression.
 - [x] Qualify and deliver the [navigation latency repair](M98_NAVIGATION_LATENCY.md).
+- [x] Implement and qualify the [local canvas boundary](M98_LOCAL_CANVAS.md), including
+  stalled-server responsiveness, shared native semantics and preserved user-folder delivery.
 - [ ] Obtain supervising-user acceptance and close M98.
 
-Navigation repair candidate `b1243a6` passes all 261 obligations in
-`20260909T221531-9189674e` (11 fresh, 250 authenticated reused). Both previews serve
+Local canvas candidate `d5f9e40` passes all 261 obligations in
+`20260910T022428-a1d7c652` (23 fresh, 238 authenticated reused). Both previews serve
 verified frozen/installed artifacts; all seven original manifold files are preserved and
-the new editing lease is unclaimed. Evidence: `target/m98/latency-preview-verification.json`
-and `target/m98/latency-static-preview-verification.json`. Human acceptance and closure remain open.
+the new editing lease is unclaimed. Evidence: `target/m98/local-canvas-preview-verification.json`
+and `target/m98/local-canvas-static-preview-verification.json`. Human acceptance and closure remain open.
 
 Stages may develop independently behind their explicit APIs, with focused verification before
 integration. No new solver primitive/equation, unsafe code, FFI solver, solid kernel, enclosure

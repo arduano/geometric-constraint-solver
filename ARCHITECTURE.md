@@ -2963,7 +2963,7 @@ runs the existing adapter in an ordered module worker, preserving immutable snap
 sequence and canvas-only fast paths across transport. Activity grants no scene authority.
 
 
-The authorized [local canvas amendment](docs/M98_LOCAL_CANVAS.md) is under implementation.
+The [local canvas amendment](docs/M98_LOCAL_CANVAS.md) is mechanically qualified and delivered.
 Folder navigation moves into a dedicated Rust/WASM presentation worker over a bounded
 `EditorScene` transport. The imported scene retains analytic geometry, computed boundaries
 and dimension placement, with a permanent detached marker and no prepared or accepted-input

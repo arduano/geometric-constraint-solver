@@ -2,9 +2,12 @@
 
 # M98 local canvas interaction amendment
 
-Status: implementation and focused qualification complete; integrated release gate pending.
-The qualified `b1243a6` previews remain available; this amendment has not been release-qualified
-or delivered. M98 acceptance stays open.
+Status: mechanically qualified and delivered from `d5f9e40` in
+`20260910T022428-a1d7c652` (261/261 obligations; 23 fresh, 238 authenticated reused).
+The static and folder previews serve verified qualified artifacts; all seven existing
+manifold files are preserved. [Final qualification and delivery](M98_QUALIFICATION.md#qualified-local-canvas-boundary)
+records commands, measured responsiveness and remaining limits. M98 acceptance stays open.
+Development and failed-attempt records below remain historical evidence.
 
 The user reports folder interaction remains much slower than the accepted M97 demo even
 after M98-F016 bounded stale queues and compressed replies. They explicitly require local
@@ -234,3 +237,22 @@ nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-sourc
 
 Log: `target/m98/local-canvas-invalid-source-r2.log`. Integrated replacement qualification
 and preview delivery remain pending.
+
+
+## Qualified replacement and delivery
+
+Clean followup `d5f9e40` passes the complete authenticated gate in
+`20260910T022428-a1d7c652`: 261/261 obligations, 23 fresh and 238 reused, 31m30.382s.
+All 17 browser prefixes and 49 full workflows pass without retries or skips. The integrated
+folder browser case measures local zoom at 133.4 ms during a 1,580.4 ms held edit, with zero
+navigation RPCs and exact final native camera/selection reconciliation. The original failed
+gate remains failed; its independent completed successes supplied authenticated reuse.
+
+The exact frozen production and offline packages are installed at static Tailscale port
+18106 and editable-folder port 18108. Served-byte and actual-WASM verification pass, including
+completed local zoom/pan/click on the preserved user manifold. Installed zoom/pan observations
+are 302.9/219.4 ms, including Playwright delivery/polling and software rendering; no 60 Hz
+claim is made. All seven files, current/accepted source hashes and editing authority remain
+unchanged during read-only verification. [The final report](M98_QUALIFICATION.md#qualified-local-canvas-boundary)
+records exact commands, artifacts, measurements and setup failures. Human acceptance and
+M98 closure remain open.

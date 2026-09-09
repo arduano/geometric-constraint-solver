@@ -425,7 +425,9 @@ on the server and validate source, epoch, lease, revision and accepted scene ide
 Transported geometry confers no solver or edit authority.
 
 [Local canvas implementation and qualification](M98_LOCAL_CANVAS.md) tracks focused native,
-transport and browser evidence. This amendment is not yet qualified or delivered.
+transport and browser evidence. This amendment is qualified and delivered from `d5f9e40`;
+[final qualification](M98_QUALIFICATION.md#qualified-local-canvas-boundary) records all 261
+passing obligations and the verified replacement previews.
 
 ## M98-F018 — Redo rejected a canvas-authored polyline's historical project
 
@@ -450,4 +452,5 @@ lowered or rewritten by this comparison.
 The focused real polyline backend regression passes exact original-source Undo, authored
 project/design Redo, reopen/Undo and subsequent `geometry2` allocation. Forged historical
 source, including matching forged hashes, remains subject to independent compilation.
-Integrated qualification remains required.
+The complete gate and actual browser source Undo/Redo workflow pass in
+`20260910T022428-a1d7c652`; the qualified replacement is delivered.

@@ -2,13 +2,90 @@
 
 # M98 implementation and review candidate
 
-M98 is implemented and mechanically qualified on 2026-09-09. Supervising-user acceptance
-and milestone closure remain open. Work is isolated on `m98/file-workspace`; accepted M97
-and its preview at http://100.94.63.83:18105/ remain unchanged.
+M98 and its local canvas amendment are mechanically qualified and delivered on 2026-09-10.
+Supervising-user acceptance and milestone closure remain open. Work is isolated on
+`m98/file-workspace`; accepted M97 remains unchanged.
 
-## Qualified navigation latency repair
+## Qualified local canvas boundary
 
-Current candidate `b1243a6deec4eddad7dd0a0f941b29ea47e538a4`, tree
+Current candidate `d5f9e4048b428939a0bcd40c8a3433d4601fbd9b`, tree
+`54975cf96815643f74f6b1b67e1e93883e07ca6b`, passes **261/261 obligations** in
+`20260910T022428-a1d7c652`: **23 fresh and 238 authenticated reused results**, in
+**31m30.382s**. Every linked passing receipt authenticates, and complete release,
+clean-source and unchanged-source flags are true. Evidence:
+`target/m98/local-canvas-final-qualification.json`.
+
+The browser owns camera, analytic reprojection, hover/picking, selection and dimension
+presentation in a dedicated Rust/WASM worker. The server owns compilation, solving,
+sketch edits, history and persistence. Delayed server replies retain newer local camera
+and selection state. Detached scene transport grants presentation capability only;
+source, scene, revision, epoch and editing-lease guards still protect server mutations.
+[Implementation and exact focused commands](M98_LOCAL_CANVAS.md) records the boundary.
+No solver equations, priority semantics or explicit mathematical branches changed in this amendment.
+
+All 17 sample-opening checks and 49 standalone browser workflows pass without failures,
+skips or retries. Folder coverage passes 110 Node cases and 11 browser workflows;
+engine coverage passes seven Node cases, with generator, browser embedding and offline
+package checks also passing. Formatting, strict Clippy, native/headless tests, optimized
+WASM lifecycle, seven native/WASM parity suites, licensing and the unchanged 271-case
+golden corpus pass. Performance passes in 250.4 s, including independently validated
+256-moving-body sparse crossover in 148.46 s.
+
+The integrated stalled-server browser case presents local zoom in **133.4 ms** while
+holding the edit reply for **1,580.4 ms**. All 20 mixed wheel samples reach local Rust,
+with **zero navigation RPCs**, one accepted edit write, and the latest camera/selection
+preserved after publication. Real drawing, cancellation, dragging, source Undo/Redo and
+external generator failure retention pass. Evidence:
+`target/release-gate/runs/20260910T022428-a1d7c652/stages/folder.browser/scratch/m98/browser/local-folder-navigation.json`.
+
+The static preview `http://100.94.63.83:18106/` and editable manifold on Tailscale port
+18108 serve the exact frozen/installed qualified artifacts, without a subsequent rebuild.
+Both sets of 14 HTTP routes match qualified bytes; static actual-WASM manifold readiness
+passes. The folder verifier removes only the existing documented HTTP compatibility shim
+for its index comparison. It verifies 372 finite presented items, working SSE, exact
+identity/gzip decoded equality and completed local zoom, pan and click with zero navigation
+RPCs. All 12 observed local worker requests receive replies, with none pending.
+
+On the installed manifold, zoom is visible in **302.9 ms** and pan in **219.4 ms**. These
+bounded Playwright observations include event delivery, polling and software-rendered
+Chromium; they do not establish 60 Hz or the user's hardware performance. Selection
+highlights are local; Inspector details and semantic edits may still await the server.
+
+The original folder at `target/m98/installed-preview-20260909T144235-377abb33/manifold`
+and all seven authored files remain unchanged. Current and accepted source identity remain
+`01fe512c5221bccbc1a032eb32480101005c9ca3571f99e504a1619647b3d59a`.
+Read-only verification does not claim the new editing lease or change source, authority or
+writes. The current session URL is in `target/m98/tailnet-folder-location.json` and
+`target/m98/local-canvas-preview-verification.json`. Static evidence is
+`target/m98/local-canvas-static-preview-verification.json`; service/file preservation is
+recorded in `target/m98/local-canvas-preview-processes.json`.
+
+Executed qualification and delivery commands use the pinned Nix shell documented in
+[M98 local canvas](M98_LOCAL_CANVAS.md):
+
+```bash
+./scripts/release-gate.sh --resume 20260910T005858-8cb8b936
+python3 target/m98/verify-qualification.py 20260910T022428-a1d7c652
+python3 target/m98/freeze-preview.py 20260910T022428-a1d7c652
+python3 target/m98/install-preview.py 20260910T022428-a1d7c652
+python3 target/m98/upgrade-local-canvas-preview.py 20260910T022428-a1d7c652
+node target/m98/verify-local-canvas-preview.mjs
+```
+
+The static `npm run verify:artifact` command, manifest, moved directory and endpoint are
+retained exactly in its receipt. It requires
+`GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome` on this host.
+An initial invocation could not launch the bundled Chromium because its Linux libraries
+were unavailable; a second could not overwrite the deliberately exclusive receipt path.
+Both failures remain recorded. The final invocation uses host Chromium and a fresh receipt,
+and passes against the same served bytes. No product change or full gate rerun followed
+these local verifier setup errors.
+
+M98 supervising-user acceptance and milestone closure remain open.
+
+## Preceding qualified navigation latency repair
+
+The preceding candidate `b1243a6deec4eddad7dd0a0f941b29ea47e538a4`, tree
 `9934cc679fe2a53ec12e1b7e62b5ef27ee5271b7`, passes **261/261 obligations** in
 `20260909T221531-9189674e`: 11 fresh and 250 authenticated reused results in
 **16m14.099s**. `complete`, `qualified_release`, `clean_source` and `source_unchanged`

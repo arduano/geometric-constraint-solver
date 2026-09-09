@@ -22,36 +22,38 @@ record the accepted scope and limits. No M97 blocker or acceptance action remain
 The previous M97 previews remain documented at ports 18104 and 18103; M96's accepted
 channel checkpoint remains in [M96_CLOSURE.md](docs/M96_CLOSURE.md).
 
-**Active amendment: [local canvas interaction](docs/M98_LOCAL_CANVAS.md) passes focused checks; integrated qualification is pending.**
-The user requires responsive local navigation, selection and highlighting with server-owned
-sketch edits. The previous queue/transfer fix remains qualified and served below; it did not
-restore the original local interaction boundary. Work only in the existing M98 worktree.
+**M98 local canvas interaction is mechanically qualified and delivered.**
+Clean candidate `d5f9e40` passes all 261 obligations in
+`20260910T022428-a1d7c652` (23 fresh, 238 authenticated reused; 31m30.382s).
+[The boundary and regression report](docs/M98_LOCAL_CANVAS.md) and
+[final qualification](docs/M98_QUALIFICATION.md#qualified-local-canvas-boundary) record
+shared Rust camera/picking/selection/dimension behavior in the browser, server-owned
+sketch edits, and exact reconciliation after delayed replies. Ordinary navigation needs
+no HTTP request. Source, scene, revision, epoch and editing-lease guards remain enforced.
 
-**M98-F016 navigation latency repair is mechanically qualified and delivered.**
-Clean candidate `b1243a6` passes all 261 obligations in
-`20260909T221531-9189674e` (11 fresh, 250 authenticated reused results; 16m14.099s).
-[The repair report](docs/M98_NAVIGATION_LATENCY.md) records bounded pending hover/pan,
-exact wheel batches, compressed folder responses and browser synchronization evidence.
-Static `http://100.94.63.83:18106/` and editable-folder Tailscale port 18108 serve verified
-qualified artifacts. `target/m98/latency-preview-verification.json` records folder bytes,
-read-only browser readiness and the new session URL. All seven existing manifold files are
-preserved and the new editing lease is unclaimed. In controlled installed-product replay,
-the final wheel response arrives 561.7 ms after input stops, compared with over 14.6 seconds
-before repair; the final throttled hover response falls from 2.866 seconds to 390.2 ms.
-M98 supervising-user acceptance and closure remain open.
+Static `http://100.94.63.83:18106/` and editable-folder Tailscale port 18108 serve exact
+qualified artifacts. The current folder session URL is recorded in
+`target/m98/tailnet-folder-location.json` and `target/m98/local-canvas-preview-verification.json`.
+Both sets of 14 HTTP routes and actual-WASM readiness pass. All seven existing manifold
+files and current/accepted source hashes are unchanged; read-only verification leaves the
+new editing lease unclaimed. Installed-manifold zoom/pan become visible in 302.9/219.4 ms,
+including browser event delivery, polling and software rendering, with zero navigation RPCs.
+The integrated stalled-server case observes local zoom in 133.4 ms before the held edit
+reply at 1,580.4 ms, retaining exact final camera/selection. These are not 60 Hz claims.
 
-The qualified loading behavior remains: a canvas veil and spinner appear after 500 ms,
-and standalone native solving runs in a worker. [The loading amendment](docs/M98_LOADING_FEEDBACK.md)
-retains the preceding `a68fffa` product and its qualification as historical evidence.
-[The ordered implementation plan](docs/M98_IMPLEMENTATION_PLAN.md) records the accepted
-scope, owning APIs, regressions and qualification requirements. Work in this existing
-`m98/file-workspace` worktree. Accepted M97 is integrated with the original M98 prototype;
-the primary checkout and accepted preview remain untouched. Original prototype handoffs
-are historical evidence, not current scope limits. [M98 qualification and preview](docs/M98_QUALIFICATION.md)
-records clean source `b1243a6` and all 261 passing obligations. The workbench preview is
-`http://100.94.63.83:18106/`; the editable manifold uses Tailscale port 18108 and the
-verified session URL above. [Authoring quickstart](docs/M98_AUTHORING_QUICKSTART.md) covers
-CLI handoff/edits and generator hosts. M98 is not accepted or closed.
+The canvas still greys out after 500 ms of remote work while local browsing continues.
+Inspector details and semantic edits may await the server. The preceding queue/transfer
+repair and loading amendment remain historical evidence in
+[the latency report](docs/M98_NAVIGATION_LATENCY.md) and
+[loading report](docs/M98_LOADING_FEEDBACK.md). M98 supervising-user acceptance and
+milestone closure remain open. Work only in the existing `m98/file-workspace` worktree;
+the primary checkout and accepted M97 product remain unchanged. The old M97 preview at
+port 18105 was unavailable during this delivery and was not restarted.
+
+[The ordered implementation plan](docs/M98_IMPLEMENTATION_PLAN.md) records the approved
+M98 scope. [Authoring quickstart](docs/M98_AUTHORING_QUICKSTART.md) covers CLI edits,
+complete folders, editable/generator modes and generator hosts. The original fast-track
+prototype handoffs are historical evidence, not current scope limits.
 
 [M95 qualification](docs/M95_QUALIFICATION.md) and [closure](docs/M95_CLOSURE.md) retain
 the previous accepted checkpoint at `http://100.94.63.83:18100/`. M94 remains at port 18096.
