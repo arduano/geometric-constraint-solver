@@ -8468,7 +8468,7 @@ merge or qualify that product.
 
 ## M98 — reliable project authoring and embeddable TypeScript engine
 
-Status: **approved implementation in progress**. M97 is accepted and merged into this
+Status: **implemented and mechanically qualified; supervising-user acceptance open**. M97 is accepted and merged into this
 worktree. [Approved scope and ordered checklist](docs/M98_IMPLEMENTATION_PLAN.md) owns
 implementation, hardening and qualification. The user selected complete project support,
 a headless Node/browser TS engine, editable/generator modes, optional source-declared
@@ -8478,8 +8478,10 @@ The recorder, dedicated native/WASM engine, editable session API, complete local
 revision-checked CLI, one-editor bridge, publication journal/design sidecar and complete
 computed-profile export are implemented with focused tests. Offline archives and the
 standalone generator website pass clean-install/browser smoke checks. Transaction/worker
-hardening, navigation measurements and browser migration are being finalized before clean
-integrated nomination. [Implementation findings](docs/M98_HARDENING.md) records exact
+hardening, navigation measurements and browser migration pass the clean integrated gate.
+[Qualification and preview](docs/M98_QUALIFICATION.md) records source `6509e9c`, all 261 obligations
+(23 fresh, 238 authenticated reused), frozen production at `http://100.94.63.83:18106/` and
+the installed manifold folder on loopback port 18108. [Implementation findings](docs/M98_HARDENING.md) records exact
 reproductions and repairs; no supervising-user acceptance or closure is implied.
 
 ### Historical fast-track prototype

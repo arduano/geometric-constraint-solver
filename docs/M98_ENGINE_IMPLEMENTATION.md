@@ -46,7 +46,7 @@ Focused development evidence:
 
 No solver residual equation, unsafe implementation or golden corpus change is involved.
 The package, website and complete-project workflows have focused checks below; the integrated
-release gate still needs to qualify the final candidate before M98 can be nominated.
+release gate has since qualified the final candidate in [M98_QUALIFICATION.md](M98_QUALIFICATION.md).
 
 ## Completed native and package seams (2026-09-09)
 
@@ -74,5 +74,6 @@ Focused commands executed in the M98 worktree:
   strict Clippy pass. Actual Node release WASM session and existing engine tests pass.
 - `node packages/geosolve-engine/scripts/build.mjs` and wrapper tests pass.
 
-This component evidence is not an integrated M98 nomination. The final gate, archives,
-served-byte verification and supervising-user acceptance remain required.
+This component evidence is historical focused validation. [The final nomination](M98_QUALIFICATION.md)
+records the passing gate, frozen archives and served-byte/browser checks. Supervising-user
+acceptance remains required.

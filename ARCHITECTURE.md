@@ -2920,7 +2920,7 @@ and the frozen production preview's exact served-byte and actual-WASM verificati
 Generated per-instance overview overrides remain deferred.
 
 
-## M98 local projects and headless embedding — implementation in progress
+## M98 local projects and headless embedding — qualified for supervising-user review
 
 The ordinary TypeScript SDK records an evaluated generator program separately from the
 managed compiler's lexical/execution receipts. Both admit through shared Rust lowering and
@@ -2953,3 +2953,6 @@ sampling, retaining explicit joins and failing closed on unsupported or uncertai
 Named output fragments select complete regions with holes; they do not imply pocket depth
 or material removal. See [M98 implementation plan](docs/M98_IMPLEMENTATION_PLAN.md),
 [engine API](docs/M98_ENGINE_IMPLEMENTATION.md) and [journal contract](docs/M98_WORKSPACE_STORAGE.md).
+
+[M98 qualification](docs/M98_QUALIFICATION.md) records the complete clean-source gate and
+verified previews. Supervising-user acceptance and milestone closure remain open.

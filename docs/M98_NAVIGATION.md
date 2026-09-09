@@ -3,8 +3,8 @@
 # M98 folder navigation measurements
 
 These are development measurements on the current main-pc, with other development work
-running. They establish behavior and report observed costs; isolated integrated qualification
-is still pending and no new latency target is inferred.
+running. They establish behavior and report observed costs; the final integrated gate is recorded in [M98_QUALIFICATION.md](M98_QUALIFICATION.md),
+and no new latency target is inferred.
 
 `workspace-navigation.test.mjs` sends 21 actual HTTP requests per accepted folder: wheel
 batches, hover, Center on origin, Fit and grid toggles. It checks every authored/cache file's

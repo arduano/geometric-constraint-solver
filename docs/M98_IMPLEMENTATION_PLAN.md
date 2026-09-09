@@ -42,7 +42,7 @@ and closed; M98 stays open until integrated qualification and supervising-user a
 - [x] Complete computed-profile/named-output export through shared engine.
 - [x] Polish first-party workbench modes/capabilities, maintain examples and measure navigation.
 - [x] Register all new owning-layer/package/browser tests in integrated release qualification.
-- [ ] Qualify clean candidate, freeze production bytes and verify a reviewable preview.
+- [x] Qualify clean candidate, freeze production bytes and verify a reviewable preview.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Stages may develop independently behind their explicit APIs, with focused verification before
@@ -96,7 +96,8 @@ bytes; do not promise atomic CAS against uncooperative external writers holding 
 
 [M98-F001/F002 focused hardening](M98_HARDENING.md) records the reproduced
 failures and current transport/cache/session repairs with focused owner checks. Final
-integrated qualification remains pending; the early checkpoints below are historical.
+[qualification and preview](M98_QUALIFICATION.md) pass on clean `6509e9c`; the early checkpoints
+below are historical and supervising-user acceptance remains open.
 
 
 Merge `1584a5a` integrates M97 `3152f33` with the earlier M98 prototype. It resolves additive
@@ -111,4 +112,6 @@ workflow and a small generator host. The current transaction/worker/cache findin
 [M98_HARDENING.md](M98_HARDENING.md). Package smoke installs all three archives offline
 and runs a browser application using only the installed SDK/engine. Navigation measurements are recorded in [M98_NAVIGATION.md](M98_NAVIGATION.md). Browser/HTTP
 migration is complete, including source-draft downloads, actual failed-write recovery, invalid
-source retention and route isolation. The final clean gate and qualified preview remain pending.
+source retention and route isolation. The final clean gate passes 261/261 obligations, and both frozen-workbench and installed-folder
+previews have fresh byte/browser evidence. [The nomination](M98_QUALIFICATION.md) preserves
+performance limits and leaves supervising-user acceptance and closure unchecked.

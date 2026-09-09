@@ -1,7 +1,7 @@
 # GeoSolve active handoff
 
-Current roadmap: **M97 focused dimensions and source-native authoring accepted and closed
-on 2026-09-09. M98 local file workspace and baked-profile prototype is the next takeover.**
+Current roadmap: **M97 is accepted and closed. M98 real-world authoring and embedding is
+implemented, mechanically qualified and available for supervising-user review.**
 
 [M97 closure and fresh-session handoff](docs/M97_CLOSURE.md) records the supervising
 user's acceptance and unchanged qualified product. Accepted source
@@ -22,12 +22,16 @@ record the accepted scope and limits. No M97 blocker or acceptance action remain
 The previous M97 previews remain documented at ports 18104 and 18103; M96's accepted
 channel checkpoint remains in [M96_CLOSURE.md](docs/M96_CLOSURE.md).
 
-**Current task: implement the approved M98 real-world usability milestone.**
+**Current task: supervising-user review of the qualified M98 candidate; acceptance and closure remain open.**
 [The ordered implementation plan](docs/M98_IMPLEMENTATION_PLAN.md) records the accepted
 scope, owning APIs, regressions and qualification requirements. Work in this existing
 `m98/file-workspace` worktree. Accepted M97 is integrated with the original M98 prototype;
 the primary checkout and accepted preview remain untouched. Original prototype handoffs
-are historical evidence, not current scope limits. M98 is not accepted or release-qualified.
+are historical evidence, not current scope limits. [M98 qualification and preview](docs/M98_QUALIFICATION.md)
+records clean source `6509e9c`, all 261 passing obligations and the byte-verified workbench at
+`http://100.94.63.83:18106/`. The installed editable manifold runs on loopback port 18108;
+use its printed session URL. [Authoring quickstart](docs/M98_AUTHORING_QUICKSTART.md) covers
+CLI handoff/edits and generator hosts. M98 is not accepted or closed.
 
 [M95 qualification](docs/M95_QUALIFICATION.md) and [closure](docs/M95_CLOSURE.md) retain
 the previous accepted checkpoint at `http://100.94.63.83:18100/`. M94 remains at port 18096.

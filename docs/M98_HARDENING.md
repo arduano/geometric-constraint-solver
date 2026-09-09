@@ -317,3 +317,12 @@ GEOSOLVE_DIST="$PWD/target/release-gate/prepared/f862ad58f8fc7bb4ed341d7ca820326
 
 Evidence: `target/m98/folder-browser-layout-r1.log`. The failed replacement remains
 failed; the runner must qualify the corrected harness and all outstanding obligations.
+
+## Final qualification
+
+The complete clean-source gate passes on `6509e9c160a74c499668b63a5ef9bddefa593223` in
+`20260909T144235-377abb33`: all 261 obligations, including corrected offline archives and
+browser synchronization, unchanged golden, native/WASM parity and performance. Frozen
+production and installed-folder previews pass fresh transport/readiness checks.
+[M98 qualification](M98_QUALIFICATION.md) records final authority, exact evidence and the
+separate transient preflight `/proc` harness race. Supervising-user acceptance remains open.

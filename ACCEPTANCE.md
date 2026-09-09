@@ -5555,3 +5555,25 @@ preview. Generated per-instance overview overrides remain deferred. Mechanical
 qualification is complete. On 2026-09-09 the supervising user stated “very nice, I approve
 of this” and requested milestone closure. This accepts the delivered scope and recorded
 limits without claiming an unrecorded exhaustive human replay. No M97 blocker remains.
+
+
+## M98 real-world authoring and embedding — mechanical qualification complete
+
+Clean source `6509e9c160a74c499668b63a5ef9bddefa593223` passes all 261 obligations in
+`20260909T144235-377abb33`, with 23 fresh and 238 authenticated unchanged-input results.
+[Qualification and preview evidence](docs/M98_QUALIFICATION.md) records complete local folders,
+editable/generator admission, source-declared inputs, dedicated Node/browser engine, semantic
+design sidecar, recoverable Linux publication and complete computed-profile export. All
+97 folder Node cases, seven folder browser cases, engine/example/offline package checks,
+unchanged 271-case golden, native/WASM parity, licensing and existing performance gates pass.
+
+The frozen workbench at `http://100.94.63.83:18106/` and installed manifold folder on loopback
+18108 have fresh served-byte and browser readiness evidence. Independent installed export
+contains 18 finite regions with correct winding and 28,800 mm² net area. The documented CLI
+handoff/apply/retry workflow passes through the exact installed archives. The measured slow
+manifold Fit/history costs and Linux/worker/topology limitations remain explicit.
+
+- [x] Approved implementation and required automated qualification.
+- [x] Frozen artifacts and concrete verified review previews.
+- [ ] Supervising-user acceptance of M98.
+- [ ] M98 milestone closure after acceptance.
