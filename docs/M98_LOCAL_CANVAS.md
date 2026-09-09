@@ -202,3 +202,35 @@ byte-for-byte; the earlier explicit-binding fixture workaround has been removed.
 WASM release, workspace runtime, paired harness/production builds and scoped strict Clippy pass.
 These focused checks nominate the implementation for the integrated release gate; previews
 remain on the previous qualified product until that gate and served-artifact verification pass.
+
+## Integrated qualification followup
+
+Candidate `2d0259a` completed run `20260910T005858-8cb8b936` with 251 passing stages,
+one failed browser stage and nine downstream stages not run (4,575.809 s). All 17 browser
+opening prefixes and 48 of 49 full workflows passed. The failed standalone invalid-source
+workflow expected its terminal header within five seconds without awaiting asynchronous
+completion. This failed attempt remains failed; the followup gate must authenticate reuse
+of unaffected successes and execute the failed and outstanding obligations.
+
+An initial test correction used the existing presentation-completion helper, but that helper
+excluded the intentionally hidden canvas in Code layout. Its 60-second timeout reported
+`element(s) not found`, not a busy canvas. An actual worker probe against the exact immutable
+gate artifact confirmed rejection after 2.511 s, one positioned Problem, hidden-canvas
+`aria-busy=false`, no pending worker requests, successful Revert and no browser errors.
+Evidence: `target/m98/invalid-source-worker-probe.json`. No production lifecycle defect was
+established and no production code changed for this qualification followup.
+
+The helper now includes the retained hidden application when awaiting presentation completion;
+the workflow waits after both Apply and Revert. All existing status, exact accepted-frame,
+single positioned Problem and export-rejection assertions remain unchanged. Focused replay
+passes (1/1, 21.5 s) on the original immutable gate harness:
+
+```bash
+GEOSOLVE_E2E_ARTIFACT_MANIFEST="$PWD/target/release-gate/prepared/decdf35058108f3c1a0d24e446208d1a797d2d6f070f86b3482b46934e8be135/browser/harness.json" \
+GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
+nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source \
+  --run 'cd crates/geosolve-demo-web/frontend && npx playwright test tests/e2e/workbench.spec.ts --grep "invalid source retains" --workers 1 --output ../../../target/m98/local-canvas-invalid-source-r2'
+```
+
+Log: `target/m98/local-canvas-invalid-source-r2.log`. Integrated replacement qualification
+and preview delivery remain pending.

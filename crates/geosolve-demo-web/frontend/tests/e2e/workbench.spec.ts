@@ -321,6 +321,7 @@ test("invalid source retains the accepted frame and one positioned Problem until
   await page.keyboard.press("Control+End");
   await page.keyboard.insertText("\nconst = ;\n");
   await page.getByRole("button", { name: "Apply" }).click();
+  await settlePresentation(page);
   await expect(page.locator("header").first()).toContainText(/failed/i);
   const problems = page.getByRole("tab", { name: "Problems (1)" });
   await expect(problems).toBeVisible();
@@ -335,6 +336,7 @@ test("invalid source retains the accepted frame and one positioned Problem until
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "Dismiss action error" }).click();
   await page.getByRole("button", { name: "Revert" }).click();
+  await settlePresentation(page);
   await expect(page.locator("header").first()).toContainText(/accepted/i);
   await expect(page.getByRole("tab", { name: "Problems" })).toBeVisible();
   await expect(page.getByRole("tabpanel")).toContainText("No problems");
