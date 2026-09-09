@@ -353,7 +353,20 @@ test("complete manifold opens from plain files and shared channel edits export a
   // source/parameter visibility and complete export after a revision-bound GUI edit.
   const input=page.getByRole("textbox",{name:"Channel width",exact:true}).first();
   await expect(input).toHaveValue("12");
-  await input.fill("11");await input.press("Enter");
+  // Enter starts a complete asynchronous source transaction. Wait for its
+  // response before inspecting disk; the source and export remain independent
+  // assertions rather than a 30-second performance deadline for this sample.
+  await input.fill("11");
+  const [edited]=await Promise.all([
+    page.waitForResponse(response=>{
+      if(new URL(response.url()).pathname!=="/api/rpc")return false;
+      const request=response.request().postDataJSON();
+      return request?.method==="dispatch"&&request.input?.command==="parameter.edit";
+    },{timeout:60000}),
+    input.press("Enter"),
+  ]);
+  assert.equal(edited.status(),200);
+  assert.equal((await edited.json()).error,undefined);
   await expect.poll(()=>readFileSync(resolve(folder,"sketch.ts"),"utf8"),{timeout:30000}).toContain('$.parameter("channelWidth", mm(11)');
   const output=resolve(evidence,"manifold-from-gui.json");
   const baked=await bakeProject(folder,output,0.02);

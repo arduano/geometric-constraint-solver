@@ -117,6 +117,17 @@ reload. Evidence: `target/m98/fixture-isolation-focused-completion.log`; the exa
 executed command is retained in `target/m98/fixture-isolation-focused-process.json`.
 Replacement integrated qualification remains pending.
 
+Run `20260909T213304-b37d7894` passes all 49 full browser workflows and 17 initial
+sample/render checks, without skips or flaky results, on the synchronization repair.
+Its folder browser stage again exceeds the manifold's 30-second source poll. That
+test now waits up to 60 seconds for the exact `parameter.edit` HTTP response, checks
+HTTP success and absence of an RPC error, then retains the original disk-source and
+18-region export assertions. Its 180-second whole-test deadline is unchanged. This
+distinguishes operation completion from post-response publication correctness.
+The focused manifold case passes (1/1, 69.3 seconds) against the exact prepared
+harness; `target/m98/manifold-response-focused.log` and its process record retain
+the result and executed command.
+
 ## Limits
 
 Folder mode still sends complete decoded snapshots and renders surrounding React UI
