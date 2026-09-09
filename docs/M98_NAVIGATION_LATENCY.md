@@ -84,6 +84,39 @@ GEOSOLVE_DIST="$PWD/crates/geosolve-demo-web/dist" node --test --test-name-patte
 nix-shell shell.nix --run 'node --test scripts/workspace-http.test.mjs scripts/workspace-navigation.test.mjs'
 ```
 
+## Qualification synchronization finding
+
+The first pinned complete attempt, `20260909T195555-1f5f64d4`, retained 254 passing
+stages but failed two browser timeouts. The folder manifold edit exceeded its 30-second
+source assertion; an isolated exact-artifact replay passed that original assertion in
+28.85 seconds, with all 18 exported regions and no errors. The unchanged retry
+`20260909T204021-0d315da4` passed all nine folder browser cases and 259 stages, but
+again timed out on the dense fixture's five-second Restore-enabled assertion.
+
+An instrumented replay against the exact prepared harness records a correct isolation
+snapshot after 675 ms, followed by a 6.5-second persistence request and delayed browser
+assertion completion. The original five-second assertion still fails; after the existing
+bounded presentation wait, isolation and restoration pass. The isolated geometry differs
+as intended, restoration has zero coordinate difference, and source and design-history
+availability remain unchanged. A separate earlier replay also caught point selection
+still pending at its five-second Inspector assertion. Evidence is in
+`target/m98/fixture-isolation-diagnosis/diagnosis.json` and
+`target/m98/fixture-selection-timeout-diagnosis/diagnosis.json`.
+
+The sample browser workflow now uses its existing `settlePresentation` helper after
+selection and isolation, as it already does after Fit and reload. All original enabled,
+ownership, geometry, source, history and scrolling assertions remain. This is browser
+synchronization, not a solver or product change, and does not claim lower persistence
+cost. The full focused fixture workflow then passed both edits and Undo/Redo but
+reached its six-minute whole-test deadline during the final reload. The complete
+two-edit sample lifecycle now has an eight-minute overall ceiling; individual
+operation deadlines, numerical assertions and the separate performance gate remain
+unchanged. The original timeout is retained in `target/m98/fixture-isolation-focused.log`.
+The focused complete fixture workflow passes (1/1, 7.1 minutes), including its final
+reload. Evidence: `target/m98/fixture-isolation-focused-completion.log`; the exact
+executed command is retained in `target/m98/fixture-isolation-focused-process.json`.
+Replacement integrated qualification remains pending.
+
 ## Limits
 
 Folder mode still sends complete decoded snapshots and renders surrounding React UI

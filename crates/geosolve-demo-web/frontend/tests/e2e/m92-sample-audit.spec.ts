@@ -99,7 +99,10 @@ async function requireJansenDrag(page: Page, info: TestInfo, originalSource: str
 for (const sample of samples) {
   const { key, manifest, witnesses } = sample;
   test(`M92 visual workflow: ${key}`, async ({ page }, info) => {
-    test.setTimeout(360_000);
+    // This is a complete two-edit/Undo/Redo/reload semantic workflow. Dense
+    // asynchronous publication can exceed six minutes across all steps; each
+    // operation retains its existing bounded wait and numerical assertions.
+    test.setTimeout(480_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -114,11 +117,15 @@ for (const sample of samples) {
     const box = await points.first().boundingBox();
     expect(box).not.toBeNull();
     await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await settlePresentation(page);
     await expect(page.getByRole("tabpanel").getByText("Ownership", { exact: true })).toBeVisible();
     const baselineGeometry = await fittedGeometry(page);
     // Group isolation is presentation-only, and restoring it must restore every
     // accepted path without creating a design-history entry.
     await page.getByRole("button", { name: /^Isolate / }).first().click();
+    // Worker dispatch can outlive Playwright's click; inspect the completed
+    // presentation using the same bounded wait as Fit and restored geometry.
+    await settlePresentation(page);
     await expect(page.getByRole("button", { name: "Restore visibility before isolate" })).toBeEnabled();
     expectGeometry(await fittedGeometry(page), baselineGeometry, false);
     expect(await acceptedSource(page)).toBe(original);
