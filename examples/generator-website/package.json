@@ -1,0 +1,20 @@
+{
+  "name": "geosolve-generator-website-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "description": "A custom Gridfinity-style footprint website using only the headless GeoSolve engine",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check:types": "node scripts/check-types.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test scripts/generator.test.mjs",
+    "test:browser": "node --test scripts/browser.test.mjs"
+  },
+  "dependencies": {
+    "@geosolve/engine": "file:../../packages/geosolve-engine",
+    "@geosolve/sketch-code": "file:../../packages/geosolve-sketch-code"
+  },
+  "devDependencies": { "esbuild": "^0.25.0", "typescript": "5.9.2" }
+}

@@ -1,0 +1,3 @@
+.geosolve/*
+!.geosolve/design.json
+!.geosolve/inputs.json

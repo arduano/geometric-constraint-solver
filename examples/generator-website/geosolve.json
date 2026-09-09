@@ -1,0 +1,5 @@
+{
+  "format": "geosolve-folder-v2",
+  "mode": "generator",
+  "entry": "src/generator.ts"
+}

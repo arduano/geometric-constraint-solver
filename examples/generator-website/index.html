@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f5f6f2" />
+  <title>Modular footprint · GeoSolve example</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header><a class="brand" href="./"><span class="brand-mark" aria-hidden="true">▦</span> MODULAR<span class="brand-light"> / footprint</span></a><span class="header-note">A GeoSolve generator example</span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">MAKE ROOM FOR YOUR NEXT IDEA</p><h1>A footprint that fits.</h1><p>Shape a modular storage layout. Choose your grid, leave a little clearance, and make room for the mounts.</p></section>
+    <div class="workspace">
+      <aside class="settings-panel"><form id="settings"><div class="panel-heading"><h2>Your layout</h2><button id="reset" type="button" class="text-button">Reset</button></div><div id="controls"></div><button class="primary-button" type="submit">Update footprint <span aria-hidden="true">↗</span></button></form><p class="settings-note">A 2D footprint inspired by the 42 mm Gridfinity grid. Rounded corners and mounting bores are part of the geometry.</p></aside>
+      <section class="preview-panel" aria-label="Generated footprint">
+        <div class="preview-heading"><span class="view-tag">TOP VIEW <span aria-hidden="true">·</span> MILLIMETRES</span><span id="size" class="size-tag">—</span></div>
+        <div class="canvas"><svg id="preview" role="img" aria-label="Accepted modular storage footprint" viewBox="-80 -60 160 120"><g id="artwork"></g></svg><div id="empty">Building your first layout…</div></div>
+        <div id="metrics" class="metrics" hidden><div><small>Overall width</small><strong id="width">—</strong></div><div><small>Overall depth</small><strong id="height">—</strong></div><div><small>Mounting bores</small><strong id="bores">—</strong></div></div>
+        <div class="preview-footer"><p id="status" role="status" aria-live="polite" data-state="busy">Loading generator…</p><button id="cancel" class="text-button" type="button" hidden>Cancel update</button></div>
+      </section>
+    </div>
+    <section class="export-row"><div><h2>Take the shape with you.</h2><p>Download the latest accepted outline and holes as millimetre profile data.</p></div><button id="export" type="button" class="export-button" disabled>Download profile <span aria-hidden="true">↓</span></button></section>
+  </main>
+  <footer><span>Ordinary TypeScript. Your own interface.</span><span>2D profile study · no height or pocket depths</span></footer>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
