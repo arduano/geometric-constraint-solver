@@ -32,7 +32,8 @@ qualified artifacts. `target/m98/latency-preview-verification.json` records fold
 read-only browser readiness and the new session URL. All seven existing manifold files are
 preserved and the new editing lease is unclaimed. In controlled installed-product replay,
 the final wheel response arrives 561.7 ms after input stops, compared with over 14.6 seconds
-before repair; the final throttled hover response falls from 2.866 seconds to 390.2 ms. M98 supervising-user acceptance and closure remain open.
+before repair; the final throttled hover response falls from 2.866 seconds to 390.2 ms.
+M98 supervising-user acceptance and closure remain open.
 
 The qualified loading behavior remains: a canvas veil and spinner appear after 500 ms,
 and standalone native solving runs in a worker. [The loading amendment](docs/M98_LOADING_FEEDBACK.md)

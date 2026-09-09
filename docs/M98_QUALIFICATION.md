@@ -50,11 +50,12 @@ Private-copy probes use the exact installed product with `GEOSOLVE_DIST` unset. 
 100 ms simulated latency and 512 KiB/s throughput, 12 wheel inputs produce three requests
 and three frames; the final response arrives 561.7 ms after input stops, compared with
 over 14.6 seconds before repair. Final presentation follows at 703.4 ms. For 90 hover
-inputs, the final response arrives after
-302.6 ms unthrottled (77 requests), or 390.2 ms with 40 ms latency and 1 MiB/s throughput
+inputs, the final response arrives after 302.6 ms unthrottled (77 requests), or 390.2 ms
+with 40 ms latency and 1 MiB/s throughput
 (34 requests), compared with 2.866 seconds before repair. Both probes report no browser
 errors. Hover records no long tasks; wheel replay retains three main-thread long tasks
-of 111–150 ms. These controlled measurements do not assert the user's actual network latency. Evidence is `target/m98/latency-folder-wheel-browser-qualified-20260909T221531-9189674e.json`
+of 111–150 ms. These controlled measurements do not assert the user's actual network latency.
+Evidence is `target/m98/latency-folder-wheel-browser-qualified-20260909T221531-9189674e.json`
 and `target/m98/latency-folder-browser-qualified-20260909T221531-9189674e.json`.
 Solving, Fit and semantic edit costs remain unchanged. M98 acceptance and closure remain open.
 

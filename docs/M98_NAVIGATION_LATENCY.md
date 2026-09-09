@@ -222,6 +222,10 @@ and `target/m98/latency-folder-wheel-browser-qualified-20260909T221531-9189674e.
 These measurements establish improvement under controlled network conditions, not
 the user's actual connection latency or lower solving cost.
 
+Documentation handoff uses `./scripts/release-gate.sh --docs-only --since b1243a6`;
+the six-file check passes and preserves the qualified product above without rebuilding.
+Its log is `target/m98/latency-docs-only.log`.
+
 ## Limits
 
 Folder mode still sends complete decoded snapshots and renders surrounding React UI
