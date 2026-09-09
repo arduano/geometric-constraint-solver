@@ -18,6 +18,7 @@ test("M98-F002: invalid UTF-8 derived cache cannot prevent valid disk source fro
   const folder = fixture(t);
   writeFileSync(resolve(folder, ".geosolve/last-good.ts"), Buffer.from([0xff]));
   const project = await openProject(folder);
+  t.after(() => project.dispose());
   assert.equal(project.state().ok, true);
   assert.equal(project.state().acceptedHash, hash(readFileSync(resolve(folder, "sketch.ts"))));
 });
@@ -28,6 +29,7 @@ test("invalid disk source retains valid last accepted geometry without publishin
   writeFileSync(resolve(folder, ".geosolve/last-good.ts"), previous);
   writeFileSync(resolve(folder, "sketch.ts"), "invalid source");
   const project = await openProject(folder);
+  t.after(() => project.dispose());
   assert.equal(project.state().ok, false);
   assert.equal(project.state().currentHash, hash("invalid source"));
   assert.equal(project.state().acceptedHash, hash(previous));
@@ -40,6 +42,7 @@ test("invalid disk and corrupt cache produce diagnostics while preserving disk b
   writeFileSync(resolve(folder, ".geosolve/last-good.ts"), Buffer.from([0xff]));
   writeFileSync(resolve(folder, "sketch.ts"), "invalid source");
   const project = await openProject(folder);
+  t.after(() => project.dispose());
   assert.equal(project.state().ok, false);
   assert.equal(project.state().acceptedHash, null);
   assert.ok(project.state().warnings.some((warning) => warning.includes("cache")));
@@ -52,6 +55,7 @@ test("invalid cached TypeScript cannot replace current disk diagnostics", async 
   writeFileSync(resolve(folder, ".geosolve/last-good.ts"), "broken cache");
   writeFileSync(resolve(folder, "sketch.ts"), "broken disk");
   const project = await openProject(folder);
+  t.after(() => project.dispose());
   assert.equal(project.state().ok, false);
   assert.equal(project.state().acceptedHash, null);
   const snapshot = await project.adapter.snapshot();

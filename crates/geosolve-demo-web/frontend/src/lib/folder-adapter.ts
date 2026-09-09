@@ -65,15 +65,45 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
     const field = this.committingField;
     const fieldIntent = field ? this.fields.get(field) : undefined;
     const operationId = crypto.randomUUID();
+    const savedMutation = ["files.apply", "inputs.set"].includes(method) || method === "dispatch" && [
+      "source.prepare", "history.undo", "history.redo", "parameter.edit", "dimensions.edit",
+      "authoring.metadata.set", "authoring.parameter.extract",
+    ].includes((input as { command?: string })?.command ?? "");
+    const readOnly = ["snapshot", "toolCatalog", "operation.outcome", "recovery.inspect",
+      "exportProject", "exportReproduction", "exportInteractionTrace"].includes(method);
     const expected = method === "session.takeover"
       ? { hash: this.basis.hash, authority: this.state?.authority } : method === "dispatch" && (input as { command?: string })?.command === "source.prepare" && this.draftBase !== undefined
       ? this.draftBase : this.fieldBase !== undefined ? this.fieldBase : this.basis;
     const run = this.tail.then(async () => {
-      const response = await fetch("/api/rpc", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
-        body: JSON.stringify({ method, input, baseHash: expected.hash, authority: expected.authority, clientId: this.clientId, operationId }),
-      });
-      const body = await response.json() as { result: T; state?: FolderState; error?: string; pendingSource?: string };
+      const request = { method, input, baseHash: expected.hash, authority: expected.authority, clientId: this.clientId, operationId };
+      const send = async () => {
+        const response = await fetch("/api/rpc", {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
+          body: JSON.stringify(request),
+        });
+        return { response, body: await response.json() as { result: T; state?: FolderState; error?: string; pendingSource?: string } };
+      };
+      let received;
+      try { received = await send(); }
+      catch (firstError) {
+        // Only authored transactions have durable receipts. Replaying a wheel,
+        // pointer or handoff could apply its relative action twice.
+        try {
+          if (!savedMutation && !readOnly) throw firstError;
+          received = await send();
+        } catch (error) {
+          if (savedMutation) {
+            this.pending = JSON.stringify(request, null, 2);
+            try { sessionStorage.setItem("geosolve.folder.pending", this.pending); } catch { /* Download remains available. */ }
+          }
+          this.notice = this.retainedError = savedMutation
+            ? "Save status is unknown after disconnect. Check the saved operation before retrying this edit."
+            : "Connection lost. Refresh to reconnect to the current folder state.";
+          this.listener?.();
+          throw error;
+        }
+      }
+      const { response, body } = received;
       if (body.state) this.state = body.state;
       if (this.fieldBase !== undefined && !this.sameBasis(this.fieldBase, { hash: this.state?.currentHash ?? null, authority: this.state?.authority }) && this.fieldDraft) {
         this.pending = this.fieldDraft;
@@ -83,7 +113,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
         this.notice = body.error ?? `Folder request failed (${response.status})`;
         this.retainedError = this.notice;
         if (response.status === 409 || body.pendingSource) {
-          this.pending = JSON.stringify({ method, input, baseHash: expected.hash, authority: expected.authority, pendingSource: body.pendingSource }, null, 2);
+          this.pending = JSON.stringify({ ...request, pendingSource: body.pendingSource }, null, 2);
           try { sessionStorage.setItem("geosolve.folder.pending", this.pending); } catch { this.notice += " Download pending intent before closing this tab."; }
         }
         this.listener?.();
@@ -104,6 +134,20 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
     });
     this.tail = run.catch(() => {});
     return run;
+  }
+  get pendingOperationId(): string | undefined {
+    try { return (JSON.parse(this.pending) as { operationId?: string }).operationId; } catch { return undefined; }
+  }
+  async checkPendingOperation(): Promise<void> {
+    const operationId = this.pendingOperationId;
+    if (!operationId) throw Error("No saved operation ID is available");
+    const outcome = await this.rpc<{ state: string } | null>("operation.outcome", { operationId });
+    this.notice = outcome && ["published", "acknowledged"].includes(outcome.state)
+      ? "This edit was saved. Revert any old draft and refresh to see the current disk state."
+      : outcome ? `This edit requires recovery (${outcome.state}). Its files remain available through the CLI recovery command.`
+        : "This edit has no saved receipt. Its original intent is retained for inspection and an explicit retry.";
+    this.retainedError = this.notice;
+    this.listener?.();
   }
   private checked(snapshot: WorkbenchSnapshot) {
     assertWorkbenchSnapshot(snapshot);

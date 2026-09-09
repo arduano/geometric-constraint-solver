@@ -512,6 +512,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
         <span className={`min-w-0 flex-1 truncate ${folder.state?.ok ? "" : "text-danger"}`} title={folder.notice} role="status">{folder.notice}</span>
         {folder.state?.editor && !folder.state.editor.canEdit && <Button className="shrink-0" onClick={() => { void folder.takeOver().catch(reportError); }}>Take over editing</Button>}
         <Button className="shrink-0" onClick={() => { void folder.refresh().catch(reportError); }}>Refresh from disk</Button>
+        {folder.pendingOperationId && <Button className="shrink-0" onClick={() => { void folder.checkPendingOperation().catch(reportError); }}>Check save status</Button>}
         {folder.pending && <Button className="shrink-0" onClick={() => downloadText("geosolve-pending-intent.json", folder.pending, "application/json")}>Download pending intent</Button>}
       </div>}
       <input ref={importInputRef} type="file" accept=".json,.txt,application/json,text/plain" hidden onChange={(event) => importSelectedFile(event.currentTarget.files?.[0])} />

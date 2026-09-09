@@ -90,3 +90,39 @@ describe("folder installed source authority", () => {
   });
 
 });
+
+it("a lost save response retries the identical operation ID and retains it if disconnected", async () => {
+  const { adapter } = await harness();
+  const successful = vi.mocked(fetch).getMockImplementation()!;
+  const bodies: string[] = [];
+  let attempt = 0;
+  vi.stubGlobal("fetch", vi.fn(async (...args: Parameters<typeof fetch>) => {
+    bodies.push(String(args[1]?.body));
+    if (++attempt === 1) throw Error("response lost after server commit");
+    return successful(...args);
+  }));
+  await adapter.dispatch({ version: 2, command: "history.undo" });
+  expect(bodies).toHaveLength(2);
+  expect(bodies[0]).toBe(bodies[1]);
+  expect(JSON.parse(bodies[0]).operationId).toBeTruthy();
+  vi.stubGlobal("fetch", vi.fn(async () => { throw Error("disconnected"); }));
+  await expect(adapter.dispatch({ version: 2, command: "history.undo" })).rejects.toThrow("disconnected");
+  expect(adapter.pendingOperationId).toBeTruthy();
+  expect(JSON.parse(adapter.pending).baseHash).toBe("radius-10");
+  expect(adapter.notice).toContain("status is unknown");
+});
+
+it("disconnected navigation is not replayed and status checks retain the saved intent", async () => {
+  const { adapter } = await harness();
+  adapter.pending = JSON.stringify({ operationId: "saved-edit", input: "original" });
+  const original = adapter.pending;
+  const disconnected = vi.fn(async () => { throw Error("disconnected"); });
+  vi.stubGlobal("fetch", disconnected);
+  await expect(adapter.wheel({ version: 2, x: 100, y: 100, deltaX: 0, deltaY: -20, ctrl: false })).rejects.toThrow("disconnected");
+  expect(disconnected).toHaveBeenCalledTimes(1);
+  expect(adapter.pending).toBe(original);
+  disconnected.mockClear();
+  await expect(adapter.checkPendingOperation()).rejects.toThrow("disconnected");
+  expect(disconnected).toHaveBeenCalledTimes(2);
+  expect(adapter.pending).toBe(original);
+});
