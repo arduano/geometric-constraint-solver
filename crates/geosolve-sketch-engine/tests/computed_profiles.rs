@@ -324,3 +324,60 @@ fn complete_manifold_exports_all_channels_seal_ports_and_plate_faces() {
         8
     );
 }
+
+#[test]
+fn disjoint_channel_and_bore_export_when_a_containment_ray_aligns_with_a_wall() {
+    for width in [10.0, 11.0, 12.0] {
+        let mut artifact = channel(width);
+        for (vertex, position) in
+            artifact["declarations"][0]["arguments"]["value"]["vertices"]["value"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .zip([[-20.0, 0.0], [0.0, 0.0], [0.0, -20.0]])
+        {
+            vertex["value"]["position"]["value"][0]["value"] = position[0].into();
+            vertex["value"]["position"]["value"][1]["value"] = position[1].into();
+        }
+        let mut last =
+            artifact["declarations"][0]["arguments"]["value"]["vertices"]["value"][2].clone();
+        last["value"]["key"]["value"] = "d".into();
+        last["value"]["position"]["value"][0]["value"] = 20.0.into();
+        artifact["declarations"][0]["arguments"]["value"]["vertices"]["value"]
+            .as_array_mut()
+            .unwrap()
+            .push(last);
+        artifact["declarations"][1]["arguments"]["value"]["bendRadius"]["value"]["value"] =
+            8.0.into();
+        artifact["applications"][0]["inputs"]["value"]["bendRadius"]["value"]["value"] = 8.0.into();
+        let fixture: Value = serde_json::from_str(include_str!("fixtures/channel.json")).unwrap();
+        let mut circle = fixture["declarations"][3].clone();
+        circle["arguments"]["value"]["center"]["value"][0]["value"] = 20.0.into();
+        circle["arguments"]["value"]["center"]["value"][1]["value"] = 2.0.into();
+        circle["arguments"]["value"]["radius"]["value"]["value"] = 3.0.into();
+        artifact["declarations"]
+            .as_array_mut()
+            .unwrap()
+            .push(circle);
+        let accepted = evaluate(&artifact);
+        let before = serde_json::to_value(accepted.result()).unwrap();
+        let polygons = regions(&accepted.export_profiles(0.002).unwrap());
+        assert_eq!(polygons.len(), 2);
+        assert!(
+            polygons
+                .iter()
+                .all(|region| region.holes.is_empty() && area(&region.outer) > 0.0)
+        );
+        let expected = (28.0 + 8.0 * std::f64::consts::PI) * width
+            + std::f64::consts::PI * (width * width * 0.25 + 9.0);
+        let actual = polygons
+            .iter()
+            .map(|region| area(&region.outer))
+            .sum::<f64>();
+        assert!(
+            (actual - expected).abs() < 0.2,
+            "width {width}: {actual} vs {expected}"
+        );
+        assert_eq!(serde_json::to_value(accepted.result()).unwrap(), before);
+    }
+}

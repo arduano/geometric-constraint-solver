@@ -7486,3 +7486,20 @@ records the supervising-user sign-off and preserved limitations.
 - Load supported old snapshots and archived fixtures without rewriting their source
   or history. Test the documented contextual fallback separately from migrated live
   samples. Personal view actions must never write authored metadata.
+## M98-F007 — Disjoint contours behind a containment ray
+
+A closed native polyline with vertices `(-25,-5), (-5,-5), (-5,-25),
+(25,-25), (25,-15), (5,-15), (5,5), (-25,5)` and a circle centered at
+`(20,2)` with radius `3` form two disjoint profiles. Their total area is
+`700 + 9π`; neither contour contains a hole. A horizontal containment witness
+at the circle's top aligns with a remote polyline endpoint behind the ray.
+Certified interval bounds must exclude pieces wholly behind the rightward ray
+before root isolation, preserving accepted geometry and existing rejection of
+actual tangency, open boundaries and exhausted work budgets.
+
+The owning regression is `geosolve-sketch/tests/m98_containment.rs`, including
+reflection and scales `0.01`, `1` and `10`. The engine integration covers a
+rounded channel through `(-20,0), (0,0), (0,-20), (20,-20)`, bend radius `8`,
+two caps and widths `10`, `11` and `12`, alongside the same separate bore.
+The full manifold GUI/semantic-sidecar regression exports all 18 regions at
+each width.

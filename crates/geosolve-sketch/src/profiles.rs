@@ -5167,7 +5167,7 @@ fn point_in_cycle(
                 support: source.span,
             });
         };
-        let roots = isolate_ray_roots(source, parameters, witness.y, work)?;
+        let roots = isolate_ray_roots(source, parameters, witness, work)?;
         for root in roots {
             let derivative = source.curve.derivative(root).map_err(|_| {
                 VisualProfileIssueKind::ContainmentAmbiguity {
@@ -5206,7 +5206,7 @@ fn point_in_cycle(
 fn isolate_ray_roots(
     source: &SourcePiece,
     parameter: Interval,
-    ray_y: Interval,
+    witness: Box2,
     work: &mut Work,
 ) -> Result<Vec<Interval>, VisualProfileIssueKind> {
     let mut stack = vec![(parameter, 0_usize)];
@@ -5218,7 +5218,11 @@ fn isolate_ray_roots(
                 support: source.span,
             }
         })?;
-        if !position.y.overlaps(ray_y) {
+        // This is a rightward half-ray, not an infinite horizontal line. Certified
+        // pieces wholly behind its origin cannot contribute crossings or contact.
+        // Prune them before root isolation: an irrelevant tangent/endpoint behind
+        // the witness must not become a containment ambiguity (M98-F007).
+        if !position.y.overlaps(witness.y) || position.x.upper < witness.x.lower {
             continue;
         }
         let derivative = source.curve.derivative(interval).map_err(|_| {
@@ -5235,7 +5239,7 @@ fn isolate_ray_roots(
                     support: source.span,
                 })?
                 .y
-                .sub(ray_y);
+                .sub(witness.y);
             let newton = Interval::point(middle).sub(value.div(derivative[1]).ok_or(
                 VisualProfileIssueKind::ContainmentAmbiguity {
                     support: source.span,
