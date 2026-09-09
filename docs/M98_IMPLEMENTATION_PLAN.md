@@ -43,7 +43,7 @@ and closed; M98 stays open until integrated qualification and supervising-user a
 - [x] Polish first-party workbench modes/capabilities, maintain examples and measure navigation.
 - [x] Register all new owning-layer/package/browser tests in integrated release qualification.
 - [x] Qualify clean candidate, freeze production bytes and verify a reviewable preview.
-- [ ] Qualify the requested 500 ms canvas loading-feedback amendment and refresh previews.
+- [x] Qualify the requested 500 ms canvas loading-feedback amendment and refresh previews.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Stages may develop independently behind their explicit APIs, with focused verification before
@@ -102,8 +102,9 @@ bytes; do not promise atomic CAS against uncooperative external writers holding 
 
 [M98-F001/F002 focused hardening](M98_HARDENING.md) records the reproduced
 failures and current transport/cache/session repairs with focused owner checks. Final
-[qualification and preview](M98_QUALIFICATION.md) pass on clean `6509e9c`; the early checkpoints
-below are historical and supervising-user acceptance remains open.
+[qualification and preview](M98_QUALIFICATION.md) include the loading amendment on clean `a68fffa`
+with all 261 obligations passing; the early checkpoints below are historical and supervising-user
+acceptance remains open.
 
 
 Merge `1584a5a` integrates M97 `3152f33` with the earlier M98 prototype. It resolves additive

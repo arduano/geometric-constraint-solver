@@ -5560,8 +5560,10 @@ limits without claiming an unrecorded exhaustive human replay. No M97 blocker re
 ## M98 real-world authoring and embedding — mechanical qualification complete
 
 The supervising user's requested [loading-feedback amendment](docs/M98_LOADING_FEEDBACK.md)
-extends this candidate. Its qualification is in progress; the following evidence belongs
-to the preceding product. Acceptance and closure remain open.
+is qualified and delivered from `a68fffa` in `20260909T173058-0f35c852`: all 261 obligations
+pass, including delayed feedback, retained geometry and refreshed static/folder previews.
+The following original evidence belongs to the preceding product. Acceptance and closure
+remain open.
 
 Clean source `6509e9c160a74c499668b63a5ef9bddefa593223` passes all 261 obligations in
 `20260909T144235-377abb33`, with 23 fresh and 238 authenticated unchanged-input results.
@@ -5580,5 +5582,5 @@ manifold Fit/history costs and Linux/worker/topology limitations remain explicit
 - [x] Approved implementation and required automated qualification.
 - [x] Frozen artifacts and concrete verified review previews.
 - [ ] Supervising-user acceptance of M98.
-- [ ] Loading-feedback amendment qualified and preview refreshed.
+- [x] Loading-feedback amendment qualified and preview refreshed.
 - [ ] M98 milestone closure after acceptance.

@@ -6,6 +6,22 @@ M98 is implemented and mechanically qualified on 2026-09-09. Supervising-user ac
 and milestone closure remain open. Work is isolated on `m98/file-workspace`; accepted M97
 and its preview at http://100.94.63.83:18105/ remain unchanged.
 
+## Qualified loading-feedback amendment
+
+The current candidate is `a68fffa7ddd97d8b86f17eb98a7bf01c58db3fda`, qualified by
+`20260909T173058-0f35c852`: **261/261 obligations**, 16 fresh and 245 authenticated reused
+results, in 16m53.659s. [The amendment report](M98_LOADING_FEEDBACK.md) records implementation,
+failed harness attempts, final commands, limitations and frozen-byte verification.
+The canvas greys out after 500 ms and retains accepted geometry while standalone native
+solving runs in a worker. Managed TypeScript compilation remains on the main thread.
+
+Both M98 previews now serve the amended qualified files: static at
+`http://100.94.63.83:18106/`, editable folder at `http://100.94.63.83:18108/` using the exact
+session URL in `target/m98/loading-preview-final-session.json`. The original user's writable
+manifold folder and all seven existing files are preserved; the editor lease is unclaimed.
+The following detailed base-milestone record is historical. M98 acceptance and closure
+remain open.
+
 ## Delivered authoring surface
 
 - `packages/geosolve-sketch-code`: ordinary TypeScript generator recorder, optional
@@ -30,9 +46,9 @@ origin, preserving rejection of true touching/uncertain topology. The manifold e
 18 bounded arrangement regions at 12, 10 and 11 mm channel widths; complete signed area is
 28,800 mm², including retained holes and unchanged five radius-3 bores.
 
-## Qualification
+## Original qualification
 
-Final product source is `6509e9c160a74c499668b63a5ef9bddefa593223`, tree
+The preceding product source is `6509e9c160a74c499668b63a5ef9bddefa593223`, tree
 `f71ecd449ae6f911f2616fdc6a3331d628e6ad33`. Authenticated run
 `20260909T144235-377abb33` passes **261/261 obligations** in **31m11.858s**:
 23 freshly executed stages and 238 authenticated unchanged-input results. Every deferred
@@ -77,7 +93,7 @@ check and read. The unchanged 13-test harness recheck passed, followed by final 
 preflight. That pre-existing harness race remains unfixed; no assertion or process timeout
 was relaxed. All failed attempts remain failed evidence, distinct from the final pass.
 
-## Frozen review candidate
+## Original frozen review candidate (superseded)
 
 - Workbench: **http://100.94.63.83:18106/**.
 - Editable manifold: installed CLI on **127.0.0.1:18108**. Open the exact `url` in

@@ -22,18 +22,21 @@ record the accepted scope and limits. No M97 blocker or acceptance action remain
 The previous M97 previews remain documented at ports 18104 and 18103; M96's accepted
 channel checkpoint remains in [M96_CLOSURE.md](docs/M96_CLOSURE.md).
 
-**Current task: implement and qualify the requested M98 loading-feedback amendment;
+**Current status: the M98 loading-feedback amendment is implemented, qualified and delivered;
 acceptance and closure remain open.** [The amendment](docs/M98_LOADING_FEEDBACK.md) adds a
-500 ms delayed canvas veil/spinner and responsive standalone WASM transport. The qualified
-candidate below precedes that amendment; its previews remain available during development.
+500 ms delayed canvas veil/spinner and responsive standalone WASM transport. Clean candidate
+`a68fffa` passes all 261 obligations in `20260909T173058-0f35c852`. The updated previews are
+`http://100.94.63.83:18106/` and the editable folder at Tailscale port 18108; its exact session
+URL is in `target/m98/loading-preview-final-session.json`. The user's existing manifold files
+are preserved and the editing lease is unclaimed. The original qualification is retained as history.
 [The ordered implementation plan](docs/M98_IMPLEMENTATION_PLAN.md) records the accepted
 scope, owning APIs, regressions and qualification requirements. Work in this existing
 `m98/file-workspace` worktree. Accepted M97 is integrated with the original M98 prototype;
 the primary checkout and accepted preview remain untouched. Original prototype handoffs
 are historical evidence, not current scope limits. [M98 qualification and preview](docs/M98_QUALIFICATION.md)
-records clean source `6509e9c`, all 261 passing obligations and the byte-verified workbench at
-`http://100.94.63.83:18106/`. The installed editable manifold runs on loopback port 18108;
-use its printed session URL. [Authoring quickstart](docs/M98_AUTHORING_QUICKSTART.md) covers
+records clean source `a68fffa`, all 261 passing obligations and the byte-verified workbench at
+`http://100.94.63.83:18106/`. The installed editable manifold runs on Tailscale port 18108;
+use the current session URL above. [Authoring quickstart](docs/M98_AUTHORING_QUICKSTART.md) covers
 CLI handoff/edits and generator hosts. M98 is not accepted or closed.
 
 [M95 qualification](docs/M95_QUALIFICATION.md) and [closure](docs/M95_CLOSURE.md) retain

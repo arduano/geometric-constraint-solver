@@ -67,8 +67,8 @@ Focused development checks are recorded here before integrated nomination:
   browser inventory. Readiness helpers now wait for accepted project identity and pending
   activity, because rendering the previous canvas remains possible during worker execution.
 
-Integrated candidate qualification and refreshed preview evidence are pending. The previous
-261-obligation qualification does not qualify these changed bytes.
+Integrated amendment qualification and refreshed preview verification now pass; the final
+record below supersedes the preceding product and failed intermediate attempts.
 
 ### First integrated amendment attempt and harness corrections
 
@@ -138,3 +138,70 @@ nix-shell shell.nix --run 'GEOSOLVE_DIST=target/release-gate/prepared/021e46ed7e
 The focused external-rename workflow passes in 7.5 seconds, including rejected text,
 GUI source writeback, restart and independent camera-scale checks
 (`target/m98/folder-paint-fixed.log`).
+
+## Final amendment qualification and preview
+
+Clean candidate `a68fffa7ddd97d8b86f17eb98a7bf01c58db3fda`, tree
+`9b2cc6810a4156415f9d468ed42ceae74debe8d0`, passes **261/261 obligations** in
+`20260909T173058-0f35c852` (16m53.659s): 16 fresh results and 245 authenticated reused
+results. Every stage receipt was independently unsealed and matched its stage/key; all
+completion, clean-source and unchanged-source flags are true. Exact final command:
+
+```bash
+nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260909T165704-00d40529'
+```
+
+The gate covers format, strict native/WASM Clippy, native/headless tests and release WASM,
+299 frontend tests, 17 opening prefixes and 49 full browser workflows, 100 folder Node tests,
+eight folder browser workflows, engine/generator/installed-package checks, all seven native/WASM
+interaction parity groups, the unchanged 271-case clean golden and performance (135.1s).
+The browser workflows are authenticated successful evidence from the second attempt;
+folder workflows ran freshly with the paint synchronization repair. No failed or skipped
+result supplies qualification.
+
+The 12-file production artifact (29,173,631 bytes) has ordered file hash
+`64fa95dacfd48bfb4450c6f8cc044ad1191270937ff9df6f62d65477df9a79ee`.
+Frozen production and offline archives are in `target/m98/preview-20260909T173058-0f35c852/`.
+The SDK and dedicated engine archives retain their preceding hashes. The amended CLI archive
+has SHA-256 `b33388ed29955463a980fa3c5474e240ff310b46101b06a09cce7c944b02e676`.
+No product rebuild followed qualification.
+
+Executed preview preparation and verification:
+
+```bash
+python3 target/m98/freeze-preview.py 20260909T173058-0f35c852
+nix-shell shell.nix --run 'python3 target/m98/install-preview.py 20260909T173058-0f35c852'
+python3 target/m98/replace-loading-preview.py
+GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
+  node crates/geosolve-demo-web/frontend/scripts/verify-artifact.mjs \
+  --manifest target/m98/preview-20260909T173058-0f35c852/production.json \
+  --directory target/m98/preview-20260909T173058-0f35c852/geosolve-production \
+  --url http://100.94.63.83:18106/ --receipt target/m98/loading-static-preview-verification.json
+node target/m98/verify-loading-tailnet.mjs
+python3 target/m98/release-loading-preview-lease.py
+```
+
+Before switching processes, the installed location was explicitly set to the existing writable
+manifold at `target/m98/installed-preview-20260909T144235-377abb33/manifold`.
+All seven existing authored/documentation files retain exact bytes. The static preview is
+`http://100.94.63.83:18106/`; the editable folder is `http://100.94.63.83:18108/` with its
+session URL in `target/m98/loading-preview-final-session.json`. The latter endpoint binds
+only the Tailscale address and retains its secure-random `crypto.randomUUID` compatibility
+script for plain HTTP. Authorization, Host/Origin refusal and real SSE pass verification.
+
+Static verification passes all 13 routes, MIME/hash checks and actual-WASM manifold readiness
+with 182 accepted geometry items and no browser errors. Folder verification checks all frozen
+bytes excluding only the explicitly known HTML compatibility insertion, then holds a read-only
+Fit response to witness the veil, unchanged accepted canvas and cleanup. That endpoint test
+is deterministic transport evidence; integrated tests supply the real slow-solving evidence.
+After verification, the backend and proxy were restarted to release the automated editing
+lease. The final session has an unclaimed editor and identical accepted/current hash
+`01fe512c5221bccbc1a032eb32480101005c9ca3571f99e504a1619647b3d59a`; all 12 served file
+hashes were checked again. The accepted M97 preview remains reachable and untouched.
+
+Receipts: `target/m98/loading-final-qualified.json`, `loading-static-preview-verification.json`,
+`loading-tailnet-verification.json` and `loading-preview-final-session.json`.
+The amendment is implemented, qualified and delivered. M98 supervising-user acceptance and
+closure remain open. Solve time is unchanged; standalone managed TypeScript compilation can
+still briefly block the main thread, and worker-process crash recovery still reconstructs a
+fresh camera. Live-worker rollback now retains the measured camera under M98-F015.
