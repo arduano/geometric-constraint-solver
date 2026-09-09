@@ -38,7 +38,10 @@ export async function verifyTransport(artifact, baseUrl) {
 }
 
 async function readiness(baseUrl, manifest) {
-  const { chromium, expect } = await import("@playwright/test");
+  const { chromium, expect: playwrightExpect } = await import("@playwright/test");
+  // Worker evaluation leaves the page responsive before accepted geometry is ready.
+  // Every readiness wait remains bounded by the overall 60-second deadline below.
+  const expect = playwrightExpect.configure({ timeout: 60_000 });
   const browser = await chromium.launch(process.env.GEOSOLVE_CHROMIUM_PATH ? { executablePath: process.env.GEOSOLVE_CHROMIUM_PATH } : {});
   const errors = [];
   const wasmResponses = new Set();
@@ -63,6 +66,10 @@ async function readiness(baseUrl, manifest) {
         await page.getByPlaceholder(/Search \d+ samples/).fill("water manifold");
         await page.getByRole("button", { name: "PC liquid-cooling manifold", exact: false }).click();
         await expect(page.locator("header").getByText("PC liquid-cooling manifold", { exact: true })).toBeVisible();
+        const application = page.getByRole("application");
+        await expect(application).toHaveAttribute("aria-busy", "false");
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        await expect(application).toHaveAttribute("aria-busy", "false");
         const frame = page.locator('[role="application"] canvas[data-renderer="webgl2"]');
         await expect(frame).toHaveCount(1);
         await expect(frame).toHaveAttribute("data-render-state", "ready");

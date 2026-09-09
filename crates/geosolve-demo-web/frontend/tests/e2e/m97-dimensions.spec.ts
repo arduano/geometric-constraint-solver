@@ -68,6 +68,7 @@ test("M97 manifold focus limits canvas dimensions and preserves pinned measureme
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
   await expect.poll(() => savedWorkspace(page)).not.toBeNull();
   await page.reload({ waitUntil: "networkidle" });
+  await settlePresentation(page);
   await expect(inspector(page).getByText("1/4 pinned")).toBeVisible();
   await expect.poll(() => dimensionTexts(page).then((items) => items.length)).toBeGreaterThan(0);
   await page.screenshot({ path: info.outputPath("focused-pin.png") });
@@ -194,6 +195,7 @@ test("M97 contextual dimension edits retain source authority and Undo Redo reloa
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect.poll(() => acceptedSource(page), { timeout: 30_000 }).toBe(edited);
   await page.reload({ waitUntil: "networkidle" });
+  await settlePresentation(page);
   await expect.poll(() => acceptedSource(page)).toBe(edited);
   await explorer(page).getByRole("button", { name: "reservoirWidth", exact: true }).click();
   await expect(value).toHaveValue("62");
@@ -310,6 +312,8 @@ test("M97 contextual dimension edits author source-owned overview metadata and p
   await page.getByRole("menuitem", { name: /Open/ }).click();
   await page.getByRole("button", { name: "Start from code" }).click();
   const content = page.locator(".cm-content");
+  await expect(page.locator("header").getByText("Untitled code sketch", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(content).toBeEditable();
   await content.click(); await page.keyboard.press("Control+A"); await page.keyboard.insertText(METADATA_SOURCE);
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toContain('title: "Metadata workbench"');
@@ -379,6 +383,7 @@ test("M97 contextual dimension edits author source-owned overview metadata and p
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect.poll(() => acceptedSource(page)).toBe(afterReset);
   await page.reload({ waitUntil: "networkidle" });
+  await settlePresentation(page);
   await expect.poll(() => acceptedSource(page)).toBe(afterReset);
   await inspector(page).getByText(/^All measurements/).click();
   await inspector(page).getByRole("button", { name: "Show details for Primary span", exact: true }).click();
@@ -407,6 +412,7 @@ test("M97 contextual dimension edits author source-owned overview metadata and p
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect.poll(() => acceptedSource(page)).toBe(extracted);
   await page.reload({ waitUntil: "networkidle" });
+  await settlePresentation(page);
   await expect.poll(() => acceptedSource(page)).toBe(extracted);
   await page.getByRole("tab", { name: "Parameters", exact: true }).click();
   await expect(parameters.getByRole("checkbox", { name: "Show cornerRadius in overview", exact: true })).toBeEnabled();

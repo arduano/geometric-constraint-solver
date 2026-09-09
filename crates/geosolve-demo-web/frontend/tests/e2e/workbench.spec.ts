@@ -100,6 +100,8 @@ async function waitForAcceptedManagedSource(
   page: Page,
   predicate: (source: string) => boolean,
 ) {
+  // A responsive worker can still be solving after the pointer command returns.
+  await settlePresentation(page);
   let accepted: string | null = null;
   await expect.poll(async () => {
     accepted = await readAcceptedManagedSource(page);
@@ -159,6 +161,7 @@ async function openControlledCodeProject(page: Page, source: string) {
   await page.getByRole("button", { name: "File menu" }).click();
   await page.getByRole("menuitem", { name: /Open/ }).click();
   await page.getByRole("button", { name: "Start from code" }).click();
+  await expect(page.locator("header").getByText("Untitled code sketch", { exact: true })).toBeVisible({ timeout: 60_000 });
   const content = page.locator(".cm-content");
   await expect(content).toContainText('"use geosolve sketch"');
   await content.click();
@@ -361,6 +364,7 @@ test("managed parameter edit persists through a real bridge reload", async ({ pa
   );
 
   await page.reload({ waitUntil: "networkidle" });
+  await settlePresentation(page);
   await expect(page.locator("header").getByText(MANIFOLD_TITLE, { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Parameters" }).click();
   await expect(page.getByRole("textbox", { name: "reservoirWidth · value" })).toHaveValue("62");
@@ -733,6 +737,7 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
   const finalPosition = await point.position();
 
   await page.reload({ waitUntil: "networkidle" });
+  await settlePresentation(page);
   await expect(page.locator("header").getByText(SCISSOR_TITLE, { exact: true })).toBeVisible();
   const restoredPoint = drawItems(canvasFrame(page), { layer: "points", kind: "circle", persistentId });
   await expectItemCount(restoredPoint, 1);
@@ -959,15 +964,20 @@ export default sketch(($) => {
   await expect(row).toHaveCount(1);
 
   await row.click();
-  const sourceBeforeDelete = `${(await source.locator(".cm-line").allTextContents()).join("\n")}\n`;
+  // CodeMirror virtualizes and temporarily measures DOM lines; compare complete
+  // accepted source for history identity, retaining the visible-source checks.
+  const sourceBeforeDelete = await waitForAcceptedManagedSource(page, (accepted) =>
+    accepted.includes(`const ${declarationName} =`)
+      && accepted.includes(`radius: mm(${radiusAfter})`)
+      && !accepted.includes(`$.suppress(${declarationName})`));
   await actions.getByRole("button", { name: "Delete" }).click();
   await expect.poll(() => source.textContent()).not.toContain(`const ${declarationName} =`);
   await expect(row).toHaveCount(0);
   await expectItemCount(computedFillets, 0);
 
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect.poll(async () => `${(await source.locator(".cm-line").allTextContents()).join("\n")}\n`)
-    .toBe(sourceBeforeDelete);
+  await waitForAcceptedManagedSource(page, (accepted) => accepted === sourceBeforeDelete);
+  await expect(source).toContainText(`const ${declarationName} =`);
   await expect(row).toHaveCount(1);
   await expectItemCount(computedFillets, 1);
   await expect.poll(() => computedFillets.first().geometryKey()).toBe(editedPath);
@@ -1009,7 +1019,7 @@ test("a downloaded reproduction imports atomically through the real bridge", asy
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "geosolve-reproduction.txt", mimeType: "text/plain", buffer: Buffer.from(reproduction) });
   // setFiles starts asynchronous restoration; wait for its accepted publication
-  // before checking the surrounding UI. Preserve the shared 30-second budget.
+  // before checking the surrounding UI. Source polling follows worker readiness.
   await waitForAcceptedManagedSource(page, (accepted) => accepted === originalSource);
   await expect(page.locator("header").getByText(MANIFOLD_TITLE, { exact: true })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText("const reservoirWidth = $.dimension.curveLength");
@@ -1075,6 +1085,7 @@ test("the supplied native contact workspace retains a constrained point drag", a
   const fittedTerminal = await point.position();
 
   await page.reload({ waitUntil: "networkidle" });
+  await settlePresentation(page);
   await expect(page.locator("header").getByText("Restored sketch", { exact: true })).toBeVisible();
   const restoredPoint = drawItems(canvasFrame(page), { layer: "points", kind: "circle", persistentId });
   await expectItemCount(restoredPoint, 1);

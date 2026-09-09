@@ -23,7 +23,8 @@ async function startControlled(page: Page) {
   await page.getByRole("menuitem", { name: /Open/ }).click();
   await page.getByRole("button", { name: "Start from code" }).click();
   const content = page.locator(".cm-content");
-  await expect(content).toBeVisible();
+  await expect(page.locator("header").getByText("Untitled code sketch", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(content).toBeEditable();
   await content.click();
   await page.keyboard.press("Control+A");
   await page.keyboard.insertText(SOURCE);

@@ -69,3 +69,44 @@ Focused development checks are recorded here before integrated nomination:
 
 Integrated candidate qualification and refreshed preview evidence are pending. The previous
 261-obligation qualification does not qualify these changed bytes.
+
+### First integrated amendment attempt and harness corrections
+
+Clean product `5e3c8ad` ran the integrated command
+`nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260909T144235-377abb33'`.
+Run `20260909T160542-79b4d8a4` remains failed (37m53.6s), with unchanged source.
+Native/headless, strict Clippy, WASM/browser preparations and all 17 sample opening
+prefixes passed. Of 49 freshly executed full browser workflows, 40 passed and nine
+failed without skips/retries; the separate catalog workflow passed in the prefix stage.
+No failed result supplies qualification evidence.
+
+The failures exposed browser harness assumptions previously masked by synchronous WASM:
+
+- Artifact readiness and four reload workflows used default five-second assertions
+  while the worker was still opening/restoring the accepted project. The verifier retains
+  its overall 60-second deadline, hashes/MIME checks and actual accepted-WASM assertions;
+  reload checks await idle activity and paint before examining the scene.
+- M95 attempted to type while the previous bootstrap editor was still read-only. New-code
+  setup now waits for the accepted project header and editable editor.
+- Segment, Cubic and Circle source assertions expired after 30 seconds while real native
+  evaluation still displayed “Solving…”. The subsequent captured contexts show accepted
+  publication. Source checks now await bounded worker readiness first, retaining their
+  exact declaration, history and geometry assertions.
+- The Fillet Undo baseline read transient CodeMirror measurement DOM, capturing one invalid
+  line although accepted source and surrounding DOM snapshots were correct. The history
+  comparison now uses complete persisted accepted source; visible-source/row/path checks remain.
+
+Independent trace review found no new solver/history defect in these failures. Focused
+repairs consume the same frozen artifact. `npm run check:types` and
+`node --test scripts/test-release-artifact.mjs` pass (18 artifact tests). The corrected
+verifier passes all 13 HTTP routes and actual manifold readiness at temporary loopback
+port 18119 (`target/m98/loading-transport-r3.json`). The first local verifier invocation
+omitted the pinned Chromium path and failed browser launch because the downloaded binary
+lacked `libglib`; retry with `GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome`
+passes without changing product bytes.
+
+The focused rerun passes all nine affected workflows in 9.1 minutes against the
+unchanged prepared harness, including manifold Segment/Cubic/Circle publication,
+Fillet history, pins, reloads and both large fixture workflows. Exact invocation is
+retained in `target/m98/loading-harness-commands.txt`; output and traces are
+`target/m98/loading-browser-r2.log` and `target/m98/loading-browser-r2-results/`.

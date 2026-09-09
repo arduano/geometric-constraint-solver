@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 import { compareFittedGeometry } from "../fitted-geometry";
-import { canvasFrame, drawItems, expectItemCount, logicalToClient, presentedFrame } from "./presented-canvas";
+import { canvasFrame, drawItems, expectItemCount, logicalToClient, presentedFrame, settlePresentation } from "./presented-canvas";
 import { acceptedSource, fittedGeometry, openSamplePrefix, samples, savedWorkspace, type Edit } from "./release-sample-prefix";
 
 function expectGeometry(actual: string, expected: string, shouldMatch = true) {
@@ -87,6 +87,7 @@ async function requireJansenDrag(page: Page, info: TestInfo, originalSource: str
   expectGeometry(await fittedGeometry(page), terminal);
   await expect.poll(() => savedWorkspace(page)).not.toBe(undoSave);
   await page.reload({ waitUntil: "networkidle" });
+  await settlePresentation(page);
   await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(originalSource);
   expectGeometry(await fittedGeometry(page), terminal);
   await capture(page, info, "theo-jansen-leg", "drag-reload");
@@ -164,6 +165,7 @@ for (const sample of samples) {
       expectGeometry(await fittedGeometry(page), editedGeometry);
       await capture(page, info, key, `redo-${index + 1}`);
       await page.reload({ waitUntil: "networkidle" });
+      await settlePresentation(page);
       await expect(page.locator("header").getByText(manifest.title, { exact: true })).toBeVisible();
       await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(edited);
       await page.getByRole("tab", { name: "Parameters", exact: true }).click();
