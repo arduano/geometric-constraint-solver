@@ -3,6 +3,8 @@
 # M98 local plaintext sketch prototype
 
 Status: **PROTOTYPE_READY_FOR_UAT**; production nomination and acceptance deferred.
+The [2026-09-09 takeover review](M98_TAKEOVER.md) records completed M97 acceptance,
+the pending integration, current preview availability and next priorities.
 Implementation, commands and actual-browser evidence: [M98_HANDOFF.md](M98_HANDOFF.md).
 Authorized parallel exception, pinned to `d80bf22264f74b60870f2e99feb8cc6ccb9d0133`.
 M97 remains owned by the active primary checkout; its live metadata changes are absent here.

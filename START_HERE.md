@@ -1,5 +1,10 @@
 # GeoSolve active handoff
 
+**M98 worktree takeover, 2026-09-09:** read [M98_TAKEOVER.md](docs/M98_TAKEOVER.md)
+first. M97 is accepted and closed in the primary checkout; this isolated branch still
+contains its pinned earlier source. The status below is historical until integration.
+M98 remains a prototype, with no milestone acceptance or integrated release claim.
+
 Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization, M94 accelerated canvas and M95 connected selection accepted and closed on 2026-09-07; M96 finite-width manifold channels accepted and closed on 2026-09-08.**
 
 [M96 closure and fresh-session handoff](docs/M96_CLOSURE.md) records the accepted checkpoint.
