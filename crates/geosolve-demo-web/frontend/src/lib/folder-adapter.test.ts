@@ -126,3 +126,30 @@ it("disconnected navigation is not replayed and status checks retain the saved i
   expect(disconnected).toHaveBeenCalledTimes(2);
   expect(adapter.pending).toBe(original);
 });
+
+it("successful status and background observations preserve a disconnected save's operation identity", async () => {
+  const { adapter, changeDisk } = await harness();
+  const connected = vi.mocked(fetch).getMockImplementation()!;
+  adapter.changeFieldEdit("radius", "Radius", "12");
+  vi.stubGlobal("fetch", vi.fn(async () => { throw Error("response lost"); }));
+  let saving!: Promise<unknown>;
+  adapter.commitFieldEdit("radius", () => { saving = adapter.dispatch({ version: 2, command: "dimensions.edit" }); });
+  await expect(saving).rejects.toThrow("response lost");
+  const request = adapter.pending;
+  const operationId = adapter.pendingOperationId;
+  expect(operationId).toBeTruthy();
+  changeDisk();
+  vi.stubGlobal("fetch", vi.fn(async (...args: Parameters<typeof fetch>) => {
+    const response = await connected(...args);
+    const body = await response.json();
+    const request = JSON.parse(String(args[1]?.body));
+    return { ...response, json: async () => ({ ...body, result: request.method === "operation.outcome" ? { state: "acknowledged" } : body.result }) };
+  }));
+  await adapter.checkPendingOperation();
+  expect(adapter.notice).toContain("This edit was saved");
+  expect(adapter.pendingOperationId).toBe(operationId);
+  expect(adapter.pending).toBe(request);
+  await adapter.refresh(false);
+  expect(adapter.pending).toBe(request);
+  expect(sessionStorage.getItem("geosolve.folder.pending")).toBe(request);
+});

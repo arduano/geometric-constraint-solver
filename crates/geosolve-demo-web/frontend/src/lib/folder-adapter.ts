@@ -105,7 +105,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
       }
       const { response, body } = received;
       if (body.state) this.state = body.state;
-      if (this.fieldBase !== undefined && !this.sameBasis(this.fieldBase, { hash: this.state?.currentHash ?? null, authority: this.state?.authority }) && this.fieldDraft) {
+      if (!this.pendingOperationId && this.fieldBase !== undefined && !this.sameBasis(this.fieldBase, { hash: this.state?.currentHash ?? null, authority: this.state?.authority }) && this.fieldDraft) {
         this.pending = this.fieldDraft;
         try { sessionStorage.setItem("geosolve.folder.pending", this.pending); } catch { /* Download remains available. */ }
       }
@@ -178,7 +178,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   }
   async construct() { return this.checked(await this.rpc<WorkbenchSnapshot>("session.join")); }
   async takeOver() {
-    if (this.fieldBase !== undefined) this.pending = this.fieldDraft;
+    if (!this.pendingOperationId && this.fieldBase !== undefined) this.pending = this.fieldDraft;
     this.retainedError = "";
     const snapshot = this.checked(await this.rpc<WorkbenchSnapshot>("session.takeover"));
     this.listener?.(snapshot);
@@ -267,7 +267,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   }
   async refresh(explicit = true) {
     if (explicit) {
-      if (this.fieldBase !== undefined) this.pending = this.fieldDraft;
+      if (!this.pendingOperationId && this.fieldBase !== undefined) this.pending = this.fieldDraft;
       this.retainedError = "";
     }
     try { const snapshot = await this.snapshot(); if (this.fieldBase === undefined && this.draftBase === undefined) this.listener?.(snapshot); return snapshot; }

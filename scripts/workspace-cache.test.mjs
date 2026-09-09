@@ -10,6 +10,8 @@ function fixture(t) {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-cache-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   initProject(folder);
+  // Retain the original single-file compatibility contract explicitly.
+  writeFileSync(resolve(folder, "geosolve.json"), JSON.stringify({ format: "geosolve-folder-v1", entry: "sketch.ts" }));
   mkdirSync(resolve(folder, ".geosolve"));
   return folder;
 }

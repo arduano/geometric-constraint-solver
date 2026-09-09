@@ -78,7 +78,8 @@ export function initProject(folder) {
   mkdirSync(folder, { recursive: true });
   const files = ["geosolve.json", "sketch.ts"];
   for (const name of files) if (existsSync(resolve(folder, name))) throw Error(`Refusing to overwrite ${resolve(folder, name)}`);
-  for (const name of files) writeFileSync(resolve(folder, name), readFileSync(resolve(starterDirectory, name)), { flag: "wx" });
+  const manifest = JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "editable" }, null, 2) + "\n";
+  for (const name of files) writeFileSync(resolve(folder, name), name === "geosolve.json" ? manifest : readFileSync(resolve(starterDirectory, name)), { flag: "wx" });
   return { ok: true, folder: resolve(folder), source: resolve(folder, "sketch.ts") };
 }
 

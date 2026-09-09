@@ -16,6 +16,8 @@ test("M98 real folder, Rust workbench and existing UI vertical slice", { timeout
   const read = () => readFileSync(sourcePath, "utf8");
   const replace = (source) => { writeFileSync(`${sourcePath}.external`, source); renameSync(`${sourcePath}.external`, sourcePath); };
   initProject(folder);
+  // Retain the original single-file compatibility contract explicitly.
+  writeFileSync(resolve(folder, "geosolve.json"), JSON.stringify({ format: "geosolve-folder-v1", entry: "sketch.ts" }));
   assert.throws(() => initProject(folder), /Refusing to overwrite/);
   let session = await serveProject(folder);
   const browser = await chromium.launch({ executablePath: process.env.GEOSOLVE_CHROMIUM_PATH ?? "/home/arduano/.nix-profile/bin/google-chrome", args: ["--disable-dev-shm-usage"] });

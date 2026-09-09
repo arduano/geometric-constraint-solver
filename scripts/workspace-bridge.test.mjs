@@ -9,6 +9,8 @@ import { initProject, serveProject, hash } from "./file-workspace.mjs";
 async function setup(t) {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-bridge-"));
   initProject(folder);
+  // Retain the original single-file compatibility contract explicitly.
+  writeFileSync(resolve(folder, "geosolve.json"), JSON.stringify({ format: "geosolve-folder-v1", entry: "sketch.ts" }));
   const bridge = await serveProject(folder);
   t.after(async () => { await bridge.close(); rmSync(folder, { recursive: true, force: true }); });
   const rpc = async (clientId, method, { input, state, operationId } = {}) => {

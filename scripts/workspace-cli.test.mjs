@@ -12,7 +12,6 @@ test("plaintext CLI inspection, explicit ownership, accepted apply and idempoten
   const folder = resolve(parent, "project");
   t.after(() => rmSync(parent, { recursive: true, force: true }));
   await runCli(["init", folder]);
-  writeFileSync(resolve(folder, "geosolve.json"), JSON.stringify({ format: "geosolve-folder-v2", mode: "editable", entry: "sketch.ts" }));
   const inspected = await runCli(["inspect", folder]);
   assert.equal(inspected.files.length, 2);
   assert.equal(inspected.mode, "editable");
