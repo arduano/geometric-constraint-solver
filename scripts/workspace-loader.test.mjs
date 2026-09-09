@@ -144,3 +144,18 @@ test("newer loader request supersedes previous evaluation and disposal prevents 
   loader.dispose();
   await assert.rejects(loader.load(f.folder), (error) => error.code === "cancelled");
 });
+
+test("candidate file graph is compiled without changing original disk and can add local dependencies", async (t) => {
+  const f = fixture(t, { "sketch.ts": 'import {sketch} from "@geosolve/sketch-code";export default ()=>sketch(()=>({value:1}));' });
+  const original = f.snapshot();
+  const fileOverrides = {
+    "sketch.ts": 'import {sketch} from "@geosolve/sketch-code";import {value} from "./added.ts";export default ()=>sketch(()=>({value}));',
+    "added.ts": 'export const value=42;',
+  };
+  const candidate = f.snapshot({ fileOverrides });
+  assert.notEqual(candidate.revision, original.revision);
+  const result = await f.run(candidate);
+  assert.equal(result.generated.output.value.value.value, 42);
+  assert.equal(f.snapshot().revision, original.revision);
+  assert.throws(() => f.snapshot({ fileOverrides: { "../escape.ts": "x" } }), /escapes/);
+});

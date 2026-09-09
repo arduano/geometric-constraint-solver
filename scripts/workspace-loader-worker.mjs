@@ -4,8 +4,10 @@ import { createHash } from "node:crypto";
 import { extname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
-import * as esbuild from "../crates/geosolve-demo-web/frontend/node_modules/esbuild/lib/main.js";
-import ts from "../packages/geosolve-sketch-code/node_modules/typescript/lib/typescript.js";
+import { esbuildModuleUrl, typescriptModuleUrl } from "./workspace-runtime-paths.mjs";
+
+const esbuild = await import(esbuildModuleUrl);
+const { default: ts } = await import(typescriptModuleUrl);
 
 const { snapshot, sdkDirectory } = workerData;
 const files = new Map(snapshot.files.map((file) => [file.path, file]));

@@ -3,13 +3,10 @@
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import ts from "../packages/geosolve-sketch-code/node_modules/typescript/lib/typescript.js";
+import { sdkRoot, sdkDirectory as defaultSdkDirectory, typescriptModuleUrl, esbuildRoot } from "./workspace-runtime-paths.mjs";
 
-const root = fileURLToPath(new URL("../", import.meta.url));
-const sdkRoot = resolve(root, "packages/geosolve-sketch-code");
-const defaultSdkDirectory = resolve(sdkRoot, "dist/src");
+const { default: ts } = await import(typescriptModuleUrl);
 const sidecars = [".geosolve/inputs.json", ".geosolve/design.json"];
 const maxFiles = 512;
 const maxFileBytes = 4 * 1024 * 1024;
@@ -19,7 +16,7 @@ const digest = (value) => createHash("sha256").update(value).digest("hex");
 
 export class WorkspaceLoadError extends Error {
   constructor(code, detail, location = {}) {
-    super(detail);
+    super(location.path ? `${location.path}${location.line ? `:${location.line}:${location.column ?? 1}` : ""}: ${detail}` : detail);
     this.name = "WorkspaceLoadError";
     this.code = code;
     this.detail = detail;
@@ -89,7 +86,7 @@ function imports(file) {
   return found;
 }
 
-function resolveImport(folder, importer, imported) {
+function resolveImport(folder, importer, imported, overrides) {
   if (imported.specifier === sdkName) return sdkName;
   if (!imported.specifier.startsWith("./") && !imported.specifier.startsWith("../")) fail("invalid_project", `Unsupported project import ${imported.specifier}; only local files and ${sdkName} are available`, importer, imported.node, imported.source);
   const base = relative(folder, resolve(folder, dirname(importer), imported.specifier));
@@ -97,6 +94,7 @@ function resolveImport(folder, importer, imported) {
   const candidates = extension ? [base, ...(extension === ".js" ? [base.slice(0, -3) + ".ts"] : extension === ".mjs" ? [base.slice(0, -4) + ".mts"] : [])] : [base + ".ts", base + ".mts", base + ".js", `${base}/index.ts`];
   for (const candidate of candidates) {
     const local = localPath(folder, candidate);
+    if (overrides?.has(local.path)) return local.path;
     let stat;
     try { stat = lstatSync(local.absolute); } catch (error) { if (error.code === "ENOENT") continue; throw error; }
     if (stat.isFile() && [".ts", ".mts", ".js", ".mjs"].includes(extname(candidate))) return local.path;
@@ -111,7 +109,7 @@ function toolIdentity(sdkDirectory) {
     source: sourceFiles.map((path) => [path, digest(readFileSync(resolve(sdkRoot, "src", path)))]),
     executable: executableFiles.map((path) => [path, digest(readFileSync(resolve(sdkDirectory, path)))]),
     typescript: ts.version,
-    esbuild: JSON.parse(readFileSync(resolve(root, "crates/geosolve-demo-web/frontend/node_modules/esbuild/package.json"), "utf8")).version,
+    esbuild: JSON.parse(readFileSync(resolve(esbuildRoot, "package.json"), "utf8")).version,
   }));
 }
 
@@ -121,13 +119,21 @@ function freeze(value) {
 }
 
 /** Capture every consumed local byte before executing trusted code in a worker. */
-export function readWorkspaceSnapshot(folder, { inputs, sidecarPaths = sidecars, sdkDirectory = defaultSdkDirectory } = {}) {
+export function readWorkspaceSnapshot(folder, { inputs, sidecarPaths = sidecars, sdkDirectory = defaultSdkDirectory, fileOverrides } = {}) {
   folder = realpathSync(folder);
+  const overrides = new Map();
+  for (const [path, contents] of Object.entries(fileOverrides ?? {})) {
+    const local = localPath(folder, path);
+    if (typeof contents !== "string" || Buffer.byteLength(contents) > maxFileBytes) fail("invalid_project", "Candidate files require UTF-8 text of at most 4 MiB", path);
+    overrides.set(local.path, contents);
+  }
+  const read = (path, optional = false) => overrides.has(path)
+    ? { path, contents: overrides.get(path), sha256: digest(overrides.get(path)) } : readFile(folder, path, optional);
   const files = new Map();
   let bytes = 0;
   function include(path, optional = false) {
     if (files.has(path)) return files.get(path);
-    const file = readFile(folder, path, optional);
+    const file = read(path, optional);
     if (!file) return null;
     bytes += Buffer.byteLength(file.contents);
     if (files.size >= maxFiles || bytes > maxBytes) fail("invalid_project", "Project dependency snapshot exceeds its 512 file / 16 MiB bound", path);
@@ -147,7 +153,7 @@ export function readWorkspaceSnapshot(folder, { inputs, sidecarPaths = sidecars,
     const file = include(path);
     dependencies[path] = {};
     for (const imported of imports(file)) {
-      const target = resolveImport(folder, path, imported);
+      const target = resolveImport(folder, path, imported, overrides);
       dependencies[path][imported.specifier] = target;
       if (target !== sdkName) collect(target);
     }
@@ -165,8 +171,8 @@ export function readWorkspaceSnapshot(folder, { inputs, sidecarPaths = sidecars,
   }); } catch { fail("invalid_project", "Generator inputs must be finite JSON data", ".geosolve/inputs.json"); }
   if (Buffer.byteLength(parameterJson) > maxFileBytes) fail("invalid_project", "Generator input byte bound exceeded");
   const orderedFiles = [...files.values()].sort((a, b) => a.path.localeCompare(b.path, "en"));
-  for (const file of orderedFiles) if (readFile(folder, file.path)?.sha256 !== file.sha256) fail("conflict", "Project files changed while taking the dependency snapshot", file.path);
-  for (const path of absent) if (readFile(folder, path, true)) fail("conflict", "Project sidecar appeared while taking the dependency snapshot", path);
+  for (const file of orderedFiles) if (read(file.path)?.sha256 !== file.sha256) fail("conflict", "Project files changed while taking the dependency snapshot", file.path);
+  for (const path of absent) if (read(path, true)) fail("conflict", "Project sidecar appeared while taking the dependency snapshot", path);
   const toolchain = toolIdentity(sdkDirectory);
   const snapshot = { format: "geosolve-workspace-inputs-v1", folder, manifest, entry, mode: legacy ? "editable" : manifest.mode, files: orderedFiles, absent, dependencies, sourceHash: files.get(entry).sha256, inputs: JSON.parse(parameterJson), toolchain };
   snapshot.revision = digest(JSON.stringify({ files: orderedFiles.map(({ path, sha256 }) => [path, sha256]), absent, inputs: snapshot.inputs, toolchain }));
@@ -179,7 +185,7 @@ export function evaluateWorkspaceSnapshot(snapshot, { signal, timeoutMs = 15000,
   if (signal?.aborted) return Promise.reject(new WorkspaceLoadError("cancelled", "Workspace evaluation cancelled"));
   if (toolIdentity(sdkDirectory) !== snapshot.toolchain) return Promise.reject(new WorkspaceLoadError("conflict", "SDK/compiler files changed after the workspace snapshot was captured"));
   return new Promise((resolveResult, reject) => {
-    const worker = new Worker(new URL("./workspace-loader-worker.mjs", import.meta.url), { workerData: { snapshot, sdkDirectory }, stdout: true, stderr: true, resourceLimits: { maxOldGenerationSizeMb: 256 } });
+    const worker = new Worker(new URL("./workspace-loader-worker.mjs", import.meta.url), { workerData: { snapshot, sdkDirectory }, execArgv: [], stdout: true, stderr: true, resourceLimits: { maxOldGenerationSizeMb: 256 } });
     worker.stdout.resume(); worker.stderr.resume();
     let finished = false;
     const done = (error, result) => {

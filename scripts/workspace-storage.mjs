@@ -279,9 +279,10 @@ export function createWorkspaceStorage(folder, { lock, historyLimit = 32, fault 
     }
     return list();
   };
-  const publish = ({ operationId, files, expectedInputs = [] }) => {
+  const publish = ({ operationId, files, expectedInputs = [], requestDigest }) => {
     lock.assertHeld();
     validateId(operationId);
+    if (requestDigest !== undefined && !/^[a-f0-9]{64}$/.test(requestDigest)) throw Error("Invalid operation request digest");
     if (!Array.isArray(files) || !files.length || files.length > MAX_FILES) throw Error(`Expected 1–${MAX_FILES} publication files`);
     const prepared = files.map((file) => {
       projectPath(canonical, file.path);
@@ -310,13 +311,13 @@ export function createWorkspaceStorage(folder, { lock, historyLimit = 32, fault 
         if ((readRegular(projectPath(canonical, file.path))?.hash ?? null) !== (edited ? edited.candidateHash : file.expectedHash)) throw conflict(`Stale project input: ${file.path}`);
       }
     };
-    const requestHash = digest(JSON.stringify({ files: prepared.map(({ bytes: _bytes, ...file }) => file), expectedInputs: dependencies }));
+    const requestHash = digest(JSON.stringify({ files: prepared.map(({ bytes: _bytes, ...file }) => file), expectedInputs: dependencies, requestDigest }));
     const existing = load(operationId);
     if (existing) {
       if (existing.requestHash !== requestHash) throw conflict("Operation ID was already used for different input");
       return inspectRecord(existing);
     }
-    const record = { format: "geosolve-publication-v1", operationId, requestHash,
+    const record = { format: "geosolve-publication-v1", operationId, requestHash, requestDigest,
       state: "staging", createdAt: new Date().toISOString(),
       expectedInputs: dependencies,
       files: prepared.map(({ bytes: _bytes, ...file }) => ({ ...file, mode: 0o600 })) };
