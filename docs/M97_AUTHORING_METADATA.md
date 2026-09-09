@@ -4,13 +4,17 @@
 
 ## Status and decision
 
-This is the completed design and implementation plan requested after reviewing the
-default-priority preview. The APIs and interactions below are **planned, not yet
-implemented**. M97 remains open; the qualified product is still
-`fc3fdcb71b4d910815a51cf030128c42317ff2ed`, served at
-`http://100.94.63.83:18104/`. Its catalog-owned priorities are the starting point,
-not evidence that this amendment works. [Current qualification](M97_PRIORITY_DIMENSIONS.md)
-and [M97 goals](M97_GOALS.md) retain the existing product contract.
+This is the approved design and implementation plan requested after reviewing the
+default-priority preview. The user authorized implementation and requested explicit
+`isKeyConstraint` / `isKeyParameter` property names. The APIs and interactions below
+are **implemented, qualified and accepted on 2026-09-09**.
+Clean product `e26270cb89e5849092145b329d0cf95821a81b27` passes all 244 obligations
+in `20260908T235146-b387d273` and is served at `http://100.94.63.83:18105/`.
+[Implementation and qualification evidence](M97_AUTHORING_IMPLEMENTATION.md) records
+the gate, frozen production artifact and served-byte/actual-WASM verification.
+The previous [catalog-driven preview](M97_PRIORITY_DIMENSIONS.md) remains preserved
+at port 18104. [M97 goals](M97_GOALS.md) retains the interaction contract;
+[M97 closure](M97_CLOSURE.md) records the completed acceptance.
 
 Put reusable design intent beside its declaration. A dimension's overview status,
 a parameter's public name/help, and the document's title must travel with ordinary
@@ -33,7 +37,7 @@ public dimensional inputs. Reuse existing groups and display labels.
    when Split is already visible, it shows the small source change without moving
    the cursor or focus. Undo/Redo, save, reload and export carry
    it. A reference measurement can change presentation while its measured value stays
-   read-only. Reset to document default removes the local `key` override.
+   read-only. Reset to document default removes the local `isKeyConstraint` override.
 3. For a shared input such as channel width, use the source-ordered **Parameters**
    section. One row shows “Channel width · 12 mm”, its help and all four channel
    consumers. Selecting any channel reveals that row. Editing it updates every actual
@@ -55,11 +59,11 @@ metadata never changes solver hard/soft priority, driving/reference mode or geom
 For an empty overview, show a short hint and an **All measurements** disclosure with
 the same row actions. An unmarked imported document must remain discoverable without
 automatically promoting arbitrary dimensions. A newly created GUI dimension writes
-`key: true` explicitly. Source-authored dimensions use the document default.
+`isKeyConstraint: true` explicitly. Source-authored dimensions use the document default.
 
 ## Source API
 
-The following is proposed syntax. Existing `sketch(callback)` and unannotated
+The following syntax is implemented. Existing `sketch(callback)` and unannotated
 declarations remain valid. This shortened example uses existing rectangle outputs;
 the complete manifold retains its current anchors, constraints and patches.
 
@@ -71,7 +75,7 @@ export default sketch({
   const channelWidth = $.parameter("channelWidth", mm(12), {
     label: "Channel width",
     description: "Full passage width, shared by all four channels.",
-    key: true,
+    isKeyParameter: true,
   });
 
   const plate = $.geometry.twoPointAlignedRectangle("plate", {
@@ -83,7 +87,7 @@ export default sketch({
     curve: plate.spans[0],
     value: mm(240),
     label: "Plate width",
-    key: true,
+    isKeyConstraint: true,
   });
 
   // Pass channelWidth directly as a patch input, just like mm(12).
@@ -94,16 +98,16 @@ export default sketch({
 Gridfinity's document options include:
 
 ```ts
-dimensions: { keyByDefault: true }
+dimensions: { areKeyConstraintsByDefault: true }
 ```
 
-`keyByDefault` applies to directly authored dimensions, including reference
+`areKeyConstraintsByDefault` applies to directly authored dimensions, including reference
 measurements and dimensions on construction geometry. Its default is false.
-Explicit `key: false` always opts out, even when no other key dimensions remain.
+Explicit `isKeyConstraint: false` always opts out, even when no other key dimensions remain.
 Patch-generated measurements and public parameters do not inherit this switch.
 
 `$.parameter(id, value, options?)` introduces an explicitly public, named value,
-with `label`, `description` and `key` options. Initially accept finite numbers and
+with `label`, `description` and `isKeyParameter` options. Initially accept finite numbers and
 unit literals, matching the existing supported scalar binding kinds. Boolean/string
 public parameters are deferred; their existing editable control leaves remain supported.
 The return type remains compatible with the supplied value; this is not a new
@@ -142,7 +146,7 @@ export const waterChannel = definePatch({
   width: t.length({
     label: "Channel width",
     description: "Full width across the passage.",
-    key: true,
+    isKeyParameter: true,
   }),
   bendRadius: t.length({
     label: "Bend radius",
@@ -156,7 +160,7 @@ export const waterChannel = definePatch({
 ```
 
 `t.length()` and `t.angle()` retain their current type semantics and accept optional
-label/description/key defaults. Help text does not enforce a radius restriction;
+label, description and `isKeyParameter` defaults. Help text does not enforce a radius restriction;
 the existing native channel validation remains authoritative. New author-defined
 bounds, sliders, precision, units of display and arbitrary widget schemas are outside
 this amendment. Existing consumer-derived validation may never be widened by metadata.
@@ -165,9 +169,9 @@ this amendment. Existing consumer-derived validation may never be widened by met
 
 | Item | Authoritative source and rule |
 | --- | --- |
-| Dimension overview | Local `key` overrides document `dimensions.keyByDefault`; omitted document default is false. |
-| Named parameter | Its own options, with key default false and label fallback to its ID. Consumer schema metadata cannot rename or promote it. |
-| Inline patch input | The exact invocation input inherits its patch schema's label/help/key. To customize presentation, extract a named parameter. |
+| Dimension overview | Local `isKeyConstraint` overrides document `dimensions.areKeyConstraintsByDefault`; omitted document default is false. |
+| Named parameter | Its own options, with isKeyParameter default false and label fallback to its ID. Consumer schema metadata cannot rename or promote it. |
+| Inline patch input | The exact invocation input inherits its patch schema's label/help/isKeyParameter. To customize presentation, extract a named parameter. |
 | Ordinary shared binding | Keep its existing single contextual control and identifier fallback. Do not arbitrarily inherit one consumer's schema. Make it named to author its public presentation. |
 | Declaration label/help | Existing source `label` plus optional `description`; fallback label is the stable declaration ID. Apply consistently in Explorer, Inspector, dimensions, navigation and accessibility. |
 | Document title/description | Optional `sketch` options. Without title, display “Untitled code sketch”; absent description is empty. Catalog identity grants no document metadata. |
@@ -245,7 +249,7 @@ required by their strict validators; do not store a second mutable metadata owne
 Migrate the current bundled source before removing runtime catalog selectors:
 
 - Gridfinity and other `all_authored` entries get the explicit document default.
-  Other samples put `key: true` on the exact current curated dimensions.
+  Other samples put `isKeyConstraint: true` on the exact current curated dimensions.
 - Manifold preserves its six selected dimension identities. Convert the shared
   `channelWidth` binding into the named 12 mm parameter without changing its uses;
   extract the inline 2.4 mm groove width into a named `sealGrooveWidth` parameter.
@@ -259,7 +263,7 @@ Migrate the current bundled source before removing runtime catalog selectors:
 
 All samples then use the same mechanism as a new authored project. Copying its source
 and patches into a standalone project and recompiling through the normal authenticated
-patch/project pipeline preserves names, help and key status. Existing exports may
+patch/project pipeline preserves names, help and overview status. Existing exports may
 instead carry their required pinned patch artifacts/project lock. These generated
 compilation records remain necessary for execution authority; authors do not edit
 them to describe a dimension or parameter.
@@ -276,7 +280,9 @@ placements must continue to resolve only their exact surviving identities.
 
 ## Implementation order and acceptance
 
-Amend the open M97 milestone in this order; these are uncompleted obligations:
+The completed implementation follows these obligations within the accepted M97 milestone.
+[Implementation evidence](M97_AUTHORING_IMPLEMENTATION.md) records the completed
+focused checks, integrated qualification and verified replacement preview:
 
 1. **Compiler/domain:** SDK options and parameter API, managed parser/source sites,
    executed metadata, Rust validation, provenance and version compatibility. Prove

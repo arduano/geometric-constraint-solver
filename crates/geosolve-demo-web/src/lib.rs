@@ -611,9 +611,15 @@ mod wasm {
                 let mut dimensions =
                     geosolve_constraint_editor::DimensionPresentationState::default();
                 dimensions.mode = geosolve_constraint_editor::DimensionDisplayMode::Focused;
-                let policy = &geosolve_sketch_code::bundled_sample(key)
-                    .expect("registered sample")
-                    .dimension_presentation;
+                let metadata = code_project
+                    .authored_metadata_cached()
+                    .expect("source metadata");
+                let dimension_default = metadata
+                    .document
+                    .dimensions
+                    .as_ref()
+                    .and_then(|defaults| defaults.are_key_constraints_by_default)
+                    .unwrap_or(false);
                 let panel = code_project.declaration_panel_projection(&editor);
                 let navigation = code_project.navigation_index(&editor);
                 let priority_nodes = panel
@@ -621,8 +627,11 @@ mod wasm {
                     .iter()
                     .filter(|row| {
                         row.kind.starts_with("dimension.")
-                            && (policy.all_authored
-                                || policy.dimensions.contains(&row.symbol.0.as_str()))
+                            && metadata
+                                .declarations
+                                .get(&row.symbol)
+                                .and_then(|presentation| presentation.is_key_constraint)
+                                .unwrap_or(dimension_default)
                     })
                     .flat_map(|row| {
                         navigation

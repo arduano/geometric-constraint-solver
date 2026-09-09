@@ -7409,14 +7409,15 @@ product identity; scenario coverage does not imply an unrecorded exhaustive huma
   large underconstrained/curvature controls, mixed fixed/free preference motion and
   active-bound fail-closed behavior, and the 12 mm manifold 60→62 mm edit.
 
-## M97 focused dimension scenarios — qualified, awaiting acceptance
+## M97 focused dimension scenarios — accepted and closed on 2026-09-09
 
-Clean-source amendment run `20260908T172035-7255b491` passes all 243 obligations,
-including authenticated successes for all three M97 browser workflows and the
+The preceding clean-source amendment run `20260908T172035-7255b491` passes all
+243 obligations, including authenticated successes for all three M97 browser workflows and the
 unchanged 271-case golden. [Amendment qualification](M97_PRIORITY_DIMENSIONS.md)
-records the verified scope and frozen preview at `http://100.94.63.83:18104/`.
-Supervising-user acceptance remains pending; these checks do not imply an
-unrecorded human replay.
+records that scope and preserved preview at `http://100.94.63.83:18104/`.
+The source-native replacement below is now qualified and served at port 18105.
+[M97 closure](M97_CLOSURE.md) records supervising-user acceptance; these checks do
+not imply an unrecorded human replay.
 
 - Open the manifold in Focused mode: curated envelope/reservoir and representative
   bore/fastener dimensions remain eligible without selection. Public 12 mm channel
@@ -7443,14 +7444,28 @@ unrecorded human replay.
 - Check all eight native dimension families, reference notation, bounded automatic
   displacement, collision suppression and restoration hysteresis. Simple, manifold
   and dense presentation captures and navigation comparisons accompany qualification.
+- M97-F003: renaming a source dimension commits an organization-only native
+  transaction. Incremental composition must preserve its independently accepted
+  geometry and allow the exact code-history publication; it must not report
+  a mathematical rejection merely because no solve was necessary. The native
+  `m97_f003_source_relabel_preserves_independently_accepted_native_authority`
+  regression and bridge lifecycle fixture cover the retained evidence and
+  Undo/Redo/reload.
 
-### M97 source-native metadata — planned scenarios, not yet executed
+### M97 source-native metadata — qualified scenarios
 
-[The authoring amendment](M97_AUTHORING_METADATA.md) defines the proposed APIs and
-workflow. These scenarios extend M97 and do not claim coverage from the prior gate.
+[The authoring amendment](M97_AUTHORING_METADATA.md) defines the APIs and
+workflow. [Implementation evidence](M97_AUTHORING_IMPLEMENTATION.md) records owner
+coverage and clean-source gate `20260908T235146-b387d273` on
+`e26270cb89e5849092145b329d0cf95821a81b27`: 244/244 obligations pass, with 17/17
+prefix and 48/48 full browser workflows and the unchanged 271-case golden.
+All 16 samples receive fresh full workflows, with no retries, skips or failures.
+The frozen preview at `http://100.94.63.83:18105/` passes served-byte and actual-WASM
+verification. These results qualify the accepted amendment; [M97 closure](M97_CLOSURE.md)
+records the supervising-user sign-off and preserved limitations.
 
 - Toggle Show in overview on an authored driving and reference measurement; inspect
-  the exact local `key` source edit. Reset to a true document default, then explicitly
+  the exact local `isKeyConstraint` source edit. Reset to a true document default, then explicitly
   opt out. Undo/Redo/reload and source-only import preserve names/help and flags.
 - Create a dimension in the GUI and verify explicit overview intent in source.
   Import unmarked legacy source and reach every measurement through the Inspector
@@ -7460,7 +7475,7 @@ workflow. These scenarios extend M97 and do not claim coverage from the prior ga
   Numeric editing retains real geometry validation; metadata changes preserve geometry,
   residuals, rank/DOF, branches and identities. Generated 6/1.2 mm offsets remain distinct.
 - Give two separate parameters the same value; never merge them. Add another patch
-  consumer with different input defaults; the named parameter's own name/help/key
+  consumer with different input defaults; the named parameter's own name/help/isKeyParameter
   stay unchanged. An inline input inherits the exact patch schema until extracted.
 - Edit display labels and document title/description, including multibyte text and
   nearby comments. Keep symbols, groups, selection and pins stable. Rejected/stale

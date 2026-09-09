@@ -279,8 +279,9 @@ print(p)
         from unittest.mock import patch
         real_root = Path(__file__).resolve().parents[2]
         sample_root = Path("crates/geosolve-sketch-code/assets/bundled-samples")
-        for source in (real_root / sample_root).glob("*/manifest.json"):
-            self.write(str(source.relative_to(real_root)), source.read_text())
+        for pattern in ("*/manifest.json", "*/sketch.compiled.json"):
+            for source in (real_root / sample_root).glob(pattern):
+                self.write(str(source.relative_to(real_root)), source.read_text())
         contract_path = "crates/geosolve-sketch-code/assets/bundled-sample-catalog.json"
         contract = json.loads((real_root / contract_path).read_text())
         contract["samples"].append({"key": "stale-entry", "title": "Stale", "category": "mechanism"})
@@ -294,8 +295,9 @@ print(p)
         from unittest.mock import patch
         real_root = Path(__file__).resolve().parents[2]
         sample_root = Path("crates/geosolve-sketch-code/assets/bundled-samples")
-        for source in (real_root / sample_root).glob("*/manifest.json"):
-            self.write(str(source.relative_to(real_root)), source.read_text())
+        for pattern in ("*/manifest.json", "*/sketch.compiled.json"):
+            for source in (real_root / sample_root).glob(pattern):
+                self.write(str(source.relative_to(real_root)), source.read_text())
         contract_path = "crates/geosolve-sketch-code/assets/bundled-sample-catalog.json"
         self.write(contract_path, (real_root / contract_path).read_text())
         frontend = gate.FRONTEND + "/src/data/samples.json"

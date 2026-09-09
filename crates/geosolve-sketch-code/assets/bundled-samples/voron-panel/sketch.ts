@@ -1,7 +1,13 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Voron V0.2 motor panel",
+  description: "A connected 122 x 37 mm boundary contains the edge-open T-passage and bilateral side notches; squared transitions make this an editable topology study.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   // One continuous panel boundary follows the pinned DXF topology.
   // The T passage opens at the top edge and both side notches open at the sides.
   // 122 x 37 overall bounds, 10 mm neck, 30 x 10 crossbar extent, and

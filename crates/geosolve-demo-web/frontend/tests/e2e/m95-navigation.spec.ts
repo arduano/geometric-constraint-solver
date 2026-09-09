@@ -91,19 +91,19 @@ test("M95 canvas and Explorer selection reveal exact source without stealing cur
   await page.keyboard.press("ArrowRight");
   const cursor = await editorSelection(page);
 
-  await row(page, "first").click();
-  await expect(row(page, "first")).toHaveAttribute("aria-current", "true");
-  await expect(row(page, "first")).toHaveCSS("background-color", "rgba(251, 191, 36, 0.1)");
+  await row(page, "First edge").click();
+  await expect(row(page, "First edge")).toHaveAttribute("aria-current", "true");
+  await expect(row(page, "First edge")).toHaveCSS("background-color", "rgba(251, 191, 36, 0.1)");
   await expect(row(page, "Edges")).toHaveAttribute("aria-pressed", "mixed");
   await expect.poll(() => highlightedSource(page)).toContain('$.geometry.segment("first"');
   const after = await editorSelection(page);
   expect({ from: after.from, to: after.to }).toEqual({ from: cursor.from, to: cursor.to });
-  await expect(row(page, "first")).toBeFocused();
+  await expect(row(page, "First edge")).toBeFocused();
   await expect.poll(() => selectedCurveIds(canvas)).toHaveLength(1);
   const firstId = (await selectedCurveIds(canvas))[0];
   const pixel = await expectSelectedPixels(canvas, firstId);
 
-  await row(page, "second").click({ modifiers: ["Shift"] });
+  await row(page, "Second edge").click({ modifiers: ["Shift"] });
   await expect(row(page, "Edges")).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => selectedCurveIds(canvas)).toHaveLength(2);
   expect(await highlightedSource(page)).toContain('$.geometry.segment("second"');
@@ -113,8 +113,8 @@ test("M95 canvas and Explorer selection reveal exact source without stealing cur
   await page.mouse.click(point.x, point.y);
   await page.mouse.move(1, 1);
   // Picking a span selects that exact native member; the declaration also owns endpoints.
-  await expect(row(page, "first")).toHaveAttribute("aria-pressed", "mixed");
-  await expect(row(page, "second")).not.toHaveAttribute("aria-current", "true");
+  await expect(row(page, "First edge")).toHaveAttribute("aria-pressed", "mixed");
+  await expect(row(page, "Second edge")).not.toHaveAttribute("aria-current", "true");
   await expect.poll(() => selectedCurveIds(canvas)).toEqual([firstId]);
   await expect.poll(() => highlightedSource(page)).not.toContain('$.geometry.segment("second"');
 
@@ -135,9 +135,9 @@ test("M95 canvas and Explorer selection reveal exact source without stealing cur
 test("M95 explicit code navigation preserves layout intent and blocks unapplied source", async ({ page }) => {
   const canvas = await startControlled(page);
   const saved = await savedWorkspace(page);
-  await row(page, "first").click();
+  await row(page, "First edge").click();
   await page.getByRole("button", { name: "design", exact: true }).click();
-  await row(page, "second").click();
+  await row(page, "Second edge").click();
   await expect(page.getByRole("button", { name: "design", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Show in code", exact: true }).click();
   await expect(page.getByRole("button", { name: "split", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -152,21 +152,21 @@ test("M95 explicit code navigation preserves layout intent and blocks unapplied 
   expect(selection.text).toContain('$.geometry.segment("first"');
   await page.getByRole("button", { name: "Show in canvas", exact: true }).click();
   await expect(page.getByRole("button", { name: "split", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(row(page, "first")).toHaveAttribute("aria-current", "true");
-  await expect(row(page, "second")).not.toHaveAttribute("aria-current", "true");
+  await expect(row(page, "First edge")).toHaveAttribute("aria-current", "true");
+  await expect(row(page, "Second edge")).not.toHaveAttribute("aria-current", "true");
   await expect.poll(() => selectedCurveIds(canvas)).toHaveLength(1);
 
   await page.locator(".cm-content").click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Control+Shift+Enter");
   await expect(page.getByRole("status").filter({ hasText: "No sketch object here" })).toBeVisible();
-  await expect(row(page, "first")).toHaveAttribute("aria-current", "true");
+  await expect(row(page, "First edge")).toHaveAttribute("aria-current", "true");
   await page.keyboard.insertText("// unapplied\n");
   await expect(page.getByRole("button", { name: "Show in canvas", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Show in code", exact: true })).toBeDisabled();
   await expect(page.locator(".cm-sketch-source-owner")).toHaveCount(0);
-  await row(page, "second").click();
-  await expect(row(page, "second")).toHaveAttribute("aria-current", "true");
+  await row(page, "Second edge").click();
+  await expect(row(page, "Second edge")).toHaveAttribute("aria-current", "true");
   await expect(page.locator(".cm-sketch-source-owner")).toHaveCount(0);
   await page.getByRole("button", { name: "Revert", exact: true }).click();
   await expect(page.getByRole("button", { name: "Show in canvas", exact: true })).toBeEnabled();

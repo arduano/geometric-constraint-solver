@@ -4,7 +4,10 @@ import { waterChannel } from "./patches/water-channel.patch.ts";
 import { pointToPointChannel } from "./patches/point-to-point-channel.patch.ts";
 import { siliconeGroove } from "./patches/silicone-groove.patch.ts";
 
-export default sketch(($) => {
+export default sketch({
+  title: "PC liquid-cooling manifold",
+  description: "A constrained acrylic distribution-plate study combines three 12 mm reservoir channels, a separate stair-shaped point-to-point passage, rounded walls, five port bores, one enclosing 2.4 mm silicone seal groove and an external fastener stack.",
+}, ($) => {
   // One absolute anchor plus driving dimensions locates the complete 240 × 120 mm plate.
   const plate = $.geometry.twoPointAlignedRectangle("plate", {
     firstCorner: [-120, -60],
@@ -15,10 +18,12 @@ export default sketch(($) => {
     target: [-120, -60],
   });
   const plateWidth = $.dimension.curveLength("plateWidth", {
+    isKeyConstraint: true,
     curve: plate.spans[0],
     value: mm(240),
   });
   const plateHeight = $.dimension.curveLength("plateHeight", {
+    isKeyConstraint: true,
     curve: plate.spans[1],
     value: mm(120),
   });
@@ -59,10 +64,12 @@ export default sketch(($) => {
     second: reservoirInsetY.end,
   });
   const reservoirWidth = $.dimension.curveLength("reservoirWidth", {
+    isKeyConstraint: true,
     curve: reservoir.spans[0],
     value: mm(60),
   });
   const reservoirHeight = $.dimension.curveLength("reservoirHeight", {
+    isKeyConstraint: true,
     curve: reservoir.spans[1],
     value: mm(84),
   });
@@ -240,7 +247,11 @@ export default sketch(($) => {
   });
   // Each route is 12 mm wide, with tangent wall bends and a rounded outlet.
   // The open inlets join the reservoir perimeter without closing off the mouths.
-  const channelWidth = mm(12);
+  const channelWidth = $.parameter("channelWidth", mm(12), {
+    label: "Channel width",
+    description: "Full passage width, shared by all four channels.",
+    isKeyParameter: true,
+  });
   const channelBendRadius = mm(8);
   const upperChannel = $.use("upperChannel", waterChannel, {
     polyline: upperCenterline,
@@ -469,9 +480,14 @@ export default sketch(($) => {
   const sealLeftAxis = $.constraint.vertical("sealLeftAxis", {
     span: commonSeal.segments.byKey.northWest,
   });
+  const sealGrooveWidth = $.parameter("sealGrooveWidth", mm(2.4), {
+    label: "Seal groove width",
+    description: "Full width of the enclosing silicone seal groove.",
+    isKeyParameter: true,
+  });
   const commonSealGroove = $.use("commonSealGroove", siliconeGroove, {
     polyline: commonSeal,
-    width: mm(2.4),
+    width: sealGrooveWidth,
     bendRadius: mm(5),
   });
   // Through-bores share the rounded outlet centres and retain independent radii.
@@ -481,6 +497,7 @@ export default sketch(($) => {
     label: "Upper outlet bore",
   });
   const upperOutletRadius = $.dimension.radius("upperOutletRadius", {
+    isKeyConstraint: true,
     curve: upperOutlet.curve,
     value: mm(3),
     label: "Outlet radius",
@@ -669,6 +686,7 @@ export default sketch(($) => {
     radius: mm(2.5),
   });
   const screwNwOuterDiameter = $.dimension.diameter("screwNwOuterDiameter", {
+    isKeyConstraint: true,
     curve: screwNwOuter.curve,
     value: mm(5),
   });

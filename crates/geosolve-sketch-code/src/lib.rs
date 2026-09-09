@@ -29,9 +29,8 @@ pub use artifact::{
     ValidatedPatchModuleArtifact,
 };
 pub use bundled_samples::{
-    BundledSampleSpec, SampleCategory, SampleDimensionParameter, SampleDimensionPresentation,
-    SampleExpected, SampleProvenance, SampleProvenanceRelationship, bundled_sample,
-    bundled_sample_catalog,
+    BundledSampleSpec, SampleCategory, SampleExpected, SampleProvenance,
+    SampleProvenanceRelationship, bundled_sample, bundled_sample_catalog,
 };
 pub use composition::{
     CodeCompositionError, MaterializedCodeProject, MaterializedFilletOutput,
@@ -72,9 +71,11 @@ pub use expansion::{
 pub use managed::{
     CompiledManagedSource, EXECUTED_SKETCH_ARTIFACT_FORMAT, ExecutedConsumerTarget,
     ExecutedDeclarationResult, ExecutedGeneratedMember, ExecutedGeneratedMemberAddress,
-    ExecutedGroup, ExecutedResultLeaf, ExecutedSketchArtifact, ExecutedSuppression,
-    ExecutedValueConsumer, MANAGED_SKETCH_IR_FORMAT, MANAGED_SOURCE_LIMIT, MANAGED_WIRE_LIMIT,
-    ManagedExpression, ManagedIrImport, ManagedObjectField, ManagedReference, ManagedSketchIr,
+    ExecutedGroup, ExecutedParameter, ExecutedPresentation, ExecutedResultLeaf,
+    ExecutedSketchArtifact, ExecutedSuppression, ExecutedValueConsumer, MANAGED_SKETCH_IR_FORMAT,
+    MANAGED_SOURCE_LIMIT, MANAGED_WIRE_LIMIT, ManagedAuthoredMetadata, ManagedDimensionDefaults,
+    ManagedDocumentPresentation, ManagedExpression, ManagedIrImport, ManagedObjectField,
+    ManagedParameterDeclaration, ManagedPresentation, ManagedReference, ManagedSketchIr,
     ManagedSourceDeclarationClosure, ManagedSourceDeclarationClosureKind, ManagedSourceSite,
     ManagedSourceSiteKind, ManagedSourceSpan, ManagedStatement, ManagedValidationError,
 };
@@ -99,8 +100,8 @@ pub use overlay::{
     CodeWritableAddress, CodeWritableField,
 };
 pub use prepared_mutation::{
-    MANAGED_MUTATION_BATCH_LIMIT, ManagedDeclarationDraft, ManagedMutationAuthority,
-    ManagedMutationReceipt, ManagedMutationTarget, ManagedSketchMutation,
+    MANAGED_MUTATION_BATCH_LIMIT, ManagedDeclarationDraft, ManagedMetadataTarget,
+    ManagedMutationAuthority, ManagedMutationReceipt, ManagedMutationTarget, ManagedSketchMutation,
     ManagedSourceDeclarationHelperMutation, ManagedValueMutation, PREPARED_MANAGED_MUTATION_FORMAT,
     PREPARED_MANAGED_MUTATION_WIRE_LIMIT, PREPARED_MANAGED_SOURCE_FORMAT,
     PreparedManagedMutationError, PreparedManagedMutationReceipt, PreparedManagedMutationRequest,

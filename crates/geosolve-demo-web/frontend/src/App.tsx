@@ -18,6 +18,7 @@ import { ToolIcon } from "./components/tool-icon";
 import { TransientPopover } from "./components/transient-popover";
 import { CanvasViewport } from "./components/canvas-viewport";
 import { CanvasControls } from "./components/canvas-controls";
+import { AuthoringDocumentProperties, type AuthoringMetadataActions } from "./components/authoring-metadata";
 import { DeclarationPanel, DetailsPanel, Explorer, ParametersView, ProblemsView, type DeclarationPanelActions } from "./components/side-panels";
 import { CodeEditor, type EditorNavigation } from "./components/code-editor";
 import { OpenSurface, type SampleEntry } from "./components/open-surface";
@@ -62,6 +63,15 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const fittedReplacement = useRef(0);
   const activeTool = snapshot?.presentation.activeTool ?? "select";
   const [capturedGesture, setCapturedGesture] = useState(false);
+  const [metadataPending, setMetadataPending] = useState(false);
+  const metadataInFlight = useRef(false);
+  const metadataFocus = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (metadataPending || metadataInFlight.current) return;
+    const origin = metadataFocus.current;
+    metadataFocus.current = null;
+    if (origin?.isConnected && (document.activeElement === document.body || document.activeElement === origin)) origin.focus({ preventScroll: true });
+  }, [metadataPending]);
   const [reproOpen, setReproOpen] = useState(false);
   const [explorerOpen, setExplorerOpen] = useState(initialPresentation.explorer);
   const [detailsOpen, setDetailsOpen] = useState(initialPresentation.details);
@@ -365,6 +375,25 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const selectedFile = snapshot.source.files.find((file) => file.path === snapshot.source.selectedPath) ?? snapshot.source.files[0];
   const localDraftDirty = Boolean(selectedFile && draft !== selectedFile.contents);
   const historyBlocked = localDraftDirty || snapshot.source.dirty;
+  const metadataBlockedReason = metadataPending ? "Applying document properties…" : localDraftDirty || snapshot.source.dirty
+    ? "Apply or Revert the source draft before editing document properties."
+    : capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)
+      ? "Finish the current tool or gesture before editing document properties."
+      : undefined;
+  const mutateMetadata = (name: string, payload: unknown) => {
+    if (metadataBlockedReason || metadataInFlight.current) return;
+    metadataFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    metadataInFlight.current = true;
+    setMetadataPending(true);
+    void command(name, payload).finally(() => {
+      metadataInFlight.current = false;
+      setMetadataPending(false);
+    });
+  };
+  const metadataActions: AuthoringMetadataActions = {
+    onEdit: (payload) => mutateMetadata("authoring.metadata.set", payload),
+    onExtract: (payload) => mutateMetadata("authoring.parameter.extract", payload),
+  };
   const replacementBlocked = localDraftDirty || snapshot.source.dirty;
   const reportReplacementBlocked = () => reportError("Apply or Revert the current source draft before replacing this project.");
   const openSample = (sample: SampleEntry) => { if (replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); void command("sample.open", { key: sample.key, title: sample.title }).then((next) => {
@@ -501,157 +530,4 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
           {explorerOpen && mode !== "code" && <><Panel id="explorer" defaultSize={16} minSize={12} maxSize={26}><Explorer snapshot={snapshot} actions={declarationActions} blockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} /></Panel><ResizeHandle /></>}
           <Panel id="workspace" defaultSize={63} minSize={45}>
             <main className="relative flex h-full min-h-0 flex-col">
-              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={toolCatalog} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} onDimensionMode={(dimensionMode) => void command("dimensions.mode", { mode: dimensionMode })} captured={setCapturedGesture} />} code={<CodeWorkspace mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={(value) => { folder?.draftChanged(value !== selectedFile.contents); setDraft(value); }} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
-              {transient.active === "open" && <div ref={transient.contentRef as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="false" aria-label="Open project" className="absolute inset-5 z-40 overflow-hidden rounded-xl border border-border bg-raised shadow-panel"><OpenSurface recents={recentSamples} onOpen={openSample} onNewSketch={() => replaceProject("project.new", "design")} onNewCode={() => replaceProject("project.new-code", "code")} onImport={importProject} onDismiss={() => transient.close(true)} /></div>}
-            </main>
-          </Panel>
-          {detailsOpen && mode !== "code" && <><ResizeHandle /><Panel id="details" defaultSize={21} minSize={18} maxSize={34}><DetailsPanel snapshot={snapshot} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : historyBlocked ? "Apply or Revert the source draft before navigating between views." : snapshot.navigation && !snapshot.navigation.canNavigateSource ? snapshot.navigation.unavailableReason ?? "Source navigation is unavailable." : undefined} onOpenCode={openSelectionInCode} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} parametersBlocked={localDraftDirty || snapshot.source.dirty} dimensionInspectionBlocked={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before inspecting dimensions." : undefined} dimensionActions={{ onFocus: (id) => { void command("dimensions.focus", { id }); }, onPin: (id, pinned) => { void command("dimensions.pin", { id, pinned }); }, onClearPins: () => { void command("dimensions.clearPins"); }, onEdit: (id, value) => { if (localDraftDirty || snapshot.source.dirty) return; void command("dimensions.edit", { id, value }); } }} /></Panel></>}
-        </PanelGroup>
-      </div>
-
-      <ReproDialog adapter={adapter} open={reproOpen} onOpenChange={setReproOpen} onError={reportError} />
-    </div>
-  );
-}
-
-function StableWorkspace({ mode, splitCodeWidth, onSplitCodeWidth, canvas, code }: { mode: WorkspaceMode; splitCodeWidth: number; onSplitCodeWidth: (width: number) => void; canvas: React.ReactNode; code: React.ReactNode }) {
-  const host = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ pointer: number; x: number; width: number } | null>(null);
-  const clamp = useCallback((width: number) => {
-    const available = host.current?.clientWidth ?? (SPLIT_CODE_MINIMUM_PX + 280);
-    return Math.round(Math.max(SPLIT_CODE_MINIMUM_PX, Math.min(Math.max(SPLIT_CODE_MINIMUM_PX, available - 280), width)));
-  }, []);
-  return <div ref={host} className="flex h-full min-h-0 min-w-0 overflow-hidden">
-    <div aria-hidden={mode === "code"} className={`${mode === "code" ? "hidden" : "flex"} min-h-0 min-w-[280px] flex-1 flex-col overflow-hidden`}>{canvas}</div>
-    <div
-      role="separator"
-      aria-label="Resize canvas and code"
-      aria-orientation="vertical"
-      aria-valuemin={SPLIT_CODE_MINIMUM_PX}
-      aria-valuemax={960}
-      aria-valuenow={Math.round(splitCodeWidth)}
-      tabIndex={mode === "split" ? 0 : -1}
-      className={`${mode === "split" ? "block" : "hidden"} group relative z-20 w-1 shrink-0 cursor-col-resize bg-border outline-none focus-visible:bg-accent`}
-      onDoubleClick={() => onSplitCodeWidth(clamp(SPLIT_CODE_DEFAULT_PX))}
-      onKeyDown={(event) => {
-        const delta = event.key === "ArrowLeft" ? 20 : event.key === "ArrowRight" ? -20 : 0;
-        if (delta) { event.preventDefault(); onSplitCodeWidth(clamp(splitCodeWidth + delta)); }
-        else if (event.key === "Home") { event.preventDefault(); onSplitCodeWidth(clamp(SPLIT_CODE_DEFAULT_PX)); }
-      }}
-      onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); drag.current = { pointer: event.pointerId, x: event.clientX, width: splitCodeWidth }; }}
-      onPointerMove={(event) => { if (drag.current?.pointer === event.pointerId) onSplitCodeWidth(clamp(drag.current.width + drag.current.x - event.clientX)); }}
-      onPointerUp={(event) => { if (drag.current?.pointer === event.pointerId) drag.current = null; }}
-      onLostPointerCapture={() => { drag.current = null; }}
-    ><span className="absolute inset-y-0 -left-1 w-3" /></div>
-    <div aria-hidden={mode === "design"} inert={mode === "design" ? true : undefined} style={mode === "split" ? { flexBasis: `${splitCodeWidth}px` } : undefined} className={`${mode === "design" ? "hidden" : "flex"} min-h-0 min-w-0 flex-col overflow-hidden ${mode === "split" ? "shrink-0 grow-0" : "flex-1"}`}>{code}</div>
-  </div>;
-}
-
-function DesignWorkspace({ adapter, snapshot, catalog, onSnapshot, onError, activeTool, onFinish, onCancel, onGeometryRole, onViewCommand, onDimensionMode, captured }: { adapter: WorkbenchAdapter; snapshot: WorkbenchSnapshot; catalog: ToolCatalog; onSnapshot: (snapshot: WorkbenchSnapshot) => void; onError: (error: unknown) => void; activeTool: string; onFinish: () => void; onCancel: () => void; onGeometryRole: (selected: boolean) => void; onViewCommand: (command: "view.grid.toggle" | "view.fit" | "view.origin") => void; onDimensionMode: (mode: DimensionDisplayMode) => void; captured: (value: boolean) => void }) {
-  const section = toolSection(catalog, activeTool);
-  const command = activeTool === catalog.select.toolId ? catalog.select : section?.commands.find((candidate) => candidate.toolId === activeTool) ?? catalog.select;
-  const authoring = activeTool !== catalog.select.toolId;
-  const authoringRoleVisible = section?.id === "sketch" && activeTool !== "sketch-point";
-  const selectedRole = activeTool === catalog.select.toolId ? snapshot.presentation.selectedGeometryRole : undefined;
-  const selectedRoleVisible = selectedRole !== undefined;
-  const displayedRole = selectedRole ?? snapshot.presentation.geometryRole;
-  const constructionRole = displayedRole === "construction";
-  const mixedRole = displayedRole === "mixed";
-  const geometryRoleLabel = selectedRoleVisible ? `Selected curves: ${mixedRole ? "Mixed roles" : constructionRole ? "Construction" : "Profile"}` : `New curves: ${constructionRole ? "Construction" : "Profile"}`;
-  const nextGeometryRole = constructionRole ? "Profile" : "Construction";
-  return <section className="flex h-full min-h-0 flex-1 flex-col">
-    <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-raised/95 px-2 text-xs text-muted">
-      <ToolIcon className="size-4 text-accent" icon={command.icon} />
-      {section && <><span className="text-[10px] uppercase tracking-wider text-muted">{section.label}</span><span aria-hidden="true" className="text-border">/</span></>}
-      <span className="font-medium text-foreground">{toolLabel(catalog, activeTool)}</span>
-      {authoring && <span className="min-w-0 truncate text-[11px]">{snapshot.presentation.canFinish ? "Click the canvas to continue · Enter or Finish completes · Esc cancels" : "Click the canvas to continue · Esc cancels"}</span>}
-      <span className="ml-auto flex shrink-0 items-center gap-1">
-        {(authoringRoleVisible || selectedRoleVisible) && <Button aria-label={`${geometryRoleLabel}. Change to ${nextGeometryRole}`} aria-pressed={mixedRole ? "mixed" : constructionRole} className="h-7 text-[11px] aria-pressed:bg-cyan-400/15 aria-pressed:text-cyan-100" onClick={() => onGeometryRole(selectedRoleVisible)} size="compact" title={selectedRoleVisible ? `Selected curves have ${mixedRole ? "mixed" : constructionRole ? "Construction" : "Profile"} roles. Click to change them to ${nextGeometryRole}.` : `New curves are ${constructionRole ? "Construction" : "Profile"} geometry. Click to change the authoring role.`} variant="ghost"><ToolIcon className="size-3.5 shrink-0 text-cyan-300" icon={catalog.geometryRole.icon} />{geometryRoleLabel}</Button>}
-        {authoring && <><span aria-hidden="true" className="mx-0.5 h-4 w-px bg-border" /><Button size="compact" variant="ghost" className="h-7" onClick={onCancel}>Cancel</Button><Button size="compact" variant="default" className="h-7" disabled={!snapshot.presentation.canFinish} onClick={onFinish}>Finish</Button></>}
-      </span>
-    </div>
-    <div className="relative min-h-0 flex-1">
-      <CanvasViewport adapter={adapter} snapshot={snapshot} onSnapshot={onSnapshot} onCaptureChange={captured} onError={onError} />
-      <CanvasControls gridVisible={snapshot.presentation.gridVisible} dimensionMode={snapshot.dimensions?.mode} onDimensionMode={onDimensionMode} onCommand={onViewCommand} />
-    </div>
-  </section>;
-}
-
-const CODE_SURFACES: Array<{ id: CodeSurface; label: string }> = [
-  { id: "source", label: "Source" },
-  { id: "parameters", label: "Parameters" },
-  { id: "problems", label: "Problems" },
-  { id: "generated", label: "Generated" },
-  { id: "artifacts", label: "Artifacts" },
-];
-
-function CodeWorkspace({ mode, surface, setSurface, snapshot, selectedFile, draft, setDraft, command, navigation, onShowInCanvas, navigationBlockedReason, declarationActions, declarationBlockedReason, onParameterEdit, onProblemOpen }: { mode: WorkspaceMode; surface: CodeSurface; setSurface: (surface: CodeSurface) => void; snapshot: WorkbenchSnapshot; selectedFile: WorkbenchSnapshot["source"]["files"][number]; draft: string; setDraft: (value: string) => void; command: (name: string, payload?: unknown) => Promise<WorkbenchSnapshot>; navigation: EditorNavigation | null; onShowInCanvas: (range: Utf16SourceRange) => void; navigationBlockedReason?: string; declarationActions: DeclarationPanelActions; declarationBlockedReason?: string; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void }) {
-  const dirty = snapshot.source.dirty || draft !== selectedFile.contents;
-  const [showInCanvasRequest, setShowInCanvasRequest] = useState(0);
-  const sourceNavigationBlocked = navigationBlockedReason ?? (selectedFile.readOnly ? "This file has no sketch objects." : dirty ? "Apply or Revert the source draft before navigating between views." : !snapshot.navigation?.canNavigateSource ? snapshot.navigation?.unavailableReason ?? "This project has no source-linked sketch objects." : undefined);
-  const sourceSignature = JSON.stringify(snapshot.navigation?.sources ?? []);
-  const highlights = useMemo(() => {
-    if (dirty || !snapshot.navigation?.canNavigateSource) return [];
-    const spans = snapshot.navigation.sources.filter((span) => span.path === selectedFile.path);
-    const converted = utf8ByteSpansToUtf16Ranges(selectedFile.contents, spans);
-    return converted.ok ? converted.ranges : [];
-    // Equivalent snapshots retain decorations; source/group conversion scans the file once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, snapshot.navigation?.canNavigateSource, sourceSignature, selectedFile.contents, selectedFile.path]);
-  const languageProject = useMemo(() => selectedFile.language === "typescript" ? {
-    key: `${snapshot.project.sampleKey ?? "authored"}\0${snapshot.project.title}`,
-    file: selectedFile.path,
-    files: snapshot.source.files
-      .filter((file) => file.language === "typescript")
-      .map((file) => ({
-        path: file.path,
-        contents: file.path === selectedFile.path ? draft : file.contents,
-      })),
-  } : null, [draft, selectedFile.language, selectedFile.path, snapshot.project.sampleKey, snapshot.project.title, snapshot.source.files]);
-  const revert = () => { setDraft(selectedFile.contents); if (snapshot.source.dirty) void command("source.revert"); };
-  const selectFile = (path: string) => { if (dirty || path === selectedFile.path) return; void command("source.select", { path }).then((next) => setDraft(next.source.files.find((file) => file.path === path)?.contents ?? "")); };
-  return <section aria-label="Code workspace" className="flex h-full min-h-[500px] min-w-[520px] flex-col bg-canvas">
-    <div role="tablist" aria-label="Code surfaces" className={`${mode === "code" ? "flex" : "hidden"} h-9 shrink-0 items-end gap-1 border-b border-border bg-raised px-2`}>{CODE_SURFACES.map((item) => <button key={item.id} type="button" role="tab" aria-selected={surface === item.id} onClick={() => setSurface(item.id)} className="h-8 rounded-t border-b-2 border-transparent px-3 text-xs text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent aria-selected:border-accent aria-selected:bg-surface aria-selected:text-foreground">{item.label}{item.id === "problems" && snapshot.problems.length > 0 ? ` (${snapshot.problems.length})` : ""}</button>)}</div>
-    <header className="flex h-10 shrink-0 items-center border-b border-border bg-surface px-2"><div role="tablist" aria-label="Source files" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">{snapshot.source.files.map((file) => <button type="button" role="tab" aria-selected={file.path === selectedFile.path} aria-controls="source-editor" disabled={dirty && file.path !== selectedFile.path} onClick={() => { setSurface("source"); selectFile(file.path); }} key={file.path} className="h-8 max-w-48 shrink-0 truncate rounded-t border-b-2 border-transparent px-3 text-xs text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40 aria-selected:border-accent aria-selected:bg-raised aria-selected:text-foreground"><Code2 className="mr-1.5 inline size-3" />{file.path}</button>)}</div><span className={`mx-2 shrink-0 text-[10px] uppercase tracking-wider ${dirty ? "text-accent" : "text-emerald-300"}`}>{dirty ? "Unapplied changes" : "Accepted source"}</span><Button size="compact" variant="ghost" aria-label="Show in canvas" disabled={Boolean(sourceNavigationBlocked)} title={sourceNavigationBlocked ?? "Show the source selection in the canvas (Ctrl/Cmd+Shift+Enter)"} onClick={() => setShowInCanvasRequest((request) => request + 1)}><Focus className="size-3" /><span className="hidden xl:inline">Show in canvas</span></Button><Button size="compact" variant="ghost" disabled={!dirty} onClick={revert}><RotateCcw className="size-3" />Revert</Button><Button size="compact" variant="default" disabled={!dirty || selectedFile.readOnly} onClick={() => void command("source.prepare", { path: selectedFile.path, contents: draft })}><Play className="size-3" />Apply</Button></header>
-    {snapshot.navigation?.notice && <p role="status" className="shrink-0 border-b border-border px-3 py-1 text-xs text-muted">{snapshot.navigation.notice}</p>}
-    <div aria-hidden={surface !== "source" && mode === "code"} inert={surface !== "source" && mode === "code" ? true : undefined} className={`${surface !== "source" && mode === "code" ? "hidden" : "flex"} min-h-0 flex-1 flex-col`}>
-      <div id="source-editor" role="tabpanel" className="flex min-h-0 flex-1"><CodeEditor value={draft} readOnly={selectedFile.readOnly} onChange={setDraft} navigation={dirty ? null : navigation} highlights={highlights} onShowInCanvas={sourceNavigationBlocked ? undefined : onShowInCanvas} showInCanvasRequest={showInCanvasRequest} languageProject={mode === "design" ? null : languageProject} /></div>
-    </div>
-    {mode === "code" && surface !== "source" && <div role="tabpanel" className="min-h-0 flex-1 overflow-auto p-5">{surface === "parameters" && <ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={dirty} />}{surface === "problems" && <ProblemsView snapshot={snapshot} onOpen={onProblemOpen} />}{surface === "generated" && <DeclarationPanel rows={snapshot.explorer} navigation={snapshot.navigation} actions={declarationActions} blockedReason={declarationBlockedReason} className="mx-auto w-full max-w-3xl" />}{surface === "artifacts" && (snapshot.source.files.filter((file) => file.path !== "sketch.ts").length ? <ul className="grid gap-2">{snapshot.source.files.filter((file) => file.path !== "sketch.ts").map((file) => <li key={file.path}><button className="flex w-full items-center gap-2 rounded border border-border bg-surface p-3 text-left text-sm outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent" onClick={() => { setSurface("source"); selectFile(file.path); }}><PackageOpen className="size-4 text-accent" /><span className="truncate">{file.path}</span><span className="ml-auto text-[10px] uppercase text-muted">read-only</span></button></li>)}</ul> : <CodeEmpty icon={<PackageOpen />} title="No custom artifacts" detail="Pinned data-only project artifacts appear here." />)}</div>}
-  </section>;
-}
-
-function CodeEmpty({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) { return <div className="grid h-full min-h-64 place-content-center justify-items-center text-center"><span className="mb-3 text-muted [&>svg]:size-6">{icon}</span><p className="text-sm text-foreground">{title}</p><p className="mt-1 max-w-sm text-xs leading-relaxed text-muted">{detail}</p></div>; }
-
-function ResizeHandle({ horizontal = false }: { horizontal?: boolean }) { return <PanelResizeHandle aria-label={horizontal ? "Resize workspace rows" : "Resize workspace columns"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={50} className={`${horizontal ? "h-1 cursor-row-resize" : "w-1 cursor-col-resize"} group relative z-20 shrink-0 bg-border outline-none focus-visible:bg-accent`}><span className={`absolute ${horizontal ? "inset-x-0 -top-1 h-3" : "inset-y-0 -left-1 w-3"}`} /></PanelResizeHandle>; }
-function MenuButton({ icon, label, shortcut, onClick }: { icon: React.ReactNode; label: string; shortcut?: string; onClick: (event: React.MouseEvent<HTMLButtonElement>) => void }) { return <button role="menuitem" onClick={onClick} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-sm text-foreground outline-none hover:bg-neutral-700 focus-visible:bg-neutral-700 focus-visible:ring-1 focus-visible:ring-accent"><span className="text-muted [&>svg]:size-3.5">{icon}</span>{label}{shortcut && <kbd className="ml-auto text-[10px] text-muted">{shortcut}</kbd>}</button>; }
-function ReproDialog({ adapter, open, onOpenChange, onError }: { adapter: WorkbenchAdapter; open: boolean; onOpenChange: (open: boolean) => void; onError: (error: unknown) => void }) {
-  const [payload, setPayload] = useState<{ filename: string; contents: string }>({ filename: "geosolve-interaction-trace.txt", contents: "No interaction trace events recorded." });
-  useEffect(() => {
-    if (!open) return;
-    let current = true;
-    setPayload({ filename: "geosolve-interaction-trace.txt", contents: "Loading the current interaction trace…" });
-    void adapter.exportInteractionTrace().then((next) => { if (current) setPayload(next); }).catch((error) => { if (current) onError(error); });
-    return () => { current = false; };
-  }, [adapter, onError, open]);
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm" /><Dialog.Content aria-describedby="trace-description" className="fixed left-1/2 top-1/2 z-[61] flex h-[min(620px,80vh)] w-[min(820px,80vw)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-border bg-raised p-4 shadow-panel outline-none"><div className="flex items-start"><div><Dialog.Title className="text-base font-semibold">Interaction trace</Dialog.Title><Dialog.Description id="trace-description" className="mt-1 text-xs text-muted">Bounded diagnostic transport. Downloads remain available when clipboard payloads grow too large.</Dialog.Description></div><Dialog.Close asChild><Button className="ml-auto" size="icon" variant="ghost" aria-label="Close interaction trace"><X className="size-4" /></Button></Dialog.Close></div><textarea readOnly aria-label="Interaction trace payload" value={payload.contents} className="mt-4 min-h-0 flex-1 resize-none rounded border border-border bg-canvas p-3 font-mono text-xs text-muted outline-none focus:border-accent" /><footer className="mt-3 flex justify-end gap-2"><Button onClick={() => downloadText(payload.filename, payload.contents, "text/plain")}><Download className="size-3.5" />Download</Button><Button variant="default" onClick={() => void navigator.clipboard?.writeText(payload.contents).catch(onError)}>Copy trace</Button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>;
-}
-async function exportProject(adapter: WorkbenchAdapter) { const payload = await adapter.exportProject(); const url = URL.createObjectURL(new Blob([payload.contents], { type: "application/json" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = payload.filename; anchor.click(); URL.revokeObjectURL(url); }
-function downloadText(filename: string, contents: string, type: string) { const url = URL.createObjectURL(new Blob([contents], { type })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = filename; anchor.click(); URL.revokeObjectURL(url); }
-function downloadExport(payload: { filename: string; contents: string }) { downloadText(payload.filename, payload.contents, "text/plain"); }
-function errorText(error: unknown) { return error instanceof Error ? error.message : String(error); }
-function lineColumnOffset(source: string, line: number, column: number) { let offset = 0; const lines = source.split("\n"); for (let index = 1; index < Math.max(1, line) && index <= lines.length; index += 1) offset += (lines[index - 1]?.length ?? 0) + 1; return Math.min(source.length, offset + Math.max(0, column - 1)); }
-function restoredBrowserDraft(snapshot: WorkbenchSnapshot, file?: WorkbenchSnapshot["source"]["files"][number]) {
-  if (!file || file.readOnly) return { contents: null, issue: null };
-  const stored = readBrowserStorage(DRAFT_KEY, "the unapplied source draft");
-  if (stored.issue) return { contents: null, issue: stored.issue };
-  try {
-    const saved = JSON.parse(stored.value ?? "null") as { version?: unknown; title?: unknown; sampleKey?: unknown; path?: unknown; base?: unknown; contents?: unknown } | null;
-    if (saved?.version !== 1 || saved.title !== snapshot.project.title || (saved.sampleKey ?? null) !== (snapshot.project.sampleKey ?? null) || saved.path !== file.path || saved.base !== file.contents || typeof saved.contents !== "string") return { contents: null, issue: null };
-    return { contents: saved.contents, issue: null };
-  } catch {
-    // Cleanup belongs to the guarded persistence effect after project authority
-    // is resolved, not to this read while a fallback may still be installing.
-    return { contents: null, issue: null };
-  }
-}
+              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={toolCatalog} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} onDimensionMode={(dimensionMode) => void command("dimensions.mode", { mode: dimensionMode })} captured={setCapturedGesture} />} code={<CodeWorkspace metadataActions={metadataActions} metadataBlockedReason={metadataBlockedReason} mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={(value) => { folder?.draftChanged(value !== selectedFile.contents); setDraft(value); }} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined} onParameterEdit={(id, value) => { if (localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />

@@ -2,30 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 14,
   "key": "fabrication-operations-atlas",
-  "title": "Fabrication operations, constraints, dimensions and annotations atlas",
-  "summary": "Profile and topology operations, generated drilling, explicit constraint relations and a broad metrology annotation bench.",
   "category": "reference_lab",
   "expected": {
     "raw_dof": 255,
     "effective_dof": 255
-  },
-  "groups": [
-    "Profile generators",
-    "Split break trim extend",
-    "Mirror chamfer fillet offset",
-    "Generated drilling pattern",
-    "Constraint and metrology bench",
-    "Fabrication annotations"
-  ],
-  "dimension_presentation": {
-    "dimensions": [
-      "baselineLength",
-      "uprightHeight",
-      "datumAngle",
-      "inspectionDiameter",
-      "comparisonRadius",
-      "seedChord"
-    ]
   },
   "provenance": []
 }

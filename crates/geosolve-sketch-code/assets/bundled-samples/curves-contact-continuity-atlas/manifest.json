@@ -2,21 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 13,
   "key": "curves-contact-continuity-atlas",
-  "title": "Curves, contact and continuity atlas",
-  "summary": "Readable analytic and spline specimens frame explicit rolling contact and a parametric-C2 seam.",
   "category": "reference_lab",
   "expected": {
     "raw_dof": 81,
     "effective_dof": 81
-  },
-  "groups": [
-    "Analytic curve vocabulary",
-    "Spline curve vocabulary",
-    "Explicit rolling contact",
-    "Parametric C2 continuity"
-  ],
-  "dimension_presentation": {
-    "all_authored": true
   },
   "provenance": []
 }

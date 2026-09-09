@@ -2,7 +2,13 @@
 import { sketch, mm } from "@geosolve/sketch-code";
 import { fixtureCells } from "./patches/fixture-cells.patch.ts";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Parametric perforated fixture field",
+  description: "Three keyed serpentine lattices generate 192 pilot/counterbore pairs across a complete fixture plate.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   // The plate and three readable serpentine lattices are the only authored
   // geometry. A keyed structural patch produces exact concentric Circles at
   // every lattice point: 192 pilots plus 192 counterbores, with no LOD.

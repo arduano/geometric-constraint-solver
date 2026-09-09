@@ -20,14 +20,22 @@ export const catalogContract = JSON.parse(await readFile(resolve(sampleRoot, "..
 expect(catalogContract.schema).toBe(1);
 const directories = (await readdir(sampleRoot, { withFileTypes: true }))
   .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-export const samples = await Promise.all(directories.map(async (key) => ({
+export const samples = await Promise.all(directories.map(async (key) => {
+  const [manifest, compiled] = await Promise.all([
+    readFile(join(sampleRoot, key, "manifest.json"), "utf8").then((text) => JSON.parse(text) as { ordinal: number; category: string }),
+    readFile(join(sampleRoot, key, "sketch.compiled.json"), "utf8").then((text) => JSON.parse(text) as { artifact: { document: { title: string } } }),
+  ]);
+  return {
   key,
-  manifest: JSON.parse(await readFile(join(sampleRoot, key, "manifest.json"), "utf8")) as { ordinal: number; title: string; category: string },
+  // Display metadata comes from authored source; the independent catalog below
+  // continues to assert the exact expected titles, order and categories.
+  manifest: { ...manifest, title: compiled.artifact.document.title },
   source: await readFile(join(sampleRoot, key, "sketch.ts"), "utf8"),
   witnesses: JSON.parse(await readFile(join(sampleRoot, key, "witnesses.json"), "utf8")) as {
     representative_edit: Edit; secondary_edit: Edit;
   },
-})));
+  };
+}));
 samples.sort((a, b) => a.manifest.ordinal - b.manifest.ordinal);
 expect(samples.map(({ key, manifest }) => ({ key, title: manifest.title, category: manifest.category }))).toEqual(catalogContract.samples);
 

@@ -9,6 +9,8 @@
  */
 
 import ts from "typescript";
+import { validatePresentation, validateSketchOptions } from "./presentation.js";
+import type { ParameterOptions, PresentationOptions, SketchOptions } from "./presentation.js";
 
 import {
   AUTHORING_METHOD_CATALOG,
@@ -23,9 +25,9 @@ import type {
 } from "./compiler.js";
 
 export const MANAGED_SKETCH_IR_FORMAT =
-  "geosolve-managed-sketch-ir-v3" as const;
+  "geosolve-managed-sketch-ir-v4" as const;
 export const EXECUTED_SKETCH_ARTIFACT_FORMAT =
-  "geosolve-executed-sketch-artifact-v3" as const;
+  "geosolve-executed-sketch-artifact-v4" as const;
 export const MANAGED_SKETCH_SOURCE_LIMIT = 4 * 1024 * 1024;
 export const MANAGED_CANVAS_ADDITIONS_GROUP = "Canvas additions" as const;
 export const MANAGED_MUTATION_BATCH_LIMIT = 1_024;
@@ -86,6 +88,9 @@ export interface ManagedSourceSpan {
 
 export type ManagedSourceSiteKind =
   | "declaration"
+  | "document"
+  | "parameter"
+  | "presentation"
   | "value"
   | "group"
   | "group_reference"
@@ -133,11 +138,31 @@ export interface ManagedObjectField {
   readonly comments: readonly string[];
 }
 
+export interface ManagedParameterAnnotation {
+  readonly symbol: string;
+  readonly presentation?: ManagedExpression;
+  readonly site: string;
+}
+
+export interface ExecutedParameter {
+  readonly declaration: string;
+  readonly variable: string;
+  readonly site: string;
+  readonly value_site: string;
+  readonly value: ManagedValue;
+  readonly presentation: ParameterOptions;
+}
+export interface ExecutedPresentation {
+  readonly declaration: string;
+  readonly presentation: PresentationOptions & { readonly isKeyConstraint?: boolean };
+}
+
 export interface ManagedBindingStatement {
   readonly statement: "binding";
   readonly variable: string;
   readonly value: ManagedExpression;
   readonly comments: readonly string[];
+  readonly parameter?: ManagedParameterAnnotation;
 }
 
 export interface ManagedDeclarationStatement {
@@ -150,6 +175,7 @@ export interface ManagedDeclarationStatement {
   readonly arguments: ManagedExpression;
   readonly site: string;
   readonly comments: readonly string[];
+  readonly presentation?: ManagedExpression;
 }
 
 export interface ManagedGroupStatement {
@@ -185,13 +211,14 @@ export interface ManagedImport {
 }
 
 export interface ManagedSketchIr {
-  readonly format: typeof MANAGED_SKETCH_IR_FORMAT;
+  readonly format: typeof MANAGED_SKETCH_IR_FORMAT | "geosolve-managed-sketch-ir-v3";
   readonly imports: readonly ManagedImport[];
   readonly statements: readonly ManagedStatement[];
   /** Ordinary nested value returned by the executed sketch callback. */
   readonly output: ManagedExpression;
   readonly source_sites: readonly ManagedSourceSite[];
   readonly source_digest: string;
+  readonly document?: ManagedExpression;
   readonly ir_digest: string;
 }
 
@@ -251,7 +278,7 @@ export interface ExecutedSuppression {
 }
 
 export interface ExecutedSketchArtifact {
-  readonly format: typeof EXECUTED_SKETCH_ARTIFACT_FORMAT;
+  readonly format: typeof EXECUTED_SKETCH_ARTIFACT_FORMAT | "geosolve-executed-sketch-artifact-v3";
   readonly source_digest: string;
   readonly ir_digest: string;
   readonly declarations: readonly ExecutedDeclarationResult[];
@@ -261,6 +288,9 @@ export interface ExecutedSketchArtifact {
   readonly value_consumers: readonly ExecutedValueConsumer[];
   /** Complete data-only semantic value returned by the callback. */
   readonly output: ManagedValue;
+  readonly document?: SketchOptions;
+  readonly parameters?: readonly ExecutedParameter[];
+  readonly presentations?: readonly ExecutedPresentation[];
   readonly artifact_digest: string;
 }
 
@@ -324,7 +354,20 @@ export interface ManagedValueMutation {
   readonly value: ManagedValue;
 }
 
+export type ManagedMetadataTarget =
+  | { readonly target: "document" }
+  | { readonly target: "declaration" | "parameter"; readonly declaration: string };
+export interface ManagedMetadataChanges {
+  readonly label?: string | null;
+  readonly description?: string | null;
+  readonly isKeyConstraint?: boolean | null;
+  readonly isKeyParameter?: boolean | null;
+  readonly title?: string | null;
+  readonly areKeyConstraintsByDefault?: boolean | null;
+}
 export type ManagedSketchMutation =
+  | { readonly mutation: "set_metadata"; readonly target: ManagedMetadataTarget; readonly property: keyof ManagedMetadataChanges; readonly value: ManagedValue | null }
+  | { readonly mutation: "extract_parameter"; readonly declaration: string; readonly path: readonly SemanticPathSegment[]; readonly symbol: string; readonly variable: string; readonly presentation?: ParameterOptions }
   | {
     readonly mutation: "insert_declarations";
     readonly declarations: readonly ManagedDeclarationDraft[];
@@ -417,6 +460,7 @@ interface ParseContext {
   readonly symbols: Set<string>;
   readonly groups: Set<string>;
   statementOrdinal: number;
+  document?: ManagedExpression;
 }
 
 interface RuntimeReference {
@@ -435,9 +479,13 @@ export function compileManagedSource(
   source: string,
   options: ManagedCompileOptions = {},
 ): CompiledManagedSource {
-  const parsed = parseManagedSource(source);
+  return compileManagedSourceVersion(source, options, 4);
+}
+
+function compileManagedSourceVersion(source: string, options: ManagedCompileOptions, version: 3 | 4): CompiledManagedSource {
+  const parsed = parseManagedSource(source, version);
   const normalizedSource = printManagedSource(parsed);
-  const normalized = parseManagedSource(normalizedSource);
+  const normalized = parseManagedSource(normalizedSource, version);
   const artifact = executeManagedSource(normalizedSource, normalized, options);
   return Object.freeze({
     inputSourceDigest: sha256(source),
@@ -497,7 +545,14 @@ export function applyManagedSketchMutation(
   let imports = authenticated.ir.imports;
   const statements = [...authenticated.ir.statements];
   let output = authenticated.ir.output;
+  let document = authenticated.ir.document;
   switch (mutation.mutation) {
+    case "set_metadata":
+      document = setManagedMetadata(statements, document, mutation.target, metadataMutationChanges(mutation));
+      break;
+    case "extract_parameter":
+      extractManagedParameter(statements, mutation);
+      break;
     case "insert_declarations":
       insertManagedDeclarations(
         statements,
@@ -564,8 +619,9 @@ export function applyManagedSketchMutation(
       "managed sketch mutation exceeds the statement bound",
     );
   }
+  const { document: _oldDocument, ...irWithoutDocument } = authenticated.ir;
   const compiled = compileMutatedStatements(
-    authenticated.ir,
+    { ...irWithoutDocument, ...(document === undefined ? {} : { document }) },
     imports,
     statements,
     options,
@@ -605,7 +661,7 @@ function authenticateMutationCurrent(
   }
   let recompiled: CompiledManagedSource;
   try {
-    recompiled = compileManagedSource(current.normalizedSource, options);
+    recompiled = compileManagedSourceVersion(current.normalizedSource, options, current.ir.format === "geosolve-managed-sketch-ir-v3" ? 3 : 4);
   } catch (error) {
     if (
       error instanceof TypeError &&
@@ -767,6 +823,7 @@ function insertManagedDeclarations(
       occupiedVariables.add(statement.variable);
     }
     if (statement.statement === "declaration") symbols.add(statement.symbol);
+    else if (statement.statement === "binding" && statement.parameter !== undefined) symbols.add(statement.parameter.symbol);
   }
   const existingGroupIndex = statements.findIndex((statement) =>
     statement.statement === "group" &&
@@ -1172,7 +1229,7 @@ function setManagedValue(
   validateManagedDraftValue(expected, variables, 0, { count: 0 });
   validateManagedDraftValue(replacement, variables, 0, { count: 0 });
   const indexes = statements.flatMap((statement, index) => {
-    if (statement.statement === "binding" && statement.variable === declaration) {
+    if (statement.statement === "binding" && (statement.parameter?.symbol ?? statement.variable) === declaration) {
       return [index];
     }
     if (
@@ -1696,6 +1753,7 @@ function pruneUnusedBindings(
     }
     const index = statements.findIndex((statement) =>
       statement.statement === "binding" &&
+      statement.parameter === undefined &&
       candidates.has(statement.variable) &&
       !used.has(statement.variable)
     );
@@ -1726,6 +1784,17 @@ function validateMutationRequest(mutation: ManagedSketchMutation): void {
   }
   const request = mutation as unknown as Readonly<Record<string, unknown>>;
   switch (request.mutation) {
+    case "set_metadata":
+      if (!isRecord(request.target) || typeof request.property !== "string") return mutationFail("invalid_draft", "metadata mutation requires target and property");
+      validateMetadataChanges(request.target as ManagedMetadataTarget, metadataMutationChanges(mutation as Extract<ManagedSketchMutation, { mutation: "set_metadata" }>) as Readonly<Record<string, unknown>>);
+      return;
+    case "extract_parameter":
+      requireMutationText(request.declaration, "parameter extraction owner");
+      requireMutationText(request.symbol, "parameter symbol");
+      requireMutationText(request.variable, "parameter variable");
+      validateMutationPath(request.path as readonly SemanticPathSegment[]);
+      if (request.presentation !== undefined) validatePresentation(request.presentation, "isKeyParameter");
+      return;
     case "insert_declarations": {
       if (!Array.isArray(request.declarations)) {
         return mutationFail(
@@ -2410,7 +2479,7 @@ function errorMessage(error: unknown): string {
 }
 
 /** Parse source into the closed reversible IR without executing semantics. */
-export function parseManagedSource(source: string): ManagedSketchIr {
+export function parseManagedSource(source: string, version: 3 | 4 = 4): ManagedSketchIr {
   const bytes = new TextEncoder().encode(source);
   if (bytes.byteLength > MANAGED_SKETCH_SOURCE_LIMIT) {
     throw new ManagedCompileError(
@@ -2554,13 +2623,15 @@ export function parseManagedSource(source: string): ManagedSketchIr {
     context,
     "sketch:output",
   );
+  if (version === 3 && (context.document !== undefined || statements.some((statement) => statement.statement === "binding" && statement.parameter !== undefined || statement.statement === "declaration" && (statement.presentation !== undefined || statement.arguments.kind === "object" && statement.arguments.fields.some((field) => ["description", "isKeyConstraint"].includes(field.name)))))) throw new TypeError("V3 source cannot carry V4 authoring metadata");
   const provisional = {
-    format: MANAGED_SKETCH_IR_FORMAT,
+    format: version === 3 ? "geosolve-managed-sketch-ir-v3" as const : MANAGED_SKETCH_IR_FORMAT,
     imports,
     statements,
     output,
     source_sites: context.sites,
     source_digest: sourceDigest,
+    ...(context.document === undefined ? {} : { document: context.document }),
   };
   const irDigest = sha256(canonicalJson(provisional));
   return deepFreeze({ ...provisional, ir_digest: irDigest });
@@ -2568,7 +2639,7 @@ export function parseManagedSource(source: string): ManagedSketchIr {
 
 /** Print one canonical, stable managed sketch source file. */
 export function printManagedSource(ir: ManagedSketchIr): string {
-  if (ir.format !== MANAGED_SKETCH_IR_FORMAT) {
+  if (ir.format !== MANAGED_SKETCH_IR_FORMAT && ir.format !== "geosolve-managed-sketch-ir-v3") {
     throw new TypeError("unsupported managed sketch IR format");
   }
   const lines = ['"use geosolve sketch";'];
@@ -2580,15 +2651,15 @@ export function printManagedSource(ir: ManagedSketchIr): string {
     );
   }
   if (ir.imports.length > 0) lines.push("");
-  lines.push("export default sketch(($) => {");
+  lines.push(ir.document === undefined ? "export default sketch(($) => {" : `export default sketch(${printExpression(ir.document, 0)}, ($) => {`);
   for (const statement of ir.statements) {
     appendComments(lines, statement.comments, "  ");
     switch (statement.statement) {
       case "binding":
         lines.push(
-          `  const ${statement.variable} = ${
-            printExpression(statement.value, 1)
-          };`,
+          `  const ${statement.variable} = ${statement.parameter === undefined
+            ? printExpression(statement.value, 1)
+            : `$.parameter(${quote(statement.parameter.symbol)}, ${printExpression(statement.value, 1)}${statement.parameter.presentation === undefined ? "" : `, ${printExpression(statement.parameter.presentation, 1)}`})`};`,
         );
         break;
       case "declaration":
@@ -2598,7 +2669,7 @@ export function printManagedSource(ir: ManagedSketchIr): string {
               quote(statement.symbol)
             }, ${statement.patch}, ${
               printExpression(statement.arguments, 1)
-            });`,
+            }${statement.presentation === undefined ? "" : `, ${printExpression(statement.presentation, 1)}`});`,
           );
           break;
         }
@@ -2632,7 +2703,7 @@ export function executeManagedSketch(
   ir: ManagedSketchIr,
   options: ManagedCompileOptions = {},
 ): ExecutedSketchArtifact {
-  if (ir.format !== MANAGED_SKETCH_IR_FORMAT) {
+  if (ir.format !== MANAGED_SKETCH_IR_FORMAT && ir.format !== "geosolve-managed-sketch-ir-v3") {
     throw new TypeError("unsupported managed sketch IR format");
   }
   const declarations: ExecutedDeclarationResult[] = [];
@@ -2734,7 +2805,7 @@ export function executeManagedSketch(
     evaluateExpression(ir.output, environment),
   );
   const provisional = {
-    format: EXECUTED_SKETCH_ARTIFACT_FORMAT,
+    format: ir.format === "geosolve-managed-sketch-ir-v3" ? "geosolve-executed-sketch-artifact-v3" as const : EXECUTED_SKETCH_ARTIFACT_FORMAT,
     source_digest: ir.source_digest,
     ir_digest: ir.ir_digest,
     declarations,
@@ -2743,6 +2814,7 @@ export function executeManagedSketch(
     suppressions,
     value_consumers: consumers,
     output,
+    ...executeAuthoredMetadata(ir, environment),
   };
   return deepFreeze({
     ...provisional,
@@ -2763,7 +2835,7 @@ export function executeManagedSource(
   ir: ManagedSketchIr,
   options: ManagedCompileOptions = {},
 ): ExecutedSketchArtifact {
-  if (ir.format !== MANAGED_SKETCH_IR_FORMAT) {
+  if (ir.format !== MANAGED_SKETCH_IR_FORMAT && ir.format !== "geosolve-managed-sketch-ir-v3") {
     throw new TypeError("unsupported managed sketch IR format");
   }
   if (sha256(source) !== ir.source_digest) {
@@ -2780,7 +2852,7 @@ export function executeManagedSource(
   let statementCursor = 0;
 
   const consumeBindings = () => {
-    while (ir.statements[statementCursor]?.statement === "binding") {
+    while (ir.statements[statementCursor]?.statement === "binding" && (ir.statements[statementCursor] as ManagedBindingStatement).parameter === undefined) {
       const statement = ir.statements[statementCursor]!;
       if (statement.statement !== "binding") break;
       environment.set(
@@ -2816,6 +2888,7 @@ export function executeManagedSource(
     symbolValue: unknown,
     argumentsValue: unknown,
     patchBinding: string | null,
+    presentationValue?: unknown,
   ): unknown => {
     const statement = nextStatement("declaration");
     const family = builderPath.join(".");
@@ -2830,6 +2903,8 @@ export function executeManagedSource(
         "executed managed declaration differs from its lexical declaration identity",
       );
     }
+    const lexicalPresentation = statement.presentation === undefined ? undefined : evaluateExpression(statement.presentation, environment);
+    if ((presentationValue === undefined) !== (lexicalPresentation === undefined) || (presentationValue !== undefined && !sameRuntimeManagedValue(presentationValue, lexicalPresentation))) throw runtimeCompileError(ir, statement, "executed invocation presentation differs from lexical IR");
     const lexicalArguments = evaluateExpression(statement.arguments, environment);
     if (!sameRuntimeManagedValue(argumentsValue, lexicalArguments)) {
       throw runtimeCompileError(
@@ -2887,12 +2962,22 @@ export function executeManagedSource(
   const builder = recorderBuilder({
     declaration: (path, symbol, values) =>
       invokeDeclaration(path, symbol, values, null),
-    use: (symbol, binding, values) => {
+    parameter: (symbol, value, presentation) => {
+      const statement = nextStatement("binding");
+      if (statement.parameter === undefined || statement.parameter.symbol !== symbol) throw runtimeCompileError(ir, statement, "executed parameter differs from lexical identity");
+      const expected = evaluateExpression(statement.value, environment);
+      const expectedPresentation = statement.parameter.presentation === undefined ? undefined : evaluateExpression(statement.parameter.presentation, environment);
+      if (!sameRuntimeManagedValue(value, expected) || (presentation === undefined) !== (expectedPresentation === undefined) || (presentation !== undefined && !sameRuntimeManagedValue(presentation, expectedPresentation))) throw runtimeCompileError(ir, statement, "executed parameter differs from lexical value/presentation");
+      environment.set(statement.variable, value);
+      bindingOrigins.set(statement.variable, expressionOrigins(statement.value, bindingOrigins));
+      return value;
+    },
+    use: (symbol, binding, values, presentation) => {
       const patch = [...patchBindings.entries()].find(([, value]) => value === binding)?.[0];
       if (patch === undefined) {
         throw new TypeError("$.use received an unpinned patch binding");
       }
-      return invokeDeclaration(["use"], symbol, values, patch);
+      return invokeDeclaration(["use"], symbol, values, patch, presentation);
     },
     group: (name, values) => {
       const statement = nextStatement("group");
@@ -2956,7 +3041,11 @@ export function executeManagedSource(
   const importValues: unknown[] = [];
   let callbackExecutions = 0;
   let callbackOutput: unknown;
-  const sketchEntry = (callback: unknown): unknown => {
+  const sketchEntry = (optionsOrCallback: unknown, providedCallback?: unknown): unknown => {
+    const callback = providedCallback ?? optionsOrCallback;
+    const document = providedCallback === undefined ? undefined : optionsOrCallback;
+    const expected = ir.document === undefined ? undefined : evaluateExpression(ir.document, environment);
+    if ((document === undefined) !== (expected === undefined) || (document !== undefined && !sameRuntimeManagedValue(document, expected))) throw new TypeError("executed document metadata differs from lexical IR");
     if (typeof callback !== "function" || callbackExecutions !== 0) {
       throw new TypeError("managed sketch must execute exactly one synchronous callback");
     }
@@ -3023,7 +3112,7 @@ export function executeManagedSource(
       );
     }
     const provisional = {
-      format: EXECUTED_SKETCH_ARTIFACT_FORMAT,
+      format: ir.format === "geosolve-managed-sketch-ir-v3" ? "geosolve-executed-sketch-artifact-v3" as const : EXECUTED_SKETCH_ARTIFACT_FORMAT,
       source_digest: ir.source_digest,
       ir_digest: ir.ir_digest,
       declarations,
@@ -3032,6 +3121,7 @@ export function executeManagedSource(
       suppressions,
       value_consumers: consumers,
       output: actualOutput,
+      ...executeAuthoredMetadata(ir, environment),
     };
     return deepFreeze({
       ...provisional,
@@ -3049,7 +3139,8 @@ interface RecorderBuilderCallbacks {
     symbol: unknown,
     values: unknown,
   ) => unknown;
-  readonly use: (symbol: unknown, binding: unknown, values: unknown) => unknown;
+  readonly use: (symbol: unknown, binding: unknown, values: unknown, presentation?: unknown) => unknown;
+  readonly parameter: (symbol: unknown, value: unknown, presentation?: unknown) => unknown;
   readonly group: (name: unknown, values: unknown) => void;
   readonly suppress: (value: unknown) => void;
 }
@@ -3071,9 +3162,10 @@ function recorderBuilder(callbacks: RecorderBuilderCallbacks): unknown {
   return new Proxy(Object.create(null) as Record<string, unknown>, {
     get: (_target, property) => {
       if (property === "use") {
-        return (symbol: unknown, binding: unknown, values: unknown) =>
-          callbacks.use(symbol, binding, values);
+        return (symbol: unknown, binding: unknown, values: unknown, presentation?: unknown) =>
+          callbacks.use(symbol, binding, values, presentation);
       }
+      if (property === "parameter") return callbacks.parameter;
       if (property === "group") return callbacks.group;
       if (property === "suppress") return callbacks.suppress;
       if (typeof property !== "string") return undefined;
@@ -3139,11 +3231,16 @@ function parseSketchEnvelope(
 ): ts.Block {
   if (
     !ts.isCallExpression(node) || !ts.isIdentifier(node.expression) ||
-    node.expression.text !== "sketch" || node.arguments.length !== 1
+    node.expression.text !== "sketch" || (node.arguments.length !== 1 && node.arguments.length !== 2)
   ) {
     fail(context, node, "default export must be sketch(($) => { ... })");
   }
-  const callback = node.arguments[0];
+  if (node.arguments.length === 2) {
+    const options = node.arguments[0]!;
+    context.document = parseMetadataExpression(options, context, "sketch:document", "document");
+    validateSketchOptions(evaluateExpression(context.document, new Map()));
+  }
+  const callback = node.arguments.at(-1);
   if (
     callback === undefined || !ts.isArrowFunction(callback) ||
     callback.modifiers !== undefined ||
@@ -3206,6 +3303,23 @@ function parseStatement(
       fail(context, declaration.name, `duplicate binding ${variable}`);
     }
     const call = declaration.initializer;
+    if (ts.isCallExpression(call) && isBuilderMethod(call.expression, ["parameter"])) {
+      if ((call.arguments.length !== 2 && call.arguments.length !== 3) || !ts.isStringLiteral(call.arguments[0]!)) fail(context, call, "$.parameter requires a stable ID, scalar literal, and optional presentation options");
+      const symbol = (call.arguments[0] as ts.StringLiteral).text;
+      if (!/^[A-Za-z][A-Za-z0-9_.-]{0,255}$/u.test(symbol) || context.symbols.has(symbol)) fail(context, call.arguments[0]!, "invalid or duplicate parameter ID");
+      const siteBase = `parameter:${symbol}`;
+      const value = parseExpression(call.arguments[1]!, context, `${siteBase}:value`);
+      if (!isScalarParameterExpression(value)) fail(context, call.arguments[1]!, "named parameter value must be a finite number or unit literal");
+      const presentation = call.arguments[2] === undefined ? undefined : parseMetadataExpression(call.arguments[2], context, `${siteBase}:presentation`, "presentation", "isKeyParameter");
+      context.variables.add(variable);
+      context.symbols.add(symbol);
+      context.bindingInitializers.set(variable, call.arguments[1]!);
+      return { statement: "binding", variable, value, comments, parameter: {
+        symbol,
+        ...(presentation === undefined ? {} : { presentation }),
+        site: addSite(context, "parameter", call, `${siteBase}:call`),
+      } };
+    }
     const builderPath = managedBuilderPath(call);
     if (builderPath !== undefined) {
       if (!ts.isCallExpression(call) || call.arguments.length !== 2) {
@@ -3259,6 +3373,7 @@ function parseStatement(
         );
       }
       rejectRetiredManagedTransportProperties(argumentsNode, context);
+      validateDeclarationMetadata(args, family);
       context.variables.add(variable);
       context.declarationVariables.add(variable);
       return {
@@ -3275,7 +3390,7 @@ function parseStatement(
     if (
       ts.isCallExpression(call) && isBuilderMethod(call.expression, ["use"])
     ) {
-      if (call.arguments.length !== 3) {
+      if (call.arguments.length !== 3 && call.arguments.length !== 4) {
         fail(
           context,
           call,
@@ -3326,6 +3441,7 @@ function parseStatement(
         arguments: invocationArguments,
         site: addSite(context, "declaration", call, `${siteBase}:call`),
         comments,
+        ...(call.arguments[3] === undefined ? {} : { presentation: parseMetadataExpression(call.arguments[3], context, `${siteBase}:presentation`, "presentation") }),
       };
     }
     const value = parseExpression(
@@ -3333,7 +3449,9 @@ function parseStatement(
       context,
       `binding:${variable}:value`,
     );
+    if (context.symbols.has(variable)) fail(context, declaration.name, `duplicate source scalar identity ${variable}`);
     context.variables.add(variable);
+    context.symbols.add(variable);
     context.bindingInitializers.set(variable, declaration.initializer);
     return {
       statement: "binding",
@@ -4457,6 +4575,7 @@ function visitConsumerSites(
   consumers: ExecutedValueConsumer[],
   bindingOrigins: ReadonlyMap<string, readonly string[]>,
 ): void {
+  if (property.length === 1 && ["description", "isKeyConstraint"].includes(String(property[0]))) return;
   if (value.kind === "reference") {
     const origins = bindingOrigins.get(value.declaration) ?? [];
     // Scalar bindings retain their defining value as the shared fan-out
@@ -4884,7 +5003,7 @@ function canonicalJson(value: unknown, float = false): string {
     const record = value as Readonly<Record<string, unknown>>;
     return `{${
       Object.entries(record).map(([key, child]) => {
-        const childIsFloat = record.kind === "number" && key === "value";
+        const childIsFloat = key === "value" && (record.kind === "number" || typeof record.unit === "string");
         const encoded = record.kind === "object" && key === "value" &&
             typeof child === "object" && child !== null && !Array.isArray(child)
           ? canonicalManagedValueObject(child as Readonly<Record<string, unknown>>)
@@ -4924,4 +5043,156 @@ function deepFreeze<Value>(value: Value): Value {
   }
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
+}
+
+function isScalarParameterExpression(value: ManagedExpression): boolean {
+  return value.kind === "number" || value.kind === "call" && ["mm", "cm", "m", "inch", "deg", "rad"].includes(value.callee) && value.arguments.length === 1 && value.arguments[0]?.kind === "number";
+}
+
+function parseMetadataExpression(
+  node: ts.Expression,
+  context: ParseContext,
+  siteKey: string,
+  kind: "document" | "presentation",
+  flag?: "isKeyParameter" | "isKeyConstraint",
+): ManagedExpression {
+  if (!ts.isObjectLiteralExpression(node)) fail(context, node, "metadata requires an object literal");
+  const expression = parseExpression(node, context, siteKey);
+  const site = context.sites.find((candidate) => candidate.id === expression.site)!;
+  // Metadata roots have their own source authority; leaves remain ordinary lexical sites.
+  const id = sha256(`${kind}\0${siteKey}`);
+  context.siteIds.delete(site.id);
+  context.siteIds.add(id);
+  context.sites[context.sites.indexOf(site)] = { ...site, id, kind };
+  const value = evaluateExpression(expression, new Map());
+  if (kind === "document") validateSketchOptions(value);
+  else validatePresentation(value, flag);
+  return { ...expression, site: id };
+}
+
+function validateDeclarationMetadata(expression: ManagedExpression, family: string): void {
+  if (expression.kind !== "object") return;
+  const names = new Set(["label", "description", "isKeyConstraint", "isKeyParameter", "key"]);
+  const fields = expression.fields.filter((field) => names.has(field.name));
+  const options = Object.fromEntries(fields.map((field) => [field.name, evaluateExpression(field.value, new Map())]));
+  validatePresentation(options, family.startsWith("dimension.") ? "isKeyConstraint" : undefined);
+}
+
+function executeAuthoredMetadata(ir: ManagedSketchIr, environment: ReadonlyMap<string, unknown>): Pick<ExecutedSketchArtifact, "document" | "parameters" | "presentations"> {
+  if (ir.format === "geosolve-managed-sketch-ir-v3") return {};
+  const parameters: ExecutedParameter[] = [];
+  const presentations: ExecutedPresentation[] = [];
+  for (const statement of ir.statements) {
+    if (statement.statement === "binding" && statement.parameter !== undefined) {
+      const presentation = statement.parameter.presentation === undefined ? {} : evaluateExpression(statement.parameter.presentation, environment) as ParameterOptions;
+      validatePresentation(presentation, "isKeyParameter");
+      parameters.push({ declaration: statement.parameter.symbol, variable: statement.variable, site: statement.parameter.site, value_site: statement.value.site, value: runtimeValueToManagedValue(evaluateExpression(statement.value, environment)), presentation: orderedPresentation(presentation) });
+    } else if (statement.statement === "declaration") {
+      const value = statement.presentation === undefined
+        ? statement.patch !== null ? {} : Object.fromEntries(Object.entries(evaluateExpression(statement.arguments, environment) as Record<string, unknown>).filter(([name]) => ["label", "description", "isKeyConstraint"].includes(name)))
+        : evaluateExpression(statement.presentation, environment);
+      validatePresentation(value, statement.builder_path[0] === "dimension" ? "isKeyConstraint" : undefined);
+      if (Object.keys(value as object).length > 0) presentations.push({ declaration: statement.symbol, presentation: orderedPresentation(value as ExecutedPresentation["presentation"]) });
+    }
+  }
+  const document = ir.document === undefined ? undefined : evaluateExpression(ir.document, environment) as SketchOptions;
+  if (document !== undefined) validateSketchOptions(document);
+  return {
+    ...(document === undefined ? {} : { document: {
+      ...(document.title === undefined ? {} : { title: document.title }),
+      ...(document.description === undefined ? {} : { description: document.description }),
+      ...(document.dimensions === undefined ? {} : { dimensions: document.dimensions }),
+    } }),
+    ...(parameters.length === 0 ? {} : { parameters }),
+    ...(presentations.length === 0 ? {} : { presentations }),
+  };
+}
+
+function orderedPresentation<T extends PresentationOptions & { readonly isKeyParameter?: boolean; readonly isKeyConstraint?: boolean }>(value: T): T {
+  return { ...(value.label === undefined ? {} : { label: value.label }), ...(value.description === undefined ? {} : { description: value.description }), ...(value.isKeyConstraint === undefined ? {} : { isKeyConstraint: value.isKeyConstraint }), ...(value.isKeyParameter === undefined ? {} : { isKeyParameter: value.isKeyParameter }) } as T;
+}
+
+function validateMetadataChanges(target: ManagedMetadataTarget, changes: Readonly<Record<string, unknown>>): void {
+  const allowed = target.target === "document" ? ["title", "description", "areKeyConstraintsByDefault"] : target.target === "parameter" ? ["label", "description", "isKeyParameter"] : target.target === "declaration" ? ["label", "description", "isKeyConstraint"] : [];
+  if (allowed.length === 0 || Object.keys(changes).length === 0) mutationFail("invalid_draft", "metadata mutation requires a supported target and nonempty changes");
+  for (const [name, value] of Object.entries(changes)) {
+    if (!allowed.includes(name)) mutationFail("invalid_draft", `unsupported metadata property ${name}`);
+    if (value !== null && typeof value !== (name.startsWith("isKey") || name === "areKeyConstraintsByDefault" ? "boolean" : "string")) mutationFail("invalid_draft", `invalid metadata value ${name}`);
+  }
+}
+
+function mutateMetadataObject(root: ManagedExpression | undefined, changes: Readonly<Record<string, unknown>>): ManagedExpression | undefined {
+  if (root !== undefined && root.kind !== "object") return mutationFail("invalid_current", "metadata owner must be an object literal");
+  const fields = [...(root?.fields ?? [])];
+  for (const [name, value] of Object.entries(changes)) {
+    const index = fields.findIndex((field) => field.name === name);
+    if (value === null) { if (index >= 0) fields.splice(index, 1); continue; }
+    const field: ManagedObjectField = { name, value: managedValueToExpression(typeof value === "boolean" ? { kind: "bool", value } : { kind: "string", value: value as string }), comments: index < 0 ? [] : fields[index]!.comments };
+    if (index < 0) fields.push(field); else fields[index] = field;
+  }
+  return fields.length === 0 ? undefined : { kind: "object", fields, site: root?.site ?? mutationPlaceholderSite("presentation") };
+}
+
+function setManagedMetadata(statements: ManagedStatement[], document: ManagedExpression | undefined, target: ManagedMetadataTarget, changes: ManagedMetadataChanges): ManagedExpression | undefined {
+  validateMetadataChanges(target, changes as Readonly<Record<string, unknown>>);
+  if (target.target === "document") {
+    const { areKeyConstraintsByDefault, ...textChanges } = changes;
+    let next = mutateMetadataObject(document, textChanges);
+    if (areKeyConstraintsByDefault !== undefined) {
+      const fields = next?.kind === "object" ? [...next.fields] : [];
+      const index = fields.findIndex((field) => field.name === "dimensions");
+      const dimensions = mutateMetadataObject(index < 0 ? undefined : fields[index]!.value, { areKeyConstraintsByDefault });
+      if (dimensions === undefined) { if (index >= 0) fields.splice(index, 1); }
+      else if (index < 0) fields.push({ name: "dimensions", value: dimensions, comments: [] });
+      else fields[index] = { ...fields[index]!, value: dimensions };
+      next = fields.length === 0 ? undefined : { kind: "object", fields, site: document?.site ?? mutationPlaceholderSite("document") };
+    }
+    validateSketchOptions(next === undefined ? {} : evaluateExpression(next, new Map()));
+    return next;
+  }
+  const index = statements.findIndex((statement) => target.target === "parameter" ? statement.statement === "binding" && statement.parameter?.symbol === target.declaration : statement.statement === "declaration" && statement.symbol === target.declaration);
+  if (index < 0) return mutationFail("unknown_declaration", "metadata declaration is absent");
+  const statement = statements[index]!;
+  if (statement.statement === "binding" && statement.parameter !== undefined) {
+    const next = mutateMetadataObject(statement.parameter.presentation, changes as Readonly<Record<string, unknown>>);
+    validatePresentation(next === undefined ? {} : evaluateExpression(next, new Map()), "isKeyParameter");
+    const { presentation: _previous, ...parameter } = statement.parameter;
+    statements[index] = { ...statement, parameter: { ...parameter, ...(next === undefined ? {} : { presentation: next }) } };
+  } else if (statement.statement === "declaration") {
+    if (changes.isKeyConstraint !== undefined && statement.builder_path[0] !== "dimension") return mutationFail("invalid_draft", "overview constraint metadata requires an authored dimension");
+    const root = statement.patch === null ? statement.arguments : statement.presentation;
+    const next = mutateMetadataObject(root, changes as Readonly<Record<string, unknown>>);
+    if (statement.patch === null) statements[index] = { ...statement, arguments: next ?? { kind: "object", fields: [], site: statement.arguments.site } };
+    else {
+      const { presentation: _previous, ...withoutPresentation } = statement;
+      statements[index] = { ...withoutPresentation, ...(next === undefined ? {} : { presentation: next }) };
+    }
+  }
+  return document;
+}
+
+function extractManagedParameter(statements: ManagedStatement[], mutation: Extract<ManagedSketchMutation, { mutation: "extract_parameter" }>): void {
+  if (!/^[A-Za-z][A-Za-z0-9_.-]{0,255}$/u.test(mutation.symbol) || !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(mutation.variable)) mutationFail("invalid_draft", "invalid parameter ID or variable");
+  const index = statements.findIndex((statement) => statement.statement === "binding" ? (statement.parameter?.symbol ?? statement.variable) === mutation.declaration : statement.statement === "declaration" && statement.symbol === mutation.declaration);
+  const owner = statements[index];
+  if (owner === undefined || (owner.statement !== "binding" && owner.statement !== "declaration")) return mutationFail("unknown_declaration", "parameter extraction owner is absent");
+  if (statements.some((statement, other) => statement.statement === "declaration" ? statement.symbol === mutation.symbol || statement.variable === mutation.variable : statement.statement === "binding" && (statement.parameter?.symbol === mutation.symbol || other !== index && statement.variable === mutation.variable))) mutationFail("duplicate_declaration", "parameter identity already exists");
+  const root = owner.statement === "binding" ? owner.value : owner.arguments;
+  const value = expressionAtMutationPath(root, mutation.path);
+  if (!isScalarParameterExpression(value)) return mutationFail("invalid_draft", "parameter extraction requires a literal number or unit");
+  const presentation = mutation.presentation === undefined ? undefined : mutateMetadataObject(undefined, mutation.presentation as Readonly<Record<string, unknown>>);
+  const parameter: ManagedParameterAnnotation = { symbol: mutation.symbol, ...(presentation === undefined ? {} : { presentation }), site: mutationPlaceholderSite("parameter") };
+  if (owner.statement === "binding") {
+    if (owner.parameter !== undefined || mutation.path.length !== 0 || mutation.variable !== owner.variable) mutationFail("invalid_draft", "binding extraction wraps its existing variable and whole literal");
+    statements[index] = { ...owner, parameter };
+    return;
+  }
+  const replacement: ManagedExpression = { kind: "reference", declaration: mutation.variable, path: [], site: mutationPlaceholderSite("value") };
+  statements[index] = { ...owner, arguments: replaceExpressionAtMutationPath(root, mutation.path, replacement) };
+  statements.splice(index, 0, { statement: "binding", variable: mutation.variable, value, comments: [], parameter });
+}
+
+function metadataMutationChanges(mutation: Extract<ManagedSketchMutation, { mutation: "set_metadata" }>): ManagedMetadataChanges {
+  const value = mutation.value === null ? null : mutation.value.kind === "bool" || mutation.value.kind === "string" ? mutation.value.value : mutationFail("invalid_draft", "metadata mutation requires text, boolean or null");
+  return { [mutation.property]: value };
 }

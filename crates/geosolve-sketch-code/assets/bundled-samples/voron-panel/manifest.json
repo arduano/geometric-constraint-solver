@@ -2,20 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 10,
   "key": "voron-panel",
-  "title": "Voron V0.2 motor panel",
-  "summary": "A connected 122 x 37 mm boundary contains the edge-open T-passage and bilateral side notches; squared transitions make this an editable topology study.",
   "category": "product_fabrication",
   "expected": {
     "raw_dof": 0,
     "effective_dof": 0
-  },
-  "groups": [
-    "Panel envelope",
-    "Central motor passage",
-    "Side-notch references"
-  ],
-  "dimension_presentation": {
-    "all_authored": true
   },
   "provenance": [
     {

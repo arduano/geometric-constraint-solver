@@ -42,8 +42,8 @@ test("M97 manifold focus limits canvas dimensions and preserves pinned measureme
   await expect(inspector(page).getByRole("listitem").filter({ hasText: "Key dimension" })).toHaveCount(6);
   await expect(inspector(page).getByRole("textbox", { name: "plateWidth value", exact: true })).toHaveValue("240");
   await expect(inspector(page).getByRole("textbox", { name: "reservoirWidth value", exact: true })).toHaveValue("60");
-  await expect(inspector(page).getByRole("textbox", { name: "channelWidth value", exact: true })).toHaveValue("12");
-  await expect(inspector(page).getByRole("textbox", { name: "commonSealGroove · width value", exact: true })).toHaveValue("2.4");
+  await expect(inspector(page).getByRole("textbox", { name: "Channel width value", exact: true })).toHaveValue("12");
+  await expect(inspector(page).getByRole("textbox", { name: "Seal groove width value", exact: true })).toHaveValue("2.4");
   await page.screenshot({ path: info.outputPath("focused-overview.png") });
   const source = await acceptedSource(page);
   const baseline = await geometry(page);
@@ -76,7 +76,9 @@ test("M97 manifold focus limits canvas dimensions and preserves pinned measureme
   expect((await dimensionTexts(page)).length).toBeLessThanOrEqual(6);
   // Resolve a known nonpriority bore through its ordinary Explorer selection.
   // The selected native circle identifies the exact geometry for the hover probe.
-  await explorer(page).getByRole("button", { name: "middleOutlet", exact: true }).click();
+  await explorer(page).getByRole("button", { name: "Middle outlet bore", exact: true }).click();
+  await expect(explorer(page).getByRole("button", { name: "Middle outlet bore", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await settlePresentation(page);
   const selected = await presentedFrame(canvasFrame(page));
   const bores = selected.items.filter((item) => item.layer === "geometry" && item.kind === "polyline"
     && item.style.stroke === "#efb856" && item.style.shadow !== null
@@ -194,4 +196,157 @@ test("M97 contextual dimension edits retain source authority and Undo Redo reloa
   await explorer(page).getByRole("button", { name: "reservoirWidth", exact: true }).click();
   await expect(value).toHaveValue("62");
   await page.screenshot({ path: info.outputPath("dimension-edit.png") });
+});
+
+const METADATA_SOURCE = `"use geosolve sketch";
+import { sketch, mm } from "@geosolve/sketch-code";
+
+export default sketch({
+  title: "Metadata workbench",
+  description: "Shared dimensions and a contextual radius.",
+}, ($) => {
+  // naïve 東京 🧭 — source-owned names never replace declaration identity.
+  const sharedSpan = $.parameter("sharedSpan", mm(20), { label: "Shared span", isKeyParameter: true });
+  const spareSpan = $.parameter("spareSpan", mm(20), { label: "Spare span" });
+  const cornerRadius = mm(3);
+  const first = $.geometry.segment("first", { start: [-30, -10], end: [-10, -10], label: "First edge" });
+  const firstAnchor = $.constraint.fixedPoint("firstAnchor", { point: first.start, target: [-30, -10] });
+  const firstAxis = $.constraint.horizontal("firstAxis", { span: first.span });
+  const firstLength = $.dimension.curveLength("firstLength", { curve: first.span, value: sharedSpan, label: "First span", isKeyConstraint: true });
+  const second = $.geometry.segment("second", { start: [10, 10], end: [30, 10], label: "Second edge" });
+  const secondAnchor = $.constraint.fixedPoint("secondAnchor", { point: second.start, target: [10, 10] });
+  const secondAxis = $.constraint.horizontal("secondAxis", { span: second.span });
+  const secondLength = $.dimension.curveLength("secondLength", { curve: second.span, value: sharedSpan, label: "Second span" });
+  const corner = $.geometry.centerRadiusCircle("corner", { center: [0, 30], radius: cornerRadius, label: "Corner bore" });
+  const cornerAnchor = $.constraint.fixedPoint("cornerAnchor", { point: corner.center, target: [0, 30] });
+  const cornerSize = $.dimension.radius("cornerSize", { curve: corner.curve, value: cornerRadius, label: "Corner radius" });
+  $.group("Span dimensions", [first, firstAnchor, firstAxis, firstLength, second, secondAnchor, secondAxis, secondLength]);
+  $.group("Corner", [corner, cornerAnchor, cornerSize]);
+  return {};
+});
+`;
+
+function declarationSource(source: string, id: string) {
+  const declaration = source.match(new RegExp(`const ${id} = [\\s\\S]*?\\n  \\}\\);`));
+  if (!declaration) throw Error(`Missing accepted source declaration ${id}`);
+  return declaration[0];
+}
+
+test("M97 contextual dimension edits author source-owned overview metadata and public parameters", async ({ page }, info) => {
+  test.setTimeout(300_000);
+  await openManifold(page);
+  const manifoldParameters = inspector(page).getByRole("group", { name: "Dimensional parameters" });
+  await expect(manifoldParameters.getByRole("textbox", { name: "Channel width value", exact: true })).toHaveCount(1);
+  await expect(manifoldParameters.getByRole("textbox", { name: "Channel width value", exact: true })).toHaveValue("12");
+  await expect(manifoldParameters.getByRole("textbox", { name: "Seal groove width value", exact: true })).toHaveValue("2.4");
+  await expect(manifoldParameters.getByText("Used by upperChannel, middleChannel, lowerChannel, stairChannel", { exact: true })).toBeVisible();
+
+  // Run the mutation matrix on a small ordinary authored document. The full
+  // manifold above independently proves the shared 12 mm public input projects once.
+  await page.getByRole("button", { name: "File menu" }).click();
+  await page.getByRole("menuitem", { name: /Open/ }).click();
+  await page.getByRole("button", { name: "Start from code" }).click();
+  const content = page.locator(".cm-content");
+  await content.click(); await page.keyboard.press("Control+A"); await page.keyboard.insertText(METADATA_SOURCE);
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toContain('title: "Metadata workbench"');
+  const revert = page.getByRole("button", { name: "Revert", exact: true });
+  if (await revert.isEnabled()) await revert.click();
+  await expect(revert).toBeDisabled();
+  await page.getByRole("button", { name: "design", exact: true }).click();
+  await page.getByRole("button", { name: "Fit sketch" }).click();
+  await settlePresentation(page);
+  const initial = (await acceptedSource(page))!;
+  const baselineGeometry = await geometry(page);
+  await inspector(page).getByText(/^All measurements/).click();
+  await inspector(page).getByRole("button", { name: "Show details for First span", exact: true }).click();
+  const overview = inspector(page).getByRole("checkbox", { name: "Show First span in overview", exact: true });
+  await expect(overview).toBeChecked();
+  await overview.click();
+  await expect.poll(async () => declarationSource((await acceptedSource(page))!, "firstLength"), { timeout: 30_000 }).toContain("isKeyConstraint: false");
+  await expect(overview).not.toBeChecked();
+  await expect(overview).toBeFocused();
+  const explicitlyHidden = (await acceptedSource(page))!;
+  expect(declarationSource(explicitlyHidden, "secondLength")).not.toContain("isKeyConstraint");
+  expect(await geometry(page)).toEqual(baselineGeometry);
+  await expect(page.getByRole("button", { name: "design", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await emptyClick(page);
+  await expect(inspector(page).getByRole("button", { name: /^Inspect / })).toHaveCount(0);
+  await inspector(page).getByRole("button", { name: "Show details for Second span", exact: true }).click();
+  await expect(inspector(page).getByRole("checkbox", { name: "Show Second span in overview", exact: true })).not.toBeChecked();
+  await inspector(page).getByRole("button", { name: "Show details for First span", exact: true }).click();
+  expect(await acceptedSource(page)).toBe(explicitlyHidden);
+
+  await inspector(page).getByLabel("Edit First span name and description", { exact: true }).click();
+  const name = inspector(page).getByRole("textbox", { name: "First span name", exact: true });
+  await name.fill("Primary span"); await name.press("Enter");
+  await expect.poll(async () => declarationSource((await acceptedSource(page))!, "firstLength")).toContain('label: "Primary span"');
+  const renamed = inspector(page).getByRole("textbox", { name: "Primary span name", exact: true });
+  await expect(renamed).toBeFocused();
+  await expect(explorer(page).getByRole("button", { name: "Primary span", exact: true })).toBeVisible();
+  const help = inspector(page).getByRole("textbox", { name: "Primary span description", exact: true });
+  await help.fill("Overall span · naïve 東京 🧭"); await help.press("Control+Enter");
+  await expect.poll(async () => declarationSource((await acceptedSource(page))!, "firstLength")).toContain('description: "Overall span · naïve 東京 🧭"');
+
+  await page.getByText("Document properties", { exact: true }).click();
+  const title = page.getByRole("textbox", { name: "Document title", exact: true });
+  await title.fill("Metadata fixture"); await title.press("Enter");
+  await expect.poll(() => acceptedSource(page)).toContain('title: "Metadata fixture"');
+  await expect(page.locator("header").getByText("Metadata fixture", { exact: true })).toBeVisible();
+  const documentHelp = page.getByRole("textbox", { name: "Document description", exact: true });
+  await documentHelp.fill("Source-owned names, descriptions and dimensional intent."); await documentHelp.press("Control+Enter");
+  await expect.poll(() => acceptedSource(page)).toContain('description: "Source-owned names, descriptions and dimensional intent."');
+  const defaults = page.getByRole("checkbox", { name: "Show authored dimensions in overview by default", exact: true });
+  await defaults.click();
+  await expect.poll(() => acceptedSource(page)).toContain("areKeyConstraintsByDefault: true");
+  await inspector(page).getByRole("button", { name: "Show details for Second span", exact: true }).click();
+  await expect(inspector(page).getByRole("checkbox", { name: "Show Second span in overview", exact: true })).toBeChecked();
+  await inspector(page).getByRole("button", { name: "Show details for Primary span", exact: true }).click();
+  await expect(inspector(page).getByRole("checkbox", { name: "Show Primary span in overview", exact: true })).not.toBeChecked();
+  const beforeReset = (await acceptedSource(page))!;
+  await inspector(page).getByRole("button", { name: "Reset Primary span to default", exact: true }).click();
+  await expect.poll(async () => declarationSource((await acceptedSource(page))!, "firstLength")).not.toContain("isKeyConstraint");
+  await expect(inspector(page).getByRole("checkbox", { name: "Show Primary span in overview", exact: true })).toBeChecked();
+  const afterReset = (await acceptedSource(page))!;
+  expect(afterReset).toContain("// naïve 東京 🧭 — source-owned names never replace declaration identity.");
+  expect(await geometry(page)).toEqual(baselineGeometry);
+
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect.poll(() => acceptedSource(page)).toBe(beforeReset);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect.poll(() => acceptedSource(page)).toBe(afterReset);
+  await page.reload({ waitUntil: "networkidle" });
+  await expect.poll(() => acceptedSource(page)).toBe(afterReset);
+  await inspector(page).getByText(/^All measurements/).click();
+  await inspector(page).getByRole("button", { name: "Show details for Primary span", exact: true }).click();
+  await expect(inspector(page).getByRole("checkbox", { name: "Show Primary span in overview", exact: true })).toBeChecked();
+  await expect(inspector(page).locator("p").filter({ hasText: /^Overall span · naïve 東京 🧭$/ })).toBeVisible();
+
+  await page.getByRole("tab", { name: "Parameters", exact: true }).click();
+  const parameters = page.getByRole("region", { name: "Parameters", exact: true });
+  await expect(parameters.getByRole("textbox", { name: "Shared span", exact: true })).toHaveCount(1);
+  await expect(parameters.getByRole("textbox", { name: "Shared span", exact: true })).toHaveValue("20");
+  await expect(parameters.getByRole("textbox", { name: "Spare span", exact: true })).toHaveValue("20");
+  await expect(parameters.getByText("Used by Primary span, Second span", { exact: true })).toBeVisible();
+  await expect(parameters.getByRole("checkbox", { name: "Show Spare span in overview", exact: true })).not.toBeChecked();
+  const beforeExtractionGeometry = await geometry(page);
+  await parameters.getByRole("button", { name: "Make cornerRadius a named parameter", exact: true }).click();
+  await expect.poll(() => acceptedSource(page)).toContain('const cornerRadius = $.parameter("cornerRadius", mm(3), {');
+  const extracted = (await acceptedSource(page))!;
+  expect(extracted).toContain("radius: cornerRadius");
+  expect(extracted).toContain("value: cornerRadius");
+  expect(declarationSource(extracted, "cornerSize")).toContain('label: "Corner radius"');
+  await expect(parameters.getByRole("textbox", { name: "cornerRadius", exact: true })).toHaveValue("3");
+  await expect(parameters.getByRole("checkbox", { name: "Show cornerRadius in overview", exact: true })).toBeEnabled();
+  expect(await geometry(page)).toEqual(beforeExtractionGeometry);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect.poll(() => acceptedSource(page)).toBe(afterReset);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect.poll(() => acceptedSource(page)).toBe(extracted);
+  await page.reload({ waitUntil: "networkidle" });
+  await expect.poll(() => acceptedSource(page)).toBe(extracted);
+  await page.getByRole("tab", { name: "Parameters", exact: true }).click();
+  await expect(parameters.getByRole("checkbox", { name: "Show cornerRadius in overview", exact: true })).toBeEnabled();
+  await page.screenshot({ path: info.outputPath("source-owned-parameters.png") });
+  expect(extracted).not.toBe(initial);
 });

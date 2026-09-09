@@ -115,6 +115,7 @@ export type ArtifactCollectionRule =
   };
 
 export interface PatchArtifactPlan {
+  readonly input_presentation?: Readonly<Record<string, import("./presentation.js").ParameterOptions>>;
   readonly inputs: Readonly<Record<string, FeatureKind>>;
   readonly outputs: Readonly<Record<string, FeatureKind>>;
   readonly templates: readonly ArtifactTemplateNode[];
@@ -122,6 +123,7 @@ export interface PatchArtifactPlan {
 }
 
 export interface PatchModuleArtifact {
+  readonly input_presentation?: Readonly<Record<string, import("./presentation.js").ParameterOptions>>;
   readonly format: typeof PATCH_ARTIFACT_FORMAT;
   readonly sdk_abi: typeof SKETCH_CODE_SDK_ABI;
   readonly module_specifier: string;
@@ -159,6 +161,7 @@ export function compilePatchArtifact<Schemas extends InputSchemas, Result>(
   const interfaceJson = canonicalStringify({
     export_name: options.exportName,
     inputs: plan.inputs,
+    ...(plan.input_presentation === undefined ? {} : { input_presentation: plan.input_presentation }),
     module_specifier: options.moduleSpecifier,
     outputs: plan.outputs,
     sdk_abi: SKETCH_CODE_SDK_ABI,
@@ -171,6 +174,7 @@ export function compilePatchArtifact<Schemas extends InputSchemas, Result>(
     source_digest: sha256(sourceBytes),
     interface_digest: sha256(new TextEncoder().encode(interfaceJson)),
     inputs: plan.inputs,
+    ...(plan.input_presentation === undefined ? {} : { input_presentation: plan.input_presentation }),
     outputs: plan.outputs,
     templates: plan.templates,
     collections: plan.collections,
@@ -236,6 +240,13 @@ export function recordPatchArtifact<Schemas extends InputSchemas, Result>(
         schemaFeatureKind(authoringSchemaRuntime(schema)),
       ]),
     )),
+    ...(() => {
+      const presentations = Object.fromEntries(sortedEntries(runtime.inputs).flatMap(([name, schema]) => {
+        const presentation = authoringSchemaRuntime(schema).presentation;
+        return presentation === undefined ? [] : [[name, presentation]];
+      }));
+      return Object.keys(presentations).length === 0 ? {} : { input_presentation: presentations };
+    })(),
     outputs: sortedObject(outputs),
     templates,
     collections,
@@ -1202,6 +1213,7 @@ export function canonicalArtifactJson(artifact: PatchModuleArtifact): string {
     source_digest: artifact.source_digest,
     interface_digest: artifact.interface_digest,
     inputs: artifact.inputs,
+    ...(artifact.input_presentation === undefined ? {} : { input_presentation: artifact.input_presentation }),
     outputs: artifact.outputs,
     templates: artifact.templates.map((template) => ({
       path: template.path,

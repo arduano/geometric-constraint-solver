@@ -165,12 +165,13 @@ describe("WasmWorkbenchAdapter", () => {
       frame: { ...fixture.frame, scene: { ...fixture.frame.scene, viewBox: [0, 0, 900, 800] } },
       navigation: { ...fixture.navigation, selectionKey: "line", rows: [{ id: "line-1", state: "selected" }], sources: [{ path: "sketch.ts", from: 10, to: 20 }], itemCount: 3 },
       selectedDeclarations: ["line-1"],
-      selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: 10, to: 20 } },
+      selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: 10, to: 20 }, metadata: { authority: "accepted-properties", target: { kind: "declaration", id: "line-1" }, label: "Line 1", editable: true } },
       selectedGeometryRole: "profile",
     };
     response = JSON.stringify(delta);
     const next = await adapter.dispatch({ version: 2, command: "navigation.rows.select" });
     expect(isCanvasOnlySnapshot(next)).toBe(false);
+    expect(next.selection?.metadata).toEqual(delta.selection.metadata);
     expect(getCanvasSnapshotSequence(next)).toBe(getCanvasSnapshotSequence(canvasOnly)! + 1);
     for (const key of ["source", "parameters", "project", "problems"] as const) expect(next[key]).toBe(base[key]);
     expect(next.presentation).toEqual({ ...base.presentation, selectedGeometryRole: "profile" });
@@ -234,6 +235,7 @@ describe("WasmWorkbenchAdapter", () => {
       { selection: { id: "line-1", kind: "Geometry" } },
       { selection: { id: "line-1", label: "Line 1" } },
       { selection: { id: "line-1", label: "Line 1", kind: "Geometry", ownership: 1 } },
+      { selection: { id: "line-1", label: "Line 1", kind: "Geometry", metadata: { authority: "source", target: { kind: "declaration", id: "line-1" }, editable: "yes" } } },
       { selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: null } },
       { selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: 9, to: 2 } } },
       { selection: { id: "line-1", label: "Line 1", kind: "Geometry", source: { path: "sketch.ts", from: -1, to: 2 } } },

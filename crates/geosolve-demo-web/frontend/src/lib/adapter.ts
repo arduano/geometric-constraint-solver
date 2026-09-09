@@ -136,6 +136,64 @@ export interface NavigationSnapshot {
 
 export type DimensionDisplayMode = "focused" | "all" | "hidden";
 
+/** Accepted source-owned presentation and the native authority for editing it. */
+export interface AuthoringMetadataSnapshot {
+  authority: string;
+  target: { kind: "dimension" | "parameter" | "declaration"; id: string };
+  label?: string;
+  description?: string;
+  isKeyConstraint?: boolean;
+  isKeyParameter?: boolean;
+  hasKeyOverride?: boolean;
+  editable: boolean;
+  reason?: string;
+  canExtract?: boolean;
+}
+
+export interface AuthoringDocumentSnapshot {
+  authority: string;
+  title: string;
+  description: string;
+  areKeyConstraintsByDefault: boolean;
+  editable: boolean;
+  reason?: string;
+}
+
+export interface AuthoringMetadataChanges {
+  label?: string | null;
+  description?: string | null;
+  title?: string | null;
+  isKeyConstraint?: boolean | null;
+  isKeyParameter?: boolean | null;
+  areKeyConstraintsByDefault?: boolean | null;
+}
+
+export interface AuthoringMetadataCommand {
+  authority: string;
+  target: AuthoringMetadataSnapshot["target"] | { kind: "document" };
+  changes: AuthoringMetadataChanges;
+}
+
+export interface AuthoringParameterExtractionCommand {
+  authority: string;
+  id: string;
+  label?: string;
+  description?: string;
+  isKeyParameter?: boolean;
+}
+
+export interface ParameterEntry {
+  id: string;
+  rowKey?: string;
+  label: string;
+  value: string;
+  unit?: string;
+  editable: boolean;
+  defaultPriority?: boolean;
+  metadata?: AuthoringMetadataSnapshot;
+  consumers?: string[];
+}
+
 /** Accepted native metadata: the frontend does not infer measurement ownership. */
 export interface DimensionEntry {
   id: string;
@@ -154,12 +212,15 @@ export interface DimensionEntry {
   focused: boolean;
   editable: boolean;
   reason?: string;
+  contextual?: boolean;
+  metadata?: AuthoringMetadataSnapshot;
 }
 
 export interface DimensionsSnapshot {
   mode: DimensionDisplayMode;
   entries: DimensionEntry[];
-  parameters: Array<{ id: string; label: string; value: string; unit?: string; editable: boolean; defaultPriority?: boolean }>;
+  parameters: ParameterEntry[];
+  allMeasurements?: DimensionEntry[];
   pinCount: number;
 }
 
@@ -173,8 +234,9 @@ export interface WorkbenchSnapshot {
   explorer: DeclarationRow[];
   navigation?: NavigationSnapshot;
   dimensions?: DimensionsSnapshot;
-  selection?: { id: string; label: string; kind: string; ownership?: string; source?: { path: string; from: number; to: number } };
-  parameters: Array<{ id: string; label: string; value: string; unit?: string; editable: boolean }>;
+  authoringDocument?: AuthoringDocumentSnapshot;
+  selection?: { id: string; label: string; kind: string; ownership?: string; source?: { path: string; from: number; to: number }; metadata?: AuthoringMetadataSnapshot };
+  parameters: ParameterEntry[];
   problems: WorkbenchProblem[];
   pendingManagedMutation?: PendingManagedMutation;
 }
@@ -239,28 +301,58 @@ export function assertWorkbenchSnapshot(value: WorkbenchSnapshot): WorkbenchSnap
   assertDrawFrame(value.frame.scene);
   const geometryRole = value.presentation?.geometryRole;
   const selectedGeometryRole = value.presentation?.selectedGeometryRole;
-  if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.constructionVisible !== "boolean" || typeof value.presentation?.visibilityRestoreAvailable !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.navigation !== undefined && !validNavigationSnapshot(value.navigation)) || (value.dimensions !== undefined && !validDimensionsSnapshot(value.dimensions)) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {
+  if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.constructionVisible !== "boolean" || typeof value.presentation?.visibilityRestoreAvailable !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.navigation !== undefined && !validNavigationSnapshot(value.navigation)) || (value.dimensions !== undefined && !validDimensionsSnapshot(value.dimensions)) || (value.authoringDocument !== undefined && !validAuthoringDocument(value.authoringDocument)) || (value.selection?.metadata !== undefined && !validAuthoringMetadata(value.selection.metadata)) || !Array.isArray(value.parameters) || !value.parameters.every(validParameterEntry) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {
     throw new Error("Unsupported or malformed workbench snapshot");
   }
   return value;
 }
 
+function validAuthoringMetadata(value: unknown): value is AuthoringMetadataSnapshot {
+  return record(value) && typeof value.authority === "string" && value.authority.length > 0
+    && record(value.target) && ["dimension", "parameter", "declaration"].includes(String(value.target.kind))
+    && typeof value.target.id === "string" && value.target.id.length > 0
+    && typeof value.editable === "boolean"
+    && ["label", "description", "reason"].every((field) => value[field] === undefined || typeof value[field] === "string")
+    && ["isKeyConstraint", "isKeyParameter", "hasKeyOverride", "canExtract"].every((field) => value[field] === undefined || typeof value[field] === "boolean")
+    && (value.isKeyConstraint === undefined || value.target.kind === "dimension")
+    && (value.isKeyParameter === undefined || value.target.kind === "parameter");
+}
+
+function validAuthoringDocument(value: unknown): value is AuthoringDocumentSnapshot {
+  return record(value) && typeof value.authority === "string" && value.authority.length > 0
+    && typeof value.title === "string" && typeof value.description === "string"
+    && typeof value.areKeyConstraintsByDefault === "boolean" && typeof value.editable === "boolean"
+    && (value.reason === undefined || typeof value.reason === "string");
+}
+
+function validParameterEntry(value: unknown): value is ParameterEntry {
+  return record(value) && typeof value.id === "string" && value.id.length > 0
+    && typeof value.label === "string" && typeof value.value === "string"
+    && (value.unit === undefined || typeof value.unit === "string") && typeof value.editable === "boolean"
+    && (value.rowKey === undefined || (typeof value.rowKey === "string" && value.rowKey.length > 0))
+    && (value.defaultPriority === undefined || typeof value.defaultPriority === "boolean")
+    && (value.metadata === undefined || validAuthoringMetadata(value.metadata))
+    && (value.consumers === undefined || stringArray(value.consumers));
+}
+
+function validDimensionEntries(value: unknown): value is DimensionEntry[] {
+  return Array.isArray(value) && value.every((entry) => validParameterEntry(entry) && record(entry)
+    && typeof entry.kind === "string" && typeof entry.reference === "boolean"
+    && typeof entry.generated === "boolean" && typeof entry.pinned === "boolean"
+    && typeof entry.visible === "boolean" && typeof entry.focused === "boolean"
+    && (entry.contextual === undefined || typeof entry.contextual === "boolean")
+    && (entry.reason === undefined || typeof entry.reason === "string"))
+    && new Set(value.map((entry) => entry.id)).size === value.length
+    && new Set(value.map((entry) => entry.rowKey ?? entry.id)).size === value.length;
+}
+
 function validDimensionsSnapshot(value: unknown): value is DimensionsSnapshot {
-  const field = (entry: unknown) => record(entry) && typeof entry.id === "string" && entry.id.length > 0
-    && typeof entry.label === "string" && typeof entry.value === "string"
-    && (entry.unit === undefined || typeof entry.unit === "string") && typeof entry.editable === "boolean";
   return record(value) && ["focused", "all", "hidden"].includes(String(value.mode))
     && safeInteger(value.pinCount, 0) && value.pinCount <= 4
-    && Array.isArray(value.parameters) && value.parameters.every(field)
+    && Array.isArray(value.parameters) && value.parameters.every(validParameterEntry)
     && new Set(value.parameters.map((entry) => entry.id)).size === value.parameters.length
-    && Array.isArray(value.entries) && value.entries.every((entry) => field(entry) && record(entry)
-      && (entry.rowKey === undefined || (typeof entry.rowKey === "string" && entry.rowKey.length > 0))
-      && typeof entry.kind === "string" && typeof entry.reference === "boolean"
-      && typeof entry.generated === "boolean" && typeof entry.pinned === "boolean"
-      && typeof entry.visible === "boolean" && typeof entry.focused === "boolean"
-      && (entry.reason === undefined || typeof entry.reason === "string"))
-    && new Set(value.entries.map((entry) => entry.id)).size === value.entries.length
-    && new Set(value.entries.map((entry) => entry.rowKey ?? entry.id)).size === value.entries.length;
+    && validDimensionEntries(value.entries)
+    && (value.allMeasurements === undefined || validDimensionEntries(value.allMeasurements));
 }
 
 function validNavigationSnapshot(value: unknown): value is NavigationSnapshot {
@@ -318,6 +410,27 @@ function validSessionIdentity(value: unknown): value is CodeSessionIdentity {
 function validManagedMutation(value: unknown): value is ManagedSketchMutation {
   if (!record(value) || typeof value.mutation !== "string") return false;
   switch (value.mutation) {
+    case "set_metadata": {
+      if (!record(value.target)) return false;
+      const target = value.target.target;
+      const properties = target === "document"
+        ? ["title", "description", "areKeyConstraintsByDefault"]
+        : target === "parameter" ? ["label", "description", "isKeyParameter"]
+          : target === "declaration" ? ["label", "description", "isKeyConstraint"] : [];
+      return (target === "document" || (typeof value.target.declaration === "string" && value.target.declaration.length > 0))
+        && typeof value.property === "string" && properties.includes(value.property)
+        && (value.value === null || record(value.value));
+    }
+    case "extract_parameter":
+      return typeof value.declaration === "string" && value.declaration.length > 0
+        && typeof value.symbol === "string" && value.symbol.length > 0
+        && typeof value.variable === "string" && value.variable.length > 0
+        && Array.isArray(value.path) && value.path.every((part) => typeof part === "string" || safeInteger(part, 0) || (record(part) && typeof part.member === "string"))
+        && (value.presentation === undefined || (record(value.presentation)
+          && Object.keys(value.presentation).every((field) => ["label", "description", "isKeyParameter"].includes(field))
+          && (value.presentation.label === undefined || typeof value.presentation.label === "string")
+          && (value.presentation.description === undefined || typeof value.presentation.description === "string")
+          && (value.presentation.isKeyParameter === undefined || typeof value.presentation.isKeyParameter === "boolean")));
     case "insert_declarations":
       return Array.isArray(value.declarations) && value.declarations.every((draft) =>
         record(draft)

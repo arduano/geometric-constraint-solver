@@ -1160,7 +1160,9 @@ fn materialize_unchanged_host_project_incremental(
         accepted_continuation,
         IncrementalPatchMode::Delegated,
     )?;
-    if base_outcome.disposition != IntentPlanDisposition::Accepted {
+    // Source labels commit as organization-only changes. The retained native
+    // authority is independently validated below before composition is returned.
+    if base_outcome.disposition == IntentPlanDisposition::RetainedFailed {
         return Err(CodeCompositionError::BaseNotAccepted);
     }
     merge_retained_aliases(

@@ -1,7 +1,13 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Curves, contact and continuity atlas",
+  description: "Readable analytic and spline specimens frame explicit rolling contact and a parametric-C2 seam.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   // The top shelf keeps the analytic families spatially separated. These are
   // deliberately free specimens: their source literals remain easy to edit
   // while the contact studies below demonstrate solver-owned relationships.

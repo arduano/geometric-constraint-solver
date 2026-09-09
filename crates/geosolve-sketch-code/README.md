@@ -21,7 +21,10 @@ scene:
 "use geosolve sketch";
 import { mm, sketch } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Frame study",
+  description: "A rectangular frame with a construction diagonal.",
+}, ($) => {
   const frame = $.geometry.twoPointAlignedRectangle("frame", {
     firstCorner: [0, 0],
     oppositeCorner: [60, 35],
@@ -35,6 +38,8 @@ export default sketch(($) => {
   const width = $.dimension.curveLength("width", {
     curve: frame.spans[0],
     value: mm(60),
+    label: "Frame width",
+    isKeyConstraint: true,
   });
   $.group("Frame", [frame, diagonal, width]);
   return { frame, diagonal, width };
@@ -69,17 +74,51 @@ can replace accepted scene authority. The authenticated IR remains deep enough t
 normalized sketch again, while the execution artifact records runtime reference flow and callback
 output structure.
 
+## Source-owned presentation
+
+Dimensions use `isKeyConstraint`; named public values use `isKeyParameter`:
+
+```typescript
+const channelWidth = $.parameter("channelWidth", mm(12), {
+  label: "Channel width",
+  description: "Full passage width shared by four channels.",
+  isKeyParameter: true,
+});
+```
+
+Pass the returned value directly to dimensions or patch inputs. Stable parameter IDs,
+variable names and display labels remain separate; equal values do not merge identities.
+Set `sketch({ dimensions: { areKeyConstraintsByDefault: true } }, callback)` to prioritize
+all directly authored dimensions. A local `isKeyConstraint: false` opts out; removing the
+property restores the document default. These flags never change solver priority.
+
+`t.length(options?)` and `t.angle(options?)` provide label/description/`isKeyParameter`
+defaults for inline patch inputs. Named parameters retain their own presentation. An
+optional fourth `$.use` argument gives the invocation a label and description. The
+workbench edits the same source through prepared transactions, including extraction of
+supported literals into named parameters, with atomic validation and Undo/Redo.
+
+Managed compilation emits V4 IR/execution receipts. A bounded V3 reader retains old
+saved source and history without rewriting them on load; the first authenticated edit
+produces a V4 candidate. V1/V2 are unsupported. See the
+[TypeScript authoring guide](../../packages/geosolve-sketch-code/README.md) for examples,
+resolution rules, limits and extraction ownership.
+
 ## Bundled samples
 
-One manifest-driven registry contains exactly sixteen complete code-authored samples across
+One catalog registry contains exactly sixteen complete code-authored samples across
 mechanisms, fabrication/product studies, reference labs and scale studies. For example:
 
 - **Theo Jansen walking leg** retains one intended constrained degree of freedom.
-- **PC liquid-cooling manifold** composes direct constrained geometry with one colocated,
-  authenticated water-channel patch.
+- **PC liquid-cooling manifold** composes constrained geometry with colocated, authenticated
+  water-channel and silicone-groove patches, with source-owned public widths.
 - **Gridfinity plan and 3U section** records standards-informed dimensions with adjacent provenance.
 - **Perforated fixture field** and **robotic harness backplane** exercise complete dense scenes
   without a second catalog or LOD authority.
+
+Titles, summaries, groups and overview priorities come from compiled source. Catalog
+ordering, categories, expected sample assertions and legal provenance retain their
+catalog/test owners.
 
 In `geosolve-demo-web`, open a fresh sketch, select **Code**, and choose **Start from code** or one
 of those samples. Editing `sketch.ts` and pressing **Apply** compiles and validates the complete

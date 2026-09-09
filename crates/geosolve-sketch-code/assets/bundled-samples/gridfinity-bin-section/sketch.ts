@@ -1,7 +1,13 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Gridfinity plan and 3U section",
+  description: "A standards-informed 1 x 1 plan and symmetric 3U section expose base, body, lip and cavity intent with one scalar section datum.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   // Plain 1 x 1 x 3U centre section. Profile dimensions follow
   // kennetek/gridfinity-rebuilt-openscad src/core/standard.scad at commit
   // 910e22d8607fd7f5f51ad5e5cbc5287a76810bfd (MIT; see the bundled NOTICE).

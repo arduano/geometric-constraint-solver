@@ -8417,10 +8417,9 @@ Closure prose preserves those qualified product bytes; no further M96 work is pe
 
 ## M97 — focused dimensions and stable annotation placement
 
-Status: **default-priority preview qualified; source-native authoring amendment designed,
-implementation pending.** [M97_GOALS.md](docs/M97_GOALS.md) owns the interaction contract;
-[authoring design](docs/M97_AUTHORING_METADATA.md) specifies the requested next amendment.
-M96 remains the accepted product; M97 is open.
+Status: **accepted and closed on 2026-09-09.** [M97_GOALS.md](docs/M97_GOALS.md) owns the interaction contract;
+[authoring design](docs/M97_AUTHORING_METADATA.md) specifies the implemented amendment.
+M97 is the accepted product. [Closure](docs/M97_CLOSURE.md) records the supervising-user sign-off.
 
 - [x] Regress M97-F001 zoom-then-click layout jumps at the native owner.
 - [x] Implement shared native dimension metadata, relevance, bounded visibility and retained placement.
@@ -8430,12 +8429,12 @@ M96 remains the accepted product; M97 is open.
 - [x] Freeze and present the qualified candidate for supervising-user acceptance.
 - [x] Add and qualify default design-intent priorities, including all Gridfinity measurements.
 - [x] Design source-owned dimension priorities and audit adjacent authoring metadata.
-- [ ] Add document options, named parameters, patch input presentation and authenticated compiler metadata.
-- [ ] Add prepared metadata/extraction edits, source-driven projections and exact history/restoration.
-- [ ] Connect overview/name/help/document controls and consistently honor authored display labels.
-- [ ] Migrate live sample priorities/title/description to source, derive catalog projections and remove selector fallbacks.
-- [ ] Qualify source-only imports, precedence, shared controls and authoring transactions; deliver an amended preview.
-- [ ] Obtain supervising-user acceptance and close M97.
+- [x] Add document options, named parameters, patch input presentation and authenticated compiler metadata.
+- [x] Add prepared metadata/extraction edits, source-driven projections and exact history/restoration.
+- [x] Connect overview/name/help/document controls and consistently honor authored display labels.
+- [x] Migrate live sample priorities/title/description to source, derive catalog projections and remove selector fallbacks.
+- [x] Qualify source-only imports, precedence, shared controls and authoring transactions; deliver an amended preview.
+- [x] Obtain supervising-user acceptance and close M97.
 
 Source `a39f35ade58c3d5a272899dfb4e616d6578a9d14` passes all 243 integrated obligations
 in `20260908T133354-cff36f90` (38m18.9s), including the unchanged 271-case golden
@@ -8448,11 +8447,24 @@ passes all 243 obligations in `20260908T172035-7255b491` (13 fresh, 230 authenti
 reused results). Its frozen preview at `http://100.94.63.83:18104/` passes exact
 served-byte and actual-WASM checks. M97-F002 now preserves exact annotation
 geometry for identical viewports; archived-fixture and package-cache checks are
-corrected without changing historical fixtures or golden rows. The subsequent
-authoring request is now designed: Inspector edits write the same local source metadata
-that code authors use; public parameters, labels/help and document identity join the
-scope. The design changes no product bytes and its implementation/qualification remain
-unchecked above. M97 remains open; M96 remains accepted.
+corrected without changing historical fixtures or golden rows.
+
+The source-native amendment is qualified from clean product
+`e26270cb89e5849092145b329d0cf95821a81b27` in `20260908T235146-b387d273`:
+244/244 obligations pass in 37m29.9s, with nine fresh and 235 authenticated reused
+results. Browser coverage passes 17/17 prefix and 48/48 full workflows without
+retries, skips or failures, including fresh workflows for all 16 samples; the
+271-case golden is unchanged. Inspector edits write the same source metadata as
+code authoring, including shared parameters, labels/help and document properties.
+[Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) records the exact
+commands, retained-authority checks and verified frozen production preview at
+`http://100.94.63.83:18105/`. Its 12 files, 13 HTTP routes and actual-WASM manifold
+readiness pass verification; port 18104 remains preserved. Generated per-instance
+overview overrides remain deferred. The supervising user accepted the result and requested
+closure on 2026-09-09; no M97 work remains. The existing M98 prototype continues in
+`m98/file-workspace`, based on `d80bf22`, with integration review now authorized.
+Its separate worktree owns the M98 plan and prototype evidence; this closeout does not
+merge or qualify that product.
 
 ## M98 — local plaintext sketch folder prototype (authorized parallel exception)
 

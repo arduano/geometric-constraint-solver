@@ -1,7 +1,13 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 
-export default sketch(($) => {
+export default sketch({
+  title: "Generated five-stage scissor lift · 1 DOF",
+  description: "Five equal diagonal stages and six horizontal platforms share one guided extension mode.",
+  dimensions: {
+    areKeyConstraintsByDefault: true,
+  },
+}, ($) => {
   const point1TowerLevel0Left = $.geometry.sketchPoint("point1TowerLevel0Left", {
     point: [-4, 0],
     label: "Tower level 0 left",

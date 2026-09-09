@@ -98,6 +98,60 @@ function pendingManagedMutation(ticketDigit: string): PendingManagedMutation {
 }
 
 describe("M88 workbench interaction contract", () => {
+  it("routes source-owned overview, document properties and parameter extraction through authenticated commands", async () => {
+    class MetadataAdapter extends MockWorkbenchAdapter {
+      constructor() {
+        super();
+        this.state.authoringDocument = { authority: "document-source", title: "Untitled sketch", description: "", areKeyConstraintsByDefault: false, editable: true };
+        this.state.dimensions = { mode: "focused", pinCount: 0, parameters: [], entries: [{ id: "width-control", rowKey: "width-row", label: "Plate width", value: "240", unit: "mm", kind: "Distance", reference: false, generated: false, pinned: false, visible: true, focused: false, editable: true, metadata: { authority: "width-source", target: { kind: "dimension", id: "plateWidth" }, isKeyConstraint: true, editable: true, hasKeyOverride: true } }] };
+        this.state.parameters[0].metadata = { authority: "parameter-source", target: { kind: "parameter", id: "radius-input" }, isKeyParameter: false, editable: false, canExtract: true };
+      }
+    }
+    const adapter = new MetadataAdapter(); const { user } = await ready(adapter);
+    const dispatch = vi.spyOn(adapter, "dispatch");
+    const before = await adapter.snapshot();
+    const overview = screen.getByRole("checkbox", { name: "Show Plate width in overview" });
+    overview.focus(); await user.keyboard(" ");
+    await waitFor(() => expect(overview).toBeEnabled());
+    expect(overview).toHaveFocus();
+    expect(dispatch).toHaveBeenLastCalledWith({ version: 2, command: "authoring.metadata.set", payload: { authority: "width-source", target: { kind: "dimension", id: "plateWidth" }, changes: { isKeyConstraint: false } } });
+    expect(overview).toHaveFocus();
+    expect(screen.getByRole("button", { name: /^design$/i })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByText("Document properties"));
+    await user.click(screen.getByRole("checkbox", { name: "Show authored dimensions in overview by default" }));
+    await waitFor(() => expect(dispatch).toHaveBeenLastCalledWith({ version: 2, command: "authoring.metadata.set", payload: { authority: "document-source", target: { kind: "document" }, changes: { areKeyConstraintsByDefault: true } } }));
+    screen.getByRole("tab", { name: "Parameters" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("button", { name: "Make Radius a named parameter" }));
+    expect(dispatch).toHaveBeenLastCalledWith({ version: 2, command: "authoring.parameter.extract", payload: { authority: "parameter-source", id: "radius", label: "Radius", isKeyParameter: false } });
+    // The frontend sends intent; only an accepted native publication changes source.
+    expect((await adapter.snapshot()).source).toEqual(before.source);
+  });
+
+  it("blocks metadata controls while local source is dirty and while a metadata command is pending", async () => {
+    class MetadataAdapter extends MockWorkbenchAdapter {
+      release: (() => void) | undefined;
+      constructor() { super(); this.state.authoringDocument = { authority: "document-source", title: "Untitled sketch", description: "", areKeyConstraintsByDefault: false, editable: true }; }
+      override async dispatch(input: { command: string; payload?: unknown }) {
+        if (input.command === "authoring.metadata.set") await new Promise<void>((resolve) => { this.release = resolve; });
+        return super.dispatch(input);
+      }
+    }
+    const adapter = new MetadataAdapter(); const { user, container } = await ready(adapter);
+    await user.click(screen.getByText("Document properties"));
+    const overview = screen.getByRole("checkbox", { name: "Show authored dimensions in overview by default" });
+    await user.click(overview);
+    expect(overview).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Document title" })).toBeDisabled();
+    await act(async () => { adapter.release?.(); });
+    await waitFor(() => expect(overview).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: /^split$/i }));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    act(() => editor.dispatch({ changes: { from: editor.state.doc.length, insert: "// unapplied metadata owner" } }));
+    expect(overview).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Document title" })).toBeDisabled();
+  });
+
   it("routes dimension inspection without source, focus or layout changes and saves only persistent display choices", async () => {
     class DimensionAdapter extends MockWorkbenchAdapter {
       constructor() {

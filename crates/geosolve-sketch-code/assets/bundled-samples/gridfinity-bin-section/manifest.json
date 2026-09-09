@@ -2,13 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 9,
   "key": "gridfinity-bin-section",
-  "title": "Gridfinity plan and 3U section",
-  "summary": "A standards-informed 1 x 1 plan and symmetric 3U section expose base, body, lip and cavity intent with one scalar section datum.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["3U material section", "Section standard dimensions", "Section projection datums", "1 x 1 plan study"],
-  "dimension_presentation": {
-    "all_authored": true
+  "expected": {
+    "raw_dof": 0,
+    "effective_dof": 0
   },
   "provenance": [
     {

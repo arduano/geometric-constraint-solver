@@ -33,6 +33,28 @@ describe("TypeScript project language service", () => {
     service.dispose();
   });
 
+  it("resolves source-owned presentation types and rejects invalid overview flags", () => {
+    const source = `"use geosolve sketch";
+import { sketch, mm, t } from "@geosolve/sketch-code";
+const widthSchema = t.length({ label: "Width", isKeyParameter: true });
+export default sketch({ title: "Plate", description: "Test", dimensions: { areKeyConstraintsByDefault: true } }, ($) => {
+  const width = $.parameter("width", mm(12), { label: "Width", description: "Shared width", isKeyParameter: true });
+  const edge = $.geometry.segment("edge", { start: [0, 0], end: [12, 0], label: "Edge" });
+  const size = $.dimension.curveLength("size", { curve: edge.span, value: width, label: "Edge length", description: "Driving size", isKeyConstraint: false });
+  return { edge, size };
+});`;
+    const valid = synchronized(source);
+    expect(valid.diagnostics("sketch.ts")).toEqual([]);
+    valid.dispose();
+    for (const flag of ["isKeyParameter: true", "isKeyConstraint: false", "areKeyConstraintsByDefault: true"]) {
+      const invalid = synchronized(source.replace(flag, `${flag.split(":")[0]}: "yes"`));
+      expect(invalid.diagnostics("sketch.ts")).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 2322, severity: "error" }),
+      ]));
+      invalid.dispose();
+    }
+  });
+
   it("uses the pinned exact SDK for precise semantic diagnostics", () => {
     const service = synchronized(SOURCE.replace("end: [10, 0]", "end: [10, \"wrong\"]"));
     const diagnostics = service.diagnostics("sketch.ts");

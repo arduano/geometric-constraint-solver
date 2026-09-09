@@ -2,19 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 6,
   "key": "cnc-dogbone-coupon",
-  "title": "CNC joinery and dogbone fit coupon",
-  "summary": "A fully constrained three-station router coupon compares press, nominal and loose mortises against common tabs and explicit cutter reliefs.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Female coupon blank", "Relational station datums", "Press-fit station", "Nominal-fit station", "Loose-fit station"],
-  "dimension_presentation": {
-    "dimensions": [
-      "pressMortiseHeight",
-      "nominalMortiseHeight",
-      "looseMortiseHeight",
-      "nominalTabThickness",
-      "cutterRadius"
-    ]
+  "expected": {
+    "raw_dof": 0,
+    "effective_dof": 0
   },
   "provenance": [
     {

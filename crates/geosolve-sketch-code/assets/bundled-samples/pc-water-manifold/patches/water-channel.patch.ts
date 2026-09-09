@@ -10,8 +10,8 @@ import { definePatch, t } from "@geosolve/sketch-code";
 export const waterChannel = definePatch(
   {
     polyline: t.feature("polyline"),
-    width: t.length(),
-    bendRadius: t.length(),
+    width: t.length({ label: "Channel width", description: "Full width across the water passage.", isKeyParameter: true }),
+    bendRadius: t.length({ label: "Bend radius", description: "Centreline radius; must exceed half the width." }),
   },
   (p, { polyline, width, bendRadius }) => ({
     profile: p.computed.polylineChannel("channel", {

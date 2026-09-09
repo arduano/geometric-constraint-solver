@@ -78,6 +78,7 @@ const standardLibrary = [...libraries]
   .join("\n");
 const sdkIndex = declaration("index");
 const sdkAuthoring = declaration("authoring");
+const sdkPresentation = declaration("presentation");
 const digest = createHash("sha256")
   .update(expectedVersion)
   .update("\0")
@@ -86,6 +87,8 @@ const digest = createHash("sha256")
   .update(sdkIndex)
   .update("\0")
   .update(sdkAuthoring)
+  .update("\0")
+  .update(sdkPresentation)
   .digest("hex");
 
 const generated = `// SPDX-License-Identifier: GPL-3.0-or-later
@@ -96,6 +99,7 @@ export const LANGUAGE_SERVICE_DECLARATIONS_DIGEST = ${JSON.stringify(digest)};
 export const TYPESCRIPT_STANDARD_LIBRARY = ${JSON.stringify(standardLibrary)};
 export const GEOSOLVE_SKETCH_CODE_INDEX = ${JSON.stringify(sdkIndex)};
 export const GEOSOLVE_SKETCH_CODE_AUTHORING = ${JSON.stringify(sdkAuthoring)};
+export const GEOSOLVE_SKETCH_CODE_PRESENTATION = ${JSON.stringify(sdkPresentation)};
 `;
 
 if (check) {

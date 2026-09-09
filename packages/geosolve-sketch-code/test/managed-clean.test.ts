@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import * as publicManagedIr from "@geosolve/sketch-code/ir";
 // @ts-expect-error Generic one-phase mutation DTOs are not public IR API.
@@ -11,6 +12,8 @@ import { recordPatchArtifact } from "../src/compiler.js";
 import {
   applyManagedSketchMutation,
   compileManagedSource,
+  executeManagedSketch,
+  canonicalExecutedSketchArtifact,
   type ManagedDeclarationDraft,
 } from "../src/managed.js";
 
@@ -429,4 +432,96 @@ test("public IR handoff excludes ticketless one-phase rewrite helpers", () => {
   ]) {
     assert.equal(retired in publicManagedIr, false, retired);
   }
+});
+
+test("source-native metadata preserves parameter provenance and explicit overview intent", () => {
+  const current = compileManagedSource(`"use geosolve sketch";
+import { sketch, mm } from "@geosolve/sketch-code";
+export default sketch({ title: "Channel plate", dimensions: { areKeyConstraintsByDefault: true } }, ($) => {
+  const width = $.parameter("channelWidth", mm(12), { label: "Channel width", isKeyParameter: true });
+  const equalWidth = $.parameter("otherWidth", mm(12));
+  const line = $.geometry.segment("line", { start: [0, 0], end: [12, 0], description: "Full passage" });
+  const size = $.dimension.curveLength("size", { curve: line, value: width, isKeyConstraint: false });
+  const another = $.dimension.curveLength("another", { curve: line, value: width });
+  return { line, size, another, equalWidth };
+});`);
+  assert.equal(current.ir.format, "geosolve-managed-sketch-ir-v4");
+  assert.equal(canonicalExecutedSketchArtifact(executeManagedSketch(current.ir)), current.canonicalArtifactJson);
+  assert.deepEqual(current.artifact.document, { title: "Channel plate", dimensions: { areKeyConstraintsByDefault: true } });
+  const [shared, equal] = current.artifact.parameters!;
+  assert.notEqual(shared!.value_site, equal!.value_site);
+  assert.equal(current.artifact.value_consumers.filter((consumer) => consumer.value_site === shared!.value_site).length, 2);
+  assert.equal(current.artifact.value_consumers.filter((consumer) => consumer.value_site === equal!.value_site).length, 0);
+  assert.deepEqual(current.artifact.presentations?.find((entry) => entry.declaration === "size")?.presentation, { isKeyConstraint: false });
+  const changed = applyManagedSketchMutation(current, { mutation: "set_value", declaration: "channelWidth", path: [], expected: { kind: "unit", value: { unit: "mm", value: 12 } }, value: { kind: "unit", value: { unit: "mm", value: 14 } } }).compiled;
+  assert.equal(changed.artifact.parameters?.[0]?.value.kind, "unit");
+  assert.deepEqual(changed.artifact.parameters?.[1]?.value, equal!.value);
+});
+
+test("metadata edits reset overrides and extract values without changing ownership", () => {
+  const current = compileManagedSource(`"use geosolve sketch";
+import { sketch, mm } from "@geosolve/sketch-code";
+export default sketch(($) => {
+  const width = mm(12);
+  const line = $.geometry.segment("line", { start: [0, 0], end: [12, 0] });
+  const size = $.dimension.curveLength("size", { curve: line, value: width });
+  return { line, size };
+});`);
+  const extracted = applyManagedSketchMutation(current, { mutation: "extract_parameter", declaration: "width", path: [], symbol: "channelWidth", variable: "width", presentation: { label: "通路幅", isKeyParameter: true } }).compiled;
+  assert.match(extracted.normalizedSource, /\$\.parameter\("channelWidth", mm\(12\)/u);
+  assert.equal(extracted.artifact.parameters?.[0]?.presentation.label, "通路幅");
+  const titled = applyManagedSketchMutation(extracted, { mutation: "set_metadata", target: { target: "document" }, property: "title", value: { kind: "string", value: "Demo plate" } }).compiled;
+  assert.equal(titled.artifact.document?.title, "Demo plate");
+  const marked = applyManagedSketchMutation(titled, { mutation: "set_metadata", target: { target: "declaration", declaration: "size" }, property: "isKeyConstraint", value: { kind: "bool", value: false } }).compiled;
+  assert.deepEqual(marked.artifact.presentations, [{ declaration: "size", presentation: { isKeyConstraint: false } }]);
+  const reset = applyManagedSketchMutation(marked, { mutation: "set_metadata", target: { target: "declaration", declaration: "size" }, property: "isKeyConstraint", value: null }).compiled;
+  assert.equal(reset.artifact.presentations, undefined);
+  assert.deepEqual(reset.artifact.output, current.artifact.output);
+});
+
+test("metadata rejects ambiguous names, invalid label bytes, duplicate parameter identity and forged current", () => {
+  const make = (body: string) => `"use geosolve sketch"; import { sketch, mm } from "@geosolve/sketch-code"; export default sketch(($) => { ${body} return {}; });`;
+  assert.throws(() => compileManagedSource(make('const value = $.parameter("width", mm(12), { key: true });')), /unknown presentation field/u);
+  assert.throws(() => compileManagedSource(make(`const value = $.parameter("width", mm(12), { label: "${"幅".repeat(86)}" });`)), /256 UTF-8/u);
+  assert.throws(() => compileManagedSource(make('const first = $.parameter("width", 12); const second = $.parameter("width", 12);')), /duplicate parameter ID/u);
+  const current = compileManagedSource(make('const value = $.parameter("width", mm(12));'));
+  assert.throws(() => applyManagedSketchMutation({ ...current, canonicalArtifactJson: current.canonicalArtifactJson.replace('"presentation":{}', '"presentation":{"isKeyParameter":true}') }, { mutation: "set_metadata", target: { target: "parameter", declaration: "width" }, property: "label", value: { kind: "string", value: "Width" } }), /does not match/u);
+});
+
+test("inline parameter extraction rewrites only its consumer and unused named values survive consumer deletion", () => {
+  const current = compileManagedSource(`"use geosolve sketch"; import { sketch, mm } from "@geosolve/sketch-code"; export default sketch(($) => {
+    const line = $.geometry.segment("line", { start: [0, 0], end: [12, 0] });
+    const size = $.dimension.curveLength("size", { curve: line, value: mm(12) });
+    return { line, size };
+  });`);
+  const extracted = applyManagedSketchMutation(current, { mutation: "extract_parameter", declaration: "size", path: ["value"], symbol: "width", variable: "width", presentation: { isKeyParameter: true } }).compiled;
+  assert.deepEqual(extracted.artifact.parameters?.[0]?.value, { kind: "unit", value: { unit: "mm", value: 12 } });
+  assert.match(extracted.normalizedSource, /value: width/u);
+  const deleted = applyManagedSketchMutation(extracted, { mutation: "delete", target: { target: "declaration", declaration: "size" } }).compiled;
+  assert.equal(deleted.artifact.parameters?.length, 1);
+  assert.equal(deleted.artifact.value_consumers.filter((consumer) => consumer.value_site === deleted.artifact.parameters?.[0]?.value_site).length, 0);
+});
+
+
+test("archived V3 authority survives exact restoration and upgrades on its first metadata edit", () => {
+  const bytes = readFileSync(new URL("../../test/fixtures/legacy-v3/managed-compiler-envelope.json", import.meta.url), "utf8");
+  const current = JSON.parse(bytes) as import("../src/managed.js").CompiledManagedSource;
+  const source = current.normalizedSource;
+  assert.equal(current.ir.format, "geosolve-managed-sketch-ir-v3");
+  assert.equal(canonicalExecutedSketchArtifact(executeManagedSketch(current.ir)), current.canonicalArtifactJson);
+  const upgraded = applyManagedSketchMutation(current, { mutation: "set_metadata", target: { target: "document" }, property: "title", value: { kind: "string", value: "Restored project" } }).compiled;
+  assert.equal(current.normalizedSource, source);
+  assert.equal(JSON.stringify(current), bytes);
+  assert.equal(upgraded.ir.format, "geosolve-managed-sketch-ir-v4");
+  assert.equal(upgraded.artifact.document?.title, "Restored project");
+  assert.deepEqual(upgraded.artifact.output, current.artifact.output);
+  assert.deepEqual(upgraded.artifact.declarations, current.artifact.declarations);
+  assert.deepEqual(upgraded.artifact.value_consumers, current.artifact.value_consumers);
+});
+
+
+test("named parameter IDs cannot collide with implicit scalar identities in either source order", () => {
+  const source = (body: string) => `"use geosolve sketch"; import { sketch, mm } from "@geosolve/sketch-code"; export default sketch(($) => { ${body} return {}; });`;
+  assert.throws(() => compileManagedSource(source('const ordinary = mm(12); const other = $.parameter("ordinary", mm(14));')), /duplicate parameter ID/u);
+  assert.throws(() => compileManagedSource(source('const other = $.parameter("ordinary", mm(14)); const ordinary = mm(12);')), /duplicate source scalar identity/u);
 });

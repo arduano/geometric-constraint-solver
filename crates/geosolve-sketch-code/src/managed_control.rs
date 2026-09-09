@@ -180,6 +180,8 @@ pub struct ManagedControl {
     pub schema: Option<ManagedControlSchema>,
     pub consumers: Vec<ManagedControlConsumer>,
     pub access: ManagedControlAccess,
+    pub presentation: crate::ManagedPresentation,
+    pub is_public_parameter: bool,
 }
 
 impl ManagedControl {
@@ -404,10 +406,17 @@ fn managed_value_site_index(
     for statement in &compiled.ir.statements {
         match statement {
             ManagedStatement::Binding {
-                variable, value, ..
+                variable,
+                value,
+                parameter,
+                ..
             } => collect_value_sites(
                 value,
-                &SemanticSymbol(variable.clone()),
+                &SemanticSymbol(
+                    parameter
+                        .as_ref()
+                        .map_or_else(|| variable.clone(), |p| p.symbol.clone()),
+                ),
                 &SemanticOutputPath::default(),
                 &spans,
                 &mut index,
@@ -783,8 +792,34 @@ fn managed_control_manifest_compiled(
             .unwrap_or_default()
             .into_iter()
             .collect::<Vec<_>>();
-        let classification =
-            classify_scalar_binding(&binding.value, &schema_map.remove(&key).unwrap_or_default());
+        let mut schemas = schema_map.remove(&key).unwrap_or_default();
+        if compiled
+            .artifact
+            .parameters
+            .iter()
+            .any(|parameter| parameter.declaration == binding.symbol.0)
+        {
+            let base = match &binding.value {
+                ManagedValue::Number(_) => ManagedControlSchema::Number {
+                    number: ManagedControlNumberKind::Real,
+                    minimum: None,
+                    maximum: None,
+                },
+                ManagedValue::Unit(value) => ManagedControlSchema::Unit {
+                    unit: value.unit.clone(),
+                    number: ManagedControlNumberKind::Real,
+                    minimum: None,
+                    maximum: None,
+                },
+                _ => {
+                    return Err(ManagedControlError::ForeignExpansion(
+                        "public parameter has no scalar base schema".into(),
+                    ));
+                }
+            };
+            schemas.insert(0, base);
+        }
+        let classification = classify_scalar_binding(&binding.value, &schemas);
         push_classified_control(
             &mut controls,
             project,
@@ -795,6 +830,18 @@ fn managed_control_manifest_compiled(
                 value: &binding.value,
                 consumers,
                 classification,
+                presentation: compiled
+                    .artifact
+                    .parameters
+                    .iter()
+                    .find(|parameter| parameter.declaration == binding.symbol.0)
+                    .map(|parameter| parameter.presentation.clone())
+                    .unwrap_or_default(),
+                is_public_parameter: compiled
+                    .artifact
+                    .parameters
+                    .iter()
+                    .any(|parameter| parameter.declaration == binding.symbol.0),
             },
         )?;
     }
@@ -834,6 +881,18 @@ fn managed_control_manifest_compiled(
                     value,
                     consumers,
                     classification,
+                    presentation: if matches!(value, ManagedValue::Reference { .. }) {
+                        crate::ManagedPresentation::default()
+                    } else if let [ManagedPathSegment::Field(input)] = owned.path.0.as_slice() {
+                        artifact_plan_index
+                            .get(&declaration.symbol)
+                            .and_then(|plan| plan.artifact.artifact().input_presentation.get(input))
+                            .cloned()
+                            .unwrap_or_default()
+                    } else {
+                        crate::ManagedPresentation::default()
+                    },
+                    is_public_parameter: false,
                 },
             )?;
         }
@@ -910,6 +969,8 @@ struct ClassifiedControl<'a> {
     value: &'a ManagedValue,
     consumers: Vec<ManagedControlConsumer>,
     classification: ControlClassification,
+    presentation: crate::ManagedPresentation,
+    is_public_parameter: bool,
 }
 
 fn push_classified_control(
@@ -924,6 +985,8 @@ fn push_classified_control(
         value,
         mut consumers,
         classification,
+        presentation,
+        is_public_parameter,
     } = input;
     if controls.len() >= MANAGED_CONTROL_LIMIT {
         return Err(ManagedControlError::ResourceLimit {
@@ -975,6 +1038,8 @@ fn push_classified_control(
         }
     };
     controls.push(ManagedControl {
+        presentation,
+        is_public_parameter,
         id,
         source,
         value: value.clone(),

@@ -806,7 +806,12 @@ def check_inventory(root):
     contract = read_json(directory.parent / "bundled-sample-catalog.json")
     if contract.get("schema") != 1 or not contract.get("samples"):
         raise ValueError("catalog contract is missing, empty or unknown")
-    manifests = [read_json(p) for p in sorted(directory.glob("*/manifest.json"))]
+    manifests = []
+    for path in sorted(directory.glob("*/manifest.json")):
+        manifest = read_json(path)
+        compiled = read_json(path.parent / "sketch.compiled.json")
+        manifest["title"] = compiled["artifact"]["document"]["title"]
+        manifests.append(manifest)
     count = len(manifests)
     if not count or sorted(m["ordinal"] for m in manifests) != list(range(1, count + 1)):
         raise ValueError("sample ordinals must be complete and contiguous")

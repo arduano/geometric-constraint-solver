@@ -23,6 +23,7 @@ export interface PrivateSchemaRuntime {
   readonly kind: PrivateSchemaKind;
   readonly feature?: string;
   readonly element?: object;
+  readonly presentation?: import("./presentation.js").ParameterOptions;
 }
 
 export interface PrivatePatchRuntime {

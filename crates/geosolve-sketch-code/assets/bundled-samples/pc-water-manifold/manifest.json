@@ -2,43 +2,10 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 5,
   "key": "pc-water-manifold",
-  "title": "PC liquid-cooling manifold",
-  "summary": "A constrained acrylic distribution-plate study combines three 12 mm reservoir channels, a separate stair-shaped point-to-point passage, rounded walls, five port bores, one enclosing 2.4 mm silicone seal groove and an external fastener stack.",
   "category": "product_fabrication",
   "expected": {
     "raw_dof": 0,
     "effective_dof": 0
-  },
-  "groups": [
-    "Manifold envelope and reservoir",
-    "Upper channel circuit",
-    "Middle channel circuit",
-    "Lower channel circuit",
-    "Point-to-point stair channel",
-    "Shared circuit seal",
-    "Fastener stack"
-  ],
-  "dimension_presentation": {
-    "dimensions": [
-      "plateWidth",
-      "plateHeight",
-      "reservoirWidth",
-      "reservoirHeight",
-      "upperOutletRadius",
-      "screwNwOuterDiameter"
-    ],
-    "parameters": [
-      {
-        "declaration": "channelWidth",
-        "path": []
-      },
-      {
-        "declaration": "commonSealGroove",
-        "path": [
-          "width"
-        ]
-      }
-    ]
   },
   "provenance": [
     {
