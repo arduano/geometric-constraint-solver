@@ -135,4 +135,17 @@ describe("source-driven generator inputs", () => {
     fireEvent.keyDown(field("Part name"), { key: "Escape" });
     expect(field("Part name")).toHaveValue("Tray");
   });
+
+  it("releases an inspected field on blur without applying or abandoning changed text", () => {
+    const lifecycle: AuthoringEditLifecycle = { beginFieldEdit: vi.fn(), changeFieldEdit: vi.fn(), cancelFieldEdit: vi.fn(), commitFieldEdit: vi.fn() };
+    const onApply = vi.fn();
+    render(<AuthoringEditContext.Provider value={lifecycle}><GeneratorInputs definitions={definitions} values={{}} onApply={onApply} /></AuthoringEditContext.Provider>);
+    vi.mocked(lifecycle.cancelFieldEdit).mockClear();
+    fireEvent.focus(field("Columns")); fireEvent.blur(field("Columns"));
+    expect(lifecycle.cancelFieldEdit).toHaveBeenCalledTimes(1);
+    fireEvent.focus(field("Columns")); fireEvent.change(field("Columns"), { target: { value: "4" } }); fireEvent.blur(field("Columns"));
+    expect(lifecycle.cancelFieldEdit).toHaveBeenCalledTimes(1);
+    expect(field("Columns")).toHaveValue("4");
+    expect(onApply).not.toHaveBeenCalled();
+  });
 });

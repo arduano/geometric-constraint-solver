@@ -82,6 +82,7 @@ function GeneratorInputField({ name, definition, accepted, disabledReason, onApp
     disabled: Boolean(disabledReason),
     title: disabledReason,
     onFocus: () => field.focus(),
+    onBlur: () => { if (!changed && !pending) field.cancel(); },
     onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
       if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); apply(); }
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); cancel(); }
