@@ -2956,3 +2956,8 @@ or material removal. See [M98 implementation plan](docs/M98_IMPLEMENTATION_PLAN.
 
 [M98 qualification](docs/M98_QUALIFICATION.md) records the complete clean-source gate and
 verified previews. Supervising-user acceptance and milestone closure remain open.
+
+The [M98 loading-feedback amendment](docs/M98_LOADING_FEEDBACK.md) adds presentation-only
+activity counting, delayed canvas feedback and named folder SSE activity. Standalone WASM
+runs the existing adapter in an ordered module worker, preserving immutable snapshot
+sequence and canvas-only fast paths across transport. Activity grants no scene authority.

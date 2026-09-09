@@ -30,7 +30,7 @@ async function ready() {
     if (request.method === "session.takeover") { state.editor!.canEdit = true; state.authority!.lease++; }
     return { ok: true, json: async () => ({ result: request.method === "toolCatalog" ? catalog : structuredClone(fixture), state: structuredClone(state) }) };
   }));
-  vi.stubGlobal("EventSource", class { close() {} });
+  vi.stubGlobal("EventSource", class extends EventTarget { close() {} });
   const adapter = new FolderWorkbenchAdapter("token");
   const rendered = render(<App adapter={adapter} folder={adapter} />);
   await screen.findByRole("region", { name: "Local folder" });

@@ -62,6 +62,7 @@ export async function createWorkspaceWorkbench({ timeoutMs = 120000, workerUrl =
       const result = await send(method, input);
       if (method === "persistProject") lastCheckpoint = result.contents;
       if (method === "construct") lastCheckpoint = input.persistedProject;
+      if (method === "dispatch" && input.command === "workspace.checkpoint.restore") lastCheckpoint = input.payload.contents;
       return result;
   };
   const adapter = Object.fromEntries(["construct", "snapshot", "toolCatalog", "dispatch", "pointer", "wheel", "wheelBatch", "resize", "cancel", "exportProject", "exportWorkspaceDesign", "persistProject", "exportReproduction", "exportInteractionTrace", "bakeProfile"].map((method) => [method, (input) => call(method, input)]));

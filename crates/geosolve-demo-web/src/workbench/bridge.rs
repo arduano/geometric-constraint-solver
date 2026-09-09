@@ -1449,6 +1449,7 @@ impl WorkbenchBridge {
             }
             "workspace.project.apply" => self.apply_workspace_project(payload),
             "workspace.generator.apply" => self.apply_workspace_generator(payload),
+            "workspace.checkpoint.restore" => self.restore_workspace_checkpoint(payload),
             "project.new" => self.new_sketch(),
             "project.new-code" => self.new_code_project(),
             "project.import" => {
@@ -4226,6 +4227,7 @@ fn command_allowed_while_managed_mutation_pending(command: &str) -> bool {
         command,
         "managed.mutation.resolve"
             | "managed.mutation.abort"
+            | "workspace.checkpoint.restore"
             | "explorer.visibility.set"
             | "explorer.visibility.isolate"
             | "explorer.visibility.restore"

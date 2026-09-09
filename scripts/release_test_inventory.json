@@ -232,6 +232,11 @@
       "m97-dimensions.spec.ts",
       "M97 contextual dimension edits author source-owned overview metadata and public parameters",
       "chromium-memory"
+    ],
+    [
+      "m97-dimensions.spec.ts",
+      "M98 standalone manifold solving paints delayed busy feedback and retains accepted geometry",
+      "chromium-memory"
     ]
   ]
 }

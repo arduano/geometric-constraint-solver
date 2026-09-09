@@ -10,6 +10,8 @@ async function openManifold(page: Page) {
   await page.getByRole("menuitem", { name: /Open/ }).click();
   await page.getByPlaceholder(/Search \d+ samples/).fill("water manifold");
   await page.getByRole("button", { name: "PC liquid-cooling manifold", exact: false }).click();
+  await expect(page.locator("header").getByText("PC liquid-cooling manifold", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("textbox", { name: "Channel width value", exact: true })).toHaveValue("12", { timeout: 60_000 });
   await page.getByRole("button", { name: "design", exact: true }).click();
   await page.getByRole("button", { name: "Fit sketch" }).click();
   await settlePresentation(page);
@@ -196,6 +198,67 @@ test("M97 contextual dimension edits retain source authority and Undo Redo reloa
   await explorer(page).getByRole("button", { name: "reservoirWidth", exact: true }).click();
   await expect(value).toHaveValue("62");
   await page.screenshot({ path: info.outputPath("dimension-edit.png") });
+});
+
+test("M98 standalone manifold solving paints delayed busy feedback and retains accepted geometry", async ({ page }, info) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  const workerUrls: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("worker", (worker) => workerUrls.push(worker.url()));
+  await openManifold(page);
+  await settlePresentation(page);
+  expect(workerUrls.some((url) => /workbench-worker-[^/]+\.js$/.test(url))).toBe(true);
+  const baseline = await geometry(page);
+  expect(baseline.length).toBeGreaterThan(100);
+  const source = await acceptedSource(page);
+  const value = inspector(page).getByRole("textbox", { name: "Channel width value", exact: true });
+  const application = page.getByRole("application");
+  const overlay = page.getByRole("status").filter({ hasText: "Solving…" });
+  await expect(overlay).not.toBeVisible();
+  await page.evaluate(() => {
+    const document = Reflect.get(globalThis, "document");
+    const MutationObserver = Reflect.get(globalThis, "MutationObserver");
+    const application = document.querySelector('[role="application"]')!;
+    const samples: Array<{ busy: boolean; visible: boolean; at: number }> = [];
+    const record = () => samples.push({ busy: application.getAttribute("aria-busy") === "true", visible: document.querySelector(".geosolve-solving-overlay") !== null, at: performance.now() });
+    const observer = new MutationObserver(record);
+    observer.observe(application.parentElement!, { attributes: true, attributeFilter: ["aria-busy"], childList: true, subtree: true });
+    Reflect.set(globalThis, "__loadingWitness", { samples, observer });
+  });
+  await value.fill("13");
+  await value.press("Enter");
+  await expect(application).toHaveAttribute("aria-busy", "true");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  expect(await geometry(page)).toEqual(baseline);
+  expect(await acceptedSource(page)).toBe(source);
+  const animationFrames = await page.evaluate(() => new Promise<number>((resolve) => {
+    const requestAnimationFrame = Reflect.get(globalThis, "requestAnimationFrame") as (callback: () => void) => void;
+    const started = performance.now();
+    let count = 0;
+    function frame() { count += 1; if (performance.now() - started >= 100) resolve(count); else requestAnimationFrame(frame); }
+    requestAnimationFrame(frame);
+  }));
+  expect(animationFrames).toBeGreaterThan(1);
+  await expect(overlay).toBeVisible();
+  await page.screenshot({ path: info.outputPath("manifold-solving.png") });
+  await settlePresentation(page);
+  await expect(overlay).not.toBeVisible();
+  await expect(value).toHaveValue("13");
+  await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).not.toBe(source);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
+  expect((await geometry(page)).length).toBe(baseline.length);
+  const samples = await page.evaluate(() => {
+    const witness = Reflect.get(globalThis, "__loadingWitness") as { samples: Array<{ busy: boolean; visible: boolean; at: number }>; observer: { disconnect(): void } };
+    witness.observer.disconnect();
+    return witness.samples;
+  });
+  const busy = samples.find((sample) => sample.busy);
+  const visible = samples.find((sample) => sample.visible);
+  expect(busy).toBeDefined();
+  expect(visible).toBeDefined();
+  expect(visible!.at - busy!.at).toBeGreaterThanOrEqual(450);
+  expect(errors).toEqual([]);
 });
 
 const METADATA_SOURCE = `"use geosolve sketch";

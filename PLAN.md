@@ -8468,7 +8468,9 @@ merge or qualify that product.
 
 ## M98 — reliable project authoring and embeddable TypeScript engine
 
-Status: **implemented and mechanically qualified; supervising-user acceptance open**. M97 is accepted and merged into this
+Status: **base implementation mechanically qualified; requested loading-feedback amendment in progress;
+supervising-user acceptance open**. [Amendment scope and evidence](docs/M98_LOADING_FEEDBACK.md).
+M97 is accepted and merged into this
 worktree. [Approved scope and ordered checklist](docs/M98_IMPLEMENTATION_PLAN.md) owns
 implementation, hardening and qualification. The user selected complete project support,
 a headless Node/browser TS engine, editable/generator modes, optional source-declared

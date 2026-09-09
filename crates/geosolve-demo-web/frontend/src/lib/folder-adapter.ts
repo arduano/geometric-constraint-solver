@@ -2,6 +2,7 @@
 import { assertWorkbenchSnapshot, getCanvasSnapshotSequence, stampCanvasSnapshot, type WorkbenchAdapter, type WorkbenchSnapshot, type PointerSample, type WheelSample, type SourceFileSnapshot, type DeclarationRow, type AuthoringMetadataSnapshot } from "./adapter";
 import type { GeneratorInputDefinition } from "../components/generator-inputs";
 import type { ToolCatalog } from "./tool-catalog";
+import { WorkbenchActivity } from "./workbench-activity";
 
 export interface FolderAuthority { epoch: string; lease: number; revision: number; }
 interface FolderBasis { hash: string | null; authority?: FolderAuthority; }
@@ -26,6 +27,7 @@ export interface FolderState {
 
 /** Transport only. The server owns the same Rust workbench used by ordinary mode. */
 export class FolderWorkbenchAdapter implements WorkbenchAdapter {
+  readonly activity = new WorkbenchActivity();
   state: FolderState | null = null;
   /** Schema, values and source from the snapshot the host actually installed. */
   installedState: FolderState | null = null;
@@ -74,6 +76,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
     const expected = method === "session.takeover"
       ? { hash: this.basis.hash, authority: this.state?.authority } : method === "dispatch" && (input as { command?: string })?.command === "source.prepare" && this.draftBase !== undefined
       ? this.draftBase : this.fieldBase !== undefined ? this.fieldBase : this.basis;
+    const finishActivity = this.activity.begin();
     const run = this.tail.then(async () => {
       const request = { method, input, baseHash: expected.hash, authority: expected.authority, clientId: this.clientId, operationId };
       const send = async () => {
@@ -131,7 +134,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
         : this.state?.ok ? "Saved to disk" : `Last accepted geometry retained — ${this.state?.status}: ${this.state?.diagnostics.map((item) => item.detail).join("; ")}`);
       this.listener?.();
       return body.result;
-    });
+    }).finally(finishActivity);
     this.tail = run.catch(() => {});
     return run;
   }
@@ -256,14 +259,24 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
     this.listener = listener;
     const events = new EventSource(`/api/events?token=${encodeURIComponent(this.token)}`);
     this.events = events;
+    let finishRemoteActivity: (() => void) | undefined;
+    const clearRemoteActivity = () => { finishRemoteActivity?.(); finishRemoteActivity = undefined; };
+    events.addEventListener("activity", (event) => {
+      if (this.events !== events) return;
+      try {
+        const { busy } = JSON.parse((event as MessageEvent<string>).data) as { busy?: unknown };
+        if (busy === true) finishRemoteActivity ??= this.activity.begin();
+        else if (busy === false) clearRemoteActivity();
+      } catch { /* An invalid presentation hint grants no state or authority. */ }
+    });
     events.onmessage = (event) => {
       const sequence = Number(event.data);
       if (sequence === this.eventSequence) return;
       this.eventSequence = sequence;
       void this.refresh(false).catch(() => {});
     };
-    events.onerror = () => { this.notice = "Disconnected — edits are not saved. Reconnecting to disk…"; this.eventSequence = -1; listener(); };
-    return () => { events.close(); if (this.events === events) { this.events = undefined; this.listener = undefined; } };
+    events.onerror = () => { clearRemoteActivity(); this.notice = "Disconnected — edits are not saved. Reconnecting to disk…"; this.eventSequence = -1; listener(); };
+    return () => { events.close(); clearRemoteActivity(); if (this.events === events) { this.events = undefined; this.listener = undefined; } };
   }
   async refresh(explicit = true) {
     if (explicit) {

@@ -15,13 +15,83 @@ async function harness() {
       diagnostics: [], paths: { folder: "/project", source: "/project/sketch.ts" },
     } }) };
   }));
-  vi.stubGlobal("EventSource", class { close() {} });
+  vi.stubGlobal("EventSource", class extends EventTarget { close() {} });
   const adapter = new FolderWorkbenchAdapter("test-token");
   adapter.installSnapshot(await adapter.construct());
   return { adapter, requests, changeDisk: () => { disk = "radius-15"; } };
 }
 
-afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); sessionStorage.clear(); });
+
+it("tracks queued folder work through completion and failed transport retries", async () => {
+  const { adapter } = await harness();
+  vi.useFakeTimers();
+  const successful = vi.mocked(fetch).getMockImplementation()!;
+  let release!: () => void;
+  vi.stubGlobal("fetch", vi.fn(async (...args: Parameters<typeof fetch>) => {
+    await new Promise<void>((resolve) => { release = resolve; });
+    return successful(...args);
+  }));
+  const first = adapter.dispatch({ version: 2, command: "view.fit" });
+  const second = adapter.snapshot();
+  await vi.advanceTimersByTimeAsync(499);
+  expect(adapter.activity.getSnapshot()).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(adapter.activity.getSnapshot()).toBe(true);
+  release(); await first;
+  await vi.advanceTimersByTimeAsync(0);
+  expect(adapter.activity.getSnapshot()).toBe(true);
+  release(); await second;
+  expect(adapter.activity.getSnapshot()).toBe(false);
+
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    await new Promise<void>((resolve) => { release = resolve; });
+    throw Error("offline");
+  }));
+  const failure = expect(adapter.snapshot()).rejects.toThrow("offline");
+  await vi.advanceTimersByTimeAsync(500);
+  expect(adapter.activity.getSnapshot()).toBe(true);
+  release(); await vi.advanceTimersByTimeAsync(0);
+  expect(adapter.activity.getSnapshot()).toBe(true);
+  release(); await failure;
+  expect(adapter.activity.getSnapshot()).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("tracks external activity without fetching or installing state and retires it on disconnect/unsubscribe", async () => {
+  const { adapter, requests } = await harness();
+  vi.useFakeTimers();
+  let events!: EventTarget & { onerror?: () => void };
+  vi.stubGlobal("EventSource", class extends EventTarget {
+    constructor() { super(); events = this; }
+    close() {}
+  });
+  const listener = vi.fn();
+  const stop = adapter.subscribe(listener);
+  const notify = (data: string) => events.dispatchEvent(new MessageEvent("activity", { data }));
+  const baseline = requests.length;
+  notify('{"busy":true}');
+  await vi.advanceTimersByTimeAsync(300);
+  notify('{"busy":true}');
+  await vi.advanceTimersByTimeAsync(200);
+  expect(adapter.activity.getSnapshot()).toBe(true);
+  expect(listener).not.toHaveBeenCalled();
+  expect(requests).toHaveLength(baseline);
+  notify("invalid");
+  expect(adapter.activity.getSnapshot()).toBe(true);
+  notify('{"busy":false}');
+  expect(adapter.activity.getSnapshot()).toBe(false);
+  notify('{"busy":true}');
+  await vi.advanceTimersByTimeAsync(500);
+  events.onerror?.();
+  expect(adapter.activity.getSnapshot()).toBe(false);
+  notify('{"busy":true}');
+  await vi.advanceTimersByTimeAsync(500);
+  stop();
+  expect(adapter.activity.getSnapshot()).toBe(false);
+  notify('{"busy":true}');
+  expect(vi.getTimerCount()).toBe(0);
+});
 
 describe("folder installed source authority", () => {
   it("M98-F001: hidden disk refresh cannot authorize Undo against a snapshot the UI never installed", async () => {

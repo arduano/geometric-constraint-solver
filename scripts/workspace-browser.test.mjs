@@ -221,6 +221,51 @@ test("generator workbench shows code-owned inputs and read-only source, and upda
   assert.deepEqual(errors,[]);
 });
 
+test("slow external generator evaluation dims the retained canvas after half a second and clears on acceptance or rejection",{timeout:90000},async(t)=>{
+  const source='import {sketch,mm} from "@geosolve/sketch-code";export default sketch(($)=>({port:$.geometry.centerRadiusCircle("port",{center:[0,0],radius:mm(6)})}));';
+  const {folder,page,errors}=await setup(t,(folder)=>{
+    writeFileSync(resolve(folder,"geosolve.json"),manifest("generator"));writeFileSync(sourcePath(folder),source);
+  },{initScript:()=>{
+    window.m98Activity=[];
+    const NativeEventSource=window.EventSource;
+    window.EventSource=class extends NativeEventSource {
+      constructor(...args) {
+        super(...args);
+        this.addEventListener("activity",(event)=>window.m98Activity.push({...JSON.parse(event.data),at:performance.now()}));
+      }
+    };
+  }});
+  const indicator=page.getByRole("status").filter({hasText:"Solving…"});
+  await expect(indicator).toHaveCount(0);
+  await page.waitForTimeout(600);
+  await expect(indicator).toHaveCount(0);
+  const before=await geometry(page);
+  await page.evaluate(()=>{window.m98Activity=[];});
+  const pause='const until=Date.now()+2500;while(Date.now()<until){};';
+  replaceSource(folder,pause+source.replace("mm(6)","mm(8)"));
+  await expect.poll(()=>page.evaluate(()=>window.m98Activity.some((event)=>event.busy))).toBe(true);
+  await page.waitForTimeout(250);
+  await expect(indicator).toHaveCount(0);
+  await expect(indicator).toBeVisible();
+  const shownAfterMs=await page.evaluate(()=>performance.now()-window.m98Activity.find((event)=>event.busy).at);
+  assert.ok(shownAfterMs>=500,`indicator must wait 500 ms, observed ${shownAfterMs}`);
+  assert.deepEqual(await geometry(page),before,"last accepted canvas remains visible while the external generator is running");
+  const overlay=page.locator(".geosolve-solving-overlay");
+  assert.notEqual(await overlay.evaluate((element)=>getComputedStyle(element).backgroundColor),"rgba(0, 0, 0, 0)","overlay visibly dims the canvas");
+  await page.screenshot({path:resolve(evidence,"slow-folder-solving.png")});
+  await expect.poll(async()=>curveWidth(await geometry(page))/curveWidth(before),{timeout:10000}).toBeGreaterThan(1.3);
+  await expect(indicator).toHaveCount(0);
+  const accepted=await geometry(page);
+  replaceSource(folder,pause+'throw Error("deliberately rejected generator");'+source);
+  await expect(indicator).toBeVisible();
+  assert.deepEqual(await geometry(page),accepted);
+  await expect(folderNotice(page)).toContainText("deliberately rejected generator",{timeout:10000});
+  await expect(indicator).toHaveCount(0);
+  assert.deepEqual(await geometry(page),accepted,"rejection clears feedback without replacing accepted geometry");
+  writeFileSync(resolve(evidence,"slow-folder-solving.json"),JSON.stringify({shownAfterMs,activity:await page.evaluate(()=>window.m98Activity),retainedAfterRejection:true},null,2));
+  assert.deepEqual(errors,[]);
+});
+
 test("complete manifold opens from plain files and shared channel edits export all regions",{timeout:180000},async(t)=>{
   const {folder,page,errors}=await setup(t,(folder)=>cpSync(resolve("examples/file-workspace-manifold"),folder,{recursive:true}));
   await expect(page.getByRole("region",{name:"Local folder"})).toContainText("Saved to disk");

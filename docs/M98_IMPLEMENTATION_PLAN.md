@@ -43,6 +43,7 @@ and closed; M98 stays open until integrated qualification and supervising-user a
 - [x] Polish first-party workbench modes/capabilities, maintain examples and measure navigation.
 - [x] Register all new owning-layer/package/browser tests in integrated release qualification.
 - [x] Qualify clean candidate, freeze production bytes and verify a reviewable preview.
+- [ ] Qualify the requested 500 ms canvas loading-feedback amendment and refresh previews.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Stages may develop independently behind their explicit APIs, with focused verification before
@@ -74,6 +75,11 @@ explicit inspect/resolve recovery operations. Guarantee stale-edit refusal and r
 bytes; do not promise atomic CAS against uncooperative external writers holding old file descriptors.
 
 ## Acceptance and qualification
+
+- Loading feedback: no flash below 500 ms; grey canvas and accessible status during slow
+  folder and standalone solves; retained accepted geometry on success/rejection; continuous
+  queued/prepared work, external disk evaluation and safe captured-pointer termination.
+  [Implementation and amendment evidence](M98_LOADING_FEEDBACK.md) records current progress.
 
 - Deterministic filesystem fault points: staging/displacement/publication/acknowledgment; external
   rename and in-place writes; missing files, failed writes, stale lock, corrupt cache and restart.

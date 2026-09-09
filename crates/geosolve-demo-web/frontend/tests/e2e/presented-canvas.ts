@@ -25,10 +25,13 @@ export async function rendererDiagnostics(canvas: Locator): Promise<Record<strin
   return canvas.evaluate((element) => Reflect.get(element, "__geosolveRendererDiagnostics"));
 }
 export async function settlePresentation(page: Page) {
+  const application = page.getByRole("application");
+  await expect(application).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   await page.evaluate(() => new Promise<void>((resolve) => {
     const raf = Reflect.get(globalThis, "requestAnimationFrame") as (callback: () => void) => void;
     raf(() => raf(resolve));
   }));
+  await expect(application).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   await presentedFrame(canvasFrame(page));
 }
 

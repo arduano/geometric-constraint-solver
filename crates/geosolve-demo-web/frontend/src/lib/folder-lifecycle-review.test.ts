@@ -19,7 +19,7 @@ async function harness() {
       diagnostics: [], paths: { folder: "/project", source: "/project/sketch.ts" },
     } }) };
   }));
-  vi.stubGlobal("EventSource", class { close() {} });
+  vi.stubGlobal("EventSource", class extends EventTarget { close() {} });
   const adapter = new FolderWorkbenchAdapter("test-token");
   adapter.installSnapshot(await adapter.construct());
   return { adapter, requests, diskChanged: () => { disk = "disk-after"; },

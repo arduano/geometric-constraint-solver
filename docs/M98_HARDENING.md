@@ -318,7 +318,50 @@ GEOSOLVE_DIST="$PWD/target/release-gate/prepared/f862ad58f8fc7bb4ed341d7ca820326
 Evidence: `target/m98/folder-browser-layout-r1.log`. The failed replacement remains
 failed; the runner must qualify the corrected harness and all outstanding obligations.
 
-## Final qualification
+## M98-F015 — rejected folder evaluation reset the live canvas view
+
+The delayed-loading browser witness exposed a rejected external generator resetting a
+969 × 876 CSS-pixel canvas to the default 1000 × 700 view. The accepted circle remained
+mathematically unchanged but jumped from the measured host center to (500, 350).
+The focused Node reproduction independently resized to 969 × 876 at DPR 2, zoomed around
+(127, 283), middle-panned by (60, 25), and rejected an external generator. Its exact
+viewBox comparison failed with `[0,0,1000,700]` instead of `[0,0,969,876]` before repair.
+
+The folder's three transaction rollback paths called fresh adapter construction, which
+correctly reconstructs accepted authored state and history but also initializes and fits
+a new camera. They now dispatch `workspace.checkpoint.restore`: Rust independently
+decodes and validates the complete persisted checkpoint, preserves the existing camera,
+measured host extent and DPR, and recomposes geometry from the restored authority. It
+does not restore a cached scene or accept client-supplied view fields. The command is
+available to the owning bridge, including cleanup of a pending managed ticket, and is
+refused through the folder HTTP dispatch route. The actor records the restored checkpoint
+so a later worker failure cannot recover an intervening rejected candidate.
+
+The native regression verifies exact view/geometry and checkpoint retention, usable
+Undo/Redo, strict malformed-payload rejection and unchanged camera across later resizes.
+Node regressions cover external rejection, a real publication failure, forbidden HTTP
+checkpoint replacement and a later actor crash after rollback. Initial startup and cache
+loading retain their existing construction and Fit behavior. No solver equations,
+residual tolerances, source authority or golden rows change.
+
+Focused commands (from the M98 worktree):
+
+```bash
+node --test --test-name-pattern='M98-F015' scripts/workspace-http.test.mjs
+nix-shell shell.nix --run 'cargo test --locked -p geosolve-demo-web --lib workbench::bridge::workspace::tests'
+nix-shell shell.nix --run 'cargo clippy --locked -p geosolve-demo-web --all-targets --all-features -- -D warnings'
+nix-shell shell.nix --run 'node crates/geosolve-demo-web/frontend/scripts/build-wasm.mjs --release'
+node --test scripts/workspace-http.test.mjs scripts/workspace-workbench.test.mjs
+```
+
+The first command failed before repair at the exact viewBox assertion. Native owner
+checks pass 2/2, strict Clippy and formatting pass, and release demo WASM rebuilds.
+HTTP/actor checks pass 12/12 after that rebuild, including real publication rejection
+and restored-checkpoint crash recovery. Evidence is retained under
+`target/m98/f015-{native-pending-final,clippy-r2,wasm,node-final}.log`. Replacement integrated
+qualification remains required; the loading browser witness is qualified separately.
+
+## Final qualification before the loading amendment
 
 The complete clean-source gate passes on `6509e9c160a74c499668b63a5ef9bddefa593223` in
 `20260909T144235-377abb33`: all 261 obligations, including corrected offline archives and

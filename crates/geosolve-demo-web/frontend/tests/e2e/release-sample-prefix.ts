@@ -98,7 +98,7 @@ export async function openSamplePrefix(page: Page, sample: typeof samples[number
   await page.getByPlaceholder(`Search ${catalogContract.samples.length} samples…`).fill(key);
   await page.getByRole("dialog", { name: "Open project" }).getByRole("button")
     .filter({ has: page.getByText(manifest.title, { exact: true }) }).click();
-  await expect(page.locator("header").getByText(manifest.title, { exact: true })).toBeVisible();
+  await expect(page.locator("header").getByText(manifest.title, { exact: true })).toBeVisible({ timeout: 60_000 });
   await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(source);
   await page.getByRole("button", { name: "design", exact: true }).click();
   const geometry = await fittedGeometry(page);

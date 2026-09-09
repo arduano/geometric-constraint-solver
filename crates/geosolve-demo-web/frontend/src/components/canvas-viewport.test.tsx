@@ -6,12 +6,13 @@ import { markCanvasOnlySnapshot, stampCanvasSnapshot, type WheelSample, type Wor
 import { CanvasViewport } from "./canvas-viewport";
 import { MockWorkbenchAdapter } from "../lib/mock-adapter";
 import { createCanvasRenderer } from "../lib/canvas-renderer";
+import { WorkbenchActivity } from "../lib/workbench-activity";
 
 vi.mock("../lib/canvas-renderer", () => ({ createCanvasRenderer: vi.fn(() => ({ accept: vi.fn(), resize: vi.fn(), destroy: vi.fn() })) }));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 async function setup(activeTool = "select", strict = false) {
-  const adapter = new MockWorkbenchAdapter(); const snapshot = await adapter.snapshot();
+  const adapter = Object.assign(new MockWorkbenchAdapter(), { activity: new WorkbenchActivity() }); const snapshot = await adapter.snapshot();
   snapshot.presentation.activeTool = activeTool;
   const onCaptureChange = vi.fn(); const onSnapshot = vi.fn(); const onError = vi.fn();
   const element = <CanvasViewport adapter={adapter} snapshot={snapshot} onSnapshot={onSnapshot} onCaptureChange={onCaptureChange} onError={onError} />;
@@ -19,6 +20,39 @@ async function setup(activeTool = "select", strict = false) {
   return { adapter, snapshot, onCaptureChange, onSnapshot, onError, view, host: view.getByRole("application") };
 }
 describe("canvas host lifecycle", () => {
+  it("busy feedback retains the canvas and lets captured gestures terminate while blocking new input", async () => {
+    vi.useFakeTimers();
+    const h = await setup();
+    const canvas = h.host.querySelector("canvas");
+    const pointer = vi.spyOn(h.adapter, "pointer");
+    const wheel = vi.spyOn(h.adapter, "wheel");
+    const cancel = vi.spyOn(h.adapter, "cancel");
+    const renderer = vi.mocked(createCanvasRenderer).mock.results.at(-1)!.value;
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    const finish = h.adapter.activity.begin();
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(h.host).toHaveAttribute("aria-busy", "true");
+    pointerEvent(h.host, "pointerup");
+    pointerEvent(h.host, "lostpointercapture");
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(pointer.mock.calls.map(([sample]) => sample.phase)).toEqual(["down", "up"]);
+    expect(h.onCaptureChange.mock.calls).toEqual([[true], [false]]);
+    expect(cancel).not.toHaveBeenCalled();
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    pointerEvent(h.host, "pointermove");
+    fireEvent.wheel(h.host, { deltaY: 90 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(pointer).toHaveBeenCalledTimes(2);
+    expect(wheel).not.toHaveBeenCalled();
+    expect(h.host.querySelector("canvas")).toBe(canvas);
+    expect(renderer.destroy).not.toHaveBeenCalled();
+    await act(async () => { finish(); });
+    expect(h.host).toHaveAttribute("aria-busy", "false");
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    pointerEvent(h.host, "lostpointercapture");
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(cancel).toHaveBeenCalledExactlyOnceWith({ version: 2, reason: "lost-capture" });
+  });
   it("preserves CSS-local pointer input and normal pointer-up capture retirement", async () => {
     const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer"); const cancel = vi.spyOn(h.adapter, "cancel");
     vi.spyOn(h.host, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 50, 2000, 700));

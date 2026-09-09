@@ -14,7 +14,7 @@ parentPort.on("message", ({ id, method, input }) => {
     if (input.crash !== undefined) process.exit(input.crash);
     if (input.throw) throw Error("worker panic");
     if (input.hang) { while (true) {} }
-    value = input.value;
+    value = input.command === "workspace.checkpoint.restore" ? input.payload.contents : input.value;
   }
   parentPort.postMessage({ id, ok: true, result: method === "persistProject" ? { contents: value } : { value } });
 });`)}`);
@@ -46,4 +46,15 @@ test("queued calls preserve order and disposal settles every caller", { timeout:
   const finished = Promise.allSettled([interrupted, queued]);
   await adapter.dispose();
   assert.ok((await finished).every((result) => result.status === "rejected"));
+});
+
+test("M98-F015 a restored rollback checkpoint remains authoritative after a later worker crash", { timeout: 10000 }, async (t) => {
+  const adapter = await createWorkspaceWorkbench({ workerUrl, timeoutMs: 1000 });
+  t.after(() => adapter.dispose());
+  await adapter.construct({ version: 2, persistedProject: "accepted" });
+  await adapter.dispatch({ value: "candidate" });
+  await adapter.persistProject();
+  await adapter.dispatch({ command: "workspace.checkpoint.restore", payload: { contents: "accepted" } });
+  await assert.rejects(adapter.dispatch({ crash: 7 }), /exited/);
+  assert.deepEqual(await adapter.snapshot(), { value: "accepted" });
 });

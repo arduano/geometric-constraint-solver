@@ -3,7 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import App from "./App";
-import { WasmWorkbenchAdapter, type JsonWorkbenchHandleConstructor } from "./lib/wasm-adapter";
+import { WorkerWorkbenchAdapter } from "./lib/worker-workbench-adapter";
 import { FolderWorkbenchAdapter } from "./lib/folder-adapter";
 import "./styles.css";
 
@@ -18,11 +18,9 @@ async function mount() {
     folder = new FolderWorkbenchAdapter(token);
     adapter = folder;
   } else if (import.meta.env.PROD && import.meta.env.VITE_GEOSOLVE_MOCK !== "1") {
-    const wasm = await import("./generated/geosolve_demo_web.js");
-    await wasm.default();
-    const Handle = (wasm as unknown as { WorkbenchHandle?: JsonWorkbenchHandleConstructor }).WorkbenchHandle;
-    if (!Handle) throw new Error("The generated WASM package does not expose WorkbenchHandle");
-    adapter = new WasmWorkbenchAdapter(Handle);
+    const worker = new WorkerWorkbenchAdapter();
+    adapter = worker;
+    window.addEventListener("pagehide", (event) => { if (!event.persisted) worker.dispose(); });
   }
   createRoot(document.getElementById("root")!).render(<StrictMode><Tooltip.Provider delayDuration={450}><App adapter={adapter} folder={folder} /></Tooltip.Provider></StrictMode>);
 }

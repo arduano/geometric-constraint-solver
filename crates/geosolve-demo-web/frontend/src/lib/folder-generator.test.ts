@@ -27,7 +27,7 @@ async function harness(mode: "editable" | "generator" = "generator") {
     }
     return { ok: true, json: async () => ({ result: structuredClone(fixture), state: structuredClone(state) }) };
   }));
-  vi.stubGlobal("EventSource", class { close() {} });
+  vi.stubGlobal("EventSource", class extends EventTarget { close() {} });
   const adapter = new FolderWorkbenchAdapter("token");
   const snapshot = await adapter.construct(); adapter.installSnapshot(snapshot);
   return { adapter, snapshot, fixture, state, requests, rejectInputs: () => { rejectInputs = true; } };

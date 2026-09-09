@@ -60,6 +60,7 @@ function releaseDocuments(): Plugin {
 
 export default defineConfig({
   plugins: [react(), releaseDocuments()],
+  worker: { format: "es" },
   base: publicBase,
   build: {
     assetsDir: "assets",

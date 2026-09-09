@@ -14,7 +14,7 @@ const prefix = prepared?.publicBase && prepared.publicBase !== "./" ? prepared.p
 // Fresh browser contexts isolate ordinary tests. Scale/atlas, payload and large
 // manifold compilation/restoration workflows share one memory-heavy project slot.
 // Keep their existing timeouts independent of competing expensive publications.
-const memoryHeavy = /M92 visual workflow: (perforated-fixture-field|robotic-harness-backplane|curves-contact-continuity-atlas|fabrication-operations-atlas)|Cubic Bézier authoring|normal pointer capture release commits Circle|a downloaded reproduction imports|M97 contextual dimension edits|legacy|scale|recovery/i;
+const memoryHeavy = /M92 visual workflow: (perforated-fixture-field|robotic-harness-backplane|curves-contact-continuity-atlas|fabrication-operations-atlas)|Cubic Bézier authoring|normal pointer capture release commits Circle|a downloaded reproduction imports|M97 contextual dimension edits|M98 standalone manifold solving|legacy|scale|recovery/i;
 const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1024, height: 720 } };
 
 export default defineConfig({

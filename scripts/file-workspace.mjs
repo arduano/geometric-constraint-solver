@@ -261,7 +261,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         publish();
       } catch (error) {
         if (rollback) {
-          snapshot = await adapter.construct({ version: 2, persistedProject: rollback });
+          snapshot = await adapter.dispatch({ version: 2, command: "workspace.checkpoint.restore", payload: { contents: rollback } });
           acceptedCompilation = previous.acceptedCompilation;
           acceptedDesign = previous.acceptedDesign;
           acceptedProject = previous.acceptedProject;
@@ -407,7 +407,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       if (!["files.apply", "inputs.set"].includes(method) && !allowed.has(method)) throw Error("Unsupported workspace method");
       if (method === "toolCatalog" || method.startsWith("export")) return adapter[method]();
       if (method === "snapshot") return adapter.snapshot();
-      if (method === "dispatch" && ["workspace.project.apply", "workspace.generator.apply", "project.new", "project.new-code", "project.import", "sample.open"].includes(input?.command)) {
+      if (method === "dispatch" && ["workspace.project.apply", "workspace.generator.apply", "workspace.checkpoint.restore", "project.new", "project.new-code", "project.import", "sample.open"].includes(input?.command)) {
         throw Error("Folder mode keeps this project's sketch.ts open. Use the ordinary demo URL for New, samples or project import.");
       }
       const operationId = context?.operationId ?? randomBytes(16).toString("hex");
@@ -464,7 +464,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
           publishedSnapshot = readWorkspaceSnapshot(folder);
           if (publishedSnapshot.revision !== publishedRevision) throw Error("Conflict: project changed after file publication");
         } catch (error) {
-          snapshot = await adapter.construct({ version: 2, persistedProject: rollback });
+          snapshot = await adapter.dispatch({ version: 2, command: "workspace.checkpoint.restore", payload: { contents: rollback } });
           acceptedCompilation = previous.acceptedCompilation;
           acceptedDesign = previous.acceptedDesign;
           acceptedProject = previous.acceptedProject;
@@ -620,7 +620,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         if (rollback) {
           // Native dispatch and semantic export are part of the same transaction as
           // publication. Any failure restores their complete accepted checkpoint.
-          snapshot = await adapter.construct({ version: 2, persistedProject: rollback });
+          snapshot = await adapter.dispatch({ version: 2, command: "workspace.checkpoint.restore", payload: { contents: rollback } });
           ({ acceptedCompilation, acceptedDesign, acceptedProject, inputsSnapshot,
             acceptedHash, currentHash, sourceHash, sourceRevision, acceptedRevision } = previousAccepted);
           try { if (diskIdentity() !== acceptedHash) ioError = `Publication interrupted: ${error}`; }
@@ -651,11 +651,29 @@ export async function serveProject(folder, { port = 0 } = {}) {
   let tail = Promise.resolve();
   let queued = 0;
   let closing = false;
+  let busy = false;
+  let activityAnnounced = false;
+  const announceActivity = () => {
+    for (const client of clients) client.write(`event: activity\ndata: ${JSON.stringify({ busy })}\n\n`);
+    if (busy && clients.size) activityAnnounced = true;
+  };
   const serial = (action) => {
     if (closing) return Promise.reject(Error("Folder bridge is closing"));
     if (queued >= 128) return Promise.reject(Error("Folder bridge request queue is full; retry after the current work completes"));
     queued++;
-    const next = tail.then(action).finally(() => { queued--; });
+    const next = tail.then(async () => {
+      busy = true;
+      activityAnnounced = false;
+      // Ordinary unchanged scans settle in microtasks. Announce only work that
+      // yields to the event loop, so idle polling does not flood the browser.
+      const activityTimer = setTimeout(announceActivity, 0);
+      try { return await action(); }
+      finally {
+        clearTimeout(activityTimer);
+        busy = false;
+        if (activityAnnounced) announceActivity();
+      }
+    }).finally(() => { queued--; });
     tail = next.catch(() => {});
     return next;
   };
@@ -674,7 +692,9 @@ export async function serveProject(folder, { port = 0 } = {}) {
         }
         if (url.pathname === "/api/events" && request.method === "GET") {
           response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
-          clients.add(response); response.write(`data: ${project.state().sequence}\n\n`);
+          clients.add(response);
+          response.write(`event: activity\ndata: ${JSON.stringify({ busy })}\n\ndata: ${project.state().sequence}\n\n`);
+          if (busy) activityAnnounced = true;
           request.on("close", () => clients.delete(response)); return;
         }
         if (url.pathname === "/api/status" && request.method === "GET") {

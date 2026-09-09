@@ -12,6 +12,7 @@ import { resolvePendingManagedMutationSnapshot } from "./lib/pending-managed-mut
 import { utf8ByteSpanToUtf16Range, utf8ByteSpansToUtf16Ranges, utf16RangeToUtf8ByteSpan, type Utf16SourceRange } from "./lib/source-navigation";
 import { MockWorkbenchAdapter } from "./lib/mock-adapter";
 import { useTransientSurface } from "./hooks/use-transient-surface";
+import { useWorkbenchBusy } from "./hooks/use-workbench-busy";
 import { Button } from "./components/ui/button";
 import { GeneratorInputs } from "./components/generator-inputs";
 import { ToolRail } from "./components/tool-rail";
@@ -19,6 +20,7 @@ import { ToolIcon } from "./components/tool-icon";
 import { TransientPopover } from "./components/transient-popover";
 import { CanvasViewport } from "./components/canvas-viewport";
 import { CanvasControls } from "./components/canvas-controls";
+import { SolvingIndicator } from "./components/solving-indicator";
 import { AuthoringDocumentProperties, type AuthoringMetadataActions } from "./components/authoring-metadata";
 import { DeclarationPanel, DetailsPanel, Explorer, ParametersView, ProblemsView, type DeclarationPanelActions } from "./components/side-panels";
 import { CodeEditor, type EditorNavigation } from "./components/code-editor";
@@ -112,10 +114,10 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     },
   }), [reportError]);
 
-  const resolveAdapterSnapshot = useCallback(
-    (next: WorkbenchSnapshot) => resolvePendingManagedMutationSnapshot(adapter, next),
-    [adapter],
-  );
+  const resolveAdapterSnapshot = useCallback((next: WorkbenchSnapshot) => {
+    const resolve = () => resolvePendingManagedMutationSnapshot(adapter, next);
+    return next.pendingManagedMutation && adapter.activity ? adapter.activity.track(resolve) : resolve();
+  }, [adapter]);
 
   const queueProjectSave = useCallback((intent: ProjectSaveIntent, clearError: boolean) => {
     if (folder) return folder.refresh().then(() => undefined).catch(reportError);
@@ -588,6 +590,7 @@ function StableWorkspace({ mode, splitCodeWidth, onSplitCodeWidth, canvas, code 
 }
 
 function DesignWorkspace({ adapter, snapshot, catalog, editingBlockedReason, onSnapshot, onError, activeTool, onFinish, onCancel, onGeometryRole, onViewCommand, onDimensionMode, captured }: { adapter: WorkbenchAdapter; snapshot: WorkbenchSnapshot; catalog: ToolCatalog; editingBlockedReason?: string; onSnapshot: (snapshot: WorkbenchSnapshot) => void; onError: (error: unknown) => void; activeTool: string; onFinish: () => void; onCancel: () => void; onGeometryRole: (selected: boolean) => void; onViewCommand: (command: "view.grid.toggle" | "view.fit" | "view.origin") => void; onDimensionMode: (mode: DimensionDisplayMode) => void; captured: (value: boolean) => void }) {
+  const busy = useWorkbenchBusy(adapter);
   const section = toolSection(catalog, activeTool);
   const command = activeTool === catalog.select.toolId ? catalog.select : section?.commands.find((candidate) => candidate.toolId === activeTool) ?? catalog.select;
   const authoring = activeTool !== catalog.select.toolId;
@@ -613,7 +616,8 @@ function DesignWorkspace({ adapter, snapshot, catalog, editingBlockedReason, onS
     </div>
     <div className="relative min-h-0 flex-1">
       <CanvasViewport adapter={adapter} snapshot={snapshot} onSnapshot={onSnapshot} onCaptureChange={captured} onError={onError} />
-      <CanvasControls gridVisible={snapshot.presentation.gridVisible} dimensionMode={snapshot.dimensions?.mode} onDimensionMode={onDimensionMode} onCommand={onViewCommand} />
+      <CanvasControls disabled={busy} gridVisible={snapshot.presentation.gridVisible} dimensionMode={snapshot.dimensions?.mode} onDimensionMode={onDimensionMode} onCommand={onViewCommand} />
+      {busy && <SolvingIndicator />}
     </div>
   </section>;
 }

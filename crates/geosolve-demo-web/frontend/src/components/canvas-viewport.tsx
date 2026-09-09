@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createCanvasRenderer, type CanvasRenderer, type RendererState } from "../lib/canvas-renderer";
 import { getCanvasSnapshotSequence, isCanvasOnlySnapshot, type PointerSample, type WheelSample, type WorkbenchAdapter, type WorkbenchSnapshot } from "../lib/adapter";
+import { useWorkbenchBusy } from "../hooks/use-workbench-busy";
 
 type CanvasOperation = () => Promise<WorkbenchSnapshot | null>;
 type PendingInput = { kind: "move"; sample: PointerSample } | { kind: "wheel"; samples: WheelSample[] };
@@ -174,7 +175,15 @@ interface CanvasViewportProps {
 }
 
 export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange, onError }: CanvasViewportProps) {
+  const busy = useWorkbenchBusy(adapter);
   const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Accessibility reflects pending work immediately; visual feedback is delayed.
+    // Updating this attribute directly keeps fast hover/camera traffic off React.
+    const update = () => host.current?.setAttribute("aria-busy", String(adapter.activity?.getPendingSnapshot() ?? false));
+    update();
+    return adapter.activity?.subscribePending(update);
+  }, [adapter]);
   const canvas = useRef<HTMLCanvasElement>(null);
   const renderer = useRef<CanvasRenderer | null>(null);
   const [renderState, setRenderState] = useState<RendererState>("initializing");
@@ -216,6 +225,9 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
   };
 
   const sendPointer = (event: React.PointerEvent, phase: "down" | "move" | "up") => {
+    // A busy presentation blocks new gestures, never a captured gesture's
+    // movement, release or cancellation. Do not detach the canvas or capture.
+    if (busy && (phase === "down" || capturedPointer.current === null)) return;
     input.cancelDimensionTimer();
     // Primary authoring and middle-button camera pan are the only canvas
     // pointer routes. Keep secondary clicks available to the browser instead
@@ -349,7 +361,7 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
       onPointerLeave={() => { input.clearDimensionHover(); if (capturedPointer.current === null) input.discardHover(); }}
       onPointerCancel={(event) => cancelCapturedPointer(event.pointerId)}
       onLostPointerCapture={(event) => cancelCapturedPointer(event.pointerId)}
-      onWheel={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); input.wheel({ version: 2, x: event.clientX - bounds.left, y: event.clientY - bounds.top, deltaX: event.deltaX, deltaY: event.deltaY, ctrl: event.ctrlKey }); }}
+      onWheel={(event) => { if (busy) return; const bounds = event.currentTarget.getBoundingClientRect(); input.wheel({ version: 2, x: event.clientX - bounds.left, y: event.clientY - bounds.top, deltaX: event.deltaX, deltaY: event.deltaY, ctrl: event.ctrlKey }); }}
     >
       <canvas ref={canvas} className="geosolve-canvas" aria-hidden="true" />
       {renderState !== "ready" && <div className="geosolve-render-status" role="status">

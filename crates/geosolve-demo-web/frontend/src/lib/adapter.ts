@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import type { ToolCatalog } from "./tool-catalog";
+import type { WorkbenchActivity } from "./workbench-activity";
 import { assertDrawFrame, type DrawFrame } from "./canvas-scene";
 import type {
   CompiledManagedSource,
@@ -280,6 +281,7 @@ export interface WheelSample {
 }
 
 export interface WorkbenchAdapter {
+  readonly activity?: WorkbenchActivity;
   construct(input: { version: 2; persistedProject?: string }): Promise<WorkbenchSnapshot>;
   toolCatalog(): Promise<ToolCatalog>;
   snapshot(): Promise<WorkbenchSnapshot>;

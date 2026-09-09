@@ -22,7 +22,10 @@ record the accepted scope and limits. No M97 blocker or acceptance action remain
 The previous M97 previews remain documented at ports 18104 and 18103; M96's accepted
 channel checkpoint remains in [M96_CLOSURE.md](docs/M96_CLOSURE.md).
 
-**Current task: supervising-user review of the qualified M98 candidate; acceptance and closure remain open.**
+**Current task: implement and qualify the requested M98 loading-feedback amendment;
+acceptance and closure remain open.** [The amendment](docs/M98_LOADING_FEEDBACK.md) adds a
+500 ms delayed canvas veil/spinner and responsive standalone WASM transport. The qualified
+candidate below precedes that amendment; its previews remain available during development.
 [The ordered implementation plan](docs/M98_IMPLEMENTATION_PLAN.md) records the accepted
 scope, owning APIs, regressions and qualification requirements. Work in this existing
 `m98/file-workspace` worktree. Accepted M97 is integrated with the original M98 prototype;
