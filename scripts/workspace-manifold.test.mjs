@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import assert from "node:assert/strict";
+import test from "node:test";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { openProject } from "./file-workspace.mjs";
+import { acquireWorkspaceLock, createWorkspaceStorage } from "./workspace-storage.mjs";
+import { readWorkspaceSnapshot } from "./workspace-loader.mjs";
+import { evaluateProjectSnapshot } from "./workspace-evaluation.mjs";
+
+test("manifold external patch and source metadata edits retain profiles and reversible dependency history", { timeout: 300000 }, async (t) => {
+  const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-manifold-workflow-"));
+  cpSync(resolve("examples/file-workspace-manifold"), folder, { recursive: true });
+  const lock = acquireWorkspaceLock(folder), storage = createWorkspaceStorage(folder, { lock });
+  let project = await openProject(folder, { storage });
+  t.after(async () => { await project.dispose(); lock.release(); rmSync(folder, { recursive: true, force: true }); });
+  const clientId = "manifold-workflow";
+  const join = () => project.request("session.join", undefined, undefined, { clientId });
+  const command = async (command, payload) => {
+    const started = performance.now();
+    const basis = project.state(clientId);
+    const result = await project.request("dispatch", { version: 2, command, payload }, basis.currentHash, { clientId, authority: basis.authority });
+    t.diagnostic(`${command}: ${(performance.now() - started).toFixed(1)} ms`);
+    return result;
+  };
+  let snapshot = await join();
+  const parameter = snapshot.parameters.find((item) => item.label === "Channel width");
+  assert.ok(parameter?.metadata?.editable);
+  const sourcePath = resolve(folder, "sketch.ts");
+  snapshot = await command("authoring.metadata.set", { authority: parameter.metadata.authority,
+    target: parameter.metadata.target, changes: { label: "Passage width" } });
+  assert.equal(project.state(clientId).ok, true);
+  assert.match(readFileSync(sourcePath, "utf8"), /Passage width/);
+  assert.equal(snapshot.parameters.find((item) => item.id === parameter.id)?.label, "Passage width");
+  const patchPath = resolve(folder, "patches/water-channel.patch.ts");
+  const original = readFileSync(patchPath, "utf8");
+  const edited = original.replace("Full width across the water passage.", "Full cross-section width in millimetres.");
+  assert.notEqual(edited, original);
+  writeFileSync(patchPath, edited);
+  await project.scan(true);
+  assert.equal(project.state(clientId).ok, true, JSON.stringify(project.state(clientId)));
+  const baked = await evaluateProjectSnapshot(readWorkspaceSnapshot(folder), { profiles: { chordErrorMm: 0.02 } });
+  assert.equal(baked.profiles.regions.length, 18);
+  const area = (ring) => ring.reduce((sum, [x, y], i) => { const [nx, ny] = ring[(i + 1) % ring.length]; return sum + x * ny - nx * y; }, 0) / 2;
+  const netArea = baked.profiles.regions.reduce((sum, region) => sum + area(region.outer) + region.holes.reduce((value, hole) => value + area(hole), 0), 0);
+  assert.ok(Math.abs(netArea - 240 * 120) < 1e-7);
+  const acceptedProject = (await project.adapter.exportProject()).contents;
+  writeFileSync(patchPath, edited.replace('caps: "end"', 'caps: "invalid"'));
+  await project.scan(true);
+  assert.equal(project.state(clientId).ok, false);
+  assert.equal((await project.adapter.exportProject()).contents, acceptedProject);
+  assert.match(readFileSync(patchPath, "utf8"), /caps: "invalid"/);
+  writeFileSync(patchPath, edited);
+  await project.scan(true);
+  assert.equal(project.state(clientId).ok, true, JSON.stringify(project.state(clientId)));
+  await command("history.undo");
+  assert.equal(readFileSync(patchPath, "utf8"), original);
+  await command("history.redo");
+  assert.equal(readFileSync(patchPath, "utf8"), edited);
+  await project.saveDerived(); await project.dispose();
+  project = await openProject(folder, { storage }); snapshot = await join();
+  assert.equal(project.state(clientId).ok, true, JSON.stringify(project.state(clientId)));
+  assert.equal(snapshot.parameters.find((item) => item.id === parameter.id)?.label, "Passage width");
+  assert.equal(readFileSync(patchPath, "utf8"), edited);
+});

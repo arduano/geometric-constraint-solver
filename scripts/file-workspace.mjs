@@ -216,10 +216,10 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         gestureRollback = null;
         rollback = (await adapter.persistProject()).contents;
         previous = { acceptedCompilation, acceptedDesign, acceptedProject, acceptedHash, acceptedRevision, inputsSnapshot };
-        // The existing prepare API deliberately rejects an unchanged accepted source.
-        // Restoring exactly those bytes clears its retained draft through Revert.
-        const accepted = !multi && digest === acceptedHash
-          ? ((snapshot = await adapter.dispatch({ version: 2, command: "source.revert" })), true)
+        // Repairing exactly the last accepted bytes is not a new authoring step.
+        // Rejected complete projects already restored their accepted checkpoint.
+        const accepted = digest === acceptedHash
+          ? ((snapshot = multi ? await adapter.snapshot() : await adapter.dispatch({ version: 2, command: "source.revert" })), true)
           : await apply(text, captured);
         if (accepted && !multi && hash(readSource(sourcePath)) !== digest) throw Error("Conflict: disk changed during native evaluation");
         if (accepted) {
@@ -488,11 +488,13 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         publish();
         return snapshot;
       }
-      const navigation = isWorkspaceNavigation(method, input, snapshot);
+      const navigation = isWorkspaceNavigation(method, input, snapshot)
+        || method === "pointer" && ["move", "up"].includes(input?.phase)
+          && session.isNavigationGesture(context?.clientId, input?.pointerId);
       const authoredMutation = !navigation && !isWorkspacePresentation(method, input);
       if (context && navigation && !session.state(context.clientId).editor.canEdit) return adapter.snapshot();
       if (context) {
-        if (method === "pointer" && input.phase === "down") session.beginGesture(context.clientId, context.authority, input.pointerId);
+        if (method === "pointer" && input.phase === "down") session.beginGesture(context.clientId, context.authority, input.pointerId, { navigation });
         else session.verify(context.clientId, context.authority, { navigation, pointerId: method === "pointer" ? input.pointerId : undefined });
       }
       if (mode === "generator" && !navigation && !(

@@ -37,11 +37,12 @@ export function createWorkspaceSession() {
     },
     verify,
     advance() { revision++; },
-    beginGesture(id, authority, pointerId) {
-      verify(id, authority);
+    isNavigationGesture(id, pointerId) { return gesture?.clientId === id && gesture.pointerId === pointerId && gesture.navigation; },
+    beginGesture(id, authority, pointerId, { navigation = false } = {}) {
+      verify(id, authority, { navigation });
       if (!Number.isSafeInteger(pointerId) || pointerId < 0) throw Error("Invalid pointer identity");
       if (gesture && gesture.pointerId !== pointerId) reject("finish the active gesture first.");
-      gesture = { clientId: id, pointerId };
+      gesture = { clientId: id, pointerId, navigation };
     },
     endGesture() { gesture = null; },
   };
@@ -57,7 +58,8 @@ const navigationCommands = new Set([
 export function isWorkspaceNavigation(method, input, snapshot) {
   if (["resize", "wheel", "wheelBatch", "cancel"].includes(method)) return true;
   if (method === "dispatch") return navigationCommands.has(input?.command);
-  return method === "pointer" && input?.phase === "move" && !(input.buttons & 1) && snapshot?.presentation.activeTool === "select";
+  return method === "pointer" && (input?.phase === "down" && input.buttons === 4
+    || input?.phase === "move" && !(input.buttons & 1) && snapshot?.presentation.activeTool === "select");
 }
 
 /** Selection/tool changes invalidate commands whose target comes from the displayed UI. */
@@ -69,7 +71,7 @@ export function workspaceInteractionKey(snapshot) {
 /** Target-bearing UI actions need revision guards but cannot change authored files. */
 export function isWorkspacePresentation(method, input) {
   return method === "dispatch" && [
-    "selection.select", "selection.clear", "declaration.select", "navigation.rows.select",
+    "selection.select", "selection.clear", "declaration.select", "navigation.rows.select", "navigation.source.select",
     "dimensions.focus", "tool.select", "geometry.role.set",
   ].includes(input?.command);
 }

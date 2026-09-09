@@ -130,3 +130,21 @@ test("transitive helper edits change geometry and Undo/Redo restore dependency b
   assert.equal(readFileSync(helper,"utf8"),"export const center=[20,0] as const;");
   assert.equal(readFileSync(resolve(f.folder,"model/hole.ts"),"utf8"),patch);
 });
+
+test("repairing rejected files to the last accepted bytes does not add an Undo step", async (t) => {
+  const f = await setup(t);
+  const initial = await f.rpc("session.join");
+  const edited = await f.rpc("dispatch", { version: 2, command: "source.prepare", payload: { path: "sketch.ts", contents: f.source.replace("value: mm(10)", "value: mm(12)") } }, initial.state);
+  assert.equal(edited.status, 200, edited.error);
+  const saved = readFileSync(resolve(f.folder, f.entry), "utf8");
+  writeFileSync(resolve(f.folder, f.entry), saved.replace("value: mm(12)", "value: mm(-12)"));
+  await f.bridge.project.scan(true);
+  assert.equal(f.bridge.project.state().ok, false);
+  writeFileSync(resolve(f.folder, f.entry), saved);
+  await f.bridge.project.scan(true);
+  const repaired = await f.rpc("snapshot");
+  assert.equal(repaired.state.ok, true);
+  const undo = await f.rpc("dispatch", { version: 2, command: "history.undo" }, repaired.state);
+  assert.equal(undo.status, 200, undo.error);
+  assert.equal(readFileSync(resolve(f.folder, f.entry), "utf8"), f.source);
+});
