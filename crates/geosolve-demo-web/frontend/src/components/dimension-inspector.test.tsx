@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DimensionEntry, DimensionsSnapshot } from "../lib/adapter";
 import { CanvasControls } from "./canvas-controls";
 import { DimensionInspector, type DimensionPanelActions } from "./dimension-inspector";
+import { AuthoringEditContext, type AuthoringEditLifecycle } from "../lib/authoring-edit";
 
 const dimension = (id: string, changes: Partial<DimensionEntry> = {}): DimensionEntry => ({ id, label: id, value: "12", unit: "mm", kind: "Distance", reference: false, generated: false, pinned: false, visible: false, focused: false, editable: true, ...changes });
 const state = (changes: Partial<DimensionsSnapshot> = {}): DimensionsSnapshot => ({ mode: "focused", pinCount: 0, entries: [dimension("Width", { visible: true }), dimension("Span", { value: "54", reference: true, editable: false }), dimension("Half width", { generated: true, value: "6" })], parameters: [{ id: "channel-width", label: "Channel width", value: "12", unit: "mm", editable: true }], ...changes });
@@ -80,6 +81,35 @@ describe("focused dimension inspection", () => {
     const parameter = screen.getByRole("textbox", { name: "Channel width value" });
     fireEvent.change(parameter, { target: { value: "16" } }); fireEvent.blur(parameter);
     expect(onParameterEdit).toHaveBeenCalledExactlyOnceWith("channel-width", "16");
+  });
+
+  it("folder field focus does not enqueue a selection revision ahead of the draft", () => {
+    const handlers = actions();
+    const lifecycle: AuthoringEditLifecycle = { beginFieldEdit: vi.fn(), changeFieldEdit: vi.fn(), cancelFieldEdit: vi.fn(), commitFieldEdit: (_id, action) => action() };
+    render(<AuthoringEditContext.Provider value={lifecycle}><DimensionInspector dimensions={state()} actions={handlers} onParameterEdit={vi.fn()} /></AuthoringEditContext.Provider>);
+    const width = screen.getByRole("textbox", { name: "Width value" });
+    fireEvent.focus(width);
+    fireEvent.change(width, { target: { value: "14" } });
+    fireEvent.keyDown(width, { key: "Enter" });
+    expect(handlers.onFocus).not.toHaveBeenCalled();
+    expect(lifecycle.beginFieldEdit).toHaveBeenCalledWith(expect.any(String), "Width value");
+    expect(handlers.onEdit).toHaveBeenCalledExactlyOnceWith("Width", "14");
+    fireEvent.click(screen.getByRole("button", { name: "Inspect Width" }));
+    expect(handlers.onFocus).toHaveBeenCalledWith("Width");
+  });
+
+  it("an older accepted echo cannot clear text typed after the submitted field value", () => {
+    const handlers = actions();
+    const lifecycle: AuthoringEditLifecycle = { beginFieldEdit: vi.fn(), changeFieldEdit: vi.fn(), cancelFieldEdit: vi.fn(), commitFieldEdit: (_id, action) => action() };
+    const renderValue = (value: string) => <AuthoringEditContext.Provider value={lifecycle}><DimensionInspector dimensions={state({ entries: [dimension("Width", { value })] })} actions={handlers} onParameterEdit={vi.fn()} /></AuthoringEditContext.Provider>;
+    const view = render(renderValue("12"));
+    const width = screen.getByRole("textbox", { name: "Width value" });
+    fireEvent.change(width, { target: { value: "14" } }); fireEvent.keyDown(width, { key: "Enter" });
+    fireEvent.change(width, { target: { value: "16" } });
+    vi.mocked(lifecycle.cancelFieldEdit).mockClear();
+    view.rerender(renderValue("14"));
+    expect(width).toHaveValue("16");
+    expect(lifecycle.cancelFieldEdit).not.toHaveBeenCalled();
   });
 
   it("enforces four pins while preserving individual unpin and clear actions", async () => {

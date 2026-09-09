@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useAuthoringEdit } from "../lib/authoring-edit";
-import { useEffect, useId, useRef, useState } from "react";
+import { useAuthoringField } from "../lib/authoring-edit";
+import { useId } from "react";
 import type { AuthoringDocumentSnapshot, AuthoringMetadataChanges, AuthoringMetadataCommand, AuthoringMetadataSnapshot, AuthoringParameterExtractionCommand } from "../lib/adapter";
 
 export interface AuthoringMetadataActions {
@@ -78,29 +78,21 @@ export function AuthoringDocumentProperties({ document, actions, blockedReason }
 }
 
 function MetadataTextField({ label, accessibleLabel, value, placeholder, multiline, blockedReason, onCommit }: { label: string; accessibleLabel: string; value: string; placeholder?: string; multiline?: boolean; blockedReason?: string; onCommit: (value: string) => void }) {
-  const editing = useAuthoringEdit(accessibleLabel);
-  const [draft, setDraft] = useState(value);
-  const submitted = useRef(value);
-  useEffect(() => { editing.cancel(); setDraft(value); submitted.current = value; }, [value]);
-  const commit = (next: string) => {
-    if (next === value) editing.cancel();
-    if (blockedReason || next === submitted.current) return;
-    submitted.current = next;
-    editing.commit(() => onCommit(next));
-  };
+  const editing = useAuthoringField(accessibleLabel, value);
+  const commit = (next: string) => editing.submit(next, () => onCommit(next), Boolean(blockedReason));
   const properties = {
     "aria-label": accessibleLabel,
-    value: draft,
+    value: editing.value,
     placeholder,
     disabled: Boolean(blockedReason),
     title: blockedReason,
     className: fieldClass,
-    onFocus: editing.begin,
-    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { editing.change(event.currentTarget.value); setDraft(event.currentTarget.value); },
+    onFocus: () => editing.focus(),
+    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => editing.change(event.currentTarget.value),
     onBlur: (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => commit(event.currentTarget.value),
     onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       if (event.key === "Enter" && (!multiline || event.ctrlKey || event.metaKey)) { event.preventDefault(); event.stopPropagation(); commit(event.currentTarget.value); }
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); editing.cancel(); setDraft(value); submitted.current = value; }
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); editing.cancel(); }
     },
   };
   return <label className="grid min-w-0 gap-1 text-[11px] text-muted"><span>{label}</span>{multiline ? <textarea {...properties} rows={3} /> : <input {...properties} />}</label>;

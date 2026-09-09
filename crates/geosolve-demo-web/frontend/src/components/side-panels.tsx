@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useAuthoringEdit } from "../lib/authoring-edit";
+import { useAuthoringField } from "../lib/authoring-edit";
 import { AlertCircle, Box, Braces, ChevronDown, ChevronUp, DraftingCompass, ExternalLink, Eye, EyeOff, Focus, GripVertical, Minus, Pencil, RotateCcw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DeclarationCapability, DeclarationRow, NavigationSnapshot, WorkbenchSnapshot } from "../lib/adapter";
@@ -138,19 +138,11 @@ export function ParametersView({ snapshot, onEdit, blocked, metadataActions, blo
   </section>;
 }
 function ParameterValue({ parameter, onEdit, blockedReason }: { parameter: WorkbenchSnapshot["parameters"][number]; onEdit: (id: string, value: string) => void; blockedReason?: string }) {
-  const editing = useAuthoringEdit(parameter.label);
-  const [draft, setDraft] = useState(parameter.value);
-  const submitted = useRef(parameter.value);
-  useEffect(() => { editing.cancel(); setDraft(parameter.value); submitted.current = parameter.value; }, [parameter.value]);
-  const submit = (value: string) => {
-    if (value === parameter.value) editing.cancel();
-    if (!parameter.editable || blockedReason || value === submitted.current) return;
-    submitted.current = value;
-    editing.commit(() => onEdit(parameter.id, value));
-  };
-  return <label className="grid min-w-0 gap-1 text-xs text-muted"><span>{parameter.label}</span><span className="flex"><input aria-label={parameter.label} disabled={!parameter.editable || Boolean(blockedReason)} title={blockedReason} value={draft} onFocus={editing.begin} onChange={(event) => { editing.change(event.currentTarget.value); setDraft(event.currentTarget.value); }} onKeyDown={(event) => {
+  const editing = useAuthoringField(parameter.label, parameter.value);
+  const submit = (value: string) => editing.submit(value, () => onEdit(parameter.id, value), !parameter.editable || Boolean(blockedReason));
+  return <label className="grid min-w-0 gap-1 text-xs text-muted"><span>{parameter.label}</span><span className="flex"><input aria-label={parameter.label} disabled={!parameter.editable || Boolean(blockedReason)} title={blockedReason} value={editing.value} onFocus={() => editing.focus()} onChange={(event) => editing.change(event.currentTarget.value)} onKeyDown={(event) => {
     if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); submit(event.currentTarget.value); }
-    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); editing.cancel(); setDraft(parameter.value); submitted.current = parameter.value; }
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); editing.cancel(); }
   }} onBlur={(event) => submit(event.currentTarget.value)} className="h-8 min-w-0 flex-1 rounded-l border border-border bg-canvas px-2 text-right text-sm text-foreground outline-none focus:border-accent disabled:opacity-50" /><span className="flex h-8 items-center rounded-r border border-l-0 border-border bg-raised px-2 text-xs text-muted">{parameter.unit}</span></span></label>;
 }
 export function ProblemsView({ snapshot, onOpen }: { snapshot: WorkbenchSnapshot; onOpen?: (problem: WorkbenchSnapshot["problems"][number]) => void }) {
