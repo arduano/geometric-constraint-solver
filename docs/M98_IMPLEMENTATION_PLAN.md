@@ -46,8 +46,14 @@ and closed; M98 stays open until integrated qualification and supervising-user a
 - [x] Qualify the requested 500 ms canvas loading-feedback amendment and refresh previews.
 - [x] Reproduce and repair M98-F016 asynchronous navigation backlog with owning regressions
   and exact-response negotiated compression.
-- [ ] Qualify and deliver the [navigation latency repair](M98_NAVIGATION_LATENCY.md).
+- [x] Qualify and deliver the [navigation latency repair](M98_NAVIGATION_LATENCY.md).
 - [ ] Obtain supervising-user acceptance and close M98.
+
+Navigation repair candidate `b1243a6` passes all 261 obligations in
+`20260909T221531-9189674e` (11 fresh, 250 authenticated reused). Both previews serve
+verified frozen/installed artifacts; all seven original manifold files are preserved and
+the new editing lease is unclaimed. Evidence: `target/m98/latency-preview-verification.json`
+and `target/m98/latency-static-preview-verification.json`. Human acceptance and closure remain open.
 
 Stages may develop independently behind their explicit APIs, with focused verification before
 integration. No new solver primitive/equation, unsafe code, FFI solver, solid kernel, enclosure

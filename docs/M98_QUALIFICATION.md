@@ -6,21 +6,72 @@ M98 is implemented and mechanically qualified on 2026-09-09. Supervising-user ac
 and milestone closure remain open. Work is isolated on `m98/file-workspace`; accepted M97
 and its preview at http://100.94.63.83:18105/ remain unchanged.
 
-## Qualified loading-feedback amendment
+## Qualified navigation latency repair
 
-The current candidate is `a68fffa7ddd97d8b86f17eb98a7bf01c58db3fda`, qualified by
+Current candidate `b1243a6deec4eddad7dd0a0f941b29ea47e538a4`, tree
+`9934cc679fe2a53ec12e1b7e62b5ef27ee5271b7`, passes **261/261 obligations** in
+`20260909T221531-9189674e`: 11 fresh and 250 authenticated reused results in
+**16m14.099s**. `complete`, `qualified_release`, `clean_source` and `source_unchanged`
+are true; every linked passing receipt was independently authenticated.
+`target/m98/latency-final-qualification.json` records the verification.
+
+The gate covers formatting, strict Clippy, native/headless and WASM parity, frontend,
+archive/license checks, the unchanged 271-case golden, browser workflows and performance.
+Folder coverage passes 101 Node tests and nine browser tests. Main browser coverage
+reuses the authenticated 49 complete workflows and 17 initial sample/render checks from
+`20260909T213304-b37d7894`, without skips or flaky results. The performance stage passes
+in 122 seconds, including the 256-moving-body case in 114.81 seconds.
+
+[The navigation repair report](M98_NAVIGATION_LATENCY.md) records exact queue/response
+contracts, failed timeout attempts, focused diagnoses and browser synchronization changes.
+The sample lifecycle now settles presentation after selection/isolation and allows eight
+minutes for its complete two-edit lifecycle. The manifold browser test awaits its exact
+parameter-edit response before retaining the original source and complete-export assertions.
+These test synchronization changes preserve mathematical and accepted-state assertions.
+
+Both previews now serve the qualified frozen/installed artifacts: static
+`http://100.94.63.83:18106/` and the editable folder on Tailscale port 18108.
+`target/m98/latency-static-preview-verification.json` passes exact static bytes and
+actual-WASM manifold readiness. `target/m98/latency-preview-verification.json` verifies
+13 folder HTTP routes against qualified bytes, a ready WebGL2 canvas with 364 finite
+items, working SSE, and exact decoded identity/gzip equality: 628,107 bytes become
+59,826 bytes. The new folder session URL is recorded there and in
+`target/m98/tailnet-folder-location.json`.
+
+Replacement preserves the original user folder at
+`target/m98/installed-preview-20260909T144235-377abb33/manifold` and all seven authored
+files. Current/accepted source identity remains
+`01fe512c5221bccbc1a032eb32480101005c9ca3571f99e504a1619647b3d59a`.
+Backend replacement creates a new token and authority epoch; read-only browser verification
+leaves the new editing lease unclaimed and preserves authority/source/write state.
+`target/m98/latency-preview-processes.json` records the preserved file hashes.
+
+Private-copy probes use the exact installed product with `GEOSOLVE_DIST` unset. Under
+100 ms simulated latency and 512 KiB/s throughput, 12 wheel inputs produce three requests
+and three frames; the final response arrives 561.7 ms after input stops, compared with
+over 14.6 seconds before repair. Final presentation follows at 703.4 ms. For 90 hover
+inputs, the final response arrives after
+302.6 ms unthrottled (77 requests), or 390.2 ms with 40 ms latency and 1 MiB/s throughput
+(34 requests), compared with 2.866 seconds before repair. Both probes report no browser
+errors. Hover records no long tasks; wheel replay retains three main-thread long tasks
+of 111–150 ms. These controlled measurements do not assert the user's actual network latency. Evidence is `target/m98/latency-folder-wheel-browser-qualified-20260909T221531-9189674e.json`
+and `target/m98/latency-folder-browser-qualified-20260909T221531-9189674e.json`.
+Solving, Fit and semantic edit costs remain unchanged. M98 acceptance and closure remain open.
+
+## Preceding qualified loading-feedback amendment
+
+The preceding candidate is `a68fffa7ddd97d8b86f17eb98a7bf01c58db3fda`, qualified by
 `20260909T173058-0f35c852`: **261/261 obligations**, 16 fresh and 245 authenticated reused
 results, in 16m53.659s. [The amendment report](M98_LOADING_FEEDBACK.md) records implementation,
 failed harness attempts, final commands, limitations and frozen-byte verification.
 The canvas greys out after 500 ms and retains accepted geometry while standalone native
 solving runs in a worker. Managed TypeScript compilation remains on the main thread.
 
-Both M98 previews now serve the amended qualified files: static at
-`http://100.94.63.83:18106/`, editable folder at `http://100.94.63.83:18108/` using the exact
-session URL in `target/m98/loading-preview-final-session.json`. The original user's writable
-manifold folder and all seven existing files are preserved; the editor lease is unclaimed.
-The following detailed base-milestone record is historical. M98 acceptance and closure
-remain open.
+That delivery refreshed both M98 previews and preserved the original user's writable
+manifold folder and all seven existing files, leaving its editing lease unclaimed.
+Its token and authority epoch are historical; current replacement verification is recorded
+above. The following detailed base-milestone record is also historical. M98 acceptance
+and closure remain open.
 
 ## Delivered authoring surface
 

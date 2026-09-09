@@ -2,8 +2,8 @@
 
 # M98 navigation latency repair
 
-Status: implementation and focused verification in progress; replacement qualification
-and preview delivery remain pending. M98 acceptance and closure remain open.
+Status: M98-F016 is implemented, mechanically qualified and delivered from clean
+candidate `b1243a6` in `20260909T221531-9189674e`. M98 acceptance and closure remain open.
 
 The user reported 2–5 second latency for hover, zoom and clicking after the loading
 amendment. M98-F016 in [the hardening ledger](M98_HARDENING.md) records the reproduction,
@@ -11,7 +11,7 @@ owner and exact queue contract. No mathematical or persisted format changes are 
 
 ## Reproduction
 
-Private Chromium browser runs use current installed `a68fffa` and preceding `6509e9c`
+Private Chromium reproduction runs use previously installed `a68fffa` and preceding `6509e9c`
 with a copy of the user's manifold. They preserve source and accepted design; the actual
 editable preview is not taken over. CDP simulates network latency/throughput. These are
 controlled browser measurements, not a claim about the user's actual connection or
@@ -38,7 +38,9 @@ The frontend scheduler retains the newest adjacent pending hover/pan position an
 combines exact wheel samples across frames while awaiting an asynchronous result.
 Down/up/cancel, semantic movement, modifier/pointer transitions and intervening
 operations remain ordering barriers. It drops queued idle hover when the pointer leaves.
-Folder JSON compression preserves exact decoded response fields and authority.
+Folder JSON compression preserves exact decoded response fields and authority. Successful
+authenticated RPC responses negotiate gzip level 1 for payloads from 16 KiB through
+4 MiB; small/oversized responses, errors and SSE remain uncompressed.
 
 The focused held-request regression failed before the scheduler change. All 40 canvas
 viewport tests and TypeScript checks pass afterward. The tests cover delayed hover plus
@@ -51,9 +53,9 @@ errors and unchanged filesystem/accepted history.
 A second browser characterization with 80 ms added request delay reduced 92 dispatched
 requests to 31 for the same 90-sample motion, with aggregate request time reduced from
 9.12 seconds to 3.08 seconds during a 2.93-second input period. This is queue behavior
-evidence; the final delivery measurement will use the exact qualified artifact.
+evidence; the final installed-product measurements below use the qualified artifact.
 
-Controlled wheel replay after both fixes uses the same 100 ms latency / 512 KiB/s
+The initial development-build wheel replay after both fixes uses the same 100 ms latency / 512 KiB/s
 conditions and exact 12 samples as the original reproduction. It makes three requests
 instead of 12; the final response arrives **546 ms after input stops**, compared with
 more than 14.6 seconds before repair. It preserves all wheel samples and reports no
@@ -86,6 +88,11 @@ nix-shell shell.nix --run 'node --test scripts/workspace-http.test.mjs scripts/w
 
 ## Qualification synchronization finding
 
+Run `20260909T191739-6f32214c` failed exact compiler parity after the host update
+changed Deno 2.9.4 to 2.9.6. Subsequent qualification explicitly uses the retained
+Nixpkgs source matching the earlier qualified tools. Run `20260909T192403-5a85f572`
+was interrupted; neither attempt establishes a qualified release.
+
 The first pinned complete attempt, `20260909T195555-1f5f64d4`, retained 254 passing
 stages but failed two browser timeouts. The folder manifold edit exceeded its 30-second
 source assertion; an isolated exact-artifact replay passed that original assertion in
@@ -115,7 +122,7 @@ unchanged. The original timeout is retained in `target/m98/fixture-isolation-foc
 The focused complete fixture workflow passes (1/1, 7.1 minutes), including its final
 reload. Evidence: `target/m98/fixture-isolation-focused-completion.log`; the exact
 executed command is retained in `target/m98/fixture-isolation-focused-process.json`.
-Replacement integrated qualification remains pending.
+The final integrated run below qualifies this browser synchronization change.
 
 Run `20260909T213304-b37d7894` passes all 49 full browser workflows and 17 initial
 sample/render checks, without skips or flaky results, on the synchronization repair.
@@ -127,6 +134,93 @@ distinguishes operation completion from post-response publication correctness.
 The focused manifold case passes (1/1, 69.3 seconds) against the exact prepared
 harness; `target/m98/manifold-response-focused.log` and its process record retain
 the result and executed command.
+
+## Final qualification and delivery
+
+Clean candidate `b1243a6deec4eddad7dd0a0f941b29ea47e538a4` passes **261/261 obligations**
+in `20260909T221531-9189674e`: 11 fresh and 250 authenticated reused results,
+974.099 seconds (16m14.099s). Product repair is `72ab926`; descendants `b6e0a27`
+and `b1243a6` add the browser synchronization changes described above. Every linked
+passing receipt and the clean/unchanged/complete qualification manifest were independently
+authenticated by `verify-qualification.py`. Earlier failed or interrupted runs remain
+failed or interrupted; only their authenticated unchanged-input passing stages can be reused.
+
+Coverage includes 307 frontend tests, 101 folder Node tests, nine folder browser cases,
+seven engine Node tests, two generator Node tests, one generator browser case and two
+offline package tests. The main browser evidence includes 49 complete workflows and
+17 initial sample/render checks without failures, skips or flaky results. Required
+format, Clippy, native/WASM, package and licence checks pass, and the unchanged
+271-case golden remains clean. The performance stage passes in 122.0 seconds with
+the 256-moving-body crossover at 114.81 seconds. Qualification evidence is
+`target/m98/latency-final-qualification.json`; the log is
+`target/m98/latency-release-gate-response.log`.
+
+```bash
+nix-shell shell.nix \
+  -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source \
+  --run './scripts/release-gate.sh --resume 20260909T213304-b37d7894'
+python3 target/m98/verify-qualification.py 20260909T221531-9189674e
+python3 target/m98/freeze-preview.py 20260909T221531-9189674e
+python3 target/m98/install-preview.py 20260909T221531-9189674e
+python3 target/m98/upgrade-latency-preview.py
+node target/m98/verify-latency-preview.mjs
+```
+
+The qualified production is served at `http://100.94.63.83:18106/` and the editable
+manifold at Tailscale port 18108. Both previews pass all 13 served-route byte checks
+and actual WASM/WebGL2 readiness. The folder preview shows 364 finite scene items,
+working SSE and no browser errors. Its authenticated response shrinks from
+**628,107 bytes to 59,826 bytes** with exact decoded-byte equality. The existing
+plain-HTTP secure-random UUID shim remains explicitly accounted for in route verification.
+
+All seven authored manifold files are preserved in the original folder
+`target/m98/installed-preview-20260909T144235-377abb33/manifold`. Current and accepted
+source retain hash `01fe512c5221bccbc1a032eb32480101005c9ca3571f99e504a1619647b3d59a`.
+Restart creates a new token and authority epoch; verification leaves the new editor
+lease unclaimed and preserves authority, source and write state within that session.
+The current folder URL is recorded in `target/m98/latency-preview-verification.json`;
+static verification is in `target/m98/latency-static-preview-verification.json`.
+M97 and its preview are outside this replacement.
+
+Static verification ran from `crates/geosolve-demo-web/frontend` with absolute paths:
+
+```bash
+GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm run verify:artifact -- \
+  --manifest /home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/preview-20260909T221531-9189674e/production.json \
+  --directory /home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/preview-20260909T221531-9189674e/geosolve-production \
+  --url http://100.94.63.83:18106/ \
+  --receipt /home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/latency-static-preview-verification.json
+```
+
+Final private browser probes consume the exact installed qualified CLI runtime and
+production distribution, preserving the live session and original manifold files:
+
+```bash
+env -u GEOSOLVE_DIST \
+  GEOSOLVE_PROBE_LABEL=qualified-20260909T221531-9189674e \
+  GEOSOLVE_PROBE_RUNTIME=/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/installed-preview-20260909T221531-9189674e/node_modules/@geosolve/cli/runtime/scripts/file-workspace.mjs \
+  node target/m98/probe-folder-wheel-latency.mjs 20260909T221531-9189674e
+env -u GEOSOLVE_DIST \
+  GEOSOLVE_PROBE_LABEL=qualified-20260909T221531-9189674e \
+  GEOSOLVE_PROBE_RUNTIME=/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/installed-preview-20260909T221531-9189674e/node_modules/@geosolve/cli/runtime/scripts/file-workspace.mjs \
+  node target/m98/probe-folder-navigation-latency.mjs 20260909T221531-9189674e
+```
+
+| Input | Conditions | Qualified installed product |
+|---|---|---|
+| 90 hover samples | Unthrottled | 77 requests; final response 302.6 ms after input stopped |
+| 90 hover samples | 40 ms latency, 1 MiB/s | 34 requests; final response 390.2 ms after input stopped |
+| 12 wheel samples | 100 ms latency, 512 KiB/s | Three requests; final response 561.7 ms after input stopped |
+
+Both probes report no browser errors. Hover produces no changed presentation frames
+in this empty-canvas motion probe. Wheel preserves all 12 ordered samples in two
+batches, followed by dimension-navigation completion; it presents three frames with
+the final presentation 703.4 ms after input stopped. Its longest request is 243.3 ms;
+three main-thread tasks take 111–150 ms, so this is not a claim of 60 Hz rendering.
+Evidence: `target/m98/latency-folder-browser-qualified-20260909T221531-9189674e.json`
+and `target/m98/latency-folder-wheel-browser-qualified-20260909T221531-9189674e.json`.
+These measurements establish improvement under controlled network conditions, not
+the user's actual connection latency or lower solving cost.
 
 ## Limits
 

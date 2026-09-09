@@ -5559,15 +5559,19 @@ limits without claiming an unrecorded exhaustive human replay. No M97 blocker re
 
 ## M98 real-world authoring and embedding — mechanical qualification complete
 
-M98-F016 navigation latency follow-up is under repair/qualification; the preceding
-loading product below remains the qualified baseline. [Latency evidence](docs/M98_NAVIGATION_LATENCY.md)
-separates reproduced queue delays from local solve time. Human acceptance remains open.
+M98-F016 navigation latency repair is mechanically qualified and delivered from `b1243a6` in
+`20260909T221531-9189674e`: all 261 obligations pass (11 fresh, 250 authenticated reused).
+[Latency evidence](docs/M98_NAVIGATION_LATENCY.md) records exact input preservation,
+bounded pending navigation, compressed-response equality and browser synchronization.
+Both replacement previews pass served-byte and browser checks, preserving all seven
+original manifold files and leaving the new editing lease unclaimed. Final evidence is
+`target/m98/latency-preview-verification.json` and
+`target/m98/latency-static-preview-verification.json`. Human acceptance and M98 closure remain open.
 
-The supervising user's requested [loading-feedback amendment](docs/M98_LOADING_FEEDBACK.md)
-is qualified and delivered from `a68fffa` in `20260909T173058-0f35c852`: all 261 obligations
-pass, including delayed feedback, retained geometry and refreshed static/folder previews.
-The following original evidence belongs to the preceding product. Acceptance and closure
-remain open.
+The preceding [loading-feedback amendment](docs/M98_LOADING_FEEDBACK.md) was qualified and
+delivered from `a68fffa` in `20260909T173058-0f35c852`: all 261 obligations passed, including
+delayed feedback and retained geometry. That loading behavior remains in the current product.
+The following original qualification and delivery evidence is historical.
 
 Clean source `6509e9c160a74c499668b63a5ef9bddefa593223` passes all 261 obligations in
 `20260909T144235-377abb33`, with 23 fresh and 238 authenticated unchanged-input results.
@@ -5587,4 +5591,6 @@ manifold Fit/history costs and Linux/worker/topology limitations remain explicit
 - [x] Frozen artifacts and concrete verified review previews.
 - [ ] Supervising-user acceptance of M98.
 - [x] Loading-feedback amendment qualified and preview refreshed.
+- [x] Navigation latency repair mechanically qualified.
+- [x] Navigation latency replacement previews verified.
 - [ ] M98 milestone closure after acceptance.

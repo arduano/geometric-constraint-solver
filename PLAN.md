@@ -8470,17 +8470,20 @@ merge or qualify that product.
 
 - [x] Reproduce M98-F016 delayed hover/zoom/click under asynchronous navigation and add
   exact scheduler regressions; preserve gesture terminals, semantic samples and wheel anchors.
-- [ ] Qualify the navigation queue/transfer repair and refresh the existing previews.
+- [x] Qualify the navigation queue/transfer repair and refresh the existing previews.
   [Latency repair evidence](docs/M98_NAVIGATION_LATENCY.md).
 
-Status: **implementation and loading-feedback amendment mechanically qualified and delivered;
-supervising-user acceptance open**. [Amendment scope and evidence](docs/M98_LOADING_FEEDBACK.md).
-The amendment passes 261/261 obligations on `a68fffa` in `20260909T173058-0f35c852`.
-Both previews are refreshed from frozen qualified bytes; the existing writable manifold is
-preserved. Fast work does not flash; slow work dims the accepted canvas after 500 ms.
-M97 is accepted and merged into this
-worktree. [Approved scope and ordered checklist](docs/M98_IMPLEMENTATION_PLAN.md) owns
-implementation, hardening and qualification. The user selected complete project support,
+Status: **implementation, loading feedback and navigation latency repair mechanically qualified
+and delivered; supervising-user acceptance remains open**.
+Candidate `b1243a6` passes 261/261 obligations in `20260909T221531-9189674e`
+(11 fresh, 250 authenticated reused; 16m14.099s). The navigation repair coalesces pending
+hover/pan and preserves exact wheel samples while reducing folder response size. Both
+replacement previews pass served-byte and browser verification, preserving all seven existing
+manifold files and leaving the new editing lease unclaimed.
+Fast work does not flash; slow work dims the accepted canvas after 500 ms.
+M97 is accepted and merged into this worktree.
+[Approved scope and ordered checklist](docs/M98_IMPLEMENTATION_PLAN.md) owns implementation,
+hardening and qualification. The user selected complete project support,
 a headless Node/browser TS engine, editable/generator modes, optional source-declared
 inputs, Linux filesystem qualification, explicit design sidecar and one active UI editor.
 
@@ -8489,10 +8492,12 @@ revision-checked CLI, one-editor bridge, publication journal/design sidecar and 
 computed-profile export are implemented with focused tests. Offline archives and the
 standalone generator website pass clean-install/browser smoke checks. Transaction/worker
 hardening, navigation measurements and browser migration pass the clean integrated gate.
-[Qualification and preview](docs/M98_QUALIFICATION.md) records amended source `a68fffa`, all 261 obligations
-(16 fresh, 245 authenticated reused), frozen production at `http://100.94.63.83:18106/` and
-the installed manifold folder on Tailscale port 18108. [Implementation findings](docs/M98_HARDENING.md) records exact
-reproductions and repairs; no supervising-user acceptance or closure is implied.
+[Qualification and preview](docs/M98_QUALIFICATION.md) records current source `b1243a6`, all 261 obligations
+(11 fresh, 250 authenticated reused), and replacement verification for static
+`http://100.94.63.83:18106/` and the installed manifold folder on Tailscale port 18108.
+Final delivery evidence is `target/m98/latency-preview-verification.json` and
+`target/m98/latency-static-preview-verification.json`. [Implementation findings](docs/M98_HARDENING.md)
+records exact reproductions and repairs; no supervising-user acceptance or closure is implied.
 
 ### Historical fast-track prototype
 
