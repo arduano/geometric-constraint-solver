@@ -5,12 +5,64 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    AnnotationLayoutKey, AnnotationLayoutState, EditorScene, SceneAnnotation, SceneAnnotationKind,
-    SelectionItem, Viewport,
+    AnnotationLayoutKey, AnnotationLayoutState, ConstraintEditor, EditorScene, PickTolerance,
+    SceneAnnotation, SceneAnnotationKind, SceneAnnotationVisibility, ScreenPoint, SelectionItem,
+    Viewport,
 };
 
+/// Resolves delayed dimension inspection using the shared paint/pick surface.
+///
+/// Direct dimensions take priority. A visible dimension retains the preceding
+/// geometry context through its 12-pixel transit corridor; otherwise ordinary
+/// geometry policy supplies the next owner. The host owns delay, tool and
+/// navigation eligibility. Invalid/outside-canvas samples clear inspection.
+#[must_use]
+pub fn dimension_hover_target(
+    scene: &EditorScene,
+    editor: &ConstraintEditor,
+    previous: Option<(SelectionItem, ScreenPoint)>,
+    position: ScreenPoint,
+) -> Option<(SelectionItem, ScreenPoint)> {
+    if !position.is_finite()
+        || position.x < 0.0
+        || position.y < 0.0
+        || position.x > scene.viewport.screen_size[0]
+        || position.y > scene.viewport.screen_size[1]
+    {
+        return None;
+    }
+    if let Some(hit) = scene.annotation_hit_test(
+        position,
+        PickTolerance::default(),
+        editor.selection(),
+        editor.hovered(),
+        &[],
+    ) && matches!(hit.item, SelectionItem::Dimension(_))
+    {
+        return Some((hit.item, position));
+    }
+    if let Some((_, origin)) = previous
+        && scene.annotations_visible
+        && scene.annotations.iter().any(|annotation| {
+            matches!(annotation.item, SelectionItem::Dimension(_))
+                && annotation.visibility == SceneAnnotationVisibility::Always
+                && annotation.context_hit_test(position, origin, 12.0)
+        })
+    {
+        return previous;
+    }
+    scene
+        .hit_test_with_policy(
+            position,
+            PickTolerance::default(),
+            editor.geometry_interaction_policy(),
+        )
+        .map(|hit| (hit.item, position))
+}
+
 /// Canvas dimension density. Standalone scene construction retains legacy defaults.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum DimensionDisplayMode {
     Focused,
     #[default]
@@ -19,7 +71,8 @@ pub enum DimensionDisplayMode {
 }
 
 /// Exact accepted context supplied by a host. Timing and pointer gestures remain host-owned.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct DimensionPresentationContext {
     pub selection: Vec<SelectionItem>,
     pub hovered: Option<SelectionItem>,
@@ -33,7 +86,8 @@ pub struct DimensionPresentationContext {
 }
 
 /// Complete accepted measurement metadata, including rows omitted from the canvas.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 #[allow(
     clippy::struct_excessive_bools,
     reason = "independent accepted and presentation flags compose without exclusive states"
@@ -96,11 +150,13 @@ impl SceneDimensionEntry {
 
 /// Host-retained presentation preferences plus automatic slots. Only mode and pins
 /// should be persisted; the cache and inspection context are transient.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct DimensionPresentationState {
     pub mode: DimensionDisplayMode,
     pub focus: Option<AnnotationLayoutKey>,
     pub pins: Vec<AnnotationLayoutKey>,
+    #[serde(with = "crate::detached_scene::map_entries")]
     retained: BTreeMap<AnnotationLayoutKey, RetainedDimension>,
     candidates: Vec<AnnotationLayoutKey>,
     base: Option<DimensionPresentationBase>,
@@ -110,7 +166,8 @@ pub struct DimensionPresentationState {
     reconsider_hidden: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 struct DimensionPresentationInterest {
     mode: DimensionDisplayMode,
     focus: Option<AnnotationLayoutKey>,
@@ -118,9 +175,11 @@ struct DimensionPresentationInterest {
     context: DimensionPresentationContext,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 struct DimensionPresentationBase {
     identity: (geosolve_sketch::DocumentId, u64),
+    #[serde(with = "crate::detached_scene::document_codec")]
     document: geosolve_sketch::SketchDocument,
     hidden_items: BTreeSet<SelectionItem>,
     viewport: Viewport,
@@ -128,7 +187,8 @@ struct DimensionPresentationBase {
     entries: Vec<SceneDimensionEntry>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 struct RetainedDimension {
     annotation: SceneAnnotation,
     viewport: Viewport,

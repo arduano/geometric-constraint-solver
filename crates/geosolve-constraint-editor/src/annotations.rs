@@ -15,7 +15,9 @@ use crate::coordinator::display_dimension_target;
 use crate::{SceneCurve, ScenePoint, ScreenPoint, SelectionItem, Viewport};
 
 /// Semantic symbol requested for one constraint annotation.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd,
+)]
 pub enum SceneConstraintGlyph {
     Fixed,
     Coincident,
@@ -45,7 +47,8 @@ pub enum SceneConstraintGlyph {
 /// render a complete constraint tree without re-reading document definitions or
 /// reconstructing operands and presentation families. Their order is the
 /// document's ordinary persistent constraint order.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SceneConstraintEntry {
     pub id: DocumentConstraintId,
     pub source: DocumentSourceId,
@@ -81,7 +84,8 @@ pub fn constraint_entries(document: &SketchDocument) -> Vec<SceneConstraintEntry
 }
 
 /// Default presentation density for one accepted annotation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum SceneAnnotationVisibility {
     /// Visible without a related hover or selection.
     Always,
@@ -92,7 +96,8 @@ pub enum SceneAnnotationVisibility {
 }
 
 /// One glyph location. A displaced marker retains its semantic leader origin.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SceneGlyphMarker {
     pub anchor: ScreenPoint,
     pub leader_from: Option<ScreenPoint>,
@@ -146,7 +151,8 @@ impl SceneAnnotationArrowhead {
 }
 
 /// Exact screen-space label rectangle shared by painting and picking.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SceneAnnotationLabelBounds {
     pub min: ScreenPoint,
     pub max: ScreenPoint,
@@ -173,7 +179,8 @@ impl SceneAnnotationLabelBounds {
 }
 
 /// Screen-space geometry needed to render and hit-test an annotation.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum SceneAnnotationGeometry {
     Glyph {
         markers: Vec<SceneGlyphMarker>,
@@ -363,7 +370,9 @@ impl SceneAnnotationGeometry {
 }
 
 /// Typed semantic category for one accepted annotation.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd,
+)]
 pub enum SceneAnnotationKind {
     Constraint(SceneConstraintGlyph),
     PointDistance,
@@ -377,7 +386,9 @@ pub enum SceneAnnotationKind {
 }
 
 /// Stable identity of one movable annotation occurrence within a document.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd,
+)]
 pub struct AnnotationLayoutKey {
     pub document: DocumentId,
     pub source: DocumentSourceId,
@@ -387,7 +398,8 @@ pub struct AnnotationLayoutKey {
 }
 
 /// Semantic manual placement retained independently from sketch history.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum AnnotationPlacement {
     Linear {
         perpendicular_pixels: f64,
@@ -435,7 +447,8 @@ impl AnnotationPlacement {
 }
 
 /// One exported cache row. Hosts persist these rows outside canonical sketch data.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct AnnotationLayoutEntry {
     pub key: AnnotationLayoutKey,
     pub placement: AnnotationPlacement,
@@ -491,8 +504,10 @@ impl AnnotationLayoutEntry {
 }
 
 /// Presentation-only manual placement retained by [`crate::ConstraintEditor`].
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct AnnotationLayoutState {
+    #[serde(with = "crate::detached_scene::map_entries")]
     entries: BTreeMap<AnnotationLayoutKey, AnnotationPlacement>,
 }
 
@@ -547,7 +562,8 @@ impl AnnotationLayoutState {
 }
 
 /// One persistent constraint or dimension projected into an accepted editor scene.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SceneAnnotation {
     pub item: SelectionItem,
     /// Exact persistent source that owns this accepted annotation.

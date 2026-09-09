@@ -1544,3 +1544,154 @@ fn projectional_fillet_invalid_stale_and_noop_transitions_are_atomic() {
         evidence_before
     );
 }
+
+#[test]
+fn detached_selection_restores_exact_native_and_discarded_curve_picks_without_edits() {
+    use geosolve_constraint_editor::{ConstraintEditor, EditorScene, GeometryVisibility};
+
+    let (mut session, viewport) = fixture();
+    create_fillet(&mut session, viewport);
+    session.set_selection([]);
+    // Keep the short discarded fragments outside the nearby arc pick halo.
+    let viewport = Viewport::new([1000.0, 1000.0], [2.0, 2.0], 200.0).unwrap();
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let detached = EditorScene::from_detached_json(&scene.to_detached_json().unwrap()).unwrap();
+    let identity = session.coordinator().intent().identity();
+    let accepted = scene.presentation_document().clone();
+    let scene_before = scene.clone();
+    let mut origins = [false; 2];
+    for curve in &detached.curves {
+        let start = *curve.screen_parameters.first().unwrap();
+        let end = *curve.screen_parameters.last().unwrap();
+        let parameter = start + (end - start) * 0.37;
+        let jet = accepted.evaluate_curve_jet(curve.span, parameter).unwrap();
+        let position = viewport.model_to_screen([jet.position.x, jet.position.y]);
+        let mut local = ConstraintEditor::default();
+        local.set_geometry_visibility(GeometryVisibility {
+            reference_geometry: false,
+            ..GeometryVisibility::default()
+        });
+        local.select_at(
+            &detached,
+            PointerInput {
+                pointer_id: 812,
+                position,
+                modifiers: Modifiers::default(),
+            },
+        );
+        let state = local.selection_presentation_state();
+        assert_eq!(state.items, vec![SelectionItem::Curve(curve.span)]);
+        assert_eq!(state.curve_picks.len(), 1);
+        let pick = state.curve_picks[0];
+        assert_eq!(pick.origin, curve.origin);
+        assert!((pick.parameter - parameter).abs() < 1.0e-12);
+        let transmitted = serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        session
+            .restore_selection_presentation(&scene, transmitted)
+            .unwrap();
+        assert_eq!(session.editor().selection_presentation_state(), state);
+        assert_eq!(session.selected_navigation_declarations().len(), 1);
+        assert_eq!(session.coordinator().intent().identity(), identity);
+        assert_eq!(scene, scene_before);
+        assert_eq!(scene.presentation_document(), &accepted);
+        assert!(local.active_pointer_gesture().is_none());
+        origins[usize::from(curve.origin.is_implicit_construction())] = true;
+    }
+    assert_eq!(origins, [true, true]);
+}
+
+#[test]
+fn detached_selection_rejects_forged_occurrences_transactionally_and_stale_authority() {
+    use geosolve_constraint_editor::{
+        CurvePickContext, EditorScene, SceneCurveOrigin, SelectionPresentationError,
+        SelectionPresentationState,
+    };
+
+    let (mut session, viewport) = fixture();
+    let old_scene = session.scene(viewport, 0.5).unwrap();
+    create_fillet(&mut session, viewport);
+    session.set_selection([]);
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let curve = scene
+        .curves
+        .iter()
+        .find(|curve| curve.origin.is_implicit_construction())
+        .unwrap();
+    let start = *curve.screen_parameters.first().unwrap();
+    let end = *curve.screen_parameters.last().unwrap();
+    let valid = SelectionPresentationState {
+        items: vec![SelectionItem::Curve(curve.span)],
+        curve_picks: vec![CurvePickContext {
+            span: curve.span,
+            parameter: start + (end - start) * 0.37,
+            origin: curve.origin,
+        }],
+    };
+    session
+        .restore_selection_presentation(&scene, valid.clone())
+        .unwrap();
+    let declaration = session.selected_declaration();
+    let identity = session.coordinator().intent().identity();
+    let mut invalid = Vec::new();
+    let mut candidate = valid.clone();
+    candidate.items.clear();
+    invalid.push(candidate);
+    let mut candidate = valid.clone();
+    candidate.items.push(candidate.items[0]);
+    invalid.push(candidate);
+    let mut candidate = valid.clone();
+    candidate.curve_picks.push(candidate.curve_picks[0]);
+    invalid.push(candidate);
+    for parameter in [f64::NAN, f64::INFINITY, start - 0.001, end + 0.001] {
+        let mut candidate = valid.clone();
+        candidate.curve_picks[0].parameter = parameter;
+        invalid.push(candidate);
+    }
+    let mut candidate = valid.clone();
+    candidate.curve_picks[0].origin = SceneCurveOrigin::Native;
+    invalid.push(candidate);
+    let mut candidate = valid.clone();
+    let SceneCurveOrigin::FilletDiscarded { interval, .. } = &mut candidate.curve_picks[0].origin
+    else {
+        panic!("discarded occurrence fixture");
+    };
+    interval.end += 0.01;
+    invalid.push(candidate);
+    for candidate in invalid {
+        assert!(
+            session
+                .restore_selection_presentation(&scene, candidate)
+                .is_err()
+        );
+        assert_eq!(session.editor().selection_presentation_state(), valid);
+        assert_eq!(session.selected_declaration(), declaration);
+        assert_eq!(session.coordinator().intent().identity(), identity);
+    }
+    let detached = EditorScene::from_detached_json(&scene.to_detached_json().unwrap()).unwrap();
+    for stale in [&old_scene, &detached] {
+        assert_eq!(
+            session.restore_selection_presentation(stale, valid.clone()),
+            Err(SelectionPresentationError::StaleScene)
+        );
+        assert_eq!(session.editor().selection_presentation_state(), valid);
+    }
+    let mut local = geosolve_constraint_editor::ConstraintEditor::default();
+    local
+        .restore_selection_presentation(&detached, valid.clone())
+        .unwrap();
+    local.activate_tool(geosolve_constraint_editor::EditorTool::Line);
+    local.pointer_down(
+        &detached,
+        PointerInput {
+            pointer_id: 813,
+            position: viewport.model_to_screen([1.0, 1.0]),
+            modifiers: Modifiers::default(),
+        },
+    );
+    assert!(local.geometry_draft_status().is_some());
+    assert_eq!(
+        local.restore_selection_presentation(&detached, valid.clone()),
+        Err(SelectionPresentationError::ActiveInteraction)
+    );
+    assert_eq!(local.selection_presentation_state(), valid);
+}

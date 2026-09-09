@@ -1147,3 +1147,89 @@ fn m97_first_filtered_scene_restores_omitted_dimensions_without_a_design_edit() 
     assert_eq!(restored.accepted_revision, filtered.accepted_revision);
     assert_eq!(restored.design_identity, filtered.design_identity);
 }
+
+#[test]
+fn dimension_hover_retains_visible_transit_and_matches_detached_selection_surface() {
+    let (session, curves) = fixture(1);
+    let mut original = scene(&session, 18.0);
+    let mut dimensions = DimensionPresentationState::default();
+    let editor = ConstraintEditor::default();
+    let key = original.annotations[0].layout_key(original.presentation_document().id(), None);
+    let manual = AnnotationLayoutState::from_entries([crate::AnnotationLayoutEntry {
+        key,
+        placement: crate::AnnotationPlacement::Linear {
+            perpendicular_pixels: 80.0,
+        },
+    }]);
+    dimensions.apply(
+        &mut original,
+        &manual,
+        &DimensionPresentationContext::default(),
+    );
+    let annotation = original
+        .annotations
+        .iter()
+        .find(|annotation| matches!(annotation.item, SelectionItem::Dimension(_)))
+        .unwrap();
+    assert_eq!(annotation.visibility, SceneAnnotationVisibility::Always);
+    let label = anchor(annotation);
+    let origin = original.viewport.model_to_screen([0.0, 0.0]);
+    let previous = Some((curves[0], origin));
+    let transit = ScreenPoint {
+        x: (origin.x + label.x) * 0.5,
+        y: (origin.y + label.y) * 0.5,
+    };
+    let detached = EditorScene::from_detached_json(&original.to_detached_json().unwrap()).unwrap();
+    for candidate in [&original, &detached] {
+        assert_eq!(
+            dimension_hover_target(candidate, &editor, previous, label),
+            Some((annotation.item, label))
+        );
+        assert_eq!(
+            dimension_hover_target(candidate, &editor, previous, transit),
+            previous
+        );
+        assert_eq!(
+            dimension_hover_target(
+                candidate,
+                &editor,
+                previous,
+                ScreenPoint { x: -1.0, y: 20.0 }
+            ),
+            None
+        );
+        assert_eq!(
+            dimension_hover_target(
+                candidate,
+                &editor,
+                previous,
+                ScreenPoint {
+                    x: f64::NAN,
+                    y: 20.0
+                }
+            ),
+            None
+        );
+    }
+    let mut hidden = detached;
+    dimensions.mode = DimensionDisplayMode::Hidden;
+    dimensions.apply(
+        &mut hidden,
+        &manual,
+        &DimensionPresentationContext::default(),
+    );
+    assert_ne!(
+        dimension_hover_target(&hidden, &editor, previous, label).map(|hit| hit.0),
+        Some(annotation.item)
+    );
+    assert_eq!(
+        dimension_hover_target(&hidden, &editor, previous, transit),
+        hidden
+            .hit_test_with_policy(
+                transit,
+                PickTolerance::default(),
+                editor.geometry_interaction_policy()
+            )
+            .map(|hit| (hit.item, transit))
+    );
+}

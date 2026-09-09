@@ -1239,6 +1239,18 @@ pub struct SketchDesignIdentity {
 }
 
 impl SketchDesignIdentity {
+    /// Reconstructs a presentation label without certifying geometry or input.
+    ///
+    /// This identity alone cannot authorize publication. Detached scene hosts
+    /// use it to compare server revisions without restoring or solving a session.
+    #[must_use]
+    pub const fn for_detached_presentation(document: crate::DocumentId, revision: u64) -> Self {
+        Self {
+            document,
+            revision: SketchDesignRevision(revision),
+        }
+    }
+
     #[must_use]
     pub const fn document(self) -> crate::DocumentId {
         self.document

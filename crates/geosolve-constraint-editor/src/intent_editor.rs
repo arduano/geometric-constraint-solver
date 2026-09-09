@@ -2704,6 +2704,24 @@ impl ProjectionalEditorSession {
         self.project_native_selection_to_declaration();
     }
 
+    /// Restores exact canvas selection context against this session's scene.
+    ///
+    /// # Errors
+    /// Rejects stale/detached scenes, active gestures or invalid picked
+    /// occurrences atomically, preserving the selected declaration and history.
+    pub fn restore_selection_presentation(
+        &mut self,
+        scene: &EditorScene,
+        state: crate::SelectionPresentationState,
+    ) -> Result<(), crate::SelectionPresentationError> {
+        if !self.scene_is_current(scene) {
+            return Err(crate::SelectionPresentationError::StaleScene);
+        }
+        self.editor.restore_selection_presentation(scene, state)?;
+        self.project_native_selection_to_declaration();
+        Ok(())
+    }
+
     /// Applies one transient selection click without touching intent or history.
     pub fn select_item(&mut self, item: SelectionItem, modifiers: Modifiers) {
         self.editor.select_item(item, modifiers);

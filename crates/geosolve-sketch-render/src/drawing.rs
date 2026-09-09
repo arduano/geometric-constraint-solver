@@ -474,6 +474,13 @@ pub fn compose_draw_frame(
                     .collect(),
             );
         }
+    } else if let Some(scene) = scene.filter(|scene| scene.is_detached_presentation()) {
+        provenance.insert("scene".into(), "accepted-presentation".into());
+        provenance.insert(
+            "document".into(),
+            scene.presentation_document().id().to_string(),
+        );
+        provenance.insert("revision".into(), scene.accepted_revision.to_string());
     } else {
         provenance.insert("scene".into(), "none".into());
     }
@@ -545,13 +552,19 @@ pub fn compose_draw_frame(
             problem,
             geometry_policy,
         );
-        if let Some(accepted) = accepted
+        if let Some(document) = accepted
+            .map(SketchAcceptedDocumentState::document)
+            .or_else(|| {
+                scene
+                    .is_detached_presentation()
+                    .then(|| scene.presentation_document())
+            })
             && scene.annotations_visible
         {
             draw_annotations(
                 &mut p,
                 scene,
-                accepted,
+                document,
                 selection,
                 pending,
                 provisional,
@@ -1145,7 +1158,9 @@ fn draw_computed(
         for action in &a.actions {
             let action_key = crate::fillet_action_key(action.id);
             let base = format!("{key}:action:{action_key}");
-            let previewed = scene.fillet_action_target(a.owner, action.id).as_ref() == active;
+            let previewed = active.is_some_and(|active| {
+                scene.fillet_action_target(a.owner, action.id).as_ref() == Some(active)
+            });
             let disabled = !matches!(
                 action.availability,
                 SceneFilletActionAvailability::Applicable
@@ -1579,7 +1594,7 @@ fn draw_glyph(
 fn draw_annotations(
     p: &mut Painter,
     scene: &EditorScene,
-    accepted: &SketchAcceptedDocumentState,
+    document: &geosolve_sketch::SketchDocument,
     selection: &[SelectionItem],
     pending: &[SelectionItem],
     provisional: &[SelectionItem],
@@ -1597,7 +1612,7 @@ fn draw_annotations(
             continue;
         }
         if let SelectionItem::Dimension(id) = a.item
-            && accepted.document().dimension(id).is_none()
+            && document.dimension(id).is_none()
         {
             continue;
         }
@@ -2516,8 +2531,17 @@ fn draw_problems(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use geosolve_constraint_editor::{
+        RetainedEditorCoordinator, SceneFilletAction, SceneFilletAlternativeGeometry,
+    };
     use geosolve_sketch::{
-        DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument, SolverConfig,
+        ContactNeighborhood, CurveDefinition, CurveSpan, DocumentCurveNormalSide,
+        DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentSolveRequest,
+        RetainedSketchDocumentSession, SketchDocument, SolverConfig,
+    };
+    use geosolve_sketch_features::{
+        ComputedFeatureDocument, ComputedFilletParent, NativeCurveSpanSource,
+        NewComputedFilletCorner,
     };
 
     fn session() -> RetainedSketchDocumentSession {
@@ -2570,6 +2594,157 @@ mod tests {
             scene.viewport,
         )
         .unwrap()
+    }
+
+    fn fillet_scene() -> (RetainedEditorCoordinator, EditorScene) {
+        let mut document = SketchDocument::new(10.0).unwrap();
+        let points = [[0.0, 0.0], [4.0, 0.0], [4.0, 4.0]]
+            .map(|position| document.add_point("corner point", position).unwrap());
+        let curve = document
+            .add_curve(
+                "corner supports",
+                CurveDefinition::Polyline {
+                    points: points.to_vec(),
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+                },
+            )
+            .unwrap();
+        let parent = |segment, picked_parameter, retained_endpoint| ComputedFilletParent {
+            source: NativeCurveSpanSource {
+                span: CurveSpan { curve, segment },
+            },
+            picked_parameter,
+            winding: 0,
+            neighborhood: ContactNeighborhood::Interior,
+            normal_side: DocumentCurveNormalSide::Left,
+            retained_endpoint,
+            periodic_anchor: None,
+        };
+        let mut features = ComputedFeatureDocument::new(document.id());
+        features
+            .create_fillet_set(
+                "rounded corner",
+                0.5,
+                vec![NewComputedFilletCorner {
+                    first: parent(0, 0.875, DocumentFilletTrimEndpoint::End),
+                    second: parent(1, 0.125, DocumentFilletTrimEndpoint::Start),
+                    endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                }],
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let coordinator = RetainedEditorCoordinator::with_features(session, features).unwrap();
+        let session = coordinator.session();
+        let accepted = session.accepted_state_for_current_input().unwrap();
+        let computed = coordinator.computed_snapshot().unwrap();
+        let mut scene = EditorScene::from_accepted_with_computed(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            &session.accepted_prepared_input().unwrap(),
+            &computed.input(),
+            computed,
+            crate::viewport(),
+            0.25,
+        )
+        .unwrap();
+        let owner = scene.computed_curves[0].owner;
+        coordinator
+            .populate_computed_fillet_affordances(
+                &mut scene,
+                &[SelectionItem::FeatureCorner(owner)],
+                0.25,
+            )
+            .unwrap();
+        (coordinator, scene)
+    }
+
+    #[test]
+    fn detached_fillet_scene_does_not_preview_an_action_without_an_active_target() {
+        let (coordinator, mut native) = fillet_scene();
+        let owner = native.computed_curves[0].owner;
+        let action_id = SceneFilletActionId::ComplementaryArc;
+        let model_polyline = vec![[3.5, 0.0], [4.5, -0.5], [4.0, 0.5]];
+        native
+            .set_fillet_corner_actions(
+                owner,
+                vec![SceneFilletAction {
+                    id: action_id,
+                    owner,
+                    label: "Preview complementary arc".into(),
+                    availability: SceneFilletActionAvailability::Applicable,
+                    control_geometry: None,
+                    dashed_alternative_arc: Some(SceneFilletAlternativeGeometry {
+                        screen_polyline: model_polyline
+                            .iter()
+                            .map(|point| native.viewport.model_to_screen(*point))
+                            .collect(),
+                        model_polyline,
+                    }),
+                }],
+            )
+            .unwrap();
+        let detached =
+            EditorScene::from_detached_json(&native.to_detached_json().unwrap()).unwrap();
+        let target = native.fillet_action_target(owner, action_id).unwrap();
+        assert_eq!(detached.fillet_action_target(owner, action_id), None);
+        let selection = [SelectionItem::FeatureCorner(owner)];
+        let render = |scene: &EditorScene, active| {
+            compose_draw_frame(
+                Some(scene),
+                coordinator.session().accepted_state(),
+                &[],
+                &selection,
+                &[],
+                &[],
+                EditorHoverState::default(),
+                None,
+                None,
+                None,
+                active,
+                None,
+                GeometryInteractionPolicy::default(),
+                CanvasDisplayOptions::default(),
+                None,
+                scene.viewport,
+            )
+            .unwrap()
+        };
+        let native_frame = render(&native, None);
+        let detached_frame = render(&detached, None);
+        assert!(
+            native_frame
+                .items
+                .iter()
+                .any(|item| item.class_name == "wb-fillet-action-control")
+        );
+        for frame in [&native_frame, &detached_frame] {
+            assert!(
+                frame
+                    .items
+                    .iter()
+                    .all(|item| item.class_name != "wb-fillet-alternative-ghost")
+            );
+        }
+        assert_eq!(detached_frame.items, native_frame.items);
+        assert_eq!(render(&detached, Some(&target)).items, native_frame.items);
+        let preview = render(&native, Some(&target));
+        assert_eq!(
+            preview
+                .items
+                .iter()
+                .filter(|item| item.class_name == "wb-fillet-alternative-ghost")
+                .count(),
+            1
+        );
     }
     #[test]
     fn draw_frame_is_numeric_deterministic_and_preserves_accepted_provenance() {

@@ -12,6 +12,7 @@ mod authoring;
 mod commit_plan;
 mod coordinator;
 mod curve_controls;
+mod detached_scene;
 mod dimension_presentation;
 mod feature_authoring;
 mod geometry_tools;
@@ -30,6 +31,7 @@ mod intent_projection;
 mod intent_rpc;
 mod interaction_work;
 mod offset_authoring;
+mod selection_presentation;
 
 pub use annotations::{
     AnnotationLayoutEntry, AnnotationLayoutKey, AnnotationLayoutState, AnnotationPlacement,
@@ -68,9 +70,10 @@ pub use curve_controls::{
     SceneCurveControlGuideKind, SceneCurveControlHit, SceneCurveControlInteraction,
     SceneCurveControlRail, SceneCurveControlRole,
 };
+pub use detached_scene::DetachedSceneError;
 pub use dimension_presentation::{
     DimensionDisplayMode, DimensionPresentationContext, DimensionPresentationState,
-    SceneDimensionEntry,
+    SceneDimensionEntry, dimension_hover_target,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -170,6 +173,9 @@ pub use offset_authoring::{
     OffsetAuthoringStage, OffsetAuthoringState, OffsetAuthoringTarget,
     OffsetAuthoringTargetAvailability, OffsetAuthoringWarning, OffsetAuthoringWarningKind,
 };
+pub use selection_presentation::{
+    CurvePickContext, SelectionPresentationError, SelectionPresentationState,
+};
 use std::{cmp::Ordering, collections::BTreeSet};
 
 use geosolve_sketch::{
@@ -200,7 +206,8 @@ const CURVE_BRANCH_CANDIDATE_BAND_PIXELS: f64 = 1.0;
 const CURVE_POINTER_REFINEMENT_STEPS: u8 = 12;
 
 /// A finite position in presentation pixels.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ScreenPoint {
     pub x: f64,
     pub y: f64,
@@ -304,7 +311,8 @@ fn profile_offset_distance_rail(
 }
 
 /// Model-to-screen mapping supplied by the presentation layer.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Viewport {
     pub screen_size: [f64; 2],
     pub model_center: [f64; 2],
@@ -398,7 +406,8 @@ impl SelectionItem {
 ///
 /// This is editor session state rather than persisted sketch state. Construction
 /// geometry remains fully solver-active regardless of the selected scope.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum GeometryPickScope {
     #[default]
     All,
@@ -408,7 +417,8 @@ pub enum GeometryPickScope {
 
 /// Independent session-local visibility for persistent guides and computed
 /// source portions discarded by Fillets.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct GeometryVisibility {
     pub explicit_construction: bool,
     pub implicit_construction: bool,
@@ -508,7 +518,8 @@ fn scene_datums(viewport: Viewport) -> Vec<SceneDatum> {
 
 /// Complete headless geometry filtering policy used consistently by hover,
 /// selection, drag ownership, snapping and authoring.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct GeometryInteractionPolicy {
     pub scope: GeometryPickScope,
     pub visibility: GeometryVisibility,
@@ -516,7 +527,8 @@ pub struct GeometryInteractionPolicy {
 
 /// Curve-role incidence used to filter persistent points without assigning a
 /// persistent role to the point itself.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ScenePointRoleIncidence {
     pub profile: bool,
     pub construction: bool,
@@ -555,7 +567,8 @@ impl SceneCurveOrigin {
 }
 
 /// One accepted point primitive for presentation and picking.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ScenePoint {
     pub id: DesignPointId,
     pub model_position: [f64; 2],
@@ -705,8 +718,10 @@ const fn role_participates(role: GeometryRole, scope: GeometryPickScope) -> bool
 /// `model_derivative` is `d(center) / d(radius)` on the selected absolute
 /// branch. Pointer motion is projected onto this vector, so motion orthogonal
 /// to the rail cannot change radius.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SceneFilletRadiusRail {
+    #[serde(with = "detached_scene::corner_codec")]
     pub owner: geosolve_sketch_features::ComputedCornerRef,
     pub model_center: [f64; 2],
     pub model_grip: [f64; 2],
@@ -821,7 +836,8 @@ impl ComputedFilletContinuationStatus {
 }
 
 /// Stable presentation-neutral identity for one explicit Fillet action.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum SceneFilletActionId {
     ReverseFirstRetainedDirection,
     ReverseSecondRetainedDirection,
@@ -836,7 +852,8 @@ pub enum SceneFilletActionId {
 }
 
 /// Applicability supplied by the coordinator for one Fillet action.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum SceneFilletActionAvailability {
     Applicable,
     Disabled { reason: String },
@@ -848,7 +865,8 @@ pub enum SceneFilletActionAvailability {
 /// geometry for non-browser consumers. `screen_start` and `screen_end` are the
 /// exact scene projection used by the workbench, so presentation adapters do
 /// not need to reconstruct tangent or retained-direction policy.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SceneFilletActionControlGeometry {
     pub model_anchor: [f64; 2],
     pub model_direction: [f64; 2],
@@ -900,7 +918,8 @@ impl SceneFilletActionControlGeometry {
 /// Presentation adapters render `screen_polyline`; the editor independently uses
 /// `model_polyline` for hit validation. Both arrays describe the same ordered
 /// samples and are checked against the scene viewport before admission.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SceneFilletAlternativeGeometry {
     pub model_polyline: Vec<[f64; 2]>,
     pub screen_polyline: Vec<ScreenPoint>,
@@ -1250,6 +1269,8 @@ impl RetainedSceneReprojectionSeal {
 /// Deterministic presentation-neutral scene derived from one accepted revision.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EditorScene {
+    /// Imported presentation geometry can never acquire retained edit authority.
+    detached_transport: bool,
     pub accepted_revision: u64,
     pub design_identity: SketchDesignIdentity,
     /// Exact retained-session input that certified the accepted geometry.
@@ -1821,6 +1842,7 @@ impl EditorScene {
         let constraint_entries =
             annotations::build_constraint_entries(design_document.unwrap_or(accepted_document));
         let mut scene = Self {
+            detached_transport: false,
             accepted_revision,
             design_identity,
             prepared_input: None,
@@ -1878,6 +1900,9 @@ impl EditorScene {
         mut self,
         session: &RetainedSketchDocumentSession,
     ) -> Result<Self, EditorError> {
+        if self.detached_transport {
+            return Err(EditorError::StalePreparedSketchInput);
+        }
         let prepared_input = session
             .accepted_prepared_input()
             .ok_or(EditorError::StalePreparedSketchInput)?;
@@ -1930,6 +1955,9 @@ impl EditorScene {
     /// adapter reject a stale cache before camera reprojection or picking.
     #[must_use]
     pub fn belongs_to_retained_session(&self, session: &RetainedSketchDocumentSession) -> bool {
+        if self.detached_transport {
+            return false;
+        }
         let Some(accepted) = session.accepted_state() else {
             return false;
         };
@@ -22611,6 +22639,177 @@ mod tests {
                 "an exact camera reprojection must preserve retained-session publication authority",
             );
         }
+    }
+
+    #[test]
+    fn detached_scene_transport_preserves_native_camera_picking_and_dimensions_without_authority() {
+        let (mut document, spans, points) = line_document();
+        let target = document
+            .add_scalar("length", 8.0, ScalarUnit::Length, ScalarDomain::Positive)
+            .unwrap();
+        document
+            .add_dimension(
+                "distance",
+                DocumentDimensionDefinition::PointDistance {
+                    first: points[0],
+                    second: points[1],
+                    target,
+                },
+                DocumentDimensionMode::Reference,
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .unwrap();
+        let accepted = session.accepted_state_for_current_input().unwrap();
+        let mut original = EditorScene::from_accepted(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).unwrap(),
+            0.5,
+        )
+        .unwrap()
+        .with_retained_session(&session)
+        .unwrap();
+        assert!(original.update_annotation_values(accepted));
+        let mut owner = super::ConstraintEditor::default();
+        owner.set_selection([SelectionItem::Curve(spans[0])]);
+        owner.populate_curve_controls(&mut original).unwrap();
+        let mut dimensions = DimensionPresentationState::default();
+        let context = DimensionPresentationContext {
+            selection: owner.selection().to_vec(),
+            ..DimensionPresentationContext::default()
+        };
+        dimensions.apply(&mut original, owner.annotation_layout(), &context);
+        let encoded = original.to_detached_json().unwrap();
+        assert!(!encoded.contains("prepared_input"));
+        assert!(!encoded.contains("computed_input"));
+        let mut detached = EditorScene::from_detached_json(&encoded).unwrap();
+        assert!(detached.is_detached_presentation());
+        assert_eq!(detached.presentation_document(), accepted.document());
+        assert_eq!(detached.to_detached_json().unwrap(), encoded);
+        assert!(detached.clone().with_retained_session(&session).is_err());
+        assert!(!detached.belongs_to_retained_session(&session));
+        assert_eq!(detached.authenticated_prepared_input(), None);
+        let mut restored_dimensions: DimensionPresentationState =
+            serde_json::from_str(&serde_json::to_string(&dimensions).unwrap()).unwrap();
+        assert_eq!(restored_dimensions, dimensions);
+        for viewport in [
+            original.viewport,
+            Viewport::new([920.0, 670.0], [1.25, -0.75], 137.0).unwrap(),
+        ] {
+            original.reproject_viewport(viewport).unwrap();
+            detached.reproject_viewport(viewport).unwrap();
+            dimensions.apply(&mut original, owner.annotation_layout(), &context);
+            restored_dimensions.apply(&mut detached, owner.annotation_layout(), &context);
+            assert_eq!(detached.points, original.points);
+            assert_eq!(detached.curves, original.curves);
+            assert_eq!(detached.annotations, original.annotations);
+            assert_eq!(detached.curve_controls, original.curve_controls);
+            assert_eq!(detached.authenticated_prepared_input(), None);
+            for model in [[-4.0, 1.0], [0.0, 1.0], [0.0, -1.0], [40.0, 40.0]] {
+                let screen = viewport.model_to_screen(model);
+                let input = pointer(700, screen.x, screen.y, Modifiers::default());
+                let mut native_editor = owner.clone();
+                let mut detached_editor = owner.clone();
+                native_editor.pointer_move(&original, input);
+                detached_editor.pointer_move(&detached, input);
+                assert_eq!(native_editor.hover_state(), detached_editor.hover_state());
+                native_editor.pointer_down(&original, input);
+                detached_editor.select_at(&detached, input);
+                assert_eq!(native_editor.selection(), detached_editor.selection());
+                assert_eq!(detached_editor.active_pointer_gesture(), None);
+                assert_eq!(
+                    native_editor.curve_pick_parameter(spans[0]),
+                    detached_editor.curve_pick_parameter(spans[0])
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn detached_scene_transport_rejects_malformed_replacements_transactionally() {
+        let (document, _, _) = line_document();
+        let original = scene(&document);
+        let encoded = original.to_detached_json().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+        let mut live = EditorScene::from_detached_json(&encoded).unwrap();
+        let before = live.clone();
+        let mut wrong_point = value.clone();
+        wrong_point["points"][0]["screen_position"]["x"] = serde_json::json!(999.0);
+        let mut wrong_curve = value.clone();
+        wrong_curve["curves"][0]["screen_parameters"] = serde_json::json!([0.0]);
+        let mut wrong_viewport = value.clone();
+        wrong_viewport["viewport"]["pixels_per_model_unit"] = serde_json::json!(-1.0);
+        let mut spoofed_authority = value.clone();
+        spoofed_authority["prepared_input"] = serde_json::json!({});
+        let mut null_point = value.clone();
+        null_point["points"][0]["model_position"][0] = serde_json::Value::Null;
+        for bad in [
+            wrong_point,
+            wrong_curve,
+            wrong_viewport,
+            spoofed_authority,
+            null_point,
+        ] {
+            assert!(live.replace_detached_json(&bad.to_string()).is_err());
+            assert_eq!(live, before);
+        }
+        assert!(
+            live.replace_detached_json(&" ".repeat(16 * 1024 * 1024 + 1))
+                .is_err()
+        );
+        assert_eq!(live, before);
+    }
+
+    #[test]
+    fn detached_scene_transport_preserves_computed_fillet_hit_and_camera_surfaces() {
+        let mut fixture = fillet_interaction_fixture(50.0, [1.0, 0.5]);
+        install_test_fillet_actions(&mut fixture);
+        let encoded = fixture.scene.to_detached_json().unwrap();
+        let mut detached = EditorScene::from_detached_json(&encoded).unwrap();
+        assert_eq!(detached.computed_curves, fixture.scene.computed_curves);
+        assert_eq!(
+            detached.fillet_affordances,
+            fixture.scene.fillet_affordances
+        );
+        assert_eq!(detached.computed_input, None);
+        assert_eq!(detached.feature_identity, None);
+        assert_eq!(detached.to_detached_json().unwrap(), encoded);
+        for viewport in [
+            fixture.scene.viewport,
+            Viewport::new([950.0, 660.0], [2.5, -3.0], 125.0).unwrap(),
+        ] {
+            fixture.scene.reproject_viewport(viewport).unwrap();
+            detached.reproject_viewport(viewport).unwrap();
+            assert_eq!(detached.computed_curves, fixture.scene.computed_curves);
+            assert_eq!(
+                detached.fillet_affordances,
+                fixture.scene.fillet_affordances
+            );
+            let rail = detached.fillet_affordances[0].radius_rail;
+            for point in [rail.screen_grip, rail.screen_rail_start, rail.screen_center] {
+                let mut original_editor = super::ConstraintEditor::default();
+                let mut local_editor = super::ConstraintEditor::default();
+                let input = pointer(800, point.x, point.y, Modifiers::default());
+                original_editor.pointer_move(&fixture.scene, input);
+                local_editor.pointer_move(&detached, input);
+                assert_eq!(original_editor.hover_state(), local_editor.hover_state());
+                original_editor.pointer_down(&fixture.scene, input);
+                local_editor.select_at(&detached, input);
+                assert_eq!(original_editor.selection(), local_editor.selection());
+                assert_eq!(local_editor.active_pointer_gesture(), None);
+            }
+        }
+        let mut bad: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+        bad["computed"][0]["radius"] = serde_json::json!(-1.0);
+        let before = detached.clone();
+        assert!(detached.replace_detached_json(&bad.to_string()).is_err());
+        assert_eq!(detached, before);
     }
 
     fn annotation_geometry_is_finite(geometry: &SceneAnnotationGeometry) -> bool {
