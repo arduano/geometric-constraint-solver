@@ -18,7 +18,7 @@ result status is `compiled`, because only native admission can establish accepte
 expansion, computed feature recipes and independent native residual validation. Generated
 programs do not fabricate managed source receipts. The native tests include the actual
 manifold through both managed and generated admission. Computed profile export and
-editable sessions remain under implementation.
+editable sessions are implemented as recorded in the completion section below.
 
 `packages/geosolve-engine` exposes `createEngine`, `evaluate`, `evaluateGenerated`,
 `compileProject`, `evaluateEditable`, `exportProfiles`, `release` and `dispose`. Accepted
@@ -45,8 +45,8 @@ Focused development evidence:
   That initial artifact predates full computed export and is development evidence only.
 
 No solver residual equation, unsafe implementation or golden corpus change is involved.
-The package, website, complete project sidecar workflow and integrated release gate still
-need qualification before M98 can be nominated.
+The package, website and complete-project workflows have focused checks below; the integrated
+release gate still needs to qualify the final candidate before M98 can be nominated.
 
 ## Completed native and package seams (2026-09-09)
 

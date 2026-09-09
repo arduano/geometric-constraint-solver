@@ -8474,6 +8474,14 @@ implementation, hardening and qualification. The user selected complete project 
 a headless Node/browser TS engine, editable/generator modes, optional source-declared
 inputs, Linux filesystem qualification, explicit design sidecar and one active UI editor.
 
+The recorder, dedicated native/WASM engine, editable session API, complete local loader,
+revision-checked CLI, one-editor bridge, publication journal/design sidecar and complete
+computed-profile export are implemented with focused tests. Offline archives and the
+standalone generator website pass clean-install/browser smoke checks. Transaction/worker
+hardening, navigation measurements and browser migration are being finalized before clean
+integrated nomination. [Implementation findings](docs/M98_HARDENING.md) records exact
+reproductions and repairs; no supervising-user acceptance or closure is implied.
+
 ### Historical fast-track prototype
 
 

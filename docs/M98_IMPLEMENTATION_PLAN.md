@@ -34,14 +34,14 @@ and closed; M98 stays open until integrated qualification and supervising-user a
 
 - [x] Merge accepted M97 descendant into the existing M98 worktree without rewriting history.
 - [x] Freeze and fix stale installed-vs-observed authority and broken-derived-cache startup.
-- [ ] Add SDK runtime recorder and separate validated generator-program admission.
-- [ ] Extract shared headless engine/native session and dedicated WASM/TS package.
-- [ ] Add complete project loading/watching and packaged CLI inspect/set/apply/status/recovery.
-- [ ] Add project lock, editing lease/session epochs, explicit field lifecycles and operation IDs.
-- [ ] Add journaled recoverable publication, design sidecar, bounded history and view state.
-- [ ] Complete computed-profile/named-output export through shared engine.
-- [ ] Polish first-party workbench modes/capabilities, maintain examples and measure navigation.
-- [ ] Register all new owning-layer/package/browser tests in integrated release qualification.
+- [x] Add SDK runtime recorder and separate validated generator-program admission.
+- [x] Extract shared headless engine/native session and dedicated WASM/TS package.
+- [x] Add complete project loading/watching and packaged CLI inspect/set/apply/status/recovery.
+- [x] Add project lock, editing lease/session epochs, explicit field lifecycles and operation IDs.
+- [x] Add journaled recoverable publication, design sidecar, bounded history and view state.
+- [x] Complete computed-profile/named-output export through shared engine.
+- [x] Polish first-party workbench modes/capabilities, maintain examples and measure navigation.
+- [x] Register all new owning-layer/package/browser tests in integrated release qualification.
 - [ ] Qualify clean candidate, freeze production bytes and verify a reviewable preview.
 - [ ] Obtain supervising-user acceptance and close M98.
 
@@ -95,11 +95,19 @@ bytes; do not promise atomic CAS against uncooperative external writers holding 
 ## Evidence ledger
 
 [M98-F001/F002 focused hardening](M98_HARDENING.md) records the reproduced
-failures, transport/cache fixes and passing owner checks. Integrated qualification
-and the broader persistence/session guarantees remain pending.
+failures and current transport/cache/session repairs with focused owner checks. Final
+integrated qualification remains pending; the early checkpoints below are historical.
 
 
 Merge `1584a5a` integrates M97 `3152f33` with the earlier M98 prototype. It resolves additive
 bridge modules, preserves folder draft tracking and M97 metadata controls, and imports accepted
 M97 docs. This is integration source, not new qualification. The accepted M97 artifact stays at
 `http://100.94.63.83:18105/` and is never rebuilt by this milestone.
+
+The checked implementation items have focused owner evidence, not milestone acceptance.
+Native/session/profile implementation is recorded in [M98_ENGINE_IMPLEMENTATION.md](M98_ENGINE_IMPLEMENTATION.md).
+The current transaction/worker/cache findings and exact regressions are recorded in
+[M98_HARDENING.md](M98_HARDENING.md). Package smoke installs all three archives offline
+and runs a browser application using only the installed SDK/engine. Navigation measurements are recorded in [M98_NAVIGATION.md](M98_NAVIGATION.md). Browser/HTTP
+migration is complete, including source-draft downloads, actual failed-write recovery, invalid
+source retention and route isolation. The final clean gate and qualified preview remain pending.

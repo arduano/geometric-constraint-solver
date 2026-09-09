@@ -41,4 +41,24 @@ unbounded source, as the maintained folder loader and generator website do. Work
 is not a security sandbox. Bundlers may supply `wasmModule` and `wasm` explicitly; default
 initialization loads the packaged WASM through filesystem bytes in Node or a URL in browsers.
 
-M98 is under development; package and integrated qualification remain outstanding.
+Editable source uses `engine.openEditableSession(project, { design? })`, where `project`
+is a strict admitted CodeProject. Capture `session.token` before each mutation:
+
+```ts
+const session = engine.openEditableSession(project);
+const expected = session.token;
+const state = await session.applyProject(nextProject, { expected });
+// session.applyOverlay, undo and redo use the same expected-token contract.
+const design = session.exportDesign();
+session.dispose();
+```
+
+Stale or cross-session authority is rejected without changing accepted geometry/history.
+The inspectable design sidecar stores keyed reconciliation and semantic overrides, without
+solved coordinates or a workbench checkpoint; source plus design can reopen in a new session.
+Previously retained accepted export handles remain valid until engine release/dispose.
+Generator results have no reverse source-editing authority. See the shipped TypeScript
+interfaces for exact method/result types.
+
+M98 has focused Node/browser, session and offline archive checks. Final integrated
+qualification and supervising-user acceptance remain outstanding.

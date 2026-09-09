@@ -2918,3 +2918,38 @@ transaction. [Implementation evidence](docs/M97_AUTHORING_IMPLEMENTATION.md) rec
 the passing 244-obligation clean-source gate on `e26270cb89e5849092145b329d0cf95821a81b27`
 and the frozen production preview's exact served-byte and actual-WASM verification.
 Generated per-instance overview overrides remain deferred.
+
+
+## M98 local projects and headless embedding — implementation in progress
+
+The ordinary TypeScript SDK records an evaluated generator program separately from the
+managed compiler's lexical/execution receipts. Both admit through shared Rust lowering and
+independently validated sketch materialization. `geosolve-sketch-engine` and its dedicated
+WASM crate expose geometry, diagnostics, editable sessions and profile export without the
+workbench or React. The TypeScript engine retains immutable accepted result handles;
+rejection, cancellation and supersession cannot replace the previous accepted result.
+
+The folder-v2 manifest declares entry and mode. Authoring labels, input schemas, parameters,
+groups and outputs belong in TypeScript. The loader snapshots complete local imports,
+manifest, optional semantic design and generator inputs, including absent-file identities;
+terminable workers execute only those captured bytes. Virtual candidate graphs compile and
+admit before a journal publishes authored files. Sidecar `geosolve-design-v1` contains project
+identity, keyed reconciliation and overrides, without a solved-geometry copy. Derived
+history is bounded, reconstructed after current authored state and never trusted as source
+or digest authority during Undo. Generator mode has no reverse-edit authority.
+
+Each canonical Linux folder has one advisory bridge lock and one active editor lease.
+Requests bind installed source, session epoch, lease, interaction revision and immutable
+intent; an observed snapshot grants nothing until the host installs it. Operation IDs resolve
+lost responses before stale-authority checks. A recoverable journal retains original,
+displaced and candidate bytes, with explicit inspect/resolve operations. This does not promise
+atomic CAS against independent writers retaining old descriptors. Publication failure restores
+native state and truthfully marks any differing disk revision. Native actor timeouts/crashes
+retire one worker generation and reconstruct its last accepted checkpoint. Navigation avoids
+source compilation, rollback capture and disk publication; the HTTP queue is bounded.
+
+Computed export projects accepted analytic boundaries into existing production topology and
+sampling, retaining explicit joins and failing closed on unsupported or uncertain geometry.
+Named output fragments select complete regions with holes; they do not imply pocket depth
+or material removal. See [M98 implementation plan](docs/M98_IMPLEMENTATION_PLAN.md),
+[engine API](docs/M98_ENGINE_IMPLEMENTATION.md) and [journal contract](docs/M98_WORKSPACE_STORAGE.md).

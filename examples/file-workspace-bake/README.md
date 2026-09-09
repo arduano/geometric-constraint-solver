@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# Accepted sketch profile export (M98-B prototype)
+# Accepted sketch profile export
 
-From the repository root, after building the existing WASM package and workspace runtime:
+From the repository root, after preparing the dedicated engine WASM and TypeScript package:
 
 ```sh
 mkdir -p target/m98/bake
@@ -12,10 +12,11 @@ node scripts/file-workspace.mjs bake examples/file-workspace-bake/circle-arc \
   --out target/m98/bake/circle-arc.json --chord-error-mm 0.02
 ```
 
-The CLI cold-compiles `sketch.ts`, solves and validates through the existing retained workbench,
-queries Rust production topology, and samples accepted curve fragments in model space. It needs
+The CLI captures the complete local source graph, then compiles, solves and independently
+validates it through the dedicated Rust engine in a bounded worker. It queries production
+topology and samples accepted curve fragments in model space. It needs
 no browser, server, token or recovery cache. JSON contains geometry under the
-[v1 contract](../../docs/M98_BAKE_CONTRACT.md), with SHA-256 of the exact source bytes.
+[v1 contract](../../docs/M98_BAKE_CONTRACT.md), with SHA-256 of the exact source bytes plus complete dependency, input and toolchain provenance.
 Output parent directories must exist; output must be outside the selected source project.
 Successful bake atomically replaces an existing regular output file. Failure leaves it intact.
 
@@ -33,9 +34,12 @@ alone does not establish the owned topological relationship.
 
 Lines, polyline spans, circles and circular arcs are supported within complete production
 profiles. Construction geometry is excluded. Open, ambiguous, self-intersecting, unsupported or
-computed-feature profiles fail explicitly. Sampling has finite vertex/work limits and can refuse
+numerically uncertain profiles fail explicitly. Supported computed line/arc/channel boundaries
+include the complete [manifold](../file-workspace-manifold/README.md); other computed forms
+without an accepted analytic profile projection fail explicitly. Sampling has finite vertex/work limits and can refuse
 precision targets that cannot be represented. The chord error bounds source-curve polygonization;
 it does not include later Boolean, STL or manufacturing error. No geometry equations run in Node.
 
-Build commands, real output evidence, tests and integration limitations:
-[M98_BAKE_HANDOFF.md](../../docs/M98_BAKE_HANDOFF.md).
+The [engine implementation](../../docs/M98_ENGINE_IMPLEMENTATION.md) records current APIs and
+focused evidence. [M98_BAKE_HANDOFF.md](../../docs/M98_BAKE_HANDOFF.md) preserves the historical
+prototype exports and their exact source identity.

@@ -88,3 +88,13 @@ multi-file partial publication, sidecar create/delete, stale input, durable idem
 permission retention, descriptor-aware cleanup, malformed recovery, path restrictions,
 canonical aliases, real process death, stale process identities and restart during pruning. This foundation does
 not by itself qualify the integrated M98 milestone.
+
+
+Current folder-v2 recovery first tries authored files. An unreadable graph has no current
+complete revision (`currentHash:null`), while any accepted identity remains separate.
+On restart, an optional previous-source cache can supply candidate dependency bytes; the
+loader rehashes them and the managed compiler/native engine independently reconstruct their
+project and semantic design before presenting previous geometry. Invalid or mismatched
+candidates are ignored. Source repair remains explicit and never publishes the cached files
+back over rejected disk bytes. The bounded derived checkpoint does not provide authoring
+or file-digest authority.
