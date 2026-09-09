@@ -41,79 +41,268 @@ const status=async(fixture)=>{
 };
 function curveWidth(items){const points=items.find((item)=>item.kind==="polyline"&&item.points.length>12)?.points;assert.ok(points,"real presented circle has sampled points");return Math.max(...points.map(([x])=>x))-Math.min(...points.map(([x])=>x));}
 
-test("M98-F016 delayed folder navigation coalesces hover and preserves exact wheel samples before click",{timeout:60000},async(t)=>{
-  const f=await setup(t),{folder,page,errors}=f;
-  const host=page.getByRole("application"),box=await host.boundingBox();assert.ok(box);
-  await page.mouse.move(box.x+20,box.y+20);
+test("M98-F016/F017 folder canvas navigates and selects locally during a stalled edit, then reconciles native authority",{timeout:60000},async(t)=>{
+  const f=await setup(t,undefined,{initScript:()=>{
+    window.m98LocalInputs=[];window.m98LocalUpdates=[];
+    const NativeWorker=window.Worker;
+    window.Worker=class extends NativeWorker {
+      constructor(...args){super(...args);this.addEventListener("message",({data})=>{
+        if(data?.result?.frame&&data.result.state)window.m98LocalUpdates.push(structuredClone(data.result));
+      });}
+      postMessage(message,...rest){
+        if(["pointer","wheel","resize","dispatch"].includes(message?.method))window.m98LocalInputs.push(structuredClone(message));
+        return super.postMessage(message,...rest);
+      }
+    };
+  }}),{folder,page,errors}=f;
+  const host=page.getByRole("application"),canvas=page.locator('canvas[data-renderer="webgl2"]');
   await expect(host).toHaveAttribute("aria-busy","false");
-  await page.waitForTimeout(300);
-  await expect(host).toHaveAttribute("aria-busy","false");
+  await page.getByRole("tab",{name:"Parameters",exact:true}).click();
+  await expect(radiusField(page)).toHaveValue("10");
+  await expect.poll(()=>page.evaluate(()=>window.m98LocalUpdates.length)).toBeGreaterThan(0);
+  await expect.poll(()=>canvas.evaluate((element)=>{
+    const frame=Reflect.get(element,"__geosolvePresentedFrame"),box=element.getBoundingClientRect();
+    return Math.abs(frame.viewBox[2]-box.width)<0.01&&Math.abs(frame.viewBox[3]-box.height)<0.01;
+  })).toBe(true);
   const beforeGeometry=await geometry(page),beforeState=await status(f),beforeSource=readSource(folder);
   const beforeDesign=await f.bridge.project.adapter.exportWorkspaceDesign();
   const beforeProject=await f.bridge.project.adapter.exportProject();
-  // The clock controls separate browser animation frames, keeping the artificial
-  // transport stall below the loading veil's 500 ms input barrier deterministically.
-  await page.clock.install();await page.clock.pauseAt(new Date());
-  let method="pointer",held=false,entered=Promise.withResolvers(),release=Promise.withResolvers();
   const requests=[],responses=[];
-  await page.route("**/api/rpc",async(route)=>{
-    const request=route.request().postDataJSON();requests.push({method:request.method,input:request.input});
-    if(request.method===method&&!held){held=true;entered.resolve();await release.promise;}
-    await route.continue();
-  });
+  await page.route("**/api/rpc",async(route)=>{requests.push(route.request().postDataJSON());await route.continue();});
   page.on("response",(response)=>{
     if(new URL(response.url()).pathname!=="/api/rpc")return;
-    responses.push((async()=>({status:response.status(),encoding:response.headers()["content-encoding"],body:await response.json()}))());
+    responses.push((async()=>({request:response.request().postDataJSON(),status:response.status(),encoding:response.headers()["content-encoding"],body:await response.json()}))());
   });
-  const hover=async(x)=>{
-    await host.evaluate((element,x)=>{const box=element.getBoundingClientRect();element.dispatchEvent(new PointerEvent("pointermove",{
-      bubbles:true,pointerId:1,pointerType:"mouse",isPrimary:true,clientX:box.x+x,clientY:box.y+20,buttons:0,
-    }));},x);
-    await page.clock.runFor(16);
+  const wheel=async(input)=>host.evaluate(async(element,input)=>{
+    const box=element.getBoundingClientRect(),event=new WheelEvent("wheel",{bubbles:true,clientX:box.x+input.x,clientY:box.y+input.y,deltaX:input.deltaX,deltaY:input.deltaY,ctrlKey:input.ctrl});
+    element.dispatchEvent(event);await new Promise(requestAnimationFrame);
+    return {...input,x:event.clientX-box.x,y:event.clientY-box.y};
+  },input);
+  const presentedCurve=()=>canvas.evaluate((element)=>Reflect.get(element,"__geosolvePresentedFrame").items.find((item)=>item.layer==="geometry"&&item.kind==="polyline"&&item.points.length>12));
+  let held=false,heldAt;const release=Promise.withResolvers();
+  const dispatch=f.bridge.project.adapter.dispatch;
+  f.bridge.project.adapter.dispatch=async(input)=>{
+    if(input.command==="parameter.edit"&&!held){held=true;heldAt=performance.now();await release.promise;}
+    return dispatch(input);
   };
-  const click=async()=>{await page.mouse.down();await page.mouse.up();};
-  const idle=async()=>{await expect(host).toHaveAttribute("aria-busy","false");await page.clock.runFor(32);};
   try{
-    await hover(30);await entered.promise;
-    for(let x=32;x<=70;x+=2)await hover(x);
-    await click();
-    assert.equal(requests.filter((request)=>request.method==="pointer").length,1,"only one pointer request may be in flight");
-    release.resolve();
-    await expect.poll(()=>requests.filter((request)=>request.method==="pointer").at(-1)?.input.phase).toBe("up");await idle();
-    const pointerRequests=requests.filter((request)=>request.method==="pointer");
-    assert.deepEqual(pointerRequests.map(({input})=>[input.phase,input.x,input.y]),[["move",30,20],["move",70,20],["down",20,20],["up",20,20]]);
-    assert.deepEqual(await geometry(page),beforeGeometry,"hover and empty clicks retain the actual painted geometry");
-    const hovered=await status(f);
-    for(const key of ["authority","currentHash","acceptedHash","sourceHash","revision","acceptedRevision","writes","externalApplies"])assert.deepEqual(hovered[key],beforeState[key],key);
-
-    method="wheelBatch";held=false;entered=Promise.withResolvers();release=Promise.withResolvers();requests.length=0;
+    // Preserve the preceding ordered-anchor regression, now at the local Rust
+    // worker boundary. Navigation itself performs no HTTP or authored work.
+    let box=await host.boundingBox();assert.ok(box);
+    for(let x=30;x<=70;x+=2)await page.mouse.move(box.x+x,box.y+20);
+    await page.evaluate(()=>{window.m98LocalInputs=[];});
     const expected=[];
     for(let index=0;index<20;index++){
-      const pair=Math.floor(index/2),input={version:2,x:20+pair*3,y:20+pair*2,deltaX:0,deltaY:index%2?12:-12,ctrl:index%4<2};
-      // WheelEvent may quantize CSS client coordinates; retain the actual event
-      // anchors as the independent ordered input oracle at this browser boundary.
-      expected.push(await host.evaluate((element,input)=>{const box=element.getBoundingClientRect();const event=new WheelEvent("wheel",{
-        bubbles:true,clientX:box.x+input.x,clientY:box.y+input.y,deltaX:input.deltaX,deltaY:input.deltaY,ctrlKey:input.ctrl,
-      });element.dispatchEvent(event);return {...input,x:event.clientX-box.x,y:event.clientY-box.y};},input));
-      await page.clock.runFor(16);if(index===0)await entered.promise;
+      const pair=Math.floor(index/2);
+      expected.push(await wheel({version:2,x:20+pair*3,y:20+pair*2,deltaX:0,deltaY:index%2?12:-12,ctrl:index%4<2}));
     }
-    await click();release.resolve();
-    await expect.poll(()=>requests.filter((request)=>request.method==="pointer").at(-1)?.input.phase).toBe("up");await idle();
-    const wheels=requests.filter((request)=>request.method==="wheelBatch");
-    assert.deepEqual(wheels.map(({input})=>input.length),[1,19]);assert.deepEqual(wheels.flatMap(({input})=>input),expected);
-    assert.deepEqual(requests.filter(({method})=>["wheelBatch","pointer"].includes(method)).map(({method,input})=>method==="pointer"?input.phase:method),["wheelBatch","wheelBatch","down","up"]);
-    const afterGeometry=await geometry(page);
-    assert.ok(afterGeometry.every((item)=>(item.points??[item.center]).filter(Boolean).flat().every(Number.isFinite)),"presented geometry stays finite after browser gzip decoding");
-    assert.ok(Math.abs(curveWidth(afterGeometry)/curveWidth(beforeGeometry)-1)<1e-9,"opposite ordered wheel samples return to the original camera scale");
-    assert.equal(readSource(folder),beforeSource);assert.deepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(),beforeDesign);
+    await expect.poll(()=>page.evaluate(()=>window.m98LocalInputs.filter(({method})=>method==="wheel").flatMap(({input})=>input.samples??[input]).length)).toBe(20);
+    const actual=await page.evaluate(()=>window.m98LocalInputs.filter(({method})=>method==="wheel").flatMap(({input})=>input.samples??[input]));
+    assert.deepEqual(actual,expected,"every ordered anchor, delta and Ctrl flag reaches shared local Rust");
+    await expect.poll(async()=>Math.abs(curveWidth(await geometry(page))/curveWidth(beforeGeometry)-1)).toBeLessThan(1e-9);
+    await page.setViewportSize({width:1560,height:1000});
+    await expect.poll(()=>canvas.evaluate((element)=>Math.abs(Reflect.get(element,"__geosolvePresentedFrame").viewBox[2]-element.getBoundingClientRect().width))).toBeLessThan(0.01);
+    await page.setViewportSize({width:1600,height:1000});
+    await expect.poll(()=>canvas.evaluate((element)=>Math.abs(Reflect.get(element,"__geosolvePresentedFrame").viewBox[2]-element.getBoundingClientRect().width))).toBeLessThan(0.01);
+    assert.equal(readSource(folder),beforeSource);
+    assert.deepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(),beforeDesign);
     assert.deepEqual(await f.bridge.project.adapter.exportProject(),beforeProject);
+    const navigationState=await status(f);
+    for(const key of ["authority","currentHash","acceptedHash","sourceHash","revision","acceptedRevision","writes","externalApplies"])assert.deepEqual(navigationState[key],beforeState[key],key);
+
+    // Hold the actual server edit before native evaluation, longer than the
+    // loading threshold. No client response can complete this operation yet.
+    await radiusField(page).fill("12");await radiusField(page).press("Enter");
+    await expect.poll(()=>held).toBe(true);
+    await expect(page.getByText("You can keep navigating the last accepted sketch.",{exact:true})).toBeVisible();
+    await expect(host).toHaveAttribute("aria-busy","true");
+    assert.ok(performance.now()-heldAt>=450,"the delayed busy feedback is visible during the held request");
+    const start=performance.now();await wheel({version:2,x:40,y:40,deltaX:0,deltaY:-90,ctrl:false});
+    await expect.poll(async()=>curveWidth(await geometry(page))/curveWidth(beforeGeometry),{timeout:1000}).toBeGreaterThan(1.1);
+    const localZoomMs=performance.now()-start;
+    box=await host.boundingBox();assert.ok(box);
+    await page.mouse.move(box.x+40,box.y+40);await page.mouse.down({button:"middle"});
+    await page.mouse.move(box.x+58,box.y+52);await page.mouse.up({button:"middle"});
+    const curve=await presentedCurve(),point=curve.points[Math.floor(curve.points.length/8)];
+    await page.mouse.move(box.x+point[0],box.y+point[1]);
+    await expect.poll(async()=>(await presentedCurve()).style.stroke,{timeout:1000}).not.toBe(curve.style.stroke);
+    await page.mouse.click(box.x+point[0],box.y+point[1]);
+    await page.mouse.move(box.x+20,box.y+20);
+    await expect.poll(()=>page.evaluate(()=>window.m98LocalUpdates.at(-1).state.selection.length),{timeout:1000}).toBeGreaterThan(0);
+    await expect.poll(async()=>(await presentedCurve()).style.shadow!==null,{timeout:1000}).toBe(true);
+    const localBeforeRelease=await page.evaluate(()=>window.m98LocalUpdates.at(-1).state);
+    const heldGeometry=await geometry(page),heldDurationMs=performance.now()-heldAt;
+    assert.ok(heldDurationMs>500);
+    assert.equal(readSource(folder),beforeSource,"navigation/selection cannot perform the held edit locally");
+    assert.deepEqual(await f.bridge.project.adapter.exportProject(),beforeProject);
+    assert.equal(requests.filter(({method})=>["pointer","wheel","wheelBatch","resize"].includes(method)).length,0,"camera, hover and selection never wait for HTTP");
+    assert.equal(requests.filter(({method})=>method==="interaction.sync").length,0,"Inspector sync waits for the pending edit's accepted scene");
+    release.resolve();
+    await expect.poll(()=>readSource(folder)).toContain("value: mm(12)");
+    await expect(folderNotice(page)).toContainText("Saved to disk");
+    await expect.poll(()=>requests.filter(({method})=>method==="interaction.sync").length).toBeGreaterThan(0);
+    await expect.poll(async()=>Math.abs(curveWidth(await geometry(page))/curveWidth(heldGeometry)-1.2)).toBeLessThan(0.01);
+    await expect.poll(async()=>{
+      const current=await f.bridge.project.adapter.interactionSnapshot();
+      return current.seed.selection;
+    },{message:"server must install the latest client selection after accepting the edited scene"}).toEqual(localBeforeRelease.selection);
+    const reconciled=await f.bridge.project.adapter.interactionSnapshot();
+    assert.deepEqual(JSON.parse(reconciled.seed.scene).viewport,localBeforeRelease.viewport,"late acceptance and sync preserve the local camera exactly");
+    const localAfter=await page.evaluate(()=>window.m98LocalUpdates.at(-1).state);
+    assert.deepEqual(localAfter.viewport,localBeforeRelease.viewport);
+    assert.deepEqual(localAfter.selection,localBeforeRelease.selection);
+    assert.notEqual(localAfter.sceneKey,localBeforeRelease.sceneKey,"local interaction now references the newly accepted scene");
+    const native=await f.bridge.project.adapter.bakeProfile(0.01);
+    assert.ok(native.regions[0].outer.every(([x,y])=>Math.abs(Math.hypot(x,y)-12)<1e-7),"server independently accepted the requested radius");
     const afterState=await status(f);
-    for(const key of ["authority","currentHash","acceptedHash","sourceHash","revision","acceptedRevision","writes","externalApplies"])assert.deepEqual(afterState[key],beforeState[key],key);
+    assert.equal(afterState.writes,beforeState.writes+1);
+    assert.equal(afterState.externalApplies,beforeState.externalApplies);
+    assert.equal(afterState.currentHash,afterState.acceptedHash);
+    assert.equal(reconciled.snapshot.presentation.canUndo,true);
     const delivered=await Promise.all(responses);
-    assert.ok(delivered.some(({encoding,body})=>encoding==="gzip"&&body.result?.frame),"Chromium decoded and installed a real compressed canvas snapshot");
-    assert.ok(delivered.every(({status,body})=>status===200&&!body.error));assert.deepEqual(errors,[]);
-    writeFileSync(resolve(evidence,"queued-folder-navigation.json"),JSON.stringify({pointerRequests,wheelBatchSizes:wheels.map(({input})=>input.length),wheelSamples:expected,compressedFrames:delivered.filter(({encoding,body})=>encoding==="gzip"&&body.result?.frame).length,unchangedAuthority:afterState.authority},null,2));
-  }finally{release.resolve();await page.unroute("**/api/rpc");}
+    assert.ok(delivered.some(({encoding,body})=>encoding==="gzip"&&body.result?.localInteraction),"Chromium installs compressed authoritative interaction seeds");
+    assert.ok(delivered.every(({status,body})=>status===200&&!body.error),JSON.stringify(delivered.filter(({status,body})=>status!==200||body.error)));
+    assert.deepEqual(errors,[]);
+    writeFileSync(resolve(evidence,"local-folder-navigation.json"),JSON.stringify({localZoomMs,heldDurationMs,wheelSamples:actual,navigationRpcCount:0,localBeforeRelease,localAfter,selection:reconciled.seed.selection,editWrites:afterState.writes-beforeState.writes,requests:requests.map(({method,input})=>({method,command:input?.command})),compressedSeeds:delivered.filter(({encoding,body})=>encoding==="gzip"&&body.result?.localInteraction).length},null,2));
+  }finally{release.resolve();f.bridge.project.adapter.dispatch=dispatch;await page.unroute("**/api/rpc");}
+});
+
+test("M98-F017 local folder authoring previews, multi-click Finish, exact point drag and history retain the local camera",{timeout:90000},async(t)=>{
+  const f=await setup(t,undefined,{initScript:()=>{
+    window.m98LocalUpdates=[];window.m98PointerInputs=[];
+    const NativeWorker=window.Worker;
+    window.Worker=class extends NativeWorker {
+      constructor(...args){super(...args);this.addEventListener("message",({data})=>{if(data?.result?.frame&&data.result.state)window.m98LocalUpdates.push(structuredClone(data.result));});}
+    };
+    for(const phase of ["down","move","up"])window.addEventListener(`pointer${phase}`,(event)=>{
+      const host=document.querySelector('[role="application"]');if(!host?.contains(event.target))return;
+      const box=host.getBoundingClientRect();window.m98PointerInputs.push({version:2,phase,pointerId:event.pointerId,x:event.clientX-box.x,y:event.clientY-box.y,buttons:event.buttons,modifiers:{alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey}});
+    },true);
+  }}),{folder,page,errors}=f;
+  const host=page.getByRole("application"),canvas=page.locator('canvas[data-renderer="webgl2"]');
+  const frame=()=>canvas.evaluate((element)=>Reflect.get(element,"__geosolvePresentedFrame"));
+  const localState=()=>page.evaluate(()=>window.m98LocalUpdates.at(-1)?.state);
+  const settled=async()=>{await expect(host).toHaveAttribute("aria-busy","false");await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await expect(host).toHaveAttribute("aria-busy","false");};
+  const responses=[];
+  page.on("response",(response)=>{if(new URL(response.url()).pathname==="/api/rpc")responses.push((async()=>({request:response.request().postDataJSON(),status:response.status(),body:await response.json()}))());});
+  const capture=async()=>{
+    if(page.isClosed())return;
+    writeFileSync(resolve(evidence,"local-folder-authoring-debug.json"),JSON.stringify({source:readSource(folder),responses:await Promise.all(responses),frame:await frame(),local:await localState(),notice:await folderNotice(page).innerText(),native:await f.bridge.project.adapter.interactionSnapshot(),errors},null,2));
+  };
+  try {
+  await settled();await expect.poll(localState).toBeTruthy();
+  const initialSource=readSource(folder),initialGeometry=await geometry(page),initialStatus=await status(f);
+  const select=page.getByRole("navigation",{name:"Primary tools"}).getByRole("button",{name:"Select",exact:true});
+  await page.getByRole("navigation",{name:"Primary tools"}).getByRole("button",{name:"Sketch",exact:true}).click();
+  await page.getByRole("menuitem",{name:"Polyline",exact:true}).click();await settled();
+  const box=await host.boundingBox();assert.ok(box);
+  const positions=[[0.18,0.18],[0.32,0.23],[0.40,0.15]].map(([x,y])=>[box.x+box.width*x,box.y+box.height*y]);
+  const finish=page.getByRole("button",{name:"Finish",exact:true});
+  await expect(finish).toBeDisabled();
+  // Local navigation cancels a staged draft but preserves the armed tool. The
+  // next press must use the new camera, without treating that mode as a live draft.
+  await page.mouse.click(...positions[0]);await settled();
+  const armedViewport=(await localState()).viewport;
+  await page.mouse.wheel(0,-55);
+  await expect.poll(async()=>JSON.stringify((await localState()).viewport)).not.toBe(JSON.stringify(armedViewport));
+  await settled();await expect(finish).toBeDisabled();
+  assert.equal(readSource(folder),initialSource,"navigation cancellation cannot publish a partial draft");
+  await page.mouse.click(...positions[0]);await settled();
+  await page.mouse.move(...positions[1]);
+  await expect.poll(async()=>(await frame()).items.some(({layer})=>layer==="draft")).toBe(true);
+  assert.equal(readSource(folder),initialSource,"preview cannot publish an incomplete polyline");
+  await page.mouse.click(...positions[1]);await settled();await expect(finish).toBeEnabled();
+  await page.mouse.move(...positions[2]);
+  await expect.poll(async()=>(await frame()).items.some(({layer})=>layer==="draft")).toBe(true);
+  await page.mouse.click(...positions[2]);await settled();
+  assert.equal(readSource(folder),initialSource,"multiple draft clicks remain unpublished until Finish");
+  await finish.click();
+  await expect.poll(()=>readSource(folder)).toContain("$.geometry.polyline");await settled();
+  const authoredSource=readSource(folder),authoredStatus=await status(f);
+  assert.equal(authoredStatus.writes,initialStatus.writes+1,"Finish writes exactly one source transaction");
+  assert.ok((await geometry(page)).length>initialGeometry.length,"new polyline has actual accepted painted spans");
+  await select.click();await settled();
+  await page.mouse.move(box.x+40,box.y+40);await page.mouse.wheel(0,-70);
+  await page.mouse.down({button:"middle"});await page.mouse.move(box.x+55,box.y+51);await page.mouse.up({button:"middle"});
+  await expect.poll(async()=>JSON.stringify((await localState()).viewport)).not.toBe(JSON.stringify(JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).viewport));
+  const camera=(await localState()).viewport;
+  await page.getByRole("button",{name:"Undo",exact:true}).click();await expect.poll(()=>readSource(folder)).toBe(initialSource);await settled();
+  assert.deepEqual((await localState()).viewport,camera,"Undo cannot rewind local navigation");
+  await page.getByRole("button",{name:"Redo",exact:true}).click();await expect.poll(()=>readSource(folder)).toBe(authoredSource);await settled();
+  assert.deepEqual((await localState()).viewport,camera,"Redo cannot rewind local navigation");
+  const beforeFrame=await frame();
+  const point=beforeFrame.items.filter(item=>item.layer==="points"&&item.kind==="circle"&&item.interactive).sort((a,b)=>a.center[0]-b.center[0])[0];
+  assert.ok(point,"authoring publishes an independently pickable point");
+  const pointId=point.metadata.persistentId;
+  const pointAfter=async()=>(await frame()).items.find(item=>item.layer==="points"&&item.kind==="circle"&&item.metadata.persistentId===pointId);
+  const beforeNative=JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).points;
+  const beforeDrag=await status(f);const beforeDesign=await f.bridge.project.adapter.exportWorkspaceDesign();
+  await page.evaluate(()=>{window.m98PointerInputs=[];});const responseStart=responses.length;
+  const dragBox=await host.boundingBox(),start=[dragBox.x+point.center[0],dragBox.y+point.center[1]];
+  await page.mouse.move(...start);await page.mouse.down();
+  for(const [dx,dy] of [[1,0],[5,2],[10,4],[16,7],[22,9]])await page.mouse.move(start[0]+dx,start[1]+dy);
+  await page.mouse.up();
+  await expect.poll(async()=>Math.hypot((await pointAfter()).center[0]-point.center[0],(await pointAfter()).center[1]-point.center[1]),{timeout:10000}).toBeGreaterThan(15);
+  await settled();await expect.poll(async()=>(await status(f)).writes).toBe(beforeDrag.writes+1);
+  const pointerInputs=(await page.evaluate(()=>window.m98PointerInputs)).filter(({phase,buttons})=>phase!=="move"||(buttons&1));
+  const pointerResponses=(await Promise.all(responses.slice(responseStart))).filter(({request})=>request.method==="pointer");
+  assert.deepEqual(pointerResponses.map(({request})=>request.input),pointerInputs,"every original down, subthreshold move, semantic move and release reaches server in order");
+  assert.ok(pointerResponses[0].request.interaction,"original down transfers captured local camera once");
+  assert.ok(pointerResponses.slice(1).every(({request})=>request.interaction===undefined));
+  assert.equal(readSource(folder),authoredSource,"point movement remains a semantic sidecar edit");
+  assert.notDeepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(),beforeDesign);
+  const afterNative=JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).points;
+  assert.notDeepEqual(afterNative.map(({model_position})=>model_position),beforeNative.map(({model_position})=>model_position),"native accepted coordinates actually moved");
+  assert.ok(afterNative.every(({model_position})=>model_position.every(Number.isFinite)));
+  await page.getByRole("button",{name:"Undo",exact:true}).click();await settled();
+  await expect.poll(async()=>Math.hypot((await pointAfter()).center[0]-point.center[0],(await pointAfter()).center[1]-point.center[1])).toBeLessThan(1e-7);
+  await page.getByRole("button",{name:"Redo",exact:true}).click();await settled();
+  await expect.poll(async()=>Math.hypot((await pointAfter()).center[0]-point.center[0],(await pointAfter()).center[1]-point.center[1])).toBeGreaterThan(15);
+  assert.deepEqual((await localState()).viewport,camera);
+  const delivered=await Promise.all(responses);assert.ok(delivered.every(({status,body})=>status===200&&!body.error),JSON.stringify(delivered.filter(({status,body})=>status!==200||body.error)));
+  assert.deepEqual(errors,[]);
+  writeFileSync(resolve(evidence,"local-folder-authoring.json"),JSON.stringify({pointerInputs,pointId,camera,finishWrites:authoredStatus.writes-initialStatus.writes,dragWrites:(await status(f)).writes-beforeDrag.writes-2,sourceHash:hash(authoredSource),beforeNative,afterNative},null,2));
+  }finally{await capture();}
+});
+
+test("M98-F017 local folder point drag keeps exact semantic samples, one release write and camera-preserving history",{timeout:60000},async(t)=>{
+  const f=await setup(t,undefined,{initScript:()=>{
+    window.m98LocalUpdates=[];window.m98PointerInputs=[];
+    const NativeWorker=window.Worker;
+    window.Worker=class extends NativeWorker {constructor(...args){super(...args);this.addEventListener("message",({data})=>{if(data?.result?.frame&&data.result.state)window.m98LocalUpdates.push(structuredClone(data.result));});}};
+    for(const phase of ["down","move","up"])window.addEventListener(`pointer${phase}`,(event)=>{const host=document.querySelector('[role="application"]');if(!host?.contains(event.target))return;const box=host.getBoundingClientRect();window.m98PointerInputs.push({version:2,phase,pointerId:event.pointerId,x:event.clientX-box.x,y:event.clientY-box.y,buttons:event.buttons,modifiers:{alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey}});},true);
+  }}),{page,folder,errors}=f;
+  const host=page.getByRole("application"),canvas=page.locator('canvas[data-renderer="webgl2"]');
+  const frame=()=>canvas.evaluate(element=>Reflect.get(element,"__geosolvePresentedFrame"));
+  const localState=()=>page.evaluate(()=>window.m98LocalUpdates.at(-1)?.state);
+  const settled=async()=>{await expect(host).toHaveAttribute("aria-busy","false");await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await expect(host).toHaveAttribute("aria-busy","false");};
+  const responses=[];page.on("response",response=>{if(new URL(response.url()).pathname==="/api/rpc")responses.push((async()=>({request:response.request().postDataJSON(),status:response.status(),body:await response.json()}))());});
+  try{
+    await settled();await expect.poll(localState).toBeTruthy();
+    const before=(await frame()).items.find(item=>item.layer==="points"&&item.kind==="circle"&&item.interactive);assert.ok(before);
+    const pointId=before.metadata.persistentId;
+    const point=async()=>(await frame()).items.find(item=>item.layer==="points"&&item.kind==="circle"&&item.metadata.persistentId===pointId);
+    const source=readSource(folder),beforeStatus=await status(f),beforeDesign=await f.bridge.project.adapter.exportWorkspaceDesign();
+    const beforeNative=JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).points;
+    const camera=(await localState()).viewport,box=await host.boundingBox(),start=[box.x+before.center[0],box.y+before.center[1]];
+    await page.mouse.move(...start);await page.evaluate(()=>{window.m98PointerInputs=[];});
+    await page.mouse.down();for(const[dx,dy]of[[1,0],[5,2],[10,4],[16,7],[22,9]])await page.mouse.move(start[0]+dx,start[1]+dy);await page.mouse.up();
+    await expect.poll(async()=>Math.hypot((await point()).center[0]-before.center[0],(await point()).center[1]-before.center[1]),{timeout:10000}).toBeGreaterThan(15);
+    await settled();await expect.poll(async()=>(await status(f)).writes).toBe(beforeStatus.writes+1);
+    const inputs=(await page.evaluate(()=>window.m98PointerInputs)).filter(({phase,buttons})=>phase!=="move"||(buttons&1));
+    const pointers=(await Promise.all(responses)).filter(({request})=>request.method==="pointer");
+    assert.deepEqual(pointers.map(({request})=>request.input),inputs);
+    assert.ok(pointers[0].request.interaction);assert.ok(pointers.slice(1).every(({request})=>request.interaction===undefined));
+    assert.equal(readSource(folder),source);assert.notDeepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(),beforeDesign);
+    const afterNative=JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).points;
+    assert.notDeepEqual(afterNative.map(({model_position})=>model_position),beforeNative.map(({model_position})=>model_position));assert.ok(afterNative.every(({model_position})=>model_position.every(Number.isFinite)));
+    const moved=(await point()).center;
+    await page.getByRole("button",{name:"Undo",exact:true}).click();await settled();await expect.poll(async()=>(await point()).center).toEqual(before.center);
+    await page.getByRole("button",{name:"Redo",exact:true}).click();await settled();await expect.poll(async()=>(await point()).center).toEqual(moved);
+    assert.deepEqual((await localState()).viewport,camera);assert.deepEqual(errors,[]);
+    const delivered=await Promise.all(responses);assert.ok(delivered.every(({status,body})=>status===200&&!body.error),JSON.stringify(delivered.filter(({status,body})=>status!==200||body.error)));
+    writeFileSync(resolve(evidence,"local-folder-point-drag.json"),JSON.stringify({inputs,pointId,camera,beforeNative,afterNative,moved,writeDelta:(await status(f)).writes-beforeStatus.writes},null,2));
+  }finally{writeFileSync(resolve(evidence,"local-folder-point-drag-debug.json"),JSON.stringify({responses:await Promise.all(responses),source:readSource(folder),frame:await frame(),local:await localState(),native:await f.bridge.project.adapter.interactionSnapshot(),notice:await folderNotice(page).innerText(),errors},null,2));}
 });
 
 test("external rename updates the open canvas once, invalid text retains it, and browser storage remains separate",{timeout:120000},async(t)=>{
@@ -328,10 +517,18 @@ test("slow external generator evaluation dims the retained canvas after half a s
   const shownAfterMs=await page.evaluate(()=>performance.now()-window.m98Activity.find((event)=>event.busy).at);
   assert.ok(shownAfterMs>=500,`indicator must wait 500 ms, observed ${shownAfterMs}`);
   assert.deepEqual(await geometry(page),before,"last accepted canvas remains visible while the external generator is running");
+  const host=page.getByRole("application"),box=await host.boundingBox();assert.ok(box);
+  const startNavigation=performance.now();
+  await page.mouse.move(box.x+40,box.y+40);await page.mouse.wheel(0,-90);
+  await expect.poll(async()=>curveWidth(await geometry(page))/curveWidth(before),{timeout:1000}).toBeGreaterThan(1.1);
+  const localNavigationMs=performance.now()-startNavigation;
+  await expect(indicator).toBeVisible();
+  const navigated=await geometry(page);
+  await page.mouse.click(box.x+20,box.y+20);
   const overlay=page.locator(".geosolve-solving-overlay");
   assert.notEqual(await overlay.evaluate((element)=>getComputedStyle(element).backgroundColor),"rgba(0, 0, 0, 0)","overlay visibly dims the canvas");
   await page.screenshot({path:resolve(evidence,"slow-folder-solving.png")});
-  await expect.poll(async()=>curveWidth(await geometry(page))/curveWidth(before),{timeout:10000}).toBeGreaterThan(1.3);
+  await expect.poll(async()=>curveWidth(await geometry(page))/curveWidth(navigated),{timeout:10000}).toBeGreaterThan(1.3);
   await expect(indicator).toHaveCount(0);
   const accepted=await geometry(page);
   replaceSource(folder,pause+'throw Error("deliberately rejected generator");'+source);
@@ -340,7 +537,7 @@ test("slow external generator evaluation dims the retained canvas after half a s
   await expect(folderNotice(page)).toContainText("deliberately rejected generator",{timeout:10000});
   await expect(indicator).toHaveCount(0);
   assert.deepEqual(await geometry(page),accepted,"rejection clears feedback without replacing accepted geometry");
-  writeFileSync(resolve(evidence,"slow-folder-solving.json"),JSON.stringify({shownAfterMs,activity:await page.evaluate(()=>window.m98Activity),retainedAfterRejection:true},null,2));
+  writeFileSync(resolve(evidence,"slow-folder-solving.json"),JSON.stringify({shownAfterMs,localNavigationMs,activity:await page.evaluate(()=>window.m98Activity),retainedAfterRejection:true},null,2));
   assert.deepEqual(errors,[]);
 });
 
