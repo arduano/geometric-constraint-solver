@@ -294,3 +294,26 @@ env -u NODE_OPTIONS -u NODE_PATH -u GEOSOLVE_DIST -u GEOSOLVE_M98_PACKAGES \
 
 Final integrated replacement qualification remains required; this focused result does
 not convert the failed run into a release pass.
+
+## Qualification harness correction — Split resize baseline
+
+Replacement run `20260909T142852-ee5601c1` on clean `f67c977` passed the 97-case folder
+runtime suite but failed one browser retention assertion. The test opened Split and
+captured screen-space geometry as soon as CodeMirror appeared, before the asynchronous
+resize RPC published the new camera frame. The retained evidence shows the same curve
+identity and all 129 points translated exactly −282 pixels in X with zero Y change;
+accepted source hash, writes and external-apply count were unchanged.
+
+The test now waits for a smaller Split canvas and a presented viewBox matching its actual
+CSS extent, using the existing canvas renderer's 0.01-pixel extent check. Its exact
+post-rejection geometry equality and all source/authority/diagnostic assertions remain.
+This is a synchronization correction without product or golden changes or a new defect ID.
+Focused command passes **1/1 in 7.41 seconds**:
+
+```bash
+GEOSOLVE_DIST="$PWD/target/release-gate/prepared/f862ad58f8fc7bb4ed341d7ca820326b75fe2a655217065d40f0d7fb56985f8e/browser/geosolve-harness" \
+  node --test --test-name-pattern='external rename updates' scripts/workspace-browser.test.mjs
+```
+
+Evidence: `target/m98/folder-browser-layout-r1.log`. The failed replacement remains
+failed; the runner must qualify the corrected harness and all outstanding obligations.

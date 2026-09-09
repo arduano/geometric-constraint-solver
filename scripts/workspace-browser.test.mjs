@@ -76,8 +76,16 @@ test("external rename updates the open canvas once, invalid text retains it, and
   await page.waitForTimeout(450);
   assert.equal((await status(f)).writes,edited.writes);
   assert.equal((await status(f)).externalApplies,edited.externalApplies);
+  const canvas=page.locator('canvas[data-renderer="webgl2"]');
+  const fullWidth=await canvas.evaluate((element)=>element.getBoundingClientRect().width);
   await page.getByRole("button",{name:"split",exact:true}).click();
   await expect(page.locator(".cm-content")).toContainText("value: mm(14)");
+  // CodeMirror can appear before the resize RPC publishes its camera frame.
+  // Capture the exact retained-geometry baseline only at the new Split extent.
+  await expect.poll(()=>canvas.evaluate((element,previousWidth)=>{
+    const frame=Reflect.get(element,"__geosolvePresentedFrame"),box=element.getBoundingClientRect();
+    return box.width<previousWidth && Math.abs(frame.viewBox[2]-box.width)<0.01 && Math.abs(frame.viewBox[3]-box.height)<0.01;
+  },fullWidth),{message:"Split resize must be presented before retaining its geometry baseline"}).toBe(true);
   const good=readSource(folder),accepted=await geometry(page);
   const invalid=good.replace("value: mm(14)","value: mm(");
   replaceSource(folder,invalid);
