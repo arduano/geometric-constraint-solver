@@ -2,7 +2,9 @@
 
 # M98 local plaintext sketch prototype
 
-Status: **PROTOTYPE_READY_FOR_UAT**; production nomination and acceptance deferred.
+Status: **approved real-world usability scope; implementation in progress**.
+[Current implementation plan](M98_IMPLEMENTATION_PLAN.md) supersedes the prototype-only
+limits below. The original prototype contract and evidence remain historical.
 The [2026-09-09 takeover review](M98_TAKEOVER.md) records completed M97 acceptance,
 the pending integration, current preview availability and next priorities.
 Implementation, commands and actual-browser evidence: [M98_HANDOFF.md](M98_HANDOFF.md).

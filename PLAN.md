@@ -8466,10 +8466,19 @@ closure on 2026-09-09; no M97 work remains. The existing M98 prototype continues
 Its separate worktree owns the M98 plan and prototype evidence; this closeout does not
 merge or qualify that product.
 
-## M98 — local plaintext sketch folder prototype (authorized parallel exception)
+## M98 — reliable project authoring and embeddable TypeScript engine
+
+Status: **approved implementation in progress**. M97 is accepted and merged into this
+worktree. [Approved scope and ordered checklist](docs/M98_IMPLEMENTATION_PLAN.md) owns
+implementation, hardening and qualification. The user selected complete project support,
+a headless Node/browser TS engine, editable/generator modes, optional source-declared
+inputs, Linux filesystem qualification, explicit design sidecar and one active UI editor.
+
+### Historical fast-track prototype
+
 
 Status: **PROTOTYPE_READY_FOR_UAT**, not accepted or release-qualified. Pinned to
-`d80bf22264f74b60870f2e99feb8cc6ccb9d0133`; M97 remains separately active and unclosed.
+`d80bf22264f74b60870f2e99feb8cc6ccb9d0133`; that original checkpoint predates M97 integration.
 [Goals](docs/M98_GOALS.md), [handoff and evidence](docs/M98_HANDOFF.md).
 
 - [x] Implement init/serve/check/status, one managed source file and the existing demo adapter.
