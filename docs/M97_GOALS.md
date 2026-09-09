@@ -2,8 +2,8 @@
 
 # M97 — focused dimensions and stable annotation placement
 
-Implementation authorized on 2026-09-08 from the approved plan. M96 remains the
-accepted product. The workbench should convey relevant measurements without
+Implementation authorized on 2026-09-08; accepted and closed on 2026-09-09.
+[M97_CLOSURE.md](M97_CLOSURE.md) records the accepted product and limits. The workbench should convey relevant measurements without
 filling general navigation with dimension widgets.
 
 The subsequent source-native authoring request has a completed
@@ -85,7 +85,7 @@ preservation. Bridge/frontend coverage includes mode, pins, patch parameters,
 native and source editing, groups, failed drafts and reload. Capture simple/manifold/
 dense screenshots and compare navigation performance. Run the integrated clean-source
 gate once at nomination, authenticating reuse under RELEASE_QUALIFICATION.md; review
-any golden changes individually. Final supervising-user acceptance remains pending.
+any golden changes individually. Final qualification and supervising-user acceptance are complete.
 
 ## Default-priority amendment
 
@@ -94,9 +94,9 @@ important shape-intent measurements by default, explicitly including every
 Gridfinity measurement. This amendment changes presentation only.
 [Default-priority qualification](M97_PRIORITY_DIMENSIONS.md) records its passing
 gate and preserved port-18104 preview. The source-native amendment below now
-supersedes it; M97 remains open.
+supersedes it and is accepted.
 
-## Source-native authoring amendment — qualified, awaiting acceptance
+## Source-native authoring amendment — accepted and closed
 
 The supervising user requested native/intuitive authoring and an audit of adjacent
 metadata that should belong in code. [M97_AUTHORING_METADATA.md](M97_AUTHORING_METADATA.md)
@@ -117,5 +117,5 @@ existing purpose. Personal mode/pins/visibility/camera remain outside design sou
 `e26270cb89e5849092145b329d0cf95821a81b27`, the passing 244-obligation gate
 `20260908T235146-b387d273`, and the frozen port-18105 preview's served-byte and
 actual-WASM verification. Generated per-instance overview overrides remain deferred.
-Implementation and mechanical qualification are complete; supervising-user acceptance
-and M97 closure remain pending.
+Implementation, mechanical qualification and supervising-user acceptance are complete.
+M97 is closed; generated overview and performance limits remain recorded.

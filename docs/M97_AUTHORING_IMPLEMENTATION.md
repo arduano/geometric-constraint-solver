@@ -6,7 +6,8 @@ The source-native amendment is implemented and qualified on
 `e26270cb89e5849092145b329d0cf95821a81b27`. The verified preview is
 `http://100.94.63.83:18105/`; port 18104 preserves the prior default-priority
 product. All 244 integrated obligations pass in `20260908T235146-b387d273`.
-M97 remains open for supervising-user acceptance; M96 remains the accepted milestone.
+The supervising user accepted this product and requested closure on 2026-09-09.
+[M97_CLOSURE.md](M97_CLOSURE.md) records the accepted milestone and continuation.
 
 ## Authoring and presentation
 
@@ -248,7 +249,8 @@ Generated per-instance overview overrides remain deferred, overview eligibility
 remains subject to collision handling, and old unmarked source has no implicit
 first-six priorities. All measurements remain discoverable. Dense-workflow timing
 varies: this successful qualification does not erase the recorded R3 timeout or claim
-a performance optimization. Supervising-user acceptance and M97 closure remain open.
+a performance optimization. Supervising-user acceptance and M97 closure are complete
+under the recorded scope; no further M97 implementation is pending.
 
 Documentation-only continuation is checked with
 `nix-shell shell.nix --run './scripts/release-gate.sh --docs-only --since e26270c'`.

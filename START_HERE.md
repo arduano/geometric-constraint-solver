@@ -1,40 +1,36 @@
 # GeoSolve active handoff
 
-Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization, M94 accelerated canvas and M95 connected selection accepted and closed on 2026-09-07; M96 finite-width manifold channels accepted and closed on 2026-09-08.**
+Current roadmap: **M97 focused dimensions and source-native authoring accepted and closed
+on 2026-09-09. M98 local file workspace and baked-profile prototype is the next takeover.**
 
-[M96 closure and fresh-session handoff](docs/M96_CLOSURE.md) records the accepted checkpoint.
-The accepted product is `d77228559f9b860ce69cc03ceea6a5d34d8a3660`, qualified through all
-243 integrated obligations in `20260908T090848-ddc447b8`, and served at
-`http://100.94.63.83:18101/`. Its manifold has three 12 mm reservoir passages,
-a separate 12 mm two-bend stair passage and a 2.4 mm silicone groove.
-[M96 goals](docs/M96_GOALS.md) and [implementation evidence](docs/M96_IMPLEMENTATION.md)
-record the custom-patch API, independent geometry checks and editing corrections.
-The supervising user accepted the final amendment and requested closure. No M96 blocker
-or acceptance action remains. **M97 focused dimensions and its source-native authoring
-amendment are implemented and qualified; supervising-user acceptance remains pending.**
-The verified amended preview is `http://100.94.63.83:18105/`.
-[Authoring implementation and qualification](docs/M97_AUTHORING_IMPLEMENTATION.md) is the
-current continuation point: clean source `e26270cb89e5849092145b329d0cf95821a81b27`
-passes all 244 obligations in `20260908T235146-b387d273` (37m29.9s; nine fresh,
-235 authenticated reused results). The frozen production copy passes exact served-byte
-verification for 12 files and 13 HTTP routes and actual-WASM manifold readiness.
-Gridfinity retains all 20 authored measurements as defaults; the
-manifold retains six key callouts and its public channel/groove widths in the
-Inspector. [The previous default-priority preview](docs/M97_PRIORITY_DIMENSIONS.md)
-remains preserved at port 18104, and [the first M97 preview](docs/M97_QUALIFICATION.md)
-at port 18103. [M97 goals](docs/M97_GOALS.md) records the approved interaction.
-M97 is open for acceptance; M96 remains the accepted product.
+[M97 closure and fresh-session handoff](docs/M97_CLOSURE.md) records the supervising
+user's acceptance and unchanged qualified product. Accepted source
+`e26270cb89e5849092145b329d0cf95821a81b27` passes all 244 obligations in
+`20260908T235146-b387d273` (37m29.9s; nine fresh, 235 authenticated reused results).
+The accepted preview is `http://100.94.63.83:18105/`; its 12 production files and
+13 HTTP routes are byte-verified, with actual-WASM manifold readiness.
 
-**Current task: review the qualified source-native authoring preview for acceptance.**
-The user requested intuitive authoring for key dimensions and adjacent metadata.
-[M97 authoring amendment](docs/M97_AUTHORING_METADATA.md) specifies source-owned
-overview flags, named public parameters, consistent labels/help and document
-title/description, with Inspector edits using the existing authenticated source
-transaction. The explicit APIs are `isKeyConstraint`, `isKeyParameter` and
-`dimensions.areKeyConstraintsByDefault`. [PLAN.md](PLAN.md) records completed
-implementation and qualification within the open M97 milestone. The final browser
-run passes 17 prefix and 48 full workflows without retries, skips or failures,
-including fresh workflows for all 16 samples; the 271-case golden is unchanged.
+The workbench retains stable Focused / All / Hidden dimensions and contextual
+inspection. Source owns overview intent, names/help, document properties and shared
+parameters through `isKeyConstraint`, `isKeyParameter` and
+`dimensions.areKeyConstraintsByDefault`; Inspector edits use the same source transactions.
+Gridfinity retains all 20 authored measurements, and the manifold retains six overview
+callouts and its shared 12 mm channel and 2.4 mm seal widths.
+[Implementation and qualification](docs/M97_AUTHORING_IMPLEMENTATION.md),
+[authoring contract](docs/M97_AUTHORING_METADATA.md) and [goals](docs/M97_GOALS.md)
+record the accepted scope and limits. No M97 blocker or acceptance action remains.
+The previous M97 previews remain documented at ports 18104 and 18103; M96's accepted
+channel checkpoint remains in [M96_CLOSURE.md](docs/M96_CLOSURE.md).
+
+**Current task: take over and review the existing M98 prototype.**
+The clean branch `m98/file-workspace` is in
+`/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace`,
+currently `cb581b50ac10b1e5edeb4da4c86761405577cd7e`. It was developed separately from
+`d80bf22264f74b60870f2e99feb8cc6ccb9d0133` and does not yet contain M97's final
+implementation. Read its `docs/M98_HANDOFF.md`, `docs/M98_BAKE_HANDOFF.md` and
+`docs/M98_GOALS.md` before continuing. It is a working prototype with focused evidence,
+not an accepted or release-qualified descendant. Preserve both worktrees and their
+artifacts; reconcile M97 source/metadata authority before integrated nomination.
 
 [M95 qualification](docs/M95_QUALIFICATION.md) and [closure](docs/M95_CLOSURE.md) retain
 the previous accepted checkpoint at `http://100.94.63.83:18100/`. M94 remains at port 18096.

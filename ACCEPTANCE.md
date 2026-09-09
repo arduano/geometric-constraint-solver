@@ -5498,7 +5498,7 @@ The supervising user stated “sounds good yeah, close the milestone please” o
 [M96_CLOSURE.md](docs/M96_CLOSURE.md) records acceptance of the amended 12 mm layout and
 documented scope without asserting an unrecorded exhaustive human replay. M96 is closed.
 
-## M97 focused dimensions — mechanically qualified, user acceptance pending
+## M97 focused dimensions — accepted and closed on 2026-09-09
 
 [M97_GOALS.md](docs/M97_GOALS.md) requires a readable default overview, at most six
 contextual canvas dimensions plus curated default priorities, complete Inspector
@@ -5515,7 +5515,7 @@ relevant browser checks. Clean-source run `20260908T133354-cff36f90` passes all
 243 obligations on `a39f35ade58c3d5a272899dfb4e616d6578a9d14`; the frozen preview
 at `http://100.94.63.83:18103/` passes exact served-byte and actual-WASM verification.
 [M97 qualification](docs/M97_QUALIFICATION.md) records the evidence and limits.
-Supervising-user acceptance remains pending; M96 is the accepted product.
+The final source-native descendant below is accepted under [M97 closure](docs/M97_CLOSURE.md).
 
 The 2026-09-08 default-priority amendment must preserve all 20 Gridfinity
 measurement rows, keep curated manifold dimensions eligible without selection,
@@ -5525,9 +5525,9 @@ passes all 243 obligations in `20260908T172035-7255b491` on
 `fc3fdcb71b4d910815a51cf030128c42317ff2ed`; the frozen preview at
 `http://100.94.63.83:18104/` passes exact served-byte and actual-WASM verification.
 [Default-priority evidence](docs/M97_PRIORITY_DIMENSIONS.md) records that qualified
-amendment; user acceptance remains pending.
+amendment; final acceptance covers its source-native descendant below.
 
-### Source-native authoring amendment — qualified, user acceptance pending
+### Source-native authoring amendment — accepted and closed
 
 [The authoring design](docs/M97_AUTHORING_METADATA.md) adds source-owned overview
 flags/defaults, named parameters, patch input presentation and document metadata,
@@ -5552,4 +5552,6 @@ the commands and owner coverage. The frozen production preview at
 `http://100.94.63.83:18105/` passes exact served-byte verification across 12 files and
 13 HTTP routes and actual-WASM manifold readiness. Port 18104 preserves the preceding
 preview. Generated per-instance overview overrides remain deferred. Mechanical
-qualification is complete; supervising-user acceptance and M97 closure remain pending.
+qualification is complete. On 2026-09-09 the supervising user stated “very nice, I approve
+of this” and requested milestone closure. This accepts the delivered scope and recorded
+limits without claiming an unrecorded exhaustive human replay. No M97 blocker remains.

@@ -8417,10 +8417,9 @@ Closure prose preserves those qualified product bytes; no further M96 work is pe
 
 ## M97 — focused dimensions and stable annotation placement
 
-Status: **source-native authoring qualified and preview verified; supervising-user
-acceptance pending.** [M97_GOALS.md](docs/M97_GOALS.md) owns the interaction contract;
+Status: **accepted and closed on 2026-09-09.** [M97_GOALS.md](docs/M97_GOALS.md) owns the interaction contract;
 [authoring design](docs/M97_AUTHORING_METADATA.md) specifies the implemented amendment.
-M96 remains the accepted product; M97 is open.
+M97 is the accepted product. [Closure](docs/M97_CLOSURE.md) records the supervising-user sign-off.
 
 - [x] Regress M97-F001 zoom-then-click layout jumps at the native owner.
 - [x] Implement shared native dimension metadata, relevance, bounded visibility and retained placement.
@@ -8435,7 +8434,7 @@ M96 remains the accepted product; M97 is open.
 - [x] Connect overview/name/help/document controls and consistently honor authored display labels.
 - [x] Migrate live sample priorities/title/description to source, derive catalog projections and remove selector fallbacks.
 - [x] Qualify source-only imports, precedence, shared controls and authoring transactions; deliver an amended preview.
-- [ ] Obtain supervising-user acceptance and close M97.
+- [x] Obtain supervising-user acceptance and close M97.
 
 Source `a39f35ade58c3d5a272899dfb4e616d6578a9d14` passes all 243 integrated obligations
 in `20260908T133354-cff36f90` (38m18.9s), including the unchanged 271-case golden
@@ -8461,7 +8460,11 @@ code authoring, including shared parameters, labels/help and document properties
 commands, retained-authority checks and verified frozen production preview at
 `http://100.94.63.83:18105/`. Its 12 files, 13 HTTP routes and actual-WASM manifold
 readiness pass verification; port 18104 remains preserved. Generated per-instance
-overview overrides remain deferred. M97 remains open; M96 remains accepted.
+overview overrides remain deferred. The supervising user accepted the result and requested
+closure on 2026-09-09; no M97 work remains. The existing M98 prototype continues in
+`m98/file-workspace`, based on `d80bf22`, with integration review now authorized.
+Its separate worktree owns the M98 plan and prototype evidence; this closeout does not
+merge or qualify that product.
 
 ## Explicit non-goals
 

@@ -2865,7 +2865,7 @@ routes retain their narrow frame transport. Persisted formats and solver behavio
 [M95_GOALS.md](docs/M95_GOALS.md), [evidence](docs/M95_IMPLEMENTATION.md) and
 [closure](docs/M95_CLOSURE.md) record the accepted scope and product identity.
 
-## M97 dimension presentation — qualified, awaiting acceptance
+## M97 dimension presentation — accepted and closed
 
 `DimensionPresentationState` is a native presentation owner separate from design
 history and manual annotation placement. It resolves Focused, All and Hidden into
@@ -2893,10 +2893,10 @@ generated dimensions do not acquire writable authority from their displayed valu
 [M97_GOALS.md](docs/M97_GOALS.md) owns the approved contract.
 [M97 qualification](docs/M97_QUALIFICATION.md) records the original gate and preserved
 preview at `http://100.94.63.83:18103/`. The current qualified authoring preview is
-`http://100.94.63.83:18105/`. Supervising-user acceptance remains pending;
-no solver equations or branch semantics changed.
+`http://100.94.63.83:18105/`. [Closure](docs/M97_CLOSURE.md) records acceptance on
+2026-09-09; no solver equations or branch semantics changed.
 
-### M97 source-native metadata amendment — qualified, awaiting acceptance
+### M97 source-native metadata amendment — accepted and closed
 
 [M97_AUTHORING_METADATA.md](docs/M97_AUTHORING_METADATA.md) specifies the implemented
 authoring API. Document title/description and authored

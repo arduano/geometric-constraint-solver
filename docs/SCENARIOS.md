@@ -7409,15 +7409,15 @@ product identity; scenario coverage does not imply an unrecorded exhaustive huma
   large underconstrained/curvature controls, mixed fixed/free preference motion and
   active-bound fail-closed behavior, and the 12 mm manifold 60→62 mm edit.
 
-## M97 focused dimension scenarios — qualified, awaiting acceptance
+## M97 focused dimension scenarios — accepted and closed on 2026-09-09
 
 The preceding clean-source amendment run `20260908T172035-7255b491` passes all
 243 obligations, including authenticated successes for all three M97 browser workflows and the
 unchanged 271-case golden. [Amendment qualification](M97_PRIORITY_DIMENSIONS.md)
 records that scope and preserved preview at `http://100.94.63.83:18104/`.
 The source-native replacement below is now qualified and served at port 18105.
-Supervising-user acceptance remains pending; these checks do not imply an
-unrecorded human replay.
+[M97 closure](M97_CLOSURE.md) records supervising-user acceptance; these checks do
+not imply an unrecorded human replay.
 
 - Open the manifold in Focused mode: curated envelope/reservoir and representative
   bore/fastener dimensions remain eligible without selection. Public 12 mm channel
@@ -7461,7 +7461,8 @@ coverage and clean-source gate `20260908T235146-b387d273` on
 prefix and 48/48 full browser workflows and the unchanged 271-case golden.
 All 16 samples receive fresh full workflows, with no retries, skips or failures.
 The frozen preview at `http://100.94.63.83:18105/` passes served-byte and actual-WASM
-verification. These results qualify the amendment; supervising-user acceptance remains pending.
+verification. These results qualify the accepted amendment; [M97 closure](M97_CLOSURE.md)
+records the supervising-user sign-off and preserved limitations.
 
 - Toggle Show in overview on an authored driving and reference measurement; inspect
   the exact local `isKeyConstraint` source edit. Reset to a true document default, then explicitly
