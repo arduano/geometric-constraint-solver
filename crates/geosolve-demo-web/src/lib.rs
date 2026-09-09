@@ -147,6 +147,13 @@ mod wasm {
                 .map_err(|error| JsValue::from_str(&error))
         }
 
+        #[wasm_bindgen(js_name = exportWorkspaceDesign)]
+        pub fn export_workspace_design(&self) -> Result<String, JsValue> {
+            self.bridge
+                .workspace_design_json()
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
         #[wasm_bindgen(js_name = exportProject)]
         pub fn export_project(&self) -> Result<String, JsValue> {
             self.bridge

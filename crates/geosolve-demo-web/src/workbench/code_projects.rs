@@ -9,6 +9,8 @@
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
 mod navigation;
+#[cfg(test)]
+mod workspace_tests;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -1079,6 +1081,16 @@ pub(crate) fn canonical_code_project_files(
     })
 }
 
+/// Inspectable authored override state; geometry is always rebuilt from the source.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct WorkspaceDesign {
+    pub format: String,
+    pub project: ProjectKey,
+    pub generated: KeyedReconcileState,
+    pub overrides: CodeInteractionOverlay,
+}
+
 impl CodeProjectWorkbench {
     /// Returns only the pinned data-only patch plans needed by the managed
     /// recorder. This is deliberately an on-demand handoff: ordinary pointer,
@@ -1680,6 +1692,55 @@ impl CodeProjectWorkbench {
         overlay.drafts().is_empty() && overlay.suppressed_children().is_empty()
     }
 
+    pub(crate) fn workspace_project_key(&self) -> ProjectKey {
+        self.project.project.clone()
+    }
+
+    pub(crate) fn workspace_design(&self) -> WorkspaceDesign {
+        WorkspaceDesign {
+            format: "geosolve-design-v1".into(),
+            project: self.project.project.clone(),
+            generated: self.session.snapshot().generated.clone(),
+            overrides: self.session.snapshot().interaction_overlay.clone(),
+        }
+    }
+
+    pub(crate) fn open_workspace_design(
+        project: CodeProject,
+        design: WorkspaceDesign,
+    ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
+        if design.format != "geosolve-design-v1" || design.project != project.project {
+            return Err("design sidecar format or project identity mismatch".into());
+        }
+        design
+            .overrides
+            .validate()
+            .map_err(|error| error.to_string())?;
+        Self::open_project_with_design(
+            CodeProjectOrigin::Authored,
+            project,
+            &design.generated,
+            design.overrides,
+        )
+    }
+
+    /// Stages a complete local source/dependency update with the existing semantic
+    /// history and overlays. Failed candidates cannot alter the live project.
+    pub(crate) fn prepare_workspace_project(
+        &self,
+        project: CodeProject,
+    ) -> Result<(Self, AcceptedCodePublication), String> {
+        project.validate().map_err(|error| error.to_string())?;
+        if project.project != self.project.project {
+            return Err("workspace update belongs to a different project".into());
+        }
+        let mut candidate = Self::from_persistence_json(&self.to_persistence_json()?)?;
+        match candidate.apply_candidate_project(project)? {
+            CodeApplyOutcome::Accepted(publication) => Ok((candidate, publication)),
+            CodeApplyOutcome::RetainedFailure { diagnostic, .. } => Err(diagnostic),
+        }
+    }
+
     /// Builds a complete imported replacement without touching a live
     /// workbench. Only the returned pair may be swapped into browser state.
     pub(crate) fn import_canonical_project_json(
@@ -1695,19 +1756,43 @@ impl CodeProjectWorkbench {
         origin: CodeProjectOrigin,
         project: CodeProject,
     ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
+        Self::open_project_with_design(
+            origin,
+            project,
+            &KeyedReconcileState::empty(),
+            CodeInteractionOverlay::empty(),
+        )
+    }
+
+    fn open_project_with_design(
+        origin: CodeProjectOrigin,
+        project: CodeProject,
+        generated: &KeyedReconcileState,
+        overlay: CodeInteractionOverlay,
+    ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
         project.validate().map_err(|error| error.to_string())?;
         let desired = required_generated_members(&project).map_err(|error| error.to_string())?;
-        let plan = KeyedReconcileState::empty()
+        let plan = generated
             .plan(desired, &BTreeSet::new())
             .map_err(|error| error.to_string())?;
-        let materialized = materialize_candidate(&project, plan.staged())?;
+        let (intent, document) = next_materialization_ids()?;
+        let materialized = geosolve_sketch_code::materialize_code_project_cold_with_overlay(
+            &project,
+            plan.staged(),
+            &overlay,
+            intent,
+            document,
+            CODE_PROJECT_MODEL_SCALE,
+        )
+        .map_err(|error| error.to_string())?;
         let expansion = materialized.expansion.clone();
         let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
         let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
         let materialized = rehydrate_restored_editor(&delegated_editor, expansion.clone())?;
-        let session = SketchCodeSession::new_project(
+        let session = SketchCodeSession::new_project_with_overlay(
             project.clone(),
             plan.into_staged(),
+            overlay,
             expansion,
             checkpoint,
         )

@@ -15,6 +15,7 @@ export interface JsonWorkbenchHandle {
   wheel(request: string): string;
   resize(request: string): string;
   cancel(request: string): string;
+  exportWorkspaceDesign?(): string;
   exportProject(): string;
   bakeProfile?(maxChordErrorMm: number): string;
   persistProject(): string;
@@ -121,6 +122,11 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
   async wheelBatch(inputs: WheelSample[]) { return this.decodeUpdate(this.required().wheel(JSON.stringify({ version: 2, samples: inputs }))); }
   async resize(input: { version: 2; width: number; height: number; pixelRatio: number }) { return this.decodeUpdate(this.required().resize(JSON.stringify(input))); }
   async cancel(input: { version: 2; reason: "escape" | "lost-capture" | "blur" }) { return this.decodeUpdate(this.required().cancel(JSON.stringify(input))); }
+  async exportWorkspaceDesign(): Promise<Record<string, unknown> | null> {
+    const handle = this.required();
+    if (!handle.exportWorkspaceDesign) throw Error("Workspace design export requires the current WASM build");
+    return JSON.parse(handle.exportWorkspaceDesign()) as Record<string, unknown> | null;
+  }
   async exportProject() { return JSON.parse(this.required().exportProject()) as { version: 2; filename: string; contents: string }; }
   async bakeProfile(maxChordErrorMm: number): Promise<Record<string, unknown>> {
     const handle = this.required();

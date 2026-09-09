@@ -13,8 +13,9 @@
 
 use std::str::FromStr as _;
 
-mod bake;
 mod authoring_metadata;
+mod bake;
+mod workspace;
 use authoring_metadata::{AuthoringDocumentSnapshot, AuthoringMetadataSnapshot};
 mod navigation;
 use navigation::{NavigationSnapshot, NavigationState};
@@ -1446,6 +1447,8 @@ impl WorkbenchBridge {
                 let payload: ManagedMutationAbortPayload = decode_payload(payload)?;
                 self.abort_pending_managed_mutation(&payload)
             }
+            "workspace.project.apply" => self.apply_workspace_project(payload),
+            "workspace.generator.apply" => self.apply_workspace_generator(payload),
             "project.new" => self.new_sketch(),
             "project.new-code" => self.new_code_project(),
             "project.import" => {

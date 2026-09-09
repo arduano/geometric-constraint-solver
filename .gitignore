@@ -9,3 +9,5 @@ crates/geosolve-demo-web/frontend/.tsbuild-cache/
 *.svg.tmp
 .DS_Store
 __pycache__/
+packages/geosolve-engine/node_modules/
+packages/geosolve-cli/node_modules/

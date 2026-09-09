@@ -1,0 +1,26 @@
+{
+  "name": "@geosolve/engine",
+  "version": "0.1.0",
+  "description": "Pure Rust headless sketch evaluation for Node and browsers",
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@geosolve/sketch-code": "file:../geosolve-sketch-code"
+  }
+}

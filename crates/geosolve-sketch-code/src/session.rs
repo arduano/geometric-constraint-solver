@@ -565,15 +565,31 @@ impl SketchCodeSession {
         expansion: ExpandedCodeProject,
         editor_checkpoint: serde_json::Value,
     ) -> Result<Self, CodeSessionError> {
+        Self::new_project_with_overlay(
+            project,
+            generated,
+            CodeInteractionOverlay::empty(),
+            expansion,
+            editor_checkpoint,
+        )
+    }
+
+    /// Initializes a source project with explicit semantic overrides after independent
+    /// cold materialization. No solved geometry is admitted as authored authority.
+    ///
+    /// # Errors
+    /// Rejects invalid source, stale semantic addresses or a mismatching expansion.
+    pub fn new_project_with_overlay(
+        project: CodeProject,
+        generated: KeyedReconcileState,
+        overlay: CodeInteractionOverlay,
+        expansion: ExpandedCodeProject,
+        editor_checkpoint: serde_json::Value,
+    ) -> Result<Self, CodeSessionError> {
         project.validate().map_err(|error| {
             CodeSessionError::InvalidPersistence(format!("invalid code project: {error}"))
         })?;
-        validate_expansion(
-            &project,
-            &generated,
-            &CodeInteractionOverlay::empty(),
-            &expansion,
-        )?;
+        validate_expansion(&project, &generated, &overlay, &expansion)?;
         let artifact_digests = artifact_digests(&project)?;
         let accepted_source_digest = project.managed.source_digest.clone();
         let snapshot = CodeSessionSnapshot {
@@ -584,8 +600,8 @@ impl SketchCodeSession {
             expansion: Some(expansion.clone()),
             accepted_expansion: Some(expansion),
             accepted_generated: Some(generated.clone()),
-            interaction_overlay: CodeInteractionOverlay::empty(),
-            accepted_interaction_overlay: CodeInteractionOverlay::empty(),
+            interaction_overlay: overlay.clone(),
+            accepted_interaction_overlay: overlay,
             accepted_source_digest,
             artifact_digests,
             generated,
