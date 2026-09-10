@@ -2726,10 +2726,20 @@ fn lower_named_geometry_samples(
             );
         }
     };
+    let regularized = match definition_fields.get(&IntentFieldKey(IntentKey::new("regularized")?)) {
+        Some(IntentLiteral::Boolean(value)) => *value,
+        None => false,
+        _ => {
+            return invalid_declaration(
+                declaration,
+                "geometry regularization must be a boolean".into(),
+            );
+        }
+    };
     let samples = ProjectionalGeometrySamples {
         points: stage_positions,
         role,
-        regularized: false,
+        regularized,
         closed: false,
         conic_options: ConicConstructionOptions {
             arc_sweep,
