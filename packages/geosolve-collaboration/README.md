@@ -136,6 +136,11 @@ Native event replay reconstructs inverse ownership across restart, preserving di
 Unicode, same-value foreign ownership and stable rename identity. File restoration creates
 a fresh object ID; stale typing into its old identity remains rejected. Same-path renames
 are recorded as contributions, and path swaps/deletion replacements stage atomically.
+`stageUserWorkingEdits(edits,operation,expectedRevision)` accepts trusted ordered mixed
+splices and file lifecycle as one atomic personal contribution. CLI and external mirror
+adapters must call it through the authenticated durable host gateway. The file-only API
+remains strict. `SharedText.resolveRange(anchor)` returns native checked current path and
+UTF-16 bounds without mutation; lost ownership or invalid cursor positions reject.
 
 History retains at most 512 contributions, 4096 events and 8 MiB accounted history, with
 65,536 scalars per contiguous changed span. Capacity shortens personal Undo to a recent

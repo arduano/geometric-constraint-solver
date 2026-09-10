@@ -72,7 +72,7 @@ impl TextContributionHistory {
         self.check_operation(&operation)?;
         let record = |candidate: &mut Self| {
             if let Some(edits) = edits {
-                candidate.record_file_edits_exact(operation.clone(), before, after, edits)
+                candidate.record_working_edits_exact(operation.clone(), before, after, edits)
             } else {
                 candidate.record_exact(operation.clone(), before, after, actor.clone(), files)
             }

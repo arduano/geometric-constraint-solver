@@ -25,6 +25,7 @@ export type TextEdit =
 /** Stable cursor encoding is owned by the pinned Rust protocol. Treat it as opaque. */
 export interface TextCursor { readonly path: string; readonly object: string; readonly encoded: readonly number[] }
 export interface TextLocation { readonly path: string; readonly utf16: number }
+export interface TextRange { readonly path: string; readonly start_utf16: number; readonly end_utf16: number }
 export interface TextRangeAnchor { readonly start: TextCursor; readonly end: TextCursor; readonly expected: string; readonly ownership: readonly number[] }
 
 export interface CollaborationNativeHandle {
@@ -44,6 +45,7 @@ export interface CollaborationNativeHandle {
   resolveCursor(cursorJson: string): string;
   fileId(path: string): string;
   anchorRange(revisionJson: string, path: string, start: number, end: number): string;
+  resolveRange(anchorJson: string): string;
   replaceRange(anchorJson: string, insert: string): string;
   undo(): string;
   redo(): string;
@@ -121,6 +123,10 @@ export class SharedText {
   anchorRange(path: string, start: number, end: number, expected: TextRevision = this.capture().revision): TextRangeAnchor {
     this.live(); unicode(path); offset(start); offset(end);
     return decode(this.native.anchorRange(encode(expected), path, start, end));
+  }
+  /** Fails when overlapping edits destroyed the original range's character ownership. */
+  resolveRange(anchor: TextRangeAnchor): TextRange {
+    this.live(); return decode(this.native.resolveRange(encode(anchor)));
   }
   /** Fails when overlapping edits destroyed the original range's character ownership. */
   replaceRange(anchor: TextRangeAnchor, insert: string): TextSnapshot {

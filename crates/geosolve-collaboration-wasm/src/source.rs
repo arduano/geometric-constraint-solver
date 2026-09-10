@@ -292,6 +292,28 @@ impl TrustedSourceHost {
             .map_err(error)?;
         self.stage(candidate, None)
     }
+    /// Trusted host mixed text/file transaction with exact basis and durable history.
+    ///
+    /// # Errors
+    /// Rejects stale basis, invalid batches, pending durability and native limits.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = stageUserWorkingEdits))]
+    pub fn stage_user_working_edits(
+        &mut self,
+        expected_json: &str,
+        edits_json: &str,
+        operation_json: &str,
+    ) -> Result<String, String> {
+        self.mutable()?;
+        let mut candidate = self.document.clone();
+        candidate
+            .apply_user_working_edits(
+                &parse(expected_json)?,
+                &parse::<Vec<TextEdit>>(edits_json)?,
+                parse(operation_json)?,
+            )
+            .map_err(error)?;
+        self.stage(candidate, None)
+    }
     /// Personal Undo changes only shared working source, requiring explicit Apply.
     ///
     /// # Errors

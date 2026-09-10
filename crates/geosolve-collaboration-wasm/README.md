@@ -59,6 +59,9 @@ rejecting valid typing; an oversized contribution explicitly clears crossing Und
 Historical event replay authenticates retained raw Undo/Redo ownership
 on source checkpoint restore; accepted geometry remains unchanged until explicit Apply.
 Direct SharedTextReplica local Undo is still instance-local.
+`stageUserWorkingEdits` adds trusted ordered mixed text/file batches with the same staged
+durability and personal history. `SharedTextReplica.resolveRange` exposes native read-only
+owned range mapping for mirror reconciliation; it does not retain a preparation ticket.
 
 `SharedTextReplica.editFromRevision` returns `{snapshot,localRevision}`. The local revision
 is the post-edit displayed branch before unseen remote merges; queued next keystrokes must

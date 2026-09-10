@@ -256,6 +256,23 @@ impl SourceDocument {
         {
             return Err(SourceDocumentError::Invalid);
         }
+        self.apply_user_working_edits(expected, edits, operation)
+    }
+
+    /// Trusted, server-ordered mixed text/file edits form one personal contribution.
+    /// This gateway accepts invalid source syntax without changing accepted geometry.
+    ///
+    /// # Errors
+    /// Rejects stale basis, empty/invalid batches and native limits atomically.
+    pub fn apply_user_working_edits(
+        &mut self,
+        expected: &TextRevision,
+        edits: &[TextEdit],
+        operation: crate::protocol::OperationId,
+    ) -> Result<(), SourceDocumentError> {
+        if edits.is_empty() {
+            return Err(SourceDocumentError::Invalid);
+        }
         let mut staged = self.clone();
         staged
             .working
@@ -263,7 +280,7 @@ impl SourceDocument {
             .map_err(text_error)?;
         staged
             .text_history
-            .record_file_edits(operation, &self.working, &staged.working, edits)
+            .record_working_edits(operation, &self.working, &staged.working, edits)
             .map_err(text_error)?;
         *self = staged;
         Ok(())

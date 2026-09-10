@@ -240,3 +240,19 @@ test("actual WASM raw typing continues past retained Undo capacity with a durabl
     host.commitStage(host.stageUserUndo(userOperation("alice","undo-last")));assert.equal(host.snapshot().working.files["main.ts"],"a1");
   }finally{host.dispose();client.dispose();}
 });
+
+test("actual WASM trusted mixed working edits wait for persistence and undo as one contribution",async()=>{
+  let host=await open();
+  try{
+    const before=host.checkpoint(),basis=host.snapshot().working.revision;
+    const edits=[{kind:"rename_file",path:"main.ts",new_path:"moved.ts"},{kind:"splice",path:"moved.ts",start_utf16:14,delete_utf16:2,insert:"😀("},{kind:"create_file",path:"broken.ts",text:"const = ("}];
+    assert.throws(()=>host.stageUserFileEdits(edits,userOperation("alice","strict"),basis));
+    assert.throws(()=>host.stageUserWorkingEdits([...edits,{kind:"remove_file",path:"absent.ts"}],userOperation("alice","bad"),basis));
+    assert.equal(host.checkpoint(),before);
+    const stage=host.stageUserWorkingEdits(edits,userOperation("alice","mixed"),basis);
+    assert.equal(host.checkpoint(),before);host.commitStage(stage);
+    assert.match(host.snapshot().working.files["moved.ts"],/😀\(/u);assert.equal(host.userHistory("alice").undoCount,1);
+    const checkpointJson=host.checkpoint();host.dispose();host=await createTrustedSourceHost({configuration:configuration("restart"),actor:actor("new-server"),checkpointJson});
+    host.commitStage(host.stageUserUndo(userOperation("alice","undo")));assert.deepEqual(host.snapshot().working.files,files);
+  }finally{host.dispose();}
+});

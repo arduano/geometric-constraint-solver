@@ -155,7 +155,7 @@ impl TextContributionHistory {
                         return Err(SharedTextError::ActorMismatch);
                     }
                     if let Some(edits) = &event.file_edits {
-                        history.record_file_edits_exact(
+                        history.record_working_edits_exact(
                             event.operation.clone(),
                             &before,
                             &after,
@@ -276,6 +276,26 @@ impl TextContributionHistory {
         after: &SharedTextDocument,
         edits: &[TextEdit],
     ) -> Result<(), SharedTextError> {
+        if edits
+            .iter()
+            .any(|edit| matches!(edit, TextEdit::Splice { .. }))
+        {
+            return Err(SharedTextError::FileLifecycleRequiresOrder);
+        }
+        self.record_working_edits(operation, before, after, edits)
+    }
+
+    /// Records one trusted ordered text and file transaction in personal history.
+    ///
+    /// # Errors
+    /// Rejects invalid commands, altered native results and invalid provenance.
+    pub fn record_working_edits(
+        &mut self,
+        operation: OperationId,
+        before: &SharedTextDocument,
+        after: &SharedTextDocument,
+        edits: &[TextEdit],
+    ) -> Result<(), SharedTextError> {
         self.retain_new(
             operation,
             before,
@@ -286,23 +306,19 @@ impl TextContributionHistory {
         )
     }
 
-    /// Records the exact ordered file gateway command, including explicit
+    /// Records the exact ordered working gateway command, including explicit
     /// same-path rename ownership when the native register needs no new value.
     ///
     /// # Errors
-    /// Rejects non-lifecycle commands, altered native results and history bounds.
-    fn record_file_edits_exact(
+    /// Rejects empty commands, altered native results and history bounds.
+    fn record_working_edits_exact(
         &mut self,
         operation: OperationId,
         before: &SharedTextDocument,
         after: &SharedTextDocument,
         edits: &[TextEdit],
     ) -> Result<(), SharedTextError> {
-        if edits.is_empty()
-            || edits
-                .iter()
-                .any(|edit| matches!(edit, TextEdit::Splice { .. }))
-        {
+        if edits.is_empty() {
             return Err(SharedTextError::FileLifecycleRequiresOrder);
         }
         let mut replay = before.clone();
@@ -321,15 +337,46 @@ impl TextContributionHistory {
             .contributions
             .last_mut()
             .ok_or(SharedTextError::UndoUnavailable)?;
-        for edit in edits {
+        for (index, edit) in edits.iter().enumerate() {
             if let TextEdit::RenameFile { path, new_path } = edit
                 && path == new_path
             {
-                let current = version(after, path, false)?;
-                if !contribution.delta.files.iter().any(|entry| matches!(entry, FileInverse::Rename { file, .. } if file == &current.file)) {
-                        contribution.delta.files.push(FileInverse::Rename { file: current.file, expected_path: path.clone(),
-                            expected_stamp: current.path_stamp.clone(), restore_path: path.clone(), restore_stamp: current.path_stamp });
+                // Follow this observed file through the rest of the atomic
+                // command. A later remove ends that identity even if a different
+                // file is created under its old name.
+                let mut final_path = Some(path.clone());
+                for later in &edits[index + 1..] {
+                    match later {
+                        TextEdit::RenameFile { path, new_path }
+                            if final_path.as_ref() == Some(path) =>
+                        {
+                            final_path = Some(new_path.clone());
+                        }
+                        TextEdit::RemoveFile { path } if final_path.as_ref() == Some(path) => {
+                            final_path = None;
+                        }
+                        _ => {}
                     }
+                }
+                let Some(final_path) = final_path else {
+                    continue;
+                };
+                let current = version(after, &final_path, false)?;
+                let already_owned = contribution.delta.files.iter().any(|entry| match entry {
+                    FileInverse::Rename { file, .. } => file == &current.file,
+                    FileInverse::Remove(file) | FileInverse::Create { original: file, .. } => {
+                        file.file == current.file
+                    }
+                });
+                if !already_owned {
+                    contribution.delta.files.push(FileInverse::Rename {
+                        file: current.file,
+                        expected_path: final_path.clone(),
+                        expected_stamp: current.path_stamp.clone(),
+                        restore_path: final_path,
+                        restore_stamp: current.path_stamp,
+                    });
+                }
             }
         }
         staged.check_size()?;

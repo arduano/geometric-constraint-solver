@@ -51,6 +51,10 @@ accepted geometry still requires explicit Apply. History stores authenticated hi
 heads and operation provenance, deriving its inverse spans/file descriptions again during
 restore. Fresh character/file identities are linked only by native checked restoration.
 Same-value foreign replacements and explicit same-path renames retain ownership.
+`apply_user_working_edits` is the trusted server gateway for atomic mixed text splices,
+creation, removal and renaming. It requires the exact current text revision and records one
+durable personal contribution. The file-only API still rejects splices. Same-path ownership
+follows its file through later commands in that batch, including renaming and removal.
 
 `edit_from_revision` handles existing-file typing prepared against a historical displayed
 frontier: fork native heads, reject unseen same-actor writes, apply scalar-aligned UTF-16

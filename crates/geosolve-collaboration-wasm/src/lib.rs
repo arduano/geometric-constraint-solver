@@ -272,6 +272,21 @@ impl SharedTextReplica {
         )
     }
 
+    /// Observes current owned path/offsets without editing or retaining a ticket.
+    ///
+    /// # Errors
+    /// Rejects lost character ownership, invalid anchors and removed files.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = resolveRange))]
+    pub fn resolve_range(&self, anchor_json: &str) -> Result<String, String> {
+        let range = self
+            .document
+            .resolve_range(&parse::<TextRangeAnchor>(anchor_json)?)
+            .map_err(error)?;
+        json(
+            &serde_json::json!({"path":range.path,"start_utf16":range.start_utf16,"end_utf16":range.end_utf16}),
+        )
+    }
+
     /// Applies a source writeback only while the original span still owns it.
     ///
     /// # Errors

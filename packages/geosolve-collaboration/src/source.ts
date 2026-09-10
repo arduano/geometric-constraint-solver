@@ -72,6 +72,7 @@ export interface SourceNativeHandle {
   stageHostEdits(expectedJson:string,editsJson:string):string;
   stageUserTextChanges(changesJson:string,actor:Uint8Array,operationJson:string):string;
   stageUserFileEdits(expectedJson:string,editsJson:string,operationJson:string):string;
+  stageUserWorkingEdits(expectedJson:string,editsJson:string,operationJson:string):string;
   stageUserUndo(operationJson:string):string;
   stageUserRedo(operationJson:string):string;
   userHistory(userId:string):string;
@@ -131,6 +132,10 @@ export class TrustedSourceHost {
   }
   stageUserFileEdits(edits:readonly TextEdit[],operation:OperationId,expected:TextRevision=this.snapshot().working.revision):SourceStage {
     this.live();return this.retainStage(this.native.stageUserFileEdits(encode(expected),encode(edits),encode(operation)));
+  }
+  /** Trusted host ordered mixed splices/file lifecycle as one durable contribution. */
+  stageUserWorkingEdits(edits:readonly TextEdit[],operation:OperationId,expected:TextRevision=this.snapshot().working.revision):SourceStage {
+    this.live();return this.retainStage(this.native.stageUserWorkingEdits(encode(expected),encode(edits),encode(operation)));
   }
   stageUserUndo(operation:OperationId):SourceStage {this.live();return this.retainStage(this.native.stageUserUndo(encode(operation)));}
   stageUserRedo(operation:OperationId):SourceStage {this.live();return this.retainStage(this.native.stageUserRedo(encode(operation)));}

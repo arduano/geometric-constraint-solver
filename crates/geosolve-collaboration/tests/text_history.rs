@@ -543,3 +543,121 @@ fn oversized_undo_contribution_accepts_raw_typing_and_explicitly_closes_older_hi
             .is_err()
     );
 }
+
+#[test]
+fn mixed_host_working_batch_is_atomic_and_one_durable_personal_contribution() {
+    let mut source = source("a😀b0");
+    let accepted = source.accepted().clone();
+    let original_id = source.working().file_id("main.ts").unwrap();
+    let before = source.to_json().unwrap();
+    let expected = source.working().revision();
+    let edits = vec![
+        TextEdit::RenameFile {
+            path: "main.ts".into(),
+            new_path: "renamed.ts".into(),
+        },
+        TextEdit::Splice {
+            path: "renamed.ts".into(),
+            start_utf16: 1,
+            delete_utf16: 2,
+            insert: "🦀(".into(),
+        },
+        TextEdit::CreateFile {
+            path: "broken.ts".into(),
+            text: "export const = (".into(),
+        },
+    ];
+    assert!(
+        source
+            .apply_user_file_edits(&expected, &edits, op("alice", "strict"))
+            .is_err()
+    );
+    let mut invalid = edits.clone();
+    invalid.push(TextEdit::RemoveFile {
+        path: "absent.ts".into(),
+    });
+    assert!(
+        source
+            .apply_user_working_edits(&expected, &invalid, op("alice", "invalid"))
+            .is_err()
+    );
+    assert_eq!(source.to_json().unwrap(), before);
+    source
+        .apply_user_working_edits(&expected, &edits, op("alice", "mixed"))
+        .unwrap();
+    assert_eq!(source.working().file_id("renamed.ts").unwrap(), original_id);
+    assert_eq!(
+        source.working().capture().text("renamed.ts"),
+        Some("a🦀(b0")
+    );
+    assert_eq!(source.user_text_history("alice").undo_count, 1);
+    assert!(
+        source
+            .apply_user_working_edits(&expected, &edits, op("alice", "stale"))
+            .is_err()
+    );
+    restart(&mut source);
+    undo(&mut source, "alice", "undo-mixed");
+    assert_eq!(source.working().capture().text("main.ts"), Some("a😀b0"));
+    assert_eq!(source.working().capture().text("broken.ts"), None);
+    restart(&mut source);
+    source
+        .apply_user_text_inverse(op("alice", "redo-mixed"), true)
+        .unwrap();
+    assert_eq!(
+        source.working().capture().text("renamed.ts"),
+        Some("a🦀(b0")
+    );
+    assert_eq!(source.accepted(), &accepted);
+}
+
+#[test]
+fn mixed_host_batch_tracks_same_path_ownership_through_later_lifecycle() {
+    let mut source = source("a0");
+    let edits = vec![
+        TextEdit::RenameFile {
+            path: "main.ts".into(),
+            new_path: "main.ts".into(),
+        },
+        TextEdit::RenameFile {
+            path: "main.ts".into(),
+            new_path: "moved.ts".into(),
+        },
+        TextEdit::Splice {
+            path: "moved.ts".into(),
+            start_utf16: 1,
+            delete_utf16: 1,
+            insert: "1".into(),
+        },
+        TextEdit::CreateFile {
+            path: "temporary.ts".into(),
+            text: "x".into(),
+        },
+        TextEdit::RenameFile {
+            path: "temporary.ts".into(),
+            new_path: "temporary.ts".into(),
+        },
+        TextEdit::RemoveFile {
+            path: "temporary.ts".into(),
+        },
+        TextEdit::CreateFile {
+            path: "new.ts".into(),
+            text: "y".into(),
+        },
+        TextEdit::RenameFile {
+            path: "new.ts".into(),
+            new_path: "new.ts".into(),
+        },
+    ];
+    source
+        .apply_user_working_edits(
+            &source.working().revision(),
+            &edits,
+            op("alice", "mixed-paths"),
+        )
+        .unwrap();
+    restart(&mut source);
+    undo(&mut source, "alice", "undo-paths");
+    assert_eq!(source.working().capture().text("main.ts"), Some("a0"));
+    assert_eq!(source.working().capture().text("new.ts"), None);
+}

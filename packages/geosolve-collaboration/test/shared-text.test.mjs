@@ -168,3 +168,15 @@ test("actual WASM queued local edits use returned local branch before remote tex
     bob.applyServerChanges(alice.changesSince(bob.capture().revision));assert.deepEqual(alice.capture(),bob.capture());
   }finally{alice.dispose();bob.dispose();}
 });
+
+test("actual WASM read-only range resolution maps shared renames and rejects same-value lost ownership",async()=>{
+  const base=await createSharedText({actor:actor("base")});
+  let current;
+  try{
+    base.edit([{kind:"create_file",path:"main.ts",text:"a😀b"}]);
+    const anchor=base.anchorRange("main.ts",1,3);
+    current=base.fork(actor("other"));current.edit([{kind:"rename_file",path:"main.ts",new_path:"moved.ts"},{kind:"splice",path:"moved.ts",start_utf16:0,delete_utf16:0,insert:"prefix"}]);
+    const before=current.save();assert.deepEqual(current.resolveRange(anchor),{path:"moved.ts",start_utf16:7,end_utf16:9});assert.deepEqual(current.save(),before);
+    current.edit([{kind:"splice",path:"moved.ts",start_utf16:7,delete_utf16:2,insert:"😀"}]);const overwritten=current.save();assert.throws(()=>current.resolveRange(anchor),/ownership|position/u);assert.deepEqual(current.save(),overwritten);
+  }finally{base.dispose();current?.dispose();}
+});
