@@ -182,3 +182,143 @@ test("real point gesture contribution survives an independent edit and has prope
   assert.deepEqual(point.position, [0, 0]);
   assert.equal(app.runtime.host.snapshot().needsRecovery, false);
 });
+
+test("server personal typing history survives restart and duplicate Undo without changing accepted geometry", async (t) => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const before = (await app.state(alice)).authority;
+  await app.text(alice, await app.replica(alice), "alice-typing", "radius:mm(2)", "radius:mm(5)");
+  await app.text(bob, await app.replica(bob), "bob-typing", "radius:mm(3)", "radius:mm(9)");
+  const undoBody = { requestId: "undo-my-typing", action: "undo" };
+  const undo = await app.request("text", alice.token, undoBody);
+  let state = await app.state(alice);
+  assert.match(state.document.working.files["sketch.ts"], /radius:mm\(2\)/u);
+  assert.match(state.document.working.files["sketch.ts"], /radius:mm\(9\)/u);
+  assert.equal(state.authority.acceptedInput, before.acceptedInput);
+  assert.equal(state.authority.acceptedRevision, before.acceptedRevision);
+  assert.equal(state.document.textHistory.canRedo, true);
+  await app.runtime.close();
+  const reopened = await f.open(false), rejoined = await reopened.connect("alice");
+  assert.deepEqual(await reopened.request("text", rejoined.token, undoBody), undo);
+  const revision = (await reopened.state(rejoined)).document.working.revision;
+  await reopened.request("text", rejoined.token, { requestId: "redo-my-typing", action: "redo" });
+  state = await reopened.state(rejoined);
+  assert.match(state.document.working.files["sketch.ts"], /radius:mm\(5\)/u);
+  assert.match(state.document.working.files["sketch.ts"], /radius:mm\(9\)/u);
+  assert.equal(state.authority.acceptedInput, before.acceptedInput);
+  const delta = await reopened.request("text-state", rejoined.token, { revision });
+  assert.equal(delta.history.canUndo, true); assert.equal(delta.history.canRedo, false);
+  assert.ok(delta.changes.length > 0);
+});
+
+test("file lifecycle shares authenticated personal draft history and preserves another author's text through rename Undo", async (t) => {
+  const f = await fixture(t), app = f.first, client = new CollaborationClient({ baseUrl: app.base, inviteToken: "alice", clientId: "file-tab" });
+  t.after(() => client.dispose());
+  const joined = await client.connect(), acceptedInput = joined.authority.acceptedInput;
+  await client.editFiles([{ kind: "create_file", path: "notes.ts", text: "// notes 😀\n" }], joined.document.working.revision, "create-notes");
+  let state = await client.refresh();
+  const fileId = state.document.fileIds["notes.ts"];
+  await client.editFiles([{ kind: "rename_file", path: "notes.ts", new_path: "renamed.ts" }], state.document.working.revision, "rename-notes");
+  const bob = await app.connect("bob"), replica = await app.replica(bob), basis = replica.capture().revision;
+  replica.edit([{ kind: "splice", path: "renamed.ts", start_utf16: 0, delete_utf16: 0, insert: "// Bob\n" }]);
+  await app.request("text", bob.token, { requestId: "bob-notes", changes: replica.changesSince(basis).map(bytes => Array.from(bytes)) });
+  await client.undoText(false, "undo-rename");
+  state = await client.refresh();
+  assert.equal(state.document.fileIds["notes.ts"], fileId);
+  assert.equal(state.document.working.files["notes.ts"], "// Bob\n// notes 😀\n");
+  assert.equal(state.document.working.files["renamed.ts"], undefined);
+  assert.equal(state.authority.acceptedInput, acceptedInput);
+  // Removing Alice's original file would also remove Bob's live contribution.
+  await assert.rejects(client.undoText(false, "undo-create-protected"), /overwrit|contribution|foreign|changed|ownership/u);
+  assert.equal((await app.state(bob)).document.working.files["notes.ts"], "// Bob\n// notes 😀\n");
+  assert.equal(app.runtime.host.snapshot().needsRecovery, false);
+});
+
+test("actual folder structural deletion Undo restores fresh identity and preserves another editor through restart", async (t) => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const initial = (await app.state(alice)).document, bore = initial.targets["sketch.ts#bore"], other = initial.targets["sketch.ts#other"];
+  const command = { kind: "semantic", basisRevision: 0, payload: { action: "mutation", targets: [bore], deletion: { roots: [bore], closure: [bore] },
+    mutation: { mutation: "delete", target: { target: "declaration", declaration: "bore" } } } };
+  const deleted = await app.send(alice, "delete-bore", command); assert.equal(deleted.outcome.status, "accepted", JSON.stringify(deleted));
+  const resized = await app.send(bob, "bob-radius", value(other, "other", 7)); assert.equal(resized.outcome.status, "accepted", JSON.stringify(resized));
+  assert.equal((await app.state(alice)).document.semanticHistory.canUndo, true);
+  await app.runtime.close(); const restored = await f.open(false), reconnect = await restored.connect("alice");
+  const undone = await restored.send(reconnect, "undo-delete", { kind: "undo", basisRevision: 0, payload: {} });
+  assert.equal(undone.outcome.status, "accepted", JSON.stringify(undone));
+  const state = (await restored.state(reconnect)).document;
+  assert.ok(state.targets["sketch.ts#bore"].generation > bore.generation);
+  assert.match(state.accepted.files["sketch.ts"], /radius:\s*mm\(7\)/u);
+  assert.match(state.accepted.files["sketch.ts"], /radius:\s*mm\(2\)/u);
+  const stale = await restored.send(reconnect, "stale-radius", value(bore, "bore", 8)); assert.equal(stale.outcome.status, "rejected");
+  const redone = await restored.send(reconnect, "redo-delete", { kind: "redo", basisRevision: 0, payload: {} });
+  assert.equal(redone.outcome.status, "accepted", JSON.stringify(redone));
+  assert.equal((await restored.state(reconnect)).document.targets["sketch.ts#bore"], undefined);
+  assert.equal(restored.runtime.host.snapshot().needsRecovery, false);
+});
+
+test("shared metadata Undo has explicit targets and same-value ownership barriers", async (t) => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const target = (await app.state(alice)).document.targets["sketch.ts#bore"];
+  const command = { kind: "semantic", basisRevision: 0, payload: { action: "mutation", targets: [target], mutation: {
+    mutation: "set_metadata", target: { target: "declaration", declaration: "bore" }, property: "label", value: { kind: "string", value: "Cooling port" },
+  } } };
+  const edited = await app.send(alice, "label", command); assert.equal(edited.outcome.status, "accepted", JSON.stringify(edited));
+  const bobSame = await app.send(bob, "same-label", command); assert.equal(bobSame.outcome.status, "accepted", JSON.stringify(bobSame));
+  const blocked = await app.send(alice, "undo-label", { kind: "undo", basisRevision: 0, payload: {} }); assert.equal(blocked.outcome.status, "rejected");
+  assert.equal((await app.state(alice)).document.semanticHistory.canUndo, false);
+  const bobUndo = await app.send(bob, "undo-same-label", { kind: "undo", basisRevision: 0, payload: {} }); assert.equal(bobUndo.outcome.status, "accepted", JSON.stringify(bobUndo));
+  assert.match((await app.state(alice)).document.accepted.files["sketch.ts"], /Cooling port/u);
+});
+
+test("captured same-value lexical Apply protects the shared source contribution", async (t) => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const target = (await app.state(alice)).document.targets["sketch.ts#bore"];
+  assert.equal((await app.send(alice, "radius5", value(target, "bore", 5))).outcome.status, "accepted");
+  await app.text(bob, await app.replica(bob), "literal5", "mm(5)", "mm(5.0)");
+  const apply = await app.send(bob, "apply-literal", { kind: "apply", basisRevision: 1, payload: {} }); assert.equal(apply.outcome.status, "accepted", JSON.stringify(apply));
+  const undo = await app.send(alice, "undo-before-shared-write", { kind: "undo", basisRevision: 1, payload: {} }); assert.equal(undo.outcome.status, "rejected");
+  assert.match((await app.state(alice)).document.accepted.files["sketch.ts"], /mm\(5\.0\)/u);
+});
+
+test("canonical parent ownership blocks child Undo while disjoint siblings remain personal", async (t) => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const target = (await app.state(alice)).document.targets["sketch.ts#bore"];
+  const write = (path, next) => ({ kind: "semantic", basisRevision: 0, payload: { action: "values", writes: [{ target, declaration: "bore", path, value: next }] } });
+  const number = value => ({ kind: "number", value });
+  assert.equal((await app.send(alice, "center-x", write(["center", 0], number(4)))).outcome.status, "accepted");
+  assert.equal((await app.send(bob, "center-y", write(["center", 1], number(5)))).outcome.status, "accepted");
+  assert.equal((await app.send(alice, "undo-x", { kind: "undo", basisRevision: 0, payload: {} })).outcome.status, "accepted");
+  let state = (await app.state(alice)).document;
+  assert.deepEqual(state.pointTargets.find(entry => entry.target.address?.owner.address.declaration === "bore").position, [0, 5]);
+  assert.equal((await app.send(alice, "radius5", value(target, "bore", 5))).outcome.status, "accepted");
+  state = (await app.state(alice)).document;
+  const root = state.inventory.properties.find(item => item.declaration === "bore" && item.path.length === 0).value;
+  assert.equal((await app.send(bob, "same-whole-object", write([], root))).outcome.status, "accepted");
+  await app.runtime.close(); const reopened = await f.open(false), rejoined = await reopened.connect("alice");
+  const blocked = await reopened.send(rejoined, "undo-radius", { kind: "undo", basisRevision: 0, payload: {} });
+  assert.equal(blocked.outcome.status, "rejected", JSON.stringify(blocked));
+  assert.match(blocked.outcome.message, /owns|overwrit/u);
+  assert.equal(reopened.runtime.host.snapshot().needsRecovery, false);
+});
+
+test("point contribution resolves restored target identity after another editor deletes and undoes", async (t) => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const initial = (await app.state(alice)).document, bore = initial.targets["sketch.ts#bore"];
+  const engine = await createEngine(); t.after(() => engine.dispose());
+  const local = engine.openEditableSession(initial.model.project, { design: initial.model.design }); t.after(() => local.dispose());
+  const target = local.pointGestureTargets().find(entry => entry.target.address?.owner.address.declaration === "bore").target;
+  const prediction = local.beginPointGesture(target, { expected: local.token, gestureId: 8, viewport: { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 } });
+  assert.equal(prediction.advance({ sequence: 1, position: [4, 5] }).accepted, true);
+  const moved = await app.send(alice, "move", { kind: "semantic", basisRevision: 0, payload: { action: "point_gesture", targets: [bore], gesture: prediction.finish().command } });
+  assert.equal(moved.outcome.status, "accepted", JSON.stringify(moved));
+  const deleted = await app.send(bob, "delete", { kind: "semantic", basisRevision: 0, payload: { action: "mutation", targets: [bore], deletion: { roots: [bore], closure: [bore] }, mutation: { mutation: "delete", target: { target: "declaration", declaration: "bore" } } } });
+  assert.equal(deleted.outcome.status, "accepted", JSON.stringify(deleted));
+  assert.equal((await app.send(bob, "undo-delete", { kind: "undo", basisRevision: 0, payload: {} })).outcome.status, "accepted");
+  assert.ok((await app.state(alice)).document.targets["sketch.ts#bore"].generation > bore.generation);
+  await app.runtime.close(); const reopened = await f.open(false), rejoined = await reopened.connect("alice");
+  const undone = await reopened.send(rejoined, "undo-move", { kind: "undo", basisRevision: 0, payload: {} });
+  assert.equal(undone.outcome.status, "accepted", JSON.stringify(undone));
+  const state = (await reopened.state(rejoined)).document;
+  assert.deepEqual(state.pointTargets.find(entry => entry.target.address?.owner.address.declaration === "bore").position, [0, 0]);
+  assert.deepEqual(state.pointTargets.find(entry => entry.target.address?.owner.address.declaration === "other").position, [20, 0]);
+  assert.equal(reopened.runtime.host.snapshot().needsRecovery, false);
+});
