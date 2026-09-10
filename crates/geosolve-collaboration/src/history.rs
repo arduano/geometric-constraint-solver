@@ -13,6 +13,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
+mod structural;
+pub use structural::{
+    DependencyChange, ObjectDescription, ReorderChange, StatementPosition, StructuralInverse,
+    TargetRemapping, TransactionChanges,
+};
+
 const FORMAT: &str = "geosolve-contribution-history-v1";
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_VALUE_BYTES: usize = 1024 * 1024;
@@ -58,6 +64,11 @@ struct Contribution {
     operation: OperationId,
     changes: Vec<OwnedChange>,
     active: bool,
+    #[serde(
+        default,
+        skip_serializing_if = "structural::LifecycleChanges::is_empty"
+    )]
+    structural: structural::LifecycleChanges,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -75,6 +86,8 @@ pub struct InversePlan {
     direction: HistoryDirection,
     changes: Vec<PropertyChange>,
     ownership: Vec<Option<OperationId>>,
+    all_changes: Vec<PropertyChange>,
+    structural: StructuralInverse,
 }
 impl InversePlan {
     pub fn contribution(&self) -> &OperationId {
@@ -85,6 +98,9 @@ impl InversePlan {
     }
     pub fn changes(&self) -> &[PropertyChange] {
         &self.changes
+    }
+    pub fn structural(&self) -> &StructuralInverse {
+        &self.structural
     }
 }
 
@@ -148,43 +164,19 @@ impl ContributionHistory {
         changes: Vec<PropertyChange>,
         targets: &TargetLedger,
     ) -> Result<(), HistoryError> {
-        self.check_operation(&operation, revision)?;
-        self.check_changes(&changes, targets)?;
-        if self.contributions.len() >= MAX_CONTRIBUTIONS {
-            return Err(HistoryError::Limit);
+        if changes
+            .iter()
+            .any(|change| structural::is_reserved(&change.address.property))
+        {
+            return Err(HistoryError::Invalid);
         }
-        let owned = changes
-            .into_iter()
-            .map(|change| OwnedChange {
-                prior_owner: self
-                    .properties
-                    .get(&change.address)
-                    .and_then(|state| state.owner.clone()),
-                change,
-            })
-            .collect::<Vec<_>>();
-        let mut staged = self.clone();
-        for entry in &owned {
-            staged.properties.insert(
-                entry.change.address.clone(),
-                PropertyState {
-                    address: entry.change.address.clone(),
-                    value: entry.change.after.clone(),
-                    owner: Some(operation.clone()),
-                },
-            );
-        }
-        staged.redo.remove(&operation.user_id);
-        staged.contributions.push(Contribution {
-            operation: operation.clone(),
-            changes: owned,
-            active: true,
-        });
-        staged.operations.insert(operation);
-        staged.revision = revision;
-        staged.check_size()?;
-        *self = staged;
-        Ok(())
+        self.record_owned(
+            operation,
+            revision,
+            changes,
+            structural::LifecycleChanges::default(),
+            targets,
+        )
     }
 
     /// Picks this user's latest active contribution without skipping an unavailable
@@ -238,64 +230,10 @@ impl ContributionHistory {
         revision: u64,
         targets: &TargetLedger,
     ) -> Result<(), HistoryError> {
-        self.check_operation(&operation, revision)?;
-        if operation.user_id != plan.contribution.user_id {
+        if !plan.structural.is_empty() {
             return Err(HistoryError::Invalid);
         }
-        let current = match plan.direction {
-            HistoryDirection::Undo => self.prepare_undo(&operation.user_id, targets)?,
-            HistoryDirection::Redo => self.prepare_redo(&operation.user_id, targets)?,
-        };
-        if current.contribution != plan.contribution
-            || current.changes != plan.changes
-            || current.ownership != plan.ownership
-        {
-            return Err(HistoryError::Stale);
-        }
-        let mut staged = self.clone();
-        let index = staged
-            .contributions
-            .iter()
-            .position(|entry| entry.operation == plan.contribution)
-            .ok_or(HistoryError::Invalid)?;
-        let contribution = &mut staged.contributions[index];
-        for entry in &contribution.changes {
-            let (value, owner) = match plan.direction {
-                HistoryDirection::Undo => (entry.change.before.clone(), entry.prior_owner.clone()),
-                HistoryDirection::Redo => (
-                    entry.change.after.clone(),
-                    Some(contribution.operation.clone()),
-                ),
-            };
-            staged.properties.insert(
-                entry.change.address.clone(),
-                PropertyState {
-                    address: entry.change.address.clone(),
-                    value,
-                    owner,
-                },
-            );
-        }
-        contribution.active = plan.direction == HistoryDirection::Redo;
-        match plan.direction {
-            HistoryDirection::Undo => staged
-                .redo
-                .entry(operation.user_id.clone())
-                .or_default()
-                .push(plan.contribution.clone()),
-            HistoryDirection::Redo => {
-                staged
-                    .redo
-                    .get_mut(&operation.user_id)
-                    .ok_or(HistoryError::Invalid)?
-                    .pop();
-            }
-        }
-        staged.operations.insert(operation);
-        staged.revision = revision;
-        staged.check_size()?;
-        *self = staged;
-        Ok(())
+        self.commit_inverse_transaction(plan, operation, revision, &mut targets.clone())
     }
 
     /// Authoritative observation useful for UI availability and checked host edits.
@@ -359,11 +297,13 @@ impl ContributionHistory {
         for entry in &state.contributions {
             if !state.operations.contains(&entry.operation)
                 || previous.contains_key(&entry.operation)
-                || entry.changes.is_empty()
+                || (entry.changes.is_empty() && entry.structural.is_empty())
                 || entry.changes.len() > MAX_WRITES
             {
                 return Err(HistoryError::Invalid);
             }
+            entry.structural.validate()?;
+            entry.structural.validate_links(&previous, &entry.changes)?;
             let mut seen = BTreeSet::new();
             for owned in &entry.changes {
                 validate_change(&owned.change)?;
@@ -447,44 +387,7 @@ impl ContributionHistory {
         direction: HistoryDirection,
         targets: &TargetLedger,
     ) -> Result<InversePlan, HistoryError> {
-        let mut changes = Vec::new();
-        let mut ownership = Vec::new();
-        for owned in &contribution.changes {
-            targets
-                .authenticate(&owned.change.address.target)
-                .map_err(|_| HistoryError::Lifetime)?;
-            let state = self
-                .properties
-                .get(&owned.change.address)
-                .ok_or(HistoryError::Invalid)?;
-            let (before, after, owner) = match direction {
-                HistoryDirection::Undo => (
-                    &owned.change.after,
-                    &owned.change.before,
-                    Some(contribution.operation.clone()),
-                ),
-                HistoryDirection::Redo => (
-                    &owned.change.before,
-                    &owned.change.after,
-                    owned.prior_owner.clone(),
-                ),
-            };
-            if &state.value != before || state.owner != owner {
-                return Err(HistoryError::Overwritten);
-            }
-            ownership.push(owner);
-            changes.push(PropertyChange {
-                address: owned.change.address.clone(),
-                before: before.clone(),
-                after: after.clone(),
-            });
-        }
-        Ok(InversePlan {
-            contribution: contribution.operation.clone(),
-            direction,
-            changes,
-            ownership,
-        })
+        self.prepare_transaction(contribution, direction, targets)
     }
     fn check_operation(&self, operation: &OperationId, revision: u64) -> Result<(), HistoryError> {
         validate_operation(operation)?;
@@ -504,7 +407,7 @@ impl ContributionHistory {
         changes: &[PropertyChange],
         targets: &TargetLedger,
     ) -> Result<(), HistoryError> {
-        if changes.is_empty() || changes.len() > MAX_WRITES {
+        if changes.len() > MAX_WRITES {
             return Err(HistoryError::Limit);
         }
         let mut seen = BTreeSet::new();
@@ -573,6 +476,7 @@ fn validate_value(value: &serde_json::Value) -> Result<(), HistoryError> {
     Ok(())
 }
 fn validate_change(change: &PropertyChange) -> Result<(), HistoryError> {
+    structural::validate_reserved_change(change)?;
     validate_address(&change.address)?;
     validate_value(&change.before)?;
     validate_value(&change.after)

@@ -252,6 +252,43 @@ impl TargetLedger {
             })
     }
 
+    /// Authenticates the exact most recent dead lifetime. A later recreation,
+    /// even one deleted again, cannot authorize restoration of an older object.
+    ///
+    /// # Errors
+    /// Rejects live, missing, forged or superseded tombstones.
+    pub fn authenticate_tombstone(&self, target: &SemanticTarget) -> Result<(), TargetError> {
+        validate_name(&target.object)?;
+        match self.objects.get(&target.object) {
+            Some(object) if !object.alive && object.generation == target.generation => Ok(()),
+            _ => Err(TargetError::Stale),
+        }
+    }
+
+    /// Exact current dependency generations for trusted contribution recording.
+    ///
+    /// # Errors
+    /// Rejects stale target lifetimes.
+    pub fn dependencies(
+        &self,
+        target: &SemanticTarget,
+    ) -> Result<Vec<SemanticTarget>, TargetError> {
+        self.authenticate(target)?;
+        Ok(self.objects[&target.object]
+            .dependencies
+            .iter()
+            .filter_map(|name| self.current(name))
+            .collect())
+    }
+
+    /// Deterministic current inventory, excluding retained tombstones.
+    pub fn live_targets(&self) -> Vec<SemanticTarget> {
+        self.objects
+            .keys()
+            .filter_map(|name| self.current(name))
+            .collect()
+    }
+
     /// Replaces compiler-derived dependencies after model validation. The entire
     /// proposed relation set is checked before any adjacency is changed.
     ///

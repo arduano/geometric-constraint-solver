@@ -4,7 +4,10 @@
 
 use crate::{error, json, parse};
 use geosolve_collaboration::{
-    history::{ContributionHistory, InversePlan, PropertyAddress, PropertyChange},
+    history::{
+        ContributionHistory, DependencyChange, InversePlan, ObjectDescription, PropertyAddress,
+        PropertyChange, ReorderChange, StatementPosition, TransactionChanges,
+    },
     protocol::{MAX_REVISION, OperationId},
     targets::{DeletionPlan, SemanticTarget, TargetLedger, TargetLimits},
 };
@@ -106,6 +109,43 @@ struct DependencyUpdate {
 struct Record {
     operation: OperationId,
     changes: Vec<PropertyChange>,
+    structural: Option<StructuralRecord>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StructuralRecord {
+    #[serde(default)]
+    created: Vec<CreatedDescription>,
+    #[serde(default)]
+    deleted: Vec<DeletedDescription>,
+    #[serde(default)]
+    reorders: Vec<ReorderChange>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreatedDescription {
+    object: String,
+    payload: serde_json::Value,
+    position: CreationPosition,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreationPosition {
+    previous: Option<PositionReference>,
+    next: Option<PositionReference>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum PositionReference {
+    Target(SemanticTarget),
+    Reference(TargetReference),
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DeletedDescription {
+    target: SemanticTarget,
+    payload: serde_json::Value,
+    position: StatementPosition,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -337,8 +377,8 @@ impl TrustedSemanticHost {
         self.install_stage(self.targets.clone(), history, request.revision, &[])
     }
     /// Applies trusted compiler-derived lifecycle/dependency updates and optional
-    /// validated property changes in one staged transaction. Structural Undo is
-    /// not implemented by the core property contribution history.
+    /// validated contribution observations in one staged transaction. Opt-in
+    /// structural observations share the same personal property/lifecycle timeline.
     ///
     /// # Errors
     /// Rejects stale deletion closures, references, revisions and bounded resources.
@@ -378,18 +418,34 @@ impl TrustedSemanticHost {
                 .set_dependencies(&created[&creation.object], &dependencies)
                 .map_err(error)?;
         }
+        let mut dependency_changes = Vec::new();
         for update in &request.dependencies {
             let target = reference(&update.target, &targets, &created)?;
             let dependencies = references(&update.dependencies, &targets, &created)?;
+            if self.targets.authenticate(&target).is_ok() {
+                dependency_changes.push(DependencyChange {
+                    target: target.clone(),
+                    before: self.targets.dependencies(&target).map_err(error)?,
+                    after: {
+                        let mut canonical = dependencies.clone();
+                        canonical.sort();
+                        canonical
+                    },
+                });
+            }
             targets
                 .set_dependencies(&target, &dependencies)
                 .map_err(error)?;
         }
-        if let Some(record) = request.record {
-            history
-                .record(record.operation, request.revision, record.changes, &targets)
-                .map_err(error)?;
-        }
+        record_transaction(
+            &mut history,
+            request.record,
+            request.revision,
+            dependency_changes,
+            &self.targets,
+            &targets,
+            &created,
+        )?;
         self.install_stage(targets, history, request.revision, &allocated)
     }
     /// Commits a native prepared inverse only after independent model validation.
@@ -411,15 +467,23 @@ impl TrustedSemanticHost {
         let revision: u64 = parse(revision_json)?;
         self.check_revision(prepared.basis_revision, revision)?;
         let mut history = self.history.clone();
+        let mut targets = self.targets.clone();
+        let created = prepared
+            .plan
+            .structural()
+            .create
+            .iter()
+            .map(|entry| entry.target.clone())
+            .collect::<Vec<_>>();
         history
-            .commit_inverse(
+            .commit_inverse_transaction(
                 &prepared.plan,
                 parse(operation_json)?,
                 revision,
-                &self.targets,
+                &mut targets,
             )
             .map_err(error)?;
-        self.install_stage(self.targets.clone(), history, revision, &[])
+        self.install_stage(targets, history, revision, &created)
     }
     /// Install only after exact candidate pair/model/source transaction is fsynced.
     ///
@@ -438,6 +502,18 @@ impl TrustedSemanticHost {
         self.prepared.clear();
         self.snapshot()
     }
+    /// Discards a candidate only when the trusted host knows persistence has not
+    /// begun. This is not safe for an uncertain append; use `failStage` then.
+    ///
+    /// # Errors
+    /// Rejects foreign/reused stages; discarded IDs are never reused.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = discardUnpersistedStage))]
+    pub fn discard_unpersisted_stage(&mut self, stage_id: &str) -> Result<(), String> {
+        self.stage(stage_id)?;
+        self.pending = None;
+        Ok(())
+    }
+
     /// Uncertain persistence invalidates this runtime; reconstruct from durable state.
     ///
     /// # Errors
@@ -513,7 +589,7 @@ impl TrustedSemanticHost {
         ))
     }
     fn prepare(&mut self, plan: InversePlan) -> Result<String, String> {
-        let bytes = json(&plan.changes())?.len();
+        let bytes = json(&(plan.changes(), plan.structural()))?.len();
         if self.prepared.len() >= MAX_HANDLES
             || self
                 .prepared
@@ -527,7 +603,7 @@ impl TrustedSemanticHost {
         }
         let ticket = self.next_id()?;
         let response = json(
-            &serde_json::json!({"ticket":ticket,"basisRevision":self.revision,"contribution":plan.contribution(),"direction":plan.direction(),"changes":plan.changes()}),
+            &serde_json::json!({"ticket":ticket,"basisRevision":self.revision,"contribution":plan.contribution(),"direction":plan.direction(),"changes":plan.changes(),"structural":plan.structural()}),
         )?;
         self.prepared.insert(
             ticket,
@@ -603,4 +679,85 @@ fn references(
         .iter()
         .map(|value| reference(value, targets, created))
         .collect()
+}
+
+fn creation_position(
+    value: &CreationPosition,
+    targets: &TargetLedger,
+    created: &BTreeMap<String, SemanticTarget>,
+) -> Result<StatementPosition, String> {
+    let resolve = |value: &PositionReference| match value {
+        PositionReference::Target(target) => {
+            targets.authenticate(target).map_err(error)?;
+            Ok(target.clone())
+        }
+        PositionReference::Reference(value) => reference(value, targets, created),
+    };
+    Ok(StatementPosition {
+        previous: value.previous.as_ref().map(resolve).transpose()?,
+        next: value.next.as_ref().map(resolve).transpose()?,
+    })
+}
+
+fn record_transaction(
+    history: &mut ContributionHistory,
+    record: Option<Record>,
+    revision: u64,
+    dependency_changes: Vec<DependencyChange>,
+    before: &TargetLedger,
+    targets: &TargetLedger,
+    created: &BTreeMap<String, SemanticTarget>,
+) -> Result<(), String> {
+    if let Some(record) = record {
+        if let Some(structural) = record.structural {
+            let created = structural
+                .created
+                .into_iter()
+                .map(|object| {
+                    let target = created
+                        .get(&object.object)
+                        .ok_or("structural object not created in transaction")?
+                        .clone();
+                    Ok(ObjectDescription {
+                        dependencies: targets.dependencies(&target).map_err(error)?,
+                        target,
+                        payload: object.payload,
+                        position: creation_position(&object.position, targets, created)?,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            let deleted = structural
+                .deleted
+                .into_iter()
+                .map(|object| {
+                    Ok(ObjectDescription {
+                        dependencies: before.dependencies(&object.target).map_err(error)?,
+                        target: object.target,
+                        payload: object.payload,
+                        position: object.position,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            history
+                .record_transaction(
+                    record.operation,
+                    revision,
+                    TransactionChanges {
+                        properties: record.changes,
+                        created,
+                        deleted,
+                        dependencies: dependency_changes,
+                        reorders: structural.reorders,
+                    },
+                    before,
+                    targets,
+                )
+                .map_err(error)?;
+        } else {
+            history
+                .record(record.operation, revision, record.changes, targets)
+                .map_err(error)?;
+        }
+    }
+    Ok(())
 }

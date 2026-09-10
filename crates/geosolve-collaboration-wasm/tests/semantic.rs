@@ -315,3 +315,145 @@ fn uncertain_persistence_requires_recovery_and_inverse_handles_are_bounded() {
     assert_eq!(snapshot(&restored)["revision"], 2);
     assert!(restored.prepare_redo("alice").is_ok());
 }
+
+#[test]
+fn structural_history_uses_server_allocated_sibling_references_and_one_mixed_timeline() {
+    let mut state = host();
+    let write = transact(
+        &mut state,
+        json!({
+            "create":[{"object":"parent"},{"object":"child","dependencies":[{"kind":"created","object":"parent"}]}],
+            "record":{"operation":operation("alice","create"),"changes":[],"structural":{"created":[
+                {"object":"parent","payload":{"source":"parent()"},"position":{"previous":null,"next":{"kind":"created","object":"child"}}},
+                {"object":"child","payload":{"source":"child(parent)"},"position":{"previous":{"kind":"created","object":"parent"},"next":null}}
+            ]}}
+        }),
+    );
+    let parent = current(&state, "parent");
+    let child = current(&state, "child");
+    assert_eq!(write["created"], json!([parent, child]));
+    record(&mut state, "alice", "edit", "parent", 12, 14);
+    record(&mut state, "bob", "independent", "height", 8, 9);
+    let undo = decode(&state.prepare_undo("alice").unwrap());
+    assert_eq!(undo["contribution"]["requestId"], "edit");
+    inverse(&mut state, &undo, "alice", "undo-edit");
+    let undo = decode(&state.prepare_undo("alice").unwrap());
+    assert_eq!(
+        undo["structural"]["delete"]["closure"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    inverse(&mut state, &undo, "alice", "undo-create");
+    assert_eq!(current(&state, "parent"), Value::Null);
+    let checkpoint = state.checkpoint().unwrap();
+    let mut state = TrustedSemanticHost::restore(&config("restarted"), &checkpoint).unwrap();
+    let redo = decode(&state.prepare_redo("alice").unwrap());
+    assert_eq!(redo["structural"]["create"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        redo["structural"]["create"][0]["position"]["next"],
+        redo["structural"]["create"][1]["target"]
+    );
+    inverse(&mut state, &redo, "alice", "redo-create");
+    assert!(
+        current(&state, "parent")["generation"].as_u64().unwrap()
+            > parent["generation"].as_u64().unwrap()
+    );
+    assert!(state.authenticate(&parent.to_string()).is_err());
+    let redo = decode(&state.prepare_redo("alice").unwrap());
+    assert_eq!(
+        redo["changes"][0]["address"]["target"],
+        current(&state, "parent")
+    );
+    inverse(&mut state, &redo, "alice", "redo-edit");
+    let address = change(&state, "height", 8, 9)["address"].to_string();
+    assert_eq!(
+        decode(&state.property_owner(&address).unwrap()),
+        operation("bob", "independent")
+    );
+}
+
+#[test]
+fn structural_deletion_restore_stages_fresh_ids_and_discard_does_not_consume_them() {
+    let mut state = host();
+    let old = current(&state, "width");
+    let edge = current(&state, "edge");
+    let plan = decode(&state.plan_delete(&json!([old]).to_string()).unwrap());
+    transact(
+        &mut state,
+        json!({"deletions":[plan],"record":{"operation":operation("alice","delete"),"changes":[],"structural":{"deleted":[
+            {"target":old,"payload":{"source":"width()"},"position":{"previous":null,"next":null}},
+            {"target":edge,"payload":{"source":"edge(width)"},"position":{"previous":null,"next":null}}
+        ]}}}),
+    );
+    let before = state.checkpoint().unwrap();
+    let high = snapshot(&state)["highWater"].clone();
+    let prepared = decode(&state.prepare_undo("alice").unwrap());
+    let ticket = prepared["ticket"].as_str().unwrap();
+    let operation = operation("alice", "undo").to_string();
+    let first = decode(
+        &state
+            .stage_validated_inverse(ticket, &operation, "2")
+            .unwrap(),
+    );
+    assert_eq!(state.checkpoint().unwrap(), before);
+    assert_eq!(snapshot(&state)["highWater"], high);
+    assert_eq!(first["created"].as_array().unwrap().len(), 2);
+    state
+        .discard_unpersisted_stage(first["stageId"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(snapshot(&state)["needsRecovery"], false);
+    let second = decode(
+        &state
+            .stage_validated_inverse(ticket, &operation, "2")
+            .unwrap(),
+    );
+    assert_ne!(first["stageId"], second["stageId"]);
+    assert_eq!(first["created"], second["created"]);
+    assert!(
+        state
+            .commit_stage(first["stageId"].as_str().unwrap())
+            .is_err()
+    );
+    commit(&mut state, &second);
+    assert!(state.authenticate(&old.to_string()).is_err());
+    assert!(state.authenticate(&edge.to_string()).is_err());
+    let mut restored =
+        TrustedSemanticHost::restore(&config("new-process"), &state.checkpoint().unwrap()).unwrap();
+    let redo = decode(&restored.prepare_redo("alice").unwrap());
+    inverse(&mut restored, &redo, "alice", "redo-delete");
+    assert_eq!(current(&restored, "width"), Value::Null);
+}
+
+#[test]
+fn incomplete_structural_observations_and_same_value_dependency_interference_reject_atomically() {
+    let mut state = host();
+    let before = state.checkpoint().unwrap();
+    let incomplete = json!({"basisRevision":0,"revision":1,"create":[{"object":"new"}],"record":{"operation":operation("alice","create"),"changes":[],"structural":{}}});
+    assert!(
+        state
+            .stage_validated_transaction(&incomplete.to_string())
+            .is_err()
+    );
+    assert_eq!(state.checkpoint().unwrap(), before);
+    assert_eq!(snapshot(&state)["hasPendingStage"], false);
+    transact(
+        &mut state,
+        json!({"create":[{"object":"new"}],"record":{"operation":operation("alice","create"),"changes":[],"structural":{"created":[{"object":"new","payload":{"source":"new()"},"position":{"previous":null,"next":null}}]}}}),
+    );
+    let target = current(&state, "new");
+    transact(
+        &mut state,
+        json!({"dependencies":[{"target":{"kind":"existing","target":target},"dependencies":[]}],"record":{"operation":operation("bob","same-deps"),"changes":[],"structural":{}}}),
+    );
+    assert!(state.prepare_undo("alice").unwrap_err().contains("owns"));
+    let inverse_plan = decode(&state.prepare_undo("bob").unwrap());
+    assert_eq!(inverse_plan["changes"], json!([]));
+    assert_eq!(
+        inverse_plan["structural"]["dependencies"][0]["before"],
+        json!([])
+    );
+    inverse(&mut state, &inverse_plan, "bob", "undo");
+    assert!(state.prepare_undo("alice").is_ok());
+}

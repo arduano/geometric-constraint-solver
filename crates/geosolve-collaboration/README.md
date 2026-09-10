@@ -72,3 +72,20 @@ lifetimes and exact dependent-deletion intent. `source_patch` applies authentica
 source splices and retains unfinished drafts when lexical ownership changes. These
 components do not themselves validate or publish sketch geometry. Host composition and
 collaborative workbench integration are in progress.
+
+## Semantic personal history
+
+`ContributionHistory::record_transaction` records trusted per-object lifecycle descriptions,
+properties, dependency replacements and stable-neighbor reorders in one personal timeline.
+It replays the exact before/after `TargetLedger` pair and rejects missing observations.
+`prepare_undo`/`prepare_redo` return opaque plans with ordinary changes and typed structural
+intent. Hosts independently compile and validate before calling
+`commit_inverse_transaction` on staged history/target clones and persisting both.
+
+Deletion restoration authenticates the exact tombstone and allocates fresh generations.
+Only an explicit exact-generation remapping updates internal contribution addresses and
+stable structural references; old client handles never become valid. Create removal and
+delete replay preserve later effective contributions, including same-value writes, and
+refuse expanded dependent closures. Typed dependency and position ownership share the
+ordinary property mechanism while remaining separate from compiler value edits. No solver
+equations, model checkpoint Undo, or geometry acceptance are implemented in this ledger.

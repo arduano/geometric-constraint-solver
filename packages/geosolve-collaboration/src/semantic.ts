@@ -6,6 +6,31 @@ import type { OperationId } from "./host.js";
 export interface SemanticTarget { readonly object: string; readonly generation: number }
 export interface DeletionPlan { readonly roots: readonly SemanticTarget[]; readonly closure: readonly SemanticTarget[] }
 export interface PropertyAddress { readonly target: SemanticTarget; readonly property: string }
+export interface StatementPosition { readonly previous: SemanticTarget | null; readonly next: SemanticTarget | null }
+export interface ObjectDescription {
+  readonly target: SemanticTarget;
+  readonly dependencies: readonly SemanticTarget[];
+  readonly payload: unknown;
+  readonly position: StatementPosition;
+}
+export interface DependencyChange { readonly target: SemanticTarget; readonly before: readonly SemanticTarget[]; readonly after: readonly SemanticTarget[] }
+export interface ReorderChange { readonly target: SemanticTarget; readonly before: StatementPosition; readonly after: StatementPosition }
+export interface StructuralInverse {
+  readonly create: readonly ObjectDescription[];
+  readonly delete: DeletionPlan | null;
+  readonly dependencies: readonly DependencyChange[];
+  readonly reorders: readonly ReorderChange[];
+  readonly restored: readonly { readonly before: SemanticTarget; readonly after: SemanticTarget }[];
+}
+export interface CreationPosition {
+  readonly previous: SemanticTarget | SemanticTargetReference | null;
+  readonly next: SemanticTarget | SemanticTargetReference | null;
+}
+export interface StructuralRecord {
+  readonly created?: readonly { readonly object: string; readonly payload: unknown; readonly position: CreationPosition }[];
+  readonly deleted?: readonly { readonly target: SemanticTarget; readonly payload: unknown; readonly position: StatementPosition }[];
+  readonly reorders?: readonly ReorderChange[];
+}
 export interface PropertyChange { readonly address: PropertyAddress; readonly before: unknown; readonly after: unknown }
 export interface SemanticHostConfiguration {
   readonly documentEpoch: string;
@@ -39,6 +64,7 @@ export interface PreparedSemanticInverse {
   readonly basisRevision: number;
   readonly contribution: OperationId;
   readonly direction: "undo" | "redo";
+  readonly structural: StructuralInverse;
   readonly changes: readonly PropertyChange[];
 }
 export type SemanticTargetReference = { readonly kind: "existing"; readonly target: SemanticTarget }
@@ -51,7 +77,8 @@ export interface SemanticRecord {
 }
 /** Validated compiler inventory updates. Deletions retain exactly reviewed closures;
  * all created names are allocated before forward dependency references are resolved.
- * Structural creation/deletion Undo is not provided by property contribution history.
+ * Supply record.structural with trusted compiler observations to put lifecycle,
+ * dependency and reorder contributions in the same per-user Undo timeline.
  */
 export interface SemanticTransaction {
   readonly basisRevision: number;
@@ -59,7 +86,7 @@ export interface SemanticTransaction {
   readonly create?: readonly { readonly object: string; readonly dependencies?: readonly SemanticTargetReference[] }[];
   readonly deletions?: readonly DeletionPlan[];
   readonly dependencies?: readonly { readonly target: SemanticTargetReference; readonly dependencies: readonly SemanticTargetReference[] }[];
-  readonly record?: { readonly operation: OperationId; readonly changes: readonly PropertyChange[] };
+  readonly record?: { readonly operation: OperationId; readonly changes: readonly PropertyChange[]; readonly structural?: StructuralRecord };
 }
 /** Persist exact strings with accepted model/source/authority outcome before commit. */
 export interface SemanticStage {
@@ -88,6 +115,7 @@ export interface SemanticNativeHandle {
   stageValidatedInverse(ticket: string, operationJson: string, revisionJson: string): string;
   commitStage(stageId: string): string;
   failStage(stageId: string): void;
+  discardUnpersistedStage(stageId: string): void;
   free(): void;
 }
 export interface SemanticWasmModule {
@@ -144,6 +172,10 @@ export class TrustedSemanticHost {
     this.owns(stage);
     const result = decode<SemanticSnapshot>(this.native.commitStage(stage.stageId));
     this.pending = undefined; this.prepared.clear(); return result;
+  }
+  /** Only before any persistence has begun; uncertain writes require failStage. */
+  discardUnpersistedStage(stage: SemanticStage): void {
+    this.owns(stage); this.native.discardUnpersistedStage(stage.stageId); this.pending = undefined;
   }
   failStage(stage: SemanticStage): void {
     this.owns(stage); this.native.failStage(stage.stageId); this.pending = undefined; this.prepared.clear();

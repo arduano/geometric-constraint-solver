@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { counter, unicode, encode, decode } from "./host-codec.js";
 export { TrustedSemanticHost, createTrustedSemanticHost } from "./semantic.js";
-export type { SemanticTarget, DeletionPlan, PropertyAddress, PropertyChange, SemanticHostConfiguration, SemanticCheckpoint, SemanticSnapshot, PreparedSemanticInverse, SemanticTargetReference, SemanticRecord, SemanticTransaction, SemanticStage, PersistSemanticStage, SemanticHostOptions } from "./semantic.js";
+export type { StatementPosition, CreationPosition, ObjectDescription, DependencyChange, ReorderChange, StructuralInverse, StructuralRecord, SemanticTarget, DeletionPlan, PropertyAddress, PropertyChange, SemanticHostConfiguration, SemanticCheckpoint, SemanticSnapshot, PreparedSemanticInverse, SemanticTargetReference, SemanticRecord, SemanticTransaction, SemanticStage, PersistSemanticStage, SemanticHostOptions } from "./semantic.js";
 export { TrustedSourceHost, createTrustedSourceHost } from "./source.js";
 export type { SourceHostOptions, SourceHostConfiguration, SourceSnapshot, AcceptedSource, SourceCapture, PreparedSource, SourceStage, SourcePatch, SourceEdit, SourceReconciliation, PersistSourceStage } from "./source.js";
 /** Trusted Node/server host API. Never expose it through client command dispatch.

@@ -162,7 +162,24 @@ committed during a pending write; mutation rejects. `failStage` requires reconst
 checkpoint to the factory when restarting under a fresh server epoch. The host authenticates
 this pair against its journal and independently rebuilds the model before serving edits.
 
-Property history survives restart, including checked Redo. Structural creation/deletion
-Undo requires a further core extension and is not claimed here. Lifecycle-only transactions
-advance the accepted revision without pretending to be property history contributions.
+Property and structural contributions share one per-user timeline and survive restart,
+including checked Redo. For undoable lifecycle transactions, supply `record.structural`:
+`created` observations carry `{object,payload,position}` and `deleted` observations carry
+`{target,payload,position}`. Payloads are bounded trusted per-object compiler inverse
+descriptors, not accepted model snapshots. Position is `{previous,next}` with stable
+neighbors; created neighbors may use `{kind:"created",object}` references. Dependencies
+come from the exact committed/candidate native ledgers; explicit dependency replacements
+and `structural.reorders` acquire ownership even when their values do not change.
+
+Prepared inverses include `structural` recreation/deletion/dependency/reorder intent and
+an explicit old-to-fresh `restored` mapping. The host must independently compile/validate
+that intent before staging. Restore allocates fresh native generations privately; existing
+handles remain stale. Later effective foreign properties, dependencies or order edits block
+creation removal, and deletion replay refuses changed ownership or an expanded closure.
+Same-name reuse, even followed by deletion, invalidates an old tombstone restoration.
+
+`discardUnpersistedStage` is available only for known pre-append failures. It preserves the
+committed state and prepared ticket, and retries receive fresh stage IDs. Uncertain writes
+still require `failStage` and recovery. Omitting `record.structural` retains the old trusted
+lifecycle-only inventory route; such a route does not make lifecycle edits undoable.
 This adapter does not establish solver validity, server load capacity or client responsiveness.

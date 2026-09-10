@@ -65,5 +65,9 @@ Undo/Redo descriptors retain actual native `InversePlan` values behind bounded h
 stale deletion cannot absorb new dependents; recreation always allocates a new generation.
 Restore checks core state and history revision against the authenticated model revision.
 The host must independently reconstruct model state and authenticate the checkpoint pair.
-Structural creation/deletion Undo is not implemented by the property history. Dependency
-cycles follow core `TargetLedger` semantics; this adapter adds no JavaScript graph rules.
+Opt-in `record.structural` compiler observations add create/delete/dependency/reorder
+contributions to that same personal timeline. Prepared descriptors include structural
+intent and private fresh generation allocations; independent model validation remains
+mandatory. Stage commit installs the exact candidate target/history pair. Known pre-append
+failure can `discardUnpersistedStage`; uncertain writes still poison through `failStage`.
+Dependency cycles follow core `TargetLedger` semantics; this adapter adds no JavaScript graph rules.

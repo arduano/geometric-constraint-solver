@@ -126,3 +126,66 @@ test("actual WASM inventory and adapter limits reject duplicates, dangling depen
   await assert.rejects(createTrustedSemanticHost({configuration:{...configuration("process"),limits:{maxObjectsIncludingTombstones:2}}}),/limit/);
   await assert.rejects(createTrustedSemanticHost({configuration:{...configuration("process"),limits:{maxTotalDependencies:1_000_001}}}),/maximum/);
 });
+
+test("actual WASM mixed structural history remaps restored sibling generations and preserves Bob",async()=>{
+  let host=await open();
+  try{
+    await transact(host,{create:[{object:"parent"},{object:"child",dependencies:[{kind:"created",object:"parent"}]}],record:{operation:operation("alice","create"),changes:[],structural:{created:[
+      {object:"parent",payload:{source:"parent()"},position:{previous:null,next:{kind:"created",object:"child"}}},
+      {object:"child",payload:{source:"child(parent)"},position:{previous:{kind:"created",object:"parent"},next:null}}
+    ]}}});
+    const old=host.current("parent");
+    await record(host,"alice","edit","parent",12,14);await record(host,"bob","independent","height",8,9);
+    await inverse(host,host.prepareUndo("alice"),"alice","undo-edit");
+    const removal=host.prepareUndo("alice");assert.equal(removal.structural.delete.closure.length,2);
+    await inverse(host,removal,"alice","undo-create");assert.equal(host.current("parent"),null);
+    const checkpoint=host.checkpoint();host.dispose();host=await createTrustedSemanticHost({configuration:configuration("restart"),checkpoint});
+    const restore=host.prepareRedo("alice"),highWater=host.snapshot().highWater;
+    assert.equal(restore.structural.create.length,2);assert.deepEqual(restore.structural.create[0].position.next,restore.structural.create[1].target);
+    assert(restore.structural.create.every(object=>object.target.generation>highWater));
+    const stage=host.stageValidatedInverse(restore,operation("alice","redo-create"),host.snapshot().revision+1);
+    assert.equal(host.snapshot().highWater,highWater);assert.equal(host.current("parent"),null);
+    host.discardUnpersistedStage(stage);assert.equal(host.snapshot().needsRecovery,false);
+    const retry=host.stageValidatedInverse(restore,operation("alice","redo-create"),host.snapshot().revision+1);
+    assert.notEqual(stage.stageId,retry.stageId);assert.deepEqual(stage.created,retry.created);
+    assert.throws(()=>host.commitStage(stage),/stale/);host.commitStage(retry);
+    assert.throws(()=>host.authenticate(old),/lifetime/);
+    const redo=host.prepareRedo("alice");assert.deepEqual(redo.changes[0].address.target,host.current("parent"));
+    await inverse(host,redo,"alice","redo-edit");
+    assert.deepEqual(host.propertyOwner(change(host,"height",8,9).address),operation("bob","independent"));
+  }finally{host.dispose();}
+});
+
+test("actual WASM exact deletion observation restores a closure with fresh handles after restart",async()=>{
+  let host=await open();
+  try{
+    const width=host.current("width"),edge=host.current("edge"),plan=host.planDelete([width]);
+    await transact(host,{deletions:[plan],record:{operation:operation("alice","delete"),changes:[],structural:{deleted:[
+      {target:width,payload:{source:"width()"},position:{previous:null,next:null}},
+      {target:edge,payload:{source:"edge(width)"},position:{previous:null,next:null}}
+    ]}}});
+    const checkpoint=host.checkpoint();host.dispose();host=await createTrustedSemanticHost({configuration:configuration("restart"),checkpoint});
+    const restored=host.prepareUndo("alice");assert.equal(restored.structural.create.length,2);
+    await inverse(host,restored,"alice","undo-delete");assert.throws(()=>host.authenticate(width),/lifetime/);
+    assert.equal(host.planDelete([host.current("width")]).closure.length,2);
+    await record(host,"bob","same","width",12,12);
+    assert.throws(()=>host.prepareRedo("alice"),/owns/);
+    await inverse(host,host.prepareUndo("bob"),"bob","undo");
+    await inverse(host,host.prepareRedo("alice"),"alice","redo-delete");
+    assert.equal(host.current("width"),null);
+  }finally{host.dispose();}
+});
+
+test("actual WASM structural validation rejects missing observations and tracks same-value dependencies",async()=>{
+  const host=await open();
+  try{
+    const before=host.checkpoint();
+    assert.throws(()=>host.stageValidatedTransaction({basisRevision:0,revision:1,create:[{object:"new"}],record:{operation:operation("alice","bad"),changes:[],structural:{}}}));
+    assert.deepEqual(host.checkpoint(),before);assert.equal(host.snapshot().hasPendingStage,false);
+    await transact(host,{create:[{object:"new"}],record:{operation:operation("alice","create"),changes:[],structural:{created:[{object:"new",payload:{source:"new()"},position:{previous:null,next:null}}]}}});
+    await transact(host,{dependencies:[{target:{kind:"existing",target:host.current("new")},dependencies:[]}],record:{operation:operation("bob","same-deps"),changes:[],structural:{}}});
+    assert.throws(()=>host.prepareUndo("alice"),/owns/);
+    const undo=host.prepareUndo("bob");assert.equal(undo.changes.length,0);assert.equal(undo.structural.dependencies.length,1);
+    await inverse(host,undo,"bob","undo");host.release(host.prepareUndo("alice"));
+  }finally{host.dispose();}
+});
