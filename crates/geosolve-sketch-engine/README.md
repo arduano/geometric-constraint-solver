@@ -58,5 +58,49 @@ authorities. They cannot be imported as external state.
 `design()` exports `geosolve-design-v1`: project identity, keyed reconciliation and
 authored semantic overrides. Reopening reconstructs and independently validates
 source plus those overrides without serialized solved geometry or hidden history.
-Complete source/dependency replacements are the initial editing interface; this API
-does not manufacture lexical edit tokens or expose a canvas interaction session.
+`export_project_json()` exports the complete canonical accepted source project,
+including compiler authority, dependency artifacts and source allocation high-water
+state, to durably pair with that design and its `source_design_digest()`.
+
+Managed mutations and captured Apply use opaque preparation handles over the exact
+accepted source, compiler artifact, expansion and session identity. The host executes
+the compiler request and returns its receipt; the engine reauthenticates the live
+input and independently validates native geometry before publication. Semantic value
+batches resolve their current lexical expectations at preparation. Checked inverse
+data never rolls back global history; a collaborative host must additionally enforce
+target lifetimes and contribution ownership, including same-value writes.
+
+`point_gesture_targets()` exposes explicit semantic point addresses and their keyed
+allocation/generation. `begin_point_gesture` forks accepted native authority once;
+`RetainedPointGesture::advance` processes up to 4,096 contiguous model-space samples
+through the shared retained coordinator. Frames perform no source compilation, overlay
+publication or history write. Referenced consumers detach once at gesture start, using
+the existing semantic point codec. Camera mapping stays fixed for one gesture.
+
+`scene_json()` returns a detached provisional scene. `finish` consumes the checked native
+terminal and returns its replayable semantic command. `replay_point_gesture` authenticates
+the source/design basis and recomputes every sample; caller-provided coordinates never
+prove acceptance. The trusted host still owns document epochs, user authorization and
+latest-state target/branch admission. Stale source/design bases reject explicitly.
+
+The server calls `prepare_point_gesture_commit` to independently replay the command and
+stage a complete semantic overlay. Publication preserves moved companion points, explicit
+consumer detachment, rectangle source seeds and derived corners. It requires independently
+validated native geometry, current computed features and exact ownership, allocator,
+branch/contact and semantic-input parity. The existing bounded rectangle roundoff policy
+applies only to authenticated derived geometry; authored seeds remain exact.
+
+`PreparedPointGestureCommit` exposes the candidate result, semantic design and
+`source_design_digest`. The host durably records the candidate, then installs it through
+`apply_point_gesture_commit`, which rechecks the exact live session token and creates one
+history contribution. Discarding a candidate leaves the live session unchanged. Native hosts
+without external persistence can use `commit_point_gesture` for synchronous replay and commit.
+
+`source_design_digest()` identifies complete source, generated lifecycle state and overrides
+independently of the process/session. Reopening and independently validating the same source
+and design reproduces it. Individual evaluation `input_digest` values include prior session
+state and should not serve as durable recovery identities.
+
+`AuthoringPrediction::apply_overlay` is a whole semantic update and must not be called for
+every pointer frame. Ordinary construction workers, latest-state gesture rebase and browser
+bindings remain separate integration work.

@@ -1,0 +1,1456 @@
+{
+  "inputSourceDigest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6",
+  "normalizedSource": "\"use geosolve sketch\";\nimport { sketch, mm } from \"@geosolve/sketch-code\";\n\nexport default sketch(($) => {\n  const path = $.geometry.polyline(\"path\", {\n    vertices: [{\n      key: \"start\",\n      position: [0, 0],\n    }, {\n      key: \"bend\",\n      position: [20, 0],\n    }, {\n      key: \"end\",\n      position: [20, 20],\n    }],\n  });\n  const rounded = $.computed.filletSet(\"rounded\", {\n    radius: mm(2),\n    corners: [{\n      key: \"bend\",\n      parents: [{\n        span: path.segments.byKey.start,\n        parameter: 0.9,\n        winding: 0,\n        neighborhood: {\n          kind: \"interior\",\n        },\n        normalSide: \"left\",\n        trimEndpoint: \"end\",\n        periodicAnchor: {\n          kind: \"none\",\n        },\n      }, {\n        span: path.segments.byKey.bend,\n        parameter: 0.1,\n        winding: 0,\n        neighborhood: {\n          kind: \"interior\",\n        },\n        normalSide: \"left\",\n        trimEndpoint: \"start\",\n        periodicAnchor: {\n          kind: \"none\",\n        },\n      }],\n      endpointOrder: \"firstThenSecond\",\n      sweep: \"counterClockwise\",\n    }],\n  });\n  return {\n    path: path,\n    rounded: rounded,\n  };\n});\n",
+  "ir": {
+    "format": "geosolve-managed-sketch-ir-v4",
+    "imports": [
+      {
+        "module": "@geosolve/sketch-code",
+        "bindings": [
+          "sketch",
+          "mm"
+        ]
+      }
+    ],
+    "statements": [
+      {
+        "statement": "declaration",
+        "variable": "path",
+        "symbol": "path",
+        "builder_path": [
+          "geometry",
+          "polyline"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "vertices",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "object",
+                    "fields": [
+                      {
+                        "name": "key",
+                        "value": {
+                          "kind": "string",
+                          "value": "start",
+                          "site": "546ddadb555d34a027300e7bf41e606e6b2bb5ab9934af0e98d80dc2ea54f18a"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "position",
+                        "value": {
+                          "kind": "array",
+                          "values": [
+                            {
+                              "kind": "number",
+                              "value": 0,
+                              "site": "8fdb0025f70fa84720f810a377704b4687d4f60a5277004cc99a28bd45de2d00"
+                            },
+                            {
+                              "kind": "number",
+                              "value": 0,
+                              "site": "6c85316aa50cec169e397f7b0aed236d22c8719938d90ad28413cfd8eb92c8dd"
+                            }
+                          ],
+                          "site": "e8dff1e82f1de8902512b94bb989afbe8f0cf64bcb4e24178607ff67abff8012"
+                        },
+                        "comments": []
+                      }
+                    ],
+                    "site": "4def038bf370649dbc4527d0507ac3ba45abfc85493af105e88c472dd16187f2"
+                  },
+                  {
+                    "kind": "object",
+                    "fields": [
+                      {
+                        "name": "key",
+                        "value": {
+                          "kind": "string",
+                          "value": "bend",
+                          "site": "38d969e43328b4eddc68cedd03d36ea0f2154482a2b1b692a295d2803e501198"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "position",
+                        "value": {
+                          "kind": "array",
+                          "values": [
+                            {
+                              "kind": "number",
+                              "value": 20,
+                              "site": "a2baec72e39de2429fd28af90eaf1a279258720b11a06519bc77cfdf19a79761"
+                            },
+                            {
+                              "kind": "number",
+                              "value": 0,
+                              "site": "e32e4cce237d596c519340ecb850e6b1d0d62013c6984674a2c8dfea1bbd2142"
+                            }
+                          ],
+                          "site": "4c31f9cfa5e222589a70c112ab09be37f71660fcf092fcdc6dad50c382803364"
+                        },
+                        "comments": []
+                      }
+                    ],
+                    "site": "d055b3412d940251c2b5391f57ad03ff4872d170afdf77895edae1fdbaaedb32"
+                  },
+                  {
+                    "kind": "object",
+                    "fields": [
+                      {
+                        "name": "key",
+                        "value": {
+                          "kind": "string",
+                          "value": "end",
+                          "site": "77be6bc09775527fefcfdbe513b5b52ec9f69c007b1db85ff99c7e43d5f426ea"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "position",
+                        "value": {
+                          "kind": "array",
+                          "values": [
+                            {
+                              "kind": "number",
+                              "value": 20,
+                              "site": "14d4973cf18a0de8d9c009a6d157a72eb84503a574c2fe04606ccf8b0fa7af98"
+                            },
+                            {
+                              "kind": "number",
+                              "value": 20,
+                              "site": "d9cb05e8ac493f7d4c09d5561e7c90fb9c7fae07e20004471a4b3bfc63652774"
+                            }
+                          ],
+                          "site": "9d8935893faf7b191a5d182491c5dc20167d3c707c58f0fa87e33394b3aedb34"
+                        },
+                        "comments": []
+                      }
+                    ],
+                    "site": "056a008657d2ee6f2b6d1513707c2129b7512695881ed4daa4f729b4252527e6"
+                  }
+                ],
+                "site": "733092d1f17144a3874e286c4b2cbf161c183c738eb6e489727d7d7ff405c1ed"
+              },
+              "comments": []
+            }
+          ],
+          "site": "6b03aad176754743bd2091192b6661094b08b8d688463d4b381d5c33bfb4ce6d"
+        },
+        "site": "8728ec1d4b428110ef9199bde6224306b805d7c800d26d4dcccd174eb23c05ca",
+        "comments": []
+      },
+      {
+        "statement": "declaration",
+        "variable": "rounded",
+        "symbol": "rounded",
+        "builder_path": [
+          "computed",
+          "filletSet"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "radius",
+              "value": {
+                "kind": "call",
+                "callee": "mm",
+                "arguments": [
+                  {
+                    "kind": "number",
+                    "value": 2,
+                    "site": "541dfa31d0e654dcd398706aebb8194e0b7c1d3357e6bc3f9d6586462768b2cd"
+                  }
+                ],
+                "site": "f5b20fedf21974b670177966fb96a53a77e83b0c468423ecc42ea03793e1a71d"
+              },
+              "comments": []
+            },
+            {
+              "name": "corners",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "object",
+                    "fields": [
+                      {
+                        "name": "key",
+                        "value": {
+                          "kind": "string",
+                          "value": "bend",
+                          "site": "7366f5983586ac72bf7213c2a78814944b023cfe49b415e22325e85dac5c72f7"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "parents",
+                        "value": {
+                          "kind": "array",
+                          "values": [
+                            {
+                              "kind": "object",
+                              "fields": [
+                                {
+                                  "name": "span",
+                                  "value": {
+                                    "kind": "reference",
+                                    "declaration": "path",
+                                    "path": [
+                                      "segments",
+                                      "byKey",
+                                      "start"
+                                    ],
+                                    "site": "653c64e22334f76f0822c9065488efa1c00c613a48679b194cfc905844cc02ec"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "parameter",
+                                  "value": {
+                                    "kind": "number",
+                                    "value": 0.9,
+                                    "site": "91162800898fb42d5abd9f716a6f9a07dc5d1375980a4fab1cc1ba60e63e7661"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "winding",
+                                  "value": {
+                                    "kind": "number",
+                                    "value": 0,
+                                    "site": "63d57e83b767844770b0d8596e71298097d4729a1788486e934710a07248c1cb"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "neighborhood",
+                                  "value": {
+                                    "kind": "object",
+                                    "fields": [
+                                      {
+                                        "name": "kind",
+                                        "value": {
+                                          "kind": "string",
+                                          "value": "interior",
+                                          "site": "467021751df744807f64790e17493f47631755e494f8a5c2d1791017cd9e97d6"
+                                        },
+                                        "comments": []
+                                      }
+                                    ],
+                                    "site": "0b0df4133bf2195a50b0faa907fbaf4270ad4c8fa8483d81be812bc1f5de9ff6"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "normalSide",
+                                  "value": {
+                                    "kind": "string",
+                                    "value": "left",
+                                    "site": "14db64bc5c0d3f667912b8f3c40e9c78f5aac32dc0960828eb1132185a6219f1"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "trimEndpoint",
+                                  "value": {
+                                    "kind": "string",
+                                    "value": "end",
+                                    "site": "f5c006ac551467ad20b7179cd38d847703ef12faa8e28c1f1b034c807a530cf5"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "periodicAnchor",
+                                  "value": {
+                                    "kind": "object",
+                                    "fields": [
+                                      {
+                                        "name": "kind",
+                                        "value": {
+                                          "kind": "string",
+                                          "value": "none",
+                                          "site": "4f12fb9ec38e00bead3bd3ab7b15024511853e170f61e71b4bfce5b2c830b7c2"
+                                        },
+                                        "comments": []
+                                      }
+                                    ],
+                                    "site": "a3785e59c4700576562a31a8ef8bb5ac3547a4d06a64d23940a16a5e75969d51"
+                                  },
+                                  "comments": []
+                                }
+                              ],
+                              "site": "fecd8722884616c37876f497775ba4a1bc3654281836d5c5afa04d7203106755"
+                            },
+                            {
+                              "kind": "object",
+                              "fields": [
+                                {
+                                  "name": "span",
+                                  "value": {
+                                    "kind": "reference",
+                                    "declaration": "path",
+                                    "path": [
+                                      "segments",
+                                      "byKey",
+                                      "bend"
+                                    ],
+                                    "site": "b3124a4ed256512ec0449b6da839658a9361c0ffc7d6f22e915311919ac5d192"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "parameter",
+                                  "value": {
+                                    "kind": "number",
+                                    "value": 0.1,
+                                    "site": "a42699f84c7559eda66693c4125c6a8161e62e082375e7ebc716e25ad911dd1d"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "winding",
+                                  "value": {
+                                    "kind": "number",
+                                    "value": 0,
+                                    "site": "161f85d44f0acdabd7197017a2d0cc20d3c907bfbbf2a5a1d89b8c962ea39087"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "neighborhood",
+                                  "value": {
+                                    "kind": "object",
+                                    "fields": [
+                                      {
+                                        "name": "kind",
+                                        "value": {
+                                          "kind": "string",
+                                          "value": "interior",
+                                          "site": "fbe0875e28e61dddd26bb84fa84c839c137ec643b7fdc655d761a39b382f8e1f"
+                                        },
+                                        "comments": []
+                                      }
+                                    ],
+                                    "site": "00a62597d2876c9b9ce88131b34018a4d6558b9662d4fafac45fad9cf86fdfdf"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "normalSide",
+                                  "value": {
+                                    "kind": "string",
+                                    "value": "left",
+                                    "site": "ef57415e8ea469add8d3d80c0a0e36db426dd09fb2bb1c4e2dca0ef12e6c2a6c"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "trimEndpoint",
+                                  "value": {
+                                    "kind": "string",
+                                    "value": "start",
+                                    "site": "66240219ff973e21abfc4ac4107ad9aed44af52830bb412472b9ed27b0c09f2d"
+                                  },
+                                  "comments": []
+                                },
+                                {
+                                  "name": "periodicAnchor",
+                                  "value": {
+                                    "kind": "object",
+                                    "fields": [
+                                      {
+                                        "name": "kind",
+                                        "value": {
+                                          "kind": "string",
+                                          "value": "none",
+                                          "site": "bd407fb7489755770cc403ab4639189ee00f87995c0067d71b8e40419b8ee588"
+                                        },
+                                        "comments": []
+                                      }
+                                    ],
+                                    "site": "d6ca9b9d7fc1938880c59e155f3623be19df737fc6f8b6682f4fb473c07d0a97"
+                                  },
+                                  "comments": []
+                                }
+                              ],
+                              "site": "9367eff97cb6801a8e1a1c8139e69a4ab49cde2f15c3abb3ca197cb2644a23b8"
+                            }
+                          ],
+                          "site": "6f6da0c7d44fe488a67190e189189db26d620c27999e7be986637e876f0e0dd3"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "endpointOrder",
+                        "value": {
+                          "kind": "string",
+                          "value": "firstThenSecond",
+                          "site": "54445b16d382d84198119dd12f4ccc85a02564069b8584348cb6e7dd151760e3"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "sweep",
+                        "value": {
+                          "kind": "string",
+                          "value": "counterClockwise",
+                          "site": "e935122891b442fd71e32bfca33eeb2b9d0fe610e679035b9389ad2b3f7679a7"
+                        },
+                        "comments": []
+                      }
+                    ],
+                    "site": "2554d52342942f3c867c9257608cb5ed5282f8ccfacc72b8824ec8bb6ac336e1"
+                  }
+                ],
+                "site": "16708f7d682d6e76236bd80f6342efbffeeff1ab573995220a6de4b74f3f14db"
+              },
+              "comments": []
+            }
+          ],
+          "site": "060a1819642df6ff14f1a2b761aaa303bc864ab43184f8b2f623d89a85a2f69c"
+        },
+        "site": "672f11f8668d9ac58e091176de44d274c22ebcf8219828a3fa2d974a001a3957",
+        "comments": []
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "fields": [
+        {
+          "name": "path",
+          "value": {
+            "kind": "reference",
+            "declaration": "path",
+            "path": [],
+            "site": "2c7528958f7a8fdf9465a3e87a840836366232bc201c59b4dc60df958b8b2913"
+          },
+          "comments": []
+        },
+        {
+          "name": "rounded",
+          "value": {
+            "kind": "reference",
+            "declaration": "rounded",
+            "path": [],
+            "site": "9034f2035cf53457d2f740ee8b50345185e63cc6d1643b14702200de345ccf52"
+          },
+          "comments": []
+        }
+      ],
+      "site": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a"
+    },
+    "source_sites": [
+      {
+        "id": "8728ec1d4b428110ef9199bde6224306b805d7c800d26d4dcccd174eb23c05ca",
+        "kind": "declaration",
+        "span": {
+          "start": 122,
+          "end": 331
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "546ddadb555d34a027300e7bf41e606e6b2bb5ab9934af0e98d80dc2ea54f18a",
+        "kind": "value",
+        "span": {
+          "start": 180,
+          "end": 187
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "8fdb0025f70fa84720f810a377704b4687d4f60a5277004cc99a28bd45de2d00",
+        "kind": "value",
+        "span": {
+          "start": 206,
+          "end": 207
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "6c85316aa50cec169e397f7b0aed236d22c8719938d90ad28413cfd8eb92c8dd",
+        "kind": "value",
+        "span": {
+          "start": 209,
+          "end": 210
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "e8dff1e82f1de8902512b94bb989afbe8f0cf64bcb4e24178607ff67abff8012",
+        "kind": "value",
+        "span": {
+          "start": 205,
+          "end": 211
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "4def038bf370649dbc4527d0507ac3ba45abfc85493af105e88c472dd16187f2",
+        "kind": "value",
+        "span": {
+          "start": 167,
+          "end": 218
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "38d969e43328b4eddc68cedd03d36ea0f2154482a2b1b692a295d2803e501198",
+        "kind": "value",
+        "span": {
+          "start": 233,
+          "end": 239
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "a2baec72e39de2429fd28af90eaf1a279258720b11a06519bc77cfdf19a79761",
+        "kind": "value",
+        "span": {
+          "start": 258,
+          "end": 260
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "e32e4cce237d596c519340ecb850e6b1d0d62013c6984674a2c8dfea1bbd2142",
+        "kind": "value",
+        "span": {
+          "start": 262,
+          "end": 263
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "4c31f9cfa5e222589a70c112ab09be37f71660fcf092fcdc6dad50c382803364",
+        "kind": "value",
+        "span": {
+          "start": 257,
+          "end": 264
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "d055b3412d940251c2b5391f57ad03ff4872d170afdf77895edae1fdbaaedb32",
+        "kind": "value",
+        "span": {
+          "start": 220,
+          "end": 271
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "77be6bc09775527fefcfdbe513b5b52ec9f69c007b1db85ff99c7e43d5f426ea",
+        "kind": "value",
+        "span": {
+          "start": 286,
+          "end": 291
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "14d4973cf18a0de8d9c009a6d157a72eb84503a574c2fe04606ccf8b0fa7af98",
+        "kind": "value",
+        "span": {
+          "start": 310,
+          "end": 312
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "d9cb05e8ac493f7d4c09d5561e7c90fb9c7fae07e20004471a4b3bfc63652774",
+        "kind": "value",
+        "span": {
+          "start": 314,
+          "end": 316
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "9d8935893faf7b191a5d182491c5dc20167d3c707c58f0fa87e33394b3aedb34",
+        "kind": "value",
+        "span": {
+          "start": 309,
+          "end": 317
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "056a008657d2ee6f2b6d1513707c2129b7512695881ed4daa4f729b4252527e6",
+        "kind": "value",
+        "span": {
+          "start": 273,
+          "end": 324
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "733092d1f17144a3874e286c4b2cbf161c183c738eb6e489727d7d7ff405c1ed",
+        "kind": "value",
+        "span": {
+          "start": 166,
+          "end": 325
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "6b03aad176754743bd2091192b6661094b08b8d688463d4b381d5c33bfb4ce6d",
+        "kind": "value",
+        "span": {
+          "start": 150,
+          "end": 330
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "672f11f8668d9ac58e091176de44d274c22ebcf8219828a3fa2d974a001a3957",
+        "kind": "declaration",
+        "span": {
+          "start": 351,
+          "end": 1096
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "541dfa31d0e654dcd398706aebb8194e0b7c1d3357e6bc3f9d6586462768b2cd",
+        "kind": "value",
+        "span": {
+          "start": 400,
+          "end": 401
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "f5b20fedf21974b670177966fb96a53a77e83b0c468423ecc42ea03793e1a71d",
+        "kind": "value",
+        "span": {
+          "start": 397,
+          "end": 402
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "7366f5983586ac72bf7213c2a78814944b023cfe49b415e22325e85dac5c72f7",
+        "kind": "value",
+        "span": {
+          "start": 431,
+          "end": 437
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "653c64e22334f76f0822c9065488efa1c00c613a48679b194cfc905844cc02ec",
+        "kind": "value",
+        "span": {
+          "start": 471,
+          "end": 496
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "91162800898fb42d5abd9f716a6f9a07dc5d1375980a4fab1cc1ba60e63e7661",
+        "kind": "value",
+        "span": {
+          "start": 517,
+          "end": 520
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "63d57e83b767844770b0d8596e71298097d4729a1788486e934710a07248c1cb",
+        "kind": "value",
+        "span": {
+          "start": 539,
+          "end": 540
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "467021751df744807f64790e17493f47631755e494f8a5c2d1791017cd9e97d6",
+        "kind": "value",
+        "span": {
+          "start": 582,
+          "end": 592
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "0b0df4133bf2195a50b0faa907fbaf4270ad4c8fa8483d81be812bc1f5de9ff6",
+        "kind": "value",
+        "span": {
+          "start": 564,
+          "end": 603
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "14db64bc5c0d3f667912b8f3c40e9c78f5aac32dc0960828eb1132185a6219f1",
+        "kind": "value",
+        "span": {
+          "start": 625,
+          "end": 631
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "f5c006ac551467ad20b7179cd38d847703ef12faa8e28c1f1b034c807a530cf5",
+        "kind": "value",
+        "span": {
+          "start": 655,
+          "end": 660
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "4f12fb9ec38e00bead3bd3ab7b15024511853e170f61e71b4bfce5b2c830b7c2",
+        "kind": "value",
+        "span": {
+          "start": 704,
+          "end": 710
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "a3785e59c4700576562a31a8ef8bb5ac3547a4d06a64d23940a16a5e75969d51",
+        "kind": "value",
+        "span": {
+          "start": 686,
+          "end": 721
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "fecd8722884616c37876f497775ba4a1bc3654281836d5c5afa04d7203106755",
+        "kind": "value",
+        "span": {
+          "start": 455,
+          "end": 730
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "b3124a4ed256512ec0449b6da839658a9361c0ffc7d6f22e915311919ac5d192",
+        "kind": "value",
+        "span": {
+          "start": 748,
+          "end": 772
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "a42699f84c7559eda66693c4125c6a8161e62e082375e7ebc716e25ad911dd1d",
+        "kind": "value",
+        "span": {
+          "start": 793,
+          "end": 796
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "161f85d44f0acdabd7197017a2d0cc20d3c907bfbbf2a5a1d89b8c962ea39087",
+        "kind": "value",
+        "span": {
+          "start": 815,
+          "end": 816
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "fbe0875e28e61dddd26bb84fa84c839c137ec643b7fdc655d761a39b382f8e1f",
+        "kind": "value",
+        "span": {
+          "start": 858,
+          "end": 868
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "00a62597d2876c9b9ce88131b34018a4d6558b9662d4fafac45fad9cf86fdfdf",
+        "kind": "value",
+        "span": {
+          "start": 840,
+          "end": 879
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "ef57415e8ea469add8d3d80c0a0e36db426dd09fb2bb1c4e2dca0ef12e6c2a6c",
+        "kind": "value",
+        "span": {
+          "start": 901,
+          "end": 907
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "66240219ff973e21abfc4ac4107ad9aed44af52830bb412472b9ed27b0c09f2d",
+        "kind": "value",
+        "span": {
+          "start": 931,
+          "end": 938
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "bd407fb7489755770cc403ab4639189ee00f87995c0067d71b8e40419b8ee588",
+        "kind": "value",
+        "span": {
+          "start": 982,
+          "end": 988
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "d6ca9b9d7fc1938880c59e155f3623be19df737fc6f8b6682f4fb473c07d0a97",
+        "kind": "value",
+        "span": {
+          "start": 964,
+          "end": 999
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "9367eff97cb6801a8e1a1c8139e69a4ab49cde2f15c3abb3ca197cb2644a23b8",
+        "kind": "value",
+        "span": {
+          "start": 732,
+          "end": 1008
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "6f6da0c7d44fe488a67190e189189db26d620c27999e7be986637e876f0e0dd3",
+        "kind": "value",
+        "span": {
+          "start": 454,
+          "end": 1009
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "54445b16d382d84198119dd12f4ccc85a02564069b8584348cb6e7dd151760e3",
+        "kind": "value",
+        "span": {
+          "start": 1032,
+          "end": 1049
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "e935122891b442fd71e32bfca33eeb2b9d0fe610e679035b9389ad2b3f7679a7",
+        "kind": "value",
+        "span": {
+          "start": 1064,
+          "end": 1082
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "2554d52342942f3c867c9257608cb5ed5282f8ccfacc72b8824ec8bb6ac336e1",
+        "kind": "value",
+        "span": {
+          "start": 418,
+          "end": 1089
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "16708f7d682d6e76236bd80f6342efbffeeff1ab573995220a6de4b74f3f14db",
+        "kind": "value",
+        "span": {
+          "start": 417,
+          "end": 1090
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "060a1819642df6ff14f1a2b761aaa303bc864ab43184f8b2f623d89a85a2f69c",
+        "kind": "value",
+        "span": {
+          "start": 383,
+          "end": 1095
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "2c7528958f7a8fdf9465a3e87a840836366232bc201c59b4dc60df958b8b2913",
+        "kind": "value",
+        "span": {
+          "start": 1119,
+          "end": 1123
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "9034f2035cf53457d2f740ee8b50345185e63cc6d1643b14702200de345ccf52",
+        "kind": "value",
+        "span": {
+          "start": 1138,
+          "end": 1145
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      },
+      {
+        "id": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a",
+        "kind": "value",
+        "span": {
+          "start": 1107,
+          "end": 1150
+        },
+        "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6"
+      }
+    ],
+    "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6",
+    "ir_digest": "f9b1c0681225af60273613beb5c2fa42f70b32279ddcd644231f7d6a0ef7c487"
+  },
+  "artifact": {
+    "format": "geosolve-executed-sketch-artifact-v4",
+    "source_digest": "6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6",
+    "ir_digest": "f9b1c0681225af60273613beb5c2fa42f70b32279ddcd644231f7d6a0ef7c487",
+    "declarations": [
+      {
+        "declaration": "path",
+        "family": "geometry.polyline",
+        "patch": null,
+        "site": "8728ec1d4b428110ef9199bde6224306b805d7c800d26d4dcccd174eb23c05ca",
+        "result": [
+          {
+            "kind": "curve",
+            "path": [
+              "curve"
+            ]
+          },
+          {
+            "kind": "collection",
+            "path": [
+              "filletableCorners"
+            ]
+          },
+          {
+            "kind": "feature_corner",
+            "path": [
+              "filletableCorners",
+              {
+                "member": "bend"
+              }
+            ]
+          },
+          {
+            "kind": "collection",
+            "path": [
+              "segments"
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "segments",
+              {
+                "member": "start"
+              }
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "segments",
+              {
+                "member": "bend"
+              }
+            ]
+          },
+          {
+            "kind": "collection",
+            "path": [
+              "vertices"
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "vertices",
+              {
+                "member": "start"
+              }
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "vertices",
+              {
+                "member": "bend"
+              }
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "vertices",
+              {
+                "member": "end"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "declaration": "rounded",
+        "family": "computed.filletSet",
+        "patch": null,
+        "site": "672f11f8668d9ac58e091176de44d274c22ebcf8219828a3fa2d974a001a3957",
+        "result": [
+          {
+            "kind": "collection",
+            "path": [
+              "fillets"
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "fillets",
+              {
+                "member": "bend"
+              },
+              "arc"
+            ]
+          },
+          {
+            "kind": "feature_corner",
+            "path": [
+              "fillets",
+              {
+                "member": "bend"
+              },
+              "corner"
+            ]
+          }
+        ]
+      }
+    ],
+    "generated_members": [],
+    "groups": [],
+    "suppressions": [],
+    "value_consumers": [
+      {
+        "value_site": "546ddadb555d34a027300e7bf41e606e6b2bb5ab9934af0e98d80dc2ea54f18a",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          0,
+          "key"
+        ]
+      },
+      {
+        "value_site": "8fdb0025f70fa84720f810a377704b4687d4f60a5277004cc99a28bd45de2d00",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          0,
+          "position",
+          0
+        ]
+      },
+      {
+        "value_site": "6c85316aa50cec169e397f7b0aed236d22c8719938d90ad28413cfd8eb92c8dd",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          0,
+          "position",
+          1
+        ]
+      },
+      {
+        "value_site": "38d969e43328b4eddc68cedd03d36ea0f2154482a2b1b692a295d2803e501198",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          1,
+          "key"
+        ]
+      },
+      {
+        "value_site": "a2baec72e39de2429fd28af90eaf1a279258720b11a06519bc77cfdf19a79761",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          1,
+          "position",
+          0
+        ]
+      },
+      {
+        "value_site": "e32e4cce237d596c519340ecb850e6b1d0d62013c6984674a2c8dfea1bbd2142",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          1,
+          "position",
+          1
+        ]
+      },
+      {
+        "value_site": "77be6bc09775527fefcfdbe513b5b52ec9f69c007b1db85ff99c7e43d5f426ea",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          2,
+          "key"
+        ]
+      },
+      {
+        "value_site": "14d4973cf18a0de8d9c009a6d157a72eb84503a574c2fe04606ccf8b0fa7af98",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          2,
+          "position",
+          0
+        ]
+      },
+      {
+        "value_site": "d9cb05e8ac493f7d4c09d5561e7c90fb9c7fae07e20004471a4b3bfc63652774",
+        "target": {
+          "target": "declaration",
+          "declaration": "path",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          2,
+          "position",
+          1
+        ]
+      },
+      {
+        "value_site": "f5b20fedf21974b670177966fb96a53a77e83b0c468423ecc42ea03793e1a71d",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "radius"
+        ]
+      },
+      {
+        "value_site": "7366f5983586ac72bf7213c2a78814944b023cfe49b415e22325e85dac5c72f7",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "key"
+        ]
+      },
+      {
+        "value_site": "653c64e22334f76f0822c9065488efa1c00c613a48679b194cfc905844cc02ec",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          0,
+          "span"
+        ]
+      },
+      {
+        "value_site": "91162800898fb42d5abd9f716a6f9a07dc5d1375980a4fab1cc1ba60e63e7661",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          0,
+          "parameter"
+        ]
+      },
+      {
+        "value_site": "63d57e83b767844770b0d8596e71298097d4729a1788486e934710a07248c1cb",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          0,
+          "winding"
+        ]
+      },
+      {
+        "value_site": "467021751df744807f64790e17493f47631755e494f8a5c2d1791017cd9e97d6",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          0,
+          "neighborhood",
+          "kind"
+        ]
+      },
+      {
+        "value_site": "14db64bc5c0d3f667912b8f3c40e9c78f5aac32dc0960828eb1132185a6219f1",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          0,
+          "normalSide"
+        ]
+      },
+      {
+        "value_site": "f5c006ac551467ad20b7179cd38d847703ef12faa8e28c1f1b034c807a530cf5",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          0,
+          "trimEndpoint"
+        ]
+      },
+      {
+        "value_site": "4f12fb9ec38e00bead3bd3ab7b15024511853e170f61e71b4bfce5b2c830b7c2",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          0,
+          "periodicAnchor",
+          "kind"
+        ]
+      },
+      {
+        "value_site": "b3124a4ed256512ec0449b6da839658a9361c0ffc7d6f22e915311919ac5d192",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          1,
+          "span"
+        ]
+      },
+      {
+        "value_site": "a42699f84c7559eda66693c4125c6a8161e62e082375e7ebc716e25ad911dd1d",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          1,
+          "parameter"
+        ]
+      },
+      {
+        "value_site": "161f85d44f0acdabd7197017a2d0cc20d3c907bfbbf2a5a1d89b8c962ea39087",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          1,
+          "winding"
+        ]
+      },
+      {
+        "value_site": "fbe0875e28e61dddd26bb84fa84c839c137ec643b7fdc655d761a39b382f8e1f",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          1,
+          "neighborhood",
+          "kind"
+        ]
+      },
+      {
+        "value_site": "ef57415e8ea469add8d3d80c0a0e36db426dd09fb2bb1c4e2dca0ef12e6c2a6c",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          1,
+          "normalSide"
+        ]
+      },
+      {
+        "value_site": "66240219ff973e21abfc4ac4107ad9aed44af52830bb412472b9ed27b0c09f2d",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          1,
+          "trimEndpoint"
+        ]
+      },
+      {
+        "value_site": "bd407fb7489755770cc403ab4639189ee00f87995c0067d71b8e40419b8ee588",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "parents",
+          1,
+          "periodicAnchor",
+          "kind"
+        ]
+      },
+      {
+        "value_site": "54445b16d382d84198119dd12f4ccc85a02564069b8584348cb6e7dd151760e3",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "endpointOrder"
+        ]
+      },
+      {
+        "value_site": "e935122891b442fd71e32bfca33eeb2b9d0fe610e679035b9389ad2b3f7679a7",
+        "target": {
+          "target": "declaration",
+          "declaration": "rounded",
+          "family": "computed.filletSet"
+        },
+        "property": [
+          "corners",
+          0,
+          "sweep"
+        ]
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "value": {
+        "path": {
+          "kind": "reference",
+          "value": {
+            "declaration": "path",
+            "path": []
+          }
+        },
+        "rounded": {
+          "kind": "reference",
+          "value": {
+            "declaration": "rounded",
+            "path": []
+          }
+        }
+      }
+    },
+    "artifact_digest": "ab991f6c595fffe14c47b1f83a5adcc6552b5cd76562e9875823b6a01080e969"
+  },
+  "canonicalIrJson": "{\"format\":\"geosolve-managed-sketch-ir-v4\",\"imports\":[{\"module\":\"@geosolve/sketch-code\",\"bindings\":[\"sketch\",\"mm\"]}],\"statements\":[{\"statement\":\"declaration\",\"variable\":\"path\",\"symbol\":\"path\",\"builder_path\":[\"geometry\",\"polyline\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"vertices\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"object\",\"fields\":[{\"name\":\"key\",\"value\":{\"kind\":\"string\",\"value\":\"start\",\"site\":\"546ddadb555d34a027300e7bf41e606e6b2bb5ab9934af0e98d80dc2ea54f18a\"},\"comments\":[]},{\"name\":\"position\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":0.0,\"site\":\"8fdb0025f70fa84720f810a377704b4687d4f60a5277004cc99a28bd45de2d00\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"6c85316aa50cec169e397f7b0aed236d22c8719938d90ad28413cfd8eb92c8dd\"}],\"site\":\"e8dff1e82f1de8902512b94bb989afbe8f0cf64bcb4e24178607ff67abff8012\"},\"comments\":[]}],\"site\":\"4def038bf370649dbc4527d0507ac3ba45abfc85493af105e88c472dd16187f2\"},{\"kind\":\"object\",\"fields\":[{\"name\":\"key\",\"value\":{\"kind\":\"string\",\"value\":\"bend\",\"site\":\"38d969e43328b4eddc68cedd03d36ea0f2154482a2b1b692a295d2803e501198\"},\"comments\":[]},{\"name\":\"position\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":20.0,\"site\":\"a2baec72e39de2429fd28af90eaf1a279258720b11a06519bc77cfdf19a79761\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"e32e4cce237d596c519340ecb850e6b1d0d62013c6984674a2c8dfea1bbd2142\"}],\"site\":\"4c31f9cfa5e222589a70c112ab09be37f71660fcf092fcdc6dad50c382803364\"},\"comments\":[]}],\"site\":\"d055b3412d940251c2b5391f57ad03ff4872d170afdf77895edae1fdbaaedb32\"},{\"kind\":\"object\",\"fields\":[{\"name\":\"key\",\"value\":{\"kind\":\"string\",\"value\":\"end\",\"site\":\"77be6bc09775527fefcfdbe513b5b52ec9f69c007b1db85ff99c7e43d5f426ea\"},\"comments\":[]},{\"name\":\"position\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":20.0,\"site\":\"14d4973cf18a0de8d9c009a6d157a72eb84503a574c2fe04606ccf8b0fa7af98\"},{\"kind\":\"number\",\"value\":20.0,\"site\":\"d9cb05e8ac493f7d4c09d5561e7c90fb9c7fae07e20004471a4b3bfc63652774\"}],\"site\":\"9d8935893faf7b191a5d182491c5dc20167d3c707c58f0fa87e33394b3aedb34\"},\"comments\":[]}],\"site\":\"056a008657d2ee6f2b6d1513707c2129b7512695881ed4daa4f729b4252527e6\"}],\"site\":\"733092d1f17144a3874e286c4b2cbf161c183c738eb6e489727d7d7ff405c1ed\"},\"comments\":[]}],\"site\":\"6b03aad176754743bd2091192b6661094b08b8d688463d4b381d5c33bfb4ce6d\"},\"site\":\"8728ec1d4b428110ef9199bde6224306b805d7c800d26d4dcccd174eb23c05ca\",\"comments\":[]},{\"statement\":\"declaration\",\"variable\":\"rounded\",\"symbol\":\"rounded\",\"builder_path\":[\"computed\",\"filletSet\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"radius\",\"value\":{\"kind\":\"call\",\"callee\":\"mm\",\"arguments\":[{\"kind\":\"number\",\"value\":2.0,\"site\":\"541dfa31d0e654dcd398706aebb8194e0b7c1d3357e6bc3f9d6586462768b2cd\"}],\"site\":\"f5b20fedf21974b670177966fb96a53a77e83b0c468423ecc42ea03793e1a71d\"},\"comments\":[]},{\"name\":\"corners\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"object\",\"fields\":[{\"name\":\"key\",\"value\":{\"kind\":\"string\",\"value\":\"bend\",\"site\":\"7366f5983586ac72bf7213c2a78814944b023cfe49b415e22325e85dac5c72f7\"},\"comments\":[]},{\"name\":\"parents\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"object\",\"fields\":[{\"name\":\"span\",\"value\":{\"kind\":\"reference\",\"declaration\":\"path\",\"path\":[\"segments\",\"byKey\",\"start\"],\"site\":\"653c64e22334f76f0822c9065488efa1c00c613a48679b194cfc905844cc02ec\"},\"comments\":[]},{\"name\":\"parameter\",\"value\":{\"kind\":\"number\",\"value\":0.9,\"site\":\"91162800898fb42d5abd9f716a6f9a07dc5d1375980a4fab1cc1ba60e63e7661\"},\"comments\":[]},{\"name\":\"winding\",\"value\":{\"kind\":\"number\",\"value\":0.0,\"site\":\"63d57e83b767844770b0d8596e71298097d4729a1788486e934710a07248c1cb\"},\"comments\":[]},{\"name\":\"neighborhood\",\"value\":{\"kind\":\"object\",\"fields\":[{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"interior\",\"site\":\"467021751df744807f64790e17493f47631755e494f8a5c2d1791017cd9e97d6\"},\"comments\":[]}],\"site\":\"0b0df4133bf2195a50b0faa907fbaf4270ad4c8fa8483d81be812bc1f5de9ff6\"},\"comments\":[]},{\"name\":\"normalSide\",\"value\":{\"kind\":\"string\",\"value\":\"left\",\"site\":\"14db64bc5c0d3f667912b8f3c40e9c78f5aac32dc0960828eb1132185a6219f1\"},\"comments\":[]},{\"name\":\"trimEndpoint\",\"value\":{\"kind\":\"string\",\"value\":\"end\",\"site\":\"f5c006ac551467ad20b7179cd38d847703ef12faa8e28c1f1b034c807a530cf5\"},\"comments\":[]},{\"name\":\"periodicAnchor\",\"value\":{\"kind\":\"object\",\"fields\":[{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"none\",\"site\":\"4f12fb9ec38e00bead3bd3ab7b15024511853e170f61e71b4bfce5b2c830b7c2\"},\"comments\":[]}],\"site\":\"a3785e59c4700576562a31a8ef8bb5ac3547a4d06a64d23940a16a5e75969d51\"},\"comments\":[]}],\"site\":\"fecd8722884616c37876f497775ba4a1bc3654281836d5c5afa04d7203106755\"},{\"kind\":\"object\",\"fields\":[{\"name\":\"span\",\"value\":{\"kind\":\"reference\",\"declaration\":\"path\",\"path\":[\"segments\",\"byKey\",\"bend\"],\"site\":\"b3124a4ed256512ec0449b6da839658a9361c0ffc7d6f22e915311919ac5d192\"},\"comments\":[]},{\"name\":\"parameter\",\"value\":{\"kind\":\"number\",\"value\":0.1,\"site\":\"a42699f84c7559eda66693c4125c6a8161e62e082375e7ebc716e25ad911dd1d\"},\"comments\":[]},{\"name\":\"winding\",\"value\":{\"kind\":\"number\",\"value\":0.0,\"site\":\"161f85d44f0acdabd7197017a2d0cc20d3c907bfbbf2a5a1d89b8c962ea39087\"},\"comments\":[]},{\"name\":\"neighborhood\",\"value\":{\"kind\":\"object\",\"fields\":[{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"interior\",\"site\":\"fbe0875e28e61dddd26bb84fa84c839c137ec643b7fdc655d761a39b382f8e1f\"},\"comments\":[]}],\"site\":\"00a62597d2876c9b9ce88131b34018a4d6558b9662d4fafac45fad9cf86fdfdf\"},\"comments\":[]},{\"name\":\"normalSide\",\"value\":{\"kind\":\"string\",\"value\":\"left\",\"site\":\"ef57415e8ea469add8d3d80c0a0e36db426dd09fb2bb1c4e2dca0ef12e6c2a6c\"},\"comments\":[]},{\"name\":\"trimEndpoint\",\"value\":{\"kind\":\"string\",\"value\":\"start\",\"site\":\"66240219ff973e21abfc4ac4107ad9aed44af52830bb412472b9ed27b0c09f2d\"},\"comments\":[]},{\"name\":\"periodicAnchor\",\"value\":{\"kind\":\"object\",\"fields\":[{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"none\",\"site\":\"bd407fb7489755770cc403ab4639189ee00f87995c0067d71b8e40419b8ee588\"},\"comments\":[]}],\"site\":\"d6ca9b9d7fc1938880c59e155f3623be19df737fc6f8b6682f4fb473c07d0a97\"},\"comments\":[]}],\"site\":\"9367eff97cb6801a8e1a1c8139e69a4ab49cde2f15c3abb3ca197cb2644a23b8\"}],\"site\":\"6f6da0c7d44fe488a67190e189189db26d620c27999e7be986637e876f0e0dd3\"},\"comments\":[]},{\"name\":\"endpointOrder\",\"value\":{\"kind\":\"string\",\"value\":\"firstThenSecond\",\"site\":\"54445b16d382d84198119dd12f4ccc85a02564069b8584348cb6e7dd151760e3\"},\"comments\":[]},{\"name\":\"sweep\",\"value\":{\"kind\":\"string\",\"value\":\"counterClockwise\",\"site\":\"e935122891b442fd71e32bfca33eeb2b9d0fe610e679035b9389ad2b3f7679a7\"},\"comments\":[]}],\"site\":\"2554d52342942f3c867c9257608cb5ed5282f8ccfacc72b8824ec8bb6ac336e1\"}],\"site\":\"16708f7d682d6e76236bd80f6342efbffeeff1ab573995220a6de4b74f3f14db\"},\"comments\":[]}],\"site\":\"060a1819642df6ff14f1a2b761aaa303bc864ab43184f8b2f623d89a85a2f69c\"},\"site\":\"672f11f8668d9ac58e091176de44d274c22ebcf8219828a3fa2d974a001a3957\",\"comments\":[]}],\"output\":{\"kind\":\"object\",\"fields\":[{\"name\":\"path\",\"value\":{\"kind\":\"reference\",\"declaration\":\"path\",\"path\":[],\"site\":\"2c7528958f7a8fdf9465a3e87a840836366232bc201c59b4dc60df958b8b2913\"},\"comments\":[]},{\"name\":\"rounded\",\"value\":{\"kind\":\"reference\",\"declaration\":\"rounded\",\"path\":[],\"site\":\"9034f2035cf53457d2f740ee8b50345185e63cc6d1643b14702200de345ccf52\"},\"comments\":[]}],\"site\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\"},\"source_sites\":[{\"id\":\"8728ec1d4b428110ef9199bde6224306b805d7c800d26d4dcccd174eb23c05ca\",\"kind\":\"declaration\",\"span\":{\"start\":122,\"end\":331},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"546ddadb555d34a027300e7bf41e606e6b2bb5ab9934af0e98d80dc2ea54f18a\",\"kind\":\"value\",\"span\":{\"start\":180,\"end\":187},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"8fdb0025f70fa84720f810a377704b4687d4f60a5277004cc99a28bd45de2d00\",\"kind\":\"value\",\"span\":{\"start\":206,\"end\":207},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"6c85316aa50cec169e397f7b0aed236d22c8719938d90ad28413cfd8eb92c8dd\",\"kind\":\"value\",\"span\":{\"start\":209,\"end\":210},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"e8dff1e82f1de8902512b94bb989afbe8f0cf64bcb4e24178607ff67abff8012\",\"kind\":\"value\",\"span\":{\"start\":205,\"end\":211},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"4def038bf370649dbc4527d0507ac3ba45abfc85493af105e88c472dd16187f2\",\"kind\":\"value\",\"span\":{\"start\":167,\"end\":218},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"38d969e43328b4eddc68cedd03d36ea0f2154482a2b1b692a295d2803e501198\",\"kind\":\"value\",\"span\":{\"start\":233,\"end\":239},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"a2baec72e39de2429fd28af90eaf1a279258720b11a06519bc77cfdf19a79761\",\"kind\":\"value\",\"span\":{\"start\":258,\"end\":260},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"e32e4cce237d596c519340ecb850e6b1d0d62013c6984674a2c8dfea1bbd2142\",\"kind\":\"value\",\"span\":{\"start\":262,\"end\":263},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"4c31f9cfa5e222589a70c112ab09be37f71660fcf092fcdc6dad50c382803364\",\"kind\":\"value\",\"span\":{\"start\":257,\"end\":264},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"d055b3412d940251c2b5391f57ad03ff4872d170afdf77895edae1fdbaaedb32\",\"kind\":\"value\",\"span\":{\"start\":220,\"end\":271},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"77be6bc09775527fefcfdbe513b5b52ec9f69c007b1db85ff99c7e43d5f426ea\",\"kind\":\"value\",\"span\":{\"start\":286,\"end\":291},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"14d4973cf18a0de8d9c009a6d157a72eb84503a574c2fe04606ccf8b0fa7af98\",\"kind\":\"value\",\"span\":{\"start\":310,\"end\":312},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"d9cb05e8ac493f7d4c09d5561e7c90fb9c7fae07e20004471a4b3bfc63652774\",\"kind\":\"value\",\"span\":{\"start\":314,\"end\":316},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"9d8935893faf7b191a5d182491c5dc20167d3c707c58f0fa87e33394b3aedb34\",\"kind\":\"value\",\"span\":{\"start\":309,\"end\":317},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"056a008657d2ee6f2b6d1513707c2129b7512695881ed4daa4f729b4252527e6\",\"kind\":\"value\",\"span\":{\"start\":273,\"end\":324},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"733092d1f17144a3874e286c4b2cbf161c183c738eb6e489727d7d7ff405c1ed\",\"kind\":\"value\",\"span\":{\"start\":166,\"end\":325},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"6b03aad176754743bd2091192b6661094b08b8d688463d4b381d5c33bfb4ce6d\",\"kind\":\"value\",\"span\":{\"start\":150,\"end\":330},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"672f11f8668d9ac58e091176de44d274c22ebcf8219828a3fa2d974a001a3957\",\"kind\":\"declaration\",\"span\":{\"start\":351,\"end\":1096},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"541dfa31d0e654dcd398706aebb8194e0b7c1d3357e6bc3f9d6586462768b2cd\",\"kind\":\"value\",\"span\":{\"start\":400,\"end\":401},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"f5b20fedf21974b670177966fb96a53a77e83b0c468423ecc42ea03793e1a71d\",\"kind\":\"value\",\"span\":{\"start\":397,\"end\":402},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"7366f5983586ac72bf7213c2a78814944b023cfe49b415e22325e85dac5c72f7\",\"kind\":\"value\",\"span\":{\"start\":431,\"end\":437},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"653c64e22334f76f0822c9065488efa1c00c613a48679b194cfc905844cc02ec\",\"kind\":\"value\",\"span\":{\"start\":471,\"end\":496},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"91162800898fb42d5abd9f716a6f9a07dc5d1375980a4fab1cc1ba60e63e7661\",\"kind\":\"value\",\"span\":{\"start\":517,\"end\":520},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"63d57e83b767844770b0d8596e71298097d4729a1788486e934710a07248c1cb\",\"kind\":\"value\",\"span\":{\"start\":539,\"end\":540},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"467021751df744807f64790e17493f47631755e494f8a5c2d1791017cd9e97d6\",\"kind\":\"value\",\"span\":{\"start\":582,\"end\":592},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"0b0df4133bf2195a50b0faa907fbaf4270ad4c8fa8483d81be812bc1f5de9ff6\",\"kind\":\"value\",\"span\":{\"start\":564,\"end\":603},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"14db64bc5c0d3f667912b8f3c40e9c78f5aac32dc0960828eb1132185a6219f1\",\"kind\":\"value\",\"span\":{\"start\":625,\"end\":631},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"f5c006ac551467ad20b7179cd38d847703ef12faa8e28c1f1b034c807a530cf5\",\"kind\":\"value\",\"span\":{\"start\":655,\"end\":660},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"4f12fb9ec38e00bead3bd3ab7b15024511853e170f61e71b4bfce5b2c830b7c2\",\"kind\":\"value\",\"span\":{\"start\":704,\"end\":710},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"a3785e59c4700576562a31a8ef8bb5ac3547a4d06a64d23940a16a5e75969d51\",\"kind\":\"value\",\"span\":{\"start\":686,\"end\":721},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"fecd8722884616c37876f497775ba4a1bc3654281836d5c5afa04d7203106755\",\"kind\":\"value\",\"span\":{\"start\":455,\"end\":730},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"b3124a4ed256512ec0449b6da839658a9361c0ffc7d6f22e915311919ac5d192\",\"kind\":\"value\",\"span\":{\"start\":748,\"end\":772},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"a42699f84c7559eda66693c4125c6a8161e62e082375e7ebc716e25ad911dd1d\",\"kind\":\"value\",\"span\":{\"start\":793,\"end\":796},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"161f85d44f0acdabd7197017a2d0cc20d3c907bfbbf2a5a1d89b8c962ea39087\",\"kind\":\"value\",\"span\":{\"start\":815,\"end\":816},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"fbe0875e28e61dddd26bb84fa84c839c137ec643b7fdc655d761a39b382f8e1f\",\"kind\":\"value\",\"span\":{\"start\":858,\"end\":868},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"00a62597d2876c9b9ce88131b34018a4d6558b9662d4fafac45fad9cf86fdfdf\",\"kind\":\"value\",\"span\":{\"start\":840,\"end\":879},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"ef57415e8ea469add8d3d80c0a0e36db426dd09fb2bb1c4e2dca0ef12e6c2a6c\",\"kind\":\"value\",\"span\":{\"start\":901,\"end\":907},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"66240219ff973e21abfc4ac4107ad9aed44af52830bb412472b9ed27b0c09f2d\",\"kind\":\"value\",\"span\":{\"start\":931,\"end\":938},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"bd407fb7489755770cc403ab4639189ee00f87995c0067d71b8e40419b8ee588\",\"kind\":\"value\",\"span\":{\"start\":982,\"end\":988},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"d6ca9b9d7fc1938880c59e155f3623be19df737fc6f8b6682f4fb473c07d0a97\",\"kind\":\"value\",\"span\":{\"start\":964,\"end\":999},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"9367eff97cb6801a8e1a1c8139e69a4ab49cde2f15c3abb3ca197cb2644a23b8\",\"kind\":\"value\",\"span\":{\"start\":732,\"end\":1008},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"6f6da0c7d44fe488a67190e189189db26d620c27999e7be986637e876f0e0dd3\",\"kind\":\"value\",\"span\":{\"start\":454,\"end\":1009},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"54445b16d382d84198119dd12f4ccc85a02564069b8584348cb6e7dd151760e3\",\"kind\":\"value\",\"span\":{\"start\":1032,\"end\":1049},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"e935122891b442fd71e32bfca33eeb2b9d0fe610e679035b9389ad2b3f7679a7\",\"kind\":\"value\",\"span\":{\"start\":1064,\"end\":1082},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"2554d52342942f3c867c9257608cb5ed5282f8ccfacc72b8824ec8bb6ac336e1\",\"kind\":\"value\",\"span\":{\"start\":418,\"end\":1089},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"16708f7d682d6e76236bd80f6342efbffeeff1ab573995220a6de4b74f3f14db\",\"kind\":\"value\",\"span\":{\"start\":417,\"end\":1090},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"060a1819642df6ff14f1a2b761aaa303bc864ab43184f8b2f623d89a85a2f69c\",\"kind\":\"value\",\"span\":{\"start\":383,\"end\":1095},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"2c7528958f7a8fdf9465a3e87a840836366232bc201c59b4dc60df958b8b2913\",\"kind\":\"value\",\"span\":{\"start\":1119,\"end\":1123},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"9034f2035cf53457d2f740ee8b50345185e63cc6d1643b14702200de345ccf52\",\"kind\":\"value\",\"span\":{\"start\":1138,\"end\":1145},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"},{\"id\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\",\"kind\":\"value\",\"span\":{\"start\":1107,\"end\":1150},\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\"}],\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\",\"ir_digest\":\"f9b1c0681225af60273613beb5c2fa42f70b32279ddcd644231f7d6a0ef7c487\"}",
+  "canonicalArtifactJson": "{\"format\":\"geosolve-executed-sketch-artifact-v4\",\"source_digest\":\"6eef37c043e04d8c9670a47d42d31367511a2d905404a1d1b580b9beb001c7c6\",\"ir_digest\":\"f9b1c0681225af60273613beb5c2fa42f70b32279ddcd644231f7d6a0ef7c487\",\"declarations\":[{\"declaration\":\"path\",\"family\":\"geometry.polyline\",\"patch\":null,\"site\":\"8728ec1d4b428110ef9199bde6224306b805d7c800d26d4dcccd174eb23c05ca\",\"result\":[{\"kind\":\"curve\",\"path\":[\"curve\"]},{\"kind\":\"collection\",\"path\":[\"filletableCorners\"]},{\"kind\":\"feature_corner\",\"path\":[\"filletableCorners\",{\"member\":\"bend\"}]},{\"kind\":\"collection\",\"path\":[\"segments\"]},{\"kind\":\"curve_span\",\"path\":[\"segments\",{\"member\":\"start\"}]},{\"kind\":\"curve_span\",\"path\":[\"segments\",{\"member\":\"bend\"}]},{\"kind\":\"collection\",\"path\":[\"vertices\"]},{\"kind\":\"point\",\"path\":[\"vertices\",{\"member\":\"start\"}]},{\"kind\":\"point\",\"path\":[\"vertices\",{\"member\":\"bend\"}]},{\"kind\":\"point\",\"path\":[\"vertices\",{\"member\":\"end\"}]}]},{\"declaration\":\"rounded\",\"family\":\"computed.filletSet\",\"patch\":null,\"site\":\"672f11f8668d9ac58e091176de44d274c22ebcf8219828a3fa2d974a001a3957\",\"result\":[{\"kind\":\"collection\",\"path\":[\"fillets\"]},{\"kind\":\"curve_span\",\"path\":[\"fillets\",{\"member\":\"bend\"},\"arc\"]},{\"kind\":\"feature_corner\",\"path\":[\"fillets\",{\"member\":\"bend\"},\"corner\"]}]}],\"generated_members\":[],\"groups\":[],\"suppressions\":[],\"value_consumers\":[{\"value_site\":\"546ddadb555d34a027300e7bf41e606e6b2bb5ab9934af0e98d80dc2ea54f18a\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",0,\"key\"]},{\"value_site\":\"8fdb0025f70fa84720f810a377704b4687d4f60a5277004cc99a28bd45de2d00\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",0,\"position\",0]},{\"value_site\":\"6c85316aa50cec169e397f7b0aed236d22c8719938d90ad28413cfd8eb92c8dd\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",0,\"position\",1]},{\"value_site\":\"38d969e43328b4eddc68cedd03d36ea0f2154482a2b1b692a295d2803e501198\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",1,\"key\"]},{\"value_site\":\"a2baec72e39de2429fd28af90eaf1a279258720b11a06519bc77cfdf19a79761\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",1,\"position\",0]},{\"value_site\":\"e32e4cce237d596c519340ecb850e6b1d0d62013c6984674a2c8dfea1bbd2142\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",1,\"position\",1]},{\"value_site\":\"77be6bc09775527fefcfdbe513b5b52ec9f69c007b1db85ff99c7e43d5f426ea\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",2,\"key\"]},{\"value_site\":\"14d4973cf18a0de8d9c009a6d157a72eb84503a574c2fe04606ccf8b0fa7af98\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",2,\"position\",0]},{\"value_site\":\"d9cb05e8ac493f7d4c09d5561e7c90fb9c7fae07e20004471a4b3bfc63652774\",\"target\":{\"target\":\"declaration\",\"declaration\":\"path\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",2,\"position\",1]},{\"value_site\":\"f5b20fedf21974b670177966fb96a53a77e83b0c468423ecc42ea03793e1a71d\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"radius\"]},{\"value_site\":\"7366f5983586ac72bf7213c2a78814944b023cfe49b415e22325e85dac5c72f7\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"key\"]},{\"value_site\":\"653c64e22334f76f0822c9065488efa1c00c613a48679b194cfc905844cc02ec\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",0,\"span\"]},{\"value_site\":\"91162800898fb42d5abd9f716a6f9a07dc5d1375980a4fab1cc1ba60e63e7661\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",0,\"parameter\"]},{\"value_site\":\"63d57e83b767844770b0d8596e71298097d4729a1788486e934710a07248c1cb\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",0,\"winding\"]},{\"value_site\":\"467021751df744807f64790e17493f47631755e494f8a5c2d1791017cd9e97d6\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",0,\"neighborhood\",\"kind\"]},{\"value_site\":\"14db64bc5c0d3f667912b8f3c40e9c78f5aac32dc0960828eb1132185a6219f1\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",0,\"normalSide\"]},{\"value_site\":\"f5c006ac551467ad20b7179cd38d847703ef12faa8e28c1f1b034c807a530cf5\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",0,\"trimEndpoint\"]},{\"value_site\":\"4f12fb9ec38e00bead3bd3ab7b15024511853e170f61e71b4bfce5b2c830b7c2\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",0,\"periodicAnchor\",\"kind\"]},{\"value_site\":\"b3124a4ed256512ec0449b6da839658a9361c0ffc7d6f22e915311919ac5d192\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",1,\"span\"]},{\"value_site\":\"a42699f84c7559eda66693c4125c6a8161e62e082375e7ebc716e25ad911dd1d\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",1,\"parameter\"]},{\"value_site\":\"161f85d44f0acdabd7197017a2d0cc20d3c907bfbbf2a5a1d89b8c962ea39087\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",1,\"winding\"]},{\"value_site\":\"fbe0875e28e61dddd26bb84fa84c839c137ec643b7fdc655d761a39b382f8e1f\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",1,\"neighborhood\",\"kind\"]},{\"value_site\":\"ef57415e8ea469add8d3d80c0a0e36db426dd09fb2bb1c4e2dca0ef12e6c2a6c\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",1,\"normalSide\"]},{\"value_site\":\"66240219ff973e21abfc4ac4107ad9aed44af52830bb412472b9ed27b0c09f2d\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",1,\"trimEndpoint\"]},{\"value_site\":\"bd407fb7489755770cc403ab4639189ee00f87995c0067d71b8e40419b8ee588\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"parents\",1,\"periodicAnchor\",\"kind\"]},{\"value_site\":\"54445b16d382d84198119dd12f4ccc85a02564069b8584348cb6e7dd151760e3\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"endpointOrder\"]},{\"value_site\":\"e935122891b442fd71e32bfca33eeb2b9d0fe610e679035b9389ad2b3f7679a7\",\"target\":{\"target\":\"declaration\",\"declaration\":\"rounded\",\"family\":\"computed.filletSet\"},\"property\":[\"corners\",0,\"sweep\"]}],\"output\":{\"kind\":\"object\",\"value\":{\"path\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"path\",\"path\":[]}},\"rounded\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"rounded\",\"path\":[]}}}},\"artifact_digest\":\"ab991f6c595fffe14c47b1f83a5adcc6552b5cd76562e9875823b6a01080e969\"}"
+}

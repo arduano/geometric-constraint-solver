@@ -1,0 +1,592 @@
+{
+  "inputSourceDigest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0",
+  "normalizedSource": "\"use geosolve sketch\";\nimport { sketch, mm } from \"@geosolve/sketch-code\";\n\nexport default sketch(($) => {\n  const bar = $.geometry.segment(\"bar\", {\n    start: [0, 0],\n    end: [20, 0],\n  });\n  const horizontal = $.constraint.horizontal(\"horizontal\", {\n    span: bar.span,\n  });\n  const length = $.dimension.pointDistance(\"length\", {\n    first: bar.start,\n    second: bar.end,\n    value: mm(20),\n  });\n  return {\n    bar: bar,\n    horizontal: horizontal,\n    length: length,\n  };\n});\n",
+  "ir": {
+    "format": "geosolve-managed-sketch-ir-v4",
+    "imports": [
+      {
+        "module": "@geosolve/sketch-code",
+        "bindings": [
+          "sketch",
+          "mm"
+        ]
+      }
+    ],
+    "statements": [
+      {
+        "statement": "declaration",
+        "variable": "bar",
+        "symbol": "bar",
+        "builder_path": [
+          "geometry",
+          "segment"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "start",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "48c816af138a402431ca373afc9e3ae76c225efd190e9cf1bccbdc53c9cf3554"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "bdc1bfa481da879b2dd42f5c3a509b8af99b4f678f39e39ce3fe27f4cc4f5261"
+                  }
+                ],
+                "site": "e01e9591015cf89f8390e786c3af6a8a3dbafa90c51867b7985d4b7883c54f5f"
+              },
+              "comments": []
+            },
+            {
+              "name": "end",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 20,
+                    "site": "8b8a38c6a54c846cbc30118859bd7346c25d237df7439cdfef2d0edbb4c51362"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "cb5179d3642c7cdf59c889a309c1b1753a2ad0952c3b0b3cd0067e8e8fe58e73"
+                  }
+                ],
+                "site": "a33d8cd821883c636af7b2a21fd94f6fd59fb6eb5c3ffcc5694ad80f6ddece96"
+              },
+              "comments": []
+            }
+          ],
+          "site": "3ef3ca1430a3fcb3a15f3019b22b9bc98f85b5e9cf6046789fb1eaac2aa50b45"
+        },
+        "site": "27292f7c197e016673f013a7330d79da128abada9f1059de4f3ef12382279519",
+        "comments": []
+      },
+      {
+        "statement": "declaration",
+        "variable": "horizontal",
+        "symbol": "horizontal",
+        "builder_path": [
+          "constraint",
+          "horizontal"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "span",
+              "value": {
+                "kind": "reference",
+                "declaration": "bar",
+                "path": [
+                  "span"
+                ],
+                "site": "0a400c774cbe19281923c68e970d3925383e2028ec280845fa7088679fa3d15d"
+              },
+              "comments": []
+            }
+          ],
+          "site": "ef5ebd7a379f6b955886893b9d74a0dfd0fbd13d503612f2659114c693bfca04"
+        },
+        "site": "1741f70bf75ab064ee6a33a7fb813fa3f53877c8494c26cb1f4d09fa879b788e",
+        "comments": []
+      },
+      {
+        "statement": "declaration",
+        "variable": "length",
+        "symbol": "length",
+        "builder_path": [
+          "dimension",
+          "pointDistance"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "first",
+              "value": {
+                "kind": "reference",
+                "declaration": "bar",
+                "path": [
+                  "start"
+                ],
+                "site": "6409527b079d4c21cfd9d903a2d31e270d21722d7a120dac436ae9f865de36cf"
+              },
+              "comments": []
+            },
+            {
+              "name": "second",
+              "value": {
+                "kind": "reference",
+                "declaration": "bar",
+                "path": [
+                  "end"
+                ],
+                "site": "3a5a05f70cf4b2125c7784e2c9f2e9e58900f3a356ea74d5b8fd298e46db97e5"
+              },
+              "comments": []
+            },
+            {
+              "name": "value",
+              "value": {
+                "kind": "call",
+                "callee": "mm",
+                "arguments": [
+                  {
+                    "kind": "number",
+                    "value": 20,
+                    "site": "3bcf9230eb4dcb35256d724603f48dbdca795959a01720ea62aaafba6fe7379d"
+                  }
+                ],
+                "site": "ae383b0265806f21a795ce8b4b71202368e9440685f0e2def4ab566a67589b13"
+              },
+              "comments": []
+            }
+          ],
+          "site": "d511a18d401a259f786166557b928af9b1abbe313a23c50fa104f88e5dc82a22"
+        },
+        "site": "b39b81f2b42ed12e0524e183ad7be07f226b7d25ec56a9a359f610e7066f487e",
+        "comments": []
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "fields": [
+        {
+          "name": "bar",
+          "value": {
+            "kind": "reference",
+            "declaration": "bar",
+            "path": [],
+            "site": "459e63be1455db72afd91bfb23fd95ba2ebda38ca0277f6a83fcd6d79f14e9d7"
+          },
+          "comments": []
+        },
+        {
+          "name": "horizontal",
+          "value": {
+            "kind": "reference",
+            "declaration": "horizontal",
+            "path": [],
+            "site": "02cdef82a2c4d040e78ad93aa34f449ed886ad27e0139a81bdfef19f2db02860"
+          },
+          "comments": []
+        },
+        {
+          "name": "length",
+          "value": {
+            "kind": "reference",
+            "declaration": "length",
+            "path": [],
+            "site": "11aa072c257fb46b44021964c6d619c0da7f9be9787ff8f2e97ced3e3a99d77b"
+          },
+          "comments": []
+        }
+      ],
+      "site": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a"
+    },
+    "source_sites": [
+      {
+        "id": "27292f7c197e016673f013a7330d79da128abada9f1059de4f3ef12382279519",
+        "kind": "declaration",
+        "span": {
+          "start": 121,
+          "end": 190
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "48c816af138a402431ca373afc9e3ae76c225efd190e9cf1bccbdc53c9cf3554",
+        "kind": "value",
+        "span": {
+          "start": 161,
+          "end": 162
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "bdc1bfa481da879b2dd42f5c3a509b8af99b4f678f39e39ce3fe27f4cc4f5261",
+        "kind": "value",
+        "span": {
+          "start": 164,
+          "end": 165
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "e01e9591015cf89f8390e786c3af6a8a3dbafa90c51867b7985d4b7883c54f5f",
+        "kind": "value",
+        "span": {
+          "start": 160,
+          "end": 166
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "8b8a38c6a54c846cbc30118859bd7346c25d237df7439cdfef2d0edbb4c51362",
+        "kind": "value",
+        "span": {
+          "start": 178,
+          "end": 180
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "cb5179d3642c7cdf59c889a309c1b1753a2ad0952c3b0b3cd0067e8e8fe58e73",
+        "kind": "value",
+        "span": {
+          "start": 182,
+          "end": 183
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "a33d8cd821883c636af7b2a21fd94f6fd59fb6eb5c3ffcc5694ad80f6ddece96",
+        "kind": "value",
+        "span": {
+          "start": 177,
+          "end": 184
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "3ef3ca1430a3fcb3a15f3019b22b9bc98f85b5e9cf6046789fb1eaac2aa50b45",
+        "kind": "value",
+        "span": {
+          "start": 147,
+          "end": 189
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "1741f70bf75ab064ee6a33a7fb813fa3f53877c8494c26cb1f4d09fa879b788e",
+        "kind": "declaration",
+        "span": {
+          "start": 213,
+          "end": 277
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "0a400c774cbe19281923c68e970d3925383e2028ec280845fa7088679fa3d15d",
+        "kind": "value",
+        "span": {
+          "start": 263,
+          "end": 271
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "ef5ebd7a379f6b955886893b9d74a0dfd0fbd13d503612f2659114c693bfca04",
+        "kind": "value",
+        "span": {
+          "start": 251,
+          "end": 276
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "b39b81f2b42ed12e0524e183ad7be07f226b7d25ec56a9a359f610e7066f487e",
+        "kind": "declaration",
+        "span": {
+          "start": 296,
+          "end": 400
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "6409527b079d4c21cfd9d903a2d31e270d21722d7a120dac436ae9f865de36cf",
+        "kind": "value",
+        "span": {
+          "start": 345,
+          "end": 354
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "3a5a05f70cf4b2125c7784e2c9f2e9e58900f3a356ea74d5b8fd298e46db97e5",
+        "kind": "value",
+        "span": {
+          "start": 368,
+          "end": 375
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "3bcf9230eb4dcb35256d724603f48dbdca795959a01720ea62aaafba6fe7379d",
+        "kind": "value",
+        "span": {
+          "start": 391,
+          "end": 393
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "ae383b0265806f21a795ce8b4b71202368e9440685f0e2def4ab566a67589b13",
+        "kind": "value",
+        "span": {
+          "start": 388,
+          "end": 394
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "d511a18d401a259f786166557b928af9b1abbe313a23c50fa104f88e5dc82a22",
+        "kind": "value",
+        "span": {
+          "start": 332,
+          "end": 399
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "459e63be1455db72afd91bfb23fd95ba2ebda38ca0277f6a83fcd6d79f14e9d7",
+        "kind": "value",
+        "span": {
+          "start": 422,
+          "end": 425
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "02cdef82a2c4d040e78ad93aa34f449ed886ad27e0139a81bdfef19f2db02860",
+        "kind": "value",
+        "span": {
+          "start": 443,
+          "end": 453
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "11aa072c257fb46b44021964c6d619c0da7f9be9787ff8f2e97ced3e3a99d77b",
+        "kind": "value",
+        "span": {
+          "start": 467,
+          "end": 473
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      },
+      {
+        "id": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a",
+        "kind": "value",
+        "span": {
+          "start": 411,
+          "end": 478
+        },
+        "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0"
+      }
+    ],
+    "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0",
+    "ir_digest": "133ab2e613ca60710fd953479109fb09697ea615734406ee528a25c28212822f"
+  },
+  "artifact": {
+    "format": "geosolve-executed-sketch-artifact-v4",
+    "source_digest": "28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0",
+    "ir_digest": "133ab2e613ca60710fd953479109fb09697ea615734406ee528a25c28212822f",
+    "declarations": [
+      {
+        "declaration": "bar",
+        "family": "geometry.segment",
+        "patch": null,
+        "site": "27292f7c197e016673f013a7330d79da128abada9f1059de4f3ef12382279519",
+        "result": [
+          {
+            "kind": "curve",
+            "path": [
+              "curve"
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "end"
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "span"
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "start"
+            ]
+          }
+        ]
+      },
+      {
+        "declaration": "horizontal",
+        "family": "constraint.horizontal",
+        "patch": null,
+        "site": "1741f70bf75ab064ee6a33a7fb813fa3f53877c8494c26cb1f4d09fa879b788e",
+        "result": [
+          {
+            "kind": "constraint",
+            "path": [
+              "constraint"
+            ]
+          }
+        ]
+      },
+      {
+        "declaration": "length",
+        "family": "dimension.pointDistance",
+        "patch": null,
+        "site": "b39b81f2b42ed12e0524e183ad7be07f226b7d25ec56a9a359f610e7066f487e",
+        "result": [
+          {
+            "kind": "dimension",
+            "path": [
+              "dimension"
+            ]
+          },
+          {
+            "kind": "scalar",
+            "path": [
+              "value"
+            ]
+          }
+        ]
+      }
+    ],
+    "generated_members": [],
+    "groups": [],
+    "suppressions": [],
+    "value_consumers": [
+      {
+        "value_site": "48c816af138a402431ca373afc9e3ae76c225efd190e9cf1bccbdc53c9cf3554",
+        "target": {
+          "target": "declaration",
+          "declaration": "bar",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "start",
+          0
+        ]
+      },
+      {
+        "value_site": "bdc1bfa481da879b2dd42f5c3a509b8af99b4f678f39e39ce3fe27f4cc4f5261",
+        "target": {
+          "target": "declaration",
+          "declaration": "bar",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "start",
+          1
+        ]
+      },
+      {
+        "value_site": "8b8a38c6a54c846cbc30118859bd7346c25d237df7439cdfef2d0edbb4c51362",
+        "target": {
+          "target": "declaration",
+          "declaration": "bar",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "end",
+          0
+        ]
+      },
+      {
+        "value_site": "cb5179d3642c7cdf59c889a309c1b1753a2ad0952c3b0b3cd0067e8e8fe58e73",
+        "target": {
+          "target": "declaration",
+          "declaration": "bar",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "end",
+          1
+        ]
+      },
+      {
+        "value_site": "0a400c774cbe19281923c68e970d3925383e2028ec280845fa7088679fa3d15d",
+        "target": {
+          "target": "declaration",
+          "declaration": "horizontal",
+          "family": "constraint.horizontal"
+        },
+        "property": [
+          "span"
+        ]
+      },
+      {
+        "value_site": "6409527b079d4c21cfd9d903a2d31e270d21722d7a120dac436ae9f865de36cf",
+        "target": {
+          "target": "declaration",
+          "declaration": "length",
+          "family": "dimension.pointDistance"
+        },
+        "property": [
+          "first"
+        ]
+      },
+      {
+        "value_site": "3a5a05f70cf4b2125c7784e2c9f2e9e58900f3a356ea74d5b8fd298e46db97e5",
+        "target": {
+          "target": "declaration",
+          "declaration": "length",
+          "family": "dimension.pointDistance"
+        },
+        "property": [
+          "second"
+        ]
+      },
+      {
+        "value_site": "ae383b0265806f21a795ce8b4b71202368e9440685f0e2def4ab566a67589b13",
+        "target": {
+          "target": "declaration",
+          "declaration": "length",
+          "family": "dimension.pointDistance"
+        },
+        "property": [
+          "value"
+        ]
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "value": {
+        "bar": {
+          "kind": "reference",
+          "value": {
+            "declaration": "bar",
+            "path": []
+          }
+        },
+        "horizontal": {
+          "kind": "reference",
+          "value": {
+            "declaration": "horizontal",
+            "path": []
+          }
+        },
+        "length": {
+          "kind": "reference",
+          "value": {
+            "declaration": "length",
+            "path": []
+          }
+        }
+      }
+    },
+    "artifact_digest": "cd286940f33101e3fafb3402e7555ff5d8cc5ea6dbcdbb5ed92b5b59e3022045"
+  },
+  "canonicalIrJson": "{\"format\":\"geosolve-managed-sketch-ir-v4\",\"imports\":[{\"module\":\"@geosolve/sketch-code\",\"bindings\":[\"sketch\",\"mm\"]}],\"statements\":[{\"statement\":\"declaration\",\"variable\":\"bar\",\"symbol\":\"bar\",\"builder_path\":[\"geometry\",\"segment\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"start\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":0.0,\"site\":\"48c816af138a402431ca373afc9e3ae76c225efd190e9cf1bccbdc53c9cf3554\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"bdc1bfa481da879b2dd42f5c3a509b8af99b4f678f39e39ce3fe27f4cc4f5261\"}],\"site\":\"e01e9591015cf89f8390e786c3af6a8a3dbafa90c51867b7985d4b7883c54f5f\"},\"comments\":[]},{\"name\":\"end\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":20.0,\"site\":\"8b8a38c6a54c846cbc30118859bd7346c25d237df7439cdfef2d0edbb4c51362\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"cb5179d3642c7cdf59c889a309c1b1753a2ad0952c3b0b3cd0067e8e8fe58e73\"}],\"site\":\"a33d8cd821883c636af7b2a21fd94f6fd59fb6eb5c3ffcc5694ad80f6ddece96\"},\"comments\":[]}],\"site\":\"3ef3ca1430a3fcb3a15f3019b22b9bc98f85b5e9cf6046789fb1eaac2aa50b45\"},\"site\":\"27292f7c197e016673f013a7330d79da128abada9f1059de4f3ef12382279519\",\"comments\":[]},{\"statement\":\"declaration\",\"variable\":\"horizontal\",\"symbol\":\"horizontal\",\"builder_path\":[\"constraint\",\"horizontal\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"span\",\"value\":{\"kind\":\"reference\",\"declaration\":\"bar\",\"path\":[\"span\"],\"site\":\"0a400c774cbe19281923c68e970d3925383e2028ec280845fa7088679fa3d15d\"},\"comments\":[]}],\"site\":\"ef5ebd7a379f6b955886893b9d74a0dfd0fbd13d503612f2659114c693bfca04\"},\"site\":\"1741f70bf75ab064ee6a33a7fb813fa3f53877c8494c26cb1f4d09fa879b788e\",\"comments\":[]},{\"statement\":\"declaration\",\"variable\":\"length\",\"symbol\":\"length\",\"builder_path\":[\"dimension\",\"pointDistance\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"first\",\"value\":{\"kind\":\"reference\",\"declaration\":\"bar\",\"path\":[\"start\"],\"site\":\"6409527b079d4c21cfd9d903a2d31e270d21722d7a120dac436ae9f865de36cf\"},\"comments\":[]},{\"name\":\"second\",\"value\":{\"kind\":\"reference\",\"declaration\":\"bar\",\"path\":[\"end\"],\"site\":\"3a5a05f70cf4b2125c7784e2c9f2e9e58900f3a356ea74d5b8fd298e46db97e5\"},\"comments\":[]},{\"name\":\"value\",\"value\":{\"kind\":\"call\",\"callee\":\"mm\",\"arguments\":[{\"kind\":\"number\",\"value\":20.0,\"site\":\"3bcf9230eb4dcb35256d724603f48dbdca795959a01720ea62aaafba6fe7379d\"}],\"site\":\"ae383b0265806f21a795ce8b4b71202368e9440685f0e2def4ab566a67589b13\"},\"comments\":[]}],\"site\":\"d511a18d401a259f786166557b928af9b1abbe313a23c50fa104f88e5dc82a22\"},\"site\":\"b39b81f2b42ed12e0524e183ad7be07f226b7d25ec56a9a359f610e7066f487e\",\"comments\":[]}],\"output\":{\"kind\":\"object\",\"fields\":[{\"name\":\"bar\",\"value\":{\"kind\":\"reference\",\"declaration\":\"bar\",\"path\":[],\"site\":\"459e63be1455db72afd91bfb23fd95ba2ebda38ca0277f6a83fcd6d79f14e9d7\"},\"comments\":[]},{\"name\":\"horizontal\",\"value\":{\"kind\":\"reference\",\"declaration\":\"horizontal\",\"path\":[],\"site\":\"02cdef82a2c4d040e78ad93aa34f449ed886ad27e0139a81bdfef19f2db02860\"},\"comments\":[]},{\"name\":\"length\",\"value\":{\"kind\":\"reference\",\"declaration\":\"length\",\"path\":[],\"site\":\"11aa072c257fb46b44021964c6d619c0da7f9be9787ff8f2e97ced3e3a99d77b\"},\"comments\":[]}],\"site\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\"},\"source_sites\":[{\"id\":\"27292f7c197e016673f013a7330d79da128abada9f1059de4f3ef12382279519\",\"kind\":\"declaration\",\"span\":{\"start\":121,\"end\":190},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"48c816af138a402431ca373afc9e3ae76c225efd190e9cf1bccbdc53c9cf3554\",\"kind\":\"value\",\"span\":{\"start\":161,\"end\":162},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"bdc1bfa481da879b2dd42f5c3a509b8af99b4f678f39e39ce3fe27f4cc4f5261\",\"kind\":\"value\",\"span\":{\"start\":164,\"end\":165},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"e01e9591015cf89f8390e786c3af6a8a3dbafa90c51867b7985d4b7883c54f5f\",\"kind\":\"value\",\"span\":{\"start\":160,\"end\":166},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"8b8a38c6a54c846cbc30118859bd7346c25d237df7439cdfef2d0edbb4c51362\",\"kind\":\"value\",\"span\":{\"start\":178,\"end\":180},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"cb5179d3642c7cdf59c889a309c1b1753a2ad0952c3b0b3cd0067e8e8fe58e73\",\"kind\":\"value\",\"span\":{\"start\":182,\"end\":183},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"a33d8cd821883c636af7b2a21fd94f6fd59fb6eb5c3ffcc5694ad80f6ddece96\",\"kind\":\"value\",\"span\":{\"start\":177,\"end\":184},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"3ef3ca1430a3fcb3a15f3019b22b9bc98f85b5e9cf6046789fb1eaac2aa50b45\",\"kind\":\"value\",\"span\":{\"start\":147,\"end\":189},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"1741f70bf75ab064ee6a33a7fb813fa3f53877c8494c26cb1f4d09fa879b788e\",\"kind\":\"declaration\",\"span\":{\"start\":213,\"end\":277},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"0a400c774cbe19281923c68e970d3925383e2028ec280845fa7088679fa3d15d\",\"kind\":\"value\",\"span\":{\"start\":263,\"end\":271},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"ef5ebd7a379f6b955886893b9d74a0dfd0fbd13d503612f2659114c693bfca04\",\"kind\":\"value\",\"span\":{\"start\":251,\"end\":276},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"b39b81f2b42ed12e0524e183ad7be07f226b7d25ec56a9a359f610e7066f487e\",\"kind\":\"declaration\",\"span\":{\"start\":296,\"end\":400},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"6409527b079d4c21cfd9d903a2d31e270d21722d7a120dac436ae9f865de36cf\",\"kind\":\"value\",\"span\":{\"start\":345,\"end\":354},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"3a5a05f70cf4b2125c7784e2c9f2e9e58900f3a356ea74d5b8fd298e46db97e5\",\"kind\":\"value\",\"span\":{\"start\":368,\"end\":375},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"3bcf9230eb4dcb35256d724603f48dbdca795959a01720ea62aaafba6fe7379d\",\"kind\":\"value\",\"span\":{\"start\":391,\"end\":393},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"ae383b0265806f21a795ce8b4b71202368e9440685f0e2def4ab566a67589b13\",\"kind\":\"value\",\"span\":{\"start\":388,\"end\":394},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"d511a18d401a259f786166557b928af9b1abbe313a23c50fa104f88e5dc82a22\",\"kind\":\"value\",\"span\":{\"start\":332,\"end\":399},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"459e63be1455db72afd91bfb23fd95ba2ebda38ca0277f6a83fcd6d79f14e9d7\",\"kind\":\"value\",\"span\":{\"start\":422,\"end\":425},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"02cdef82a2c4d040e78ad93aa34f449ed886ad27e0139a81bdfef19f2db02860\",\"kind\":\"value\",\"span\":{\"start\":443,\"end\":453},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"11aa072c257fb46b44021964c6d619c0da7f9be9787ff8f2e97ced3e3a99d77b\",\"kind\":\"value\",\"span\":{\"start\":467,\"end\":473},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"},{\"id\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\",\"kind\":\"value\",\"span\":{\"start\":411,\"end\":478},\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\"}],\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\",\"ir_digest\":\"133ab2e613ca60710fd953479109fb09697ea615734406ee528a25c28212822f\"}",
+  "canonicalArtifactJson": "{\"format\":\"geosolve-executed-sketch-artifact-v4\",\"source_digest\":\"28b310538ec100d96161b23d0a005305dbfc50d0f83e660fafed9a148960fee0\",\"ir_digest\":\"133ab2e613ca60710fd953479109fb09697ea615734406ee528a25c28212822f\",\"declarations\":[{\"declaration\":\"bar\",\"family\":\"geometry.segment\",\"patch\":null,\"site\":\"27292f7c197e016673f013a7330d79da128abada9f1059de4f3ef12382279519\",\"result\":[{\"kind\":\"curve\",\"path\":[\"curve\"]},{\"kind\":\"point\",\"path\":[\"end\"]},{\"kind\":\"curve_span\",\"path\":[\"span\"]},{\"kind\":\"point\",\"path\":[\"start\"]}]},{\"declaration\":\"horizontal\",\"family\":\"constraint.horizontal\",\"patch\":null,\"site\":\"1741f70bf75ab064ee6a33a7fb813fa3f53877c8494c26cb1f4d09fa879b788e\",\"result\":[{\"kind\":\"constraint\",\"path\":[\"constraint\"]}]},{\"declaration\":\"length\",\"family\":\"dimension.pointDistance\",\"patch\":null,\"site\":\"b39b81f2b42ed12e0524e183ad7be07f226b7d25ec56a9a359f610e7066f487e\",\"result\":[{\"kind\":\"dimension\",\"path\":[\"dimension\"]},{\"kind\":\"scalar\",\"path\":[\"value\"]}]}],\"generated_members\":[],\"groups\":[],\"suppressions\":[],\"value_consumers\":[{\"value_site\":\"48c816af138a402431ca373afc9e3ae76c225efd190e9cf1bccbdc53c9cf3554\",\"target\":{\"target\":\"declaration\",\"declaration\":\"bar\",\"family\":\"geometry.segment\"},\"property\":[\"start\",0]},{\"value_site\":\"bdc1bfa481da879b2dd42f5c3a509b8af99b4f678f39e39ce3fe27f4cc4f5261\",\"target\":{\"target\":\"declaration\",\"declaration\":\"bar\",\"family\":\"geometry.segment\"},\"property\":[\"start\",1]},{\"value_site\":\"8b8a38c6a54c846cbc30118859bd7346c25d237df7439cdfef2d0edbb4c51362\",\"target\":{\"target\":\"declaration\",\"declaration\":\"bar\",\"family\":\"geometry.segment\"},\"property\":[\"end\",0]},{\"value_site\":\"cb5179d3642c7cdf59c889a309c1b1753a2ad0952c3b0b3cd0067e8e8fe58e73\",\"target\":{\"target\":\"declaration\",\"declaration\":\"bar\",\"family\":\"geometry.segment\"},\"property\":[\"end\",1]},{\"value_site\":\"0a400c774cbe19281923c68e970d3925383e2028ec280845fa7088679fa3d15d\",\"target\":{\"target\":\"declaration\",\"declaration\":\"horizontal\",\"family\":\"constraint.horizontal\"},\"property\":[\"span\"]},{\"value_site\":\"6409527b079d4c21cfd9d903a2d31e270d21722d7a120dac436ae9f865de36cf\",\"target\":{\"target\":\"declaration\",\"declaration\":\"length\",\"family\":\"dimension.pointDistance\"},\"property\":[\"first\"]},{\"value_site\":\"3a5a05f70cf4b2125c7784e2c9f2e9e58900f3a356ea74d5b8fd298e46db97e5\",\"target\":{\"target\":\"declaration\",\"declaration\":\"length\",\"family\":\"dimension.pointDistance\"},\"property\":[\"second\"]},{\"value_site\":\"ae383b0265806f21a795ce8b4b71202368e9440685f0e2def4ab566a67589b13\",\"target\":{\"target\":\"declaration\",\"declaration\":\"length\",\"family\":\"dimension.pointDistance\"},\"property\":[\"value\"]}],\"output\":{\"kind\":\"object\",\"value\":{\"bar\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"bar\",\"path\":[]}},\"horizontal\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"horizontal\",\"path\":[]}},\"length\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"length\",\"path\":[]}}}},\"artifact_digest\":\"cd286940f33101e3fafb3402e7555ff5d8cc5ea6dbcdbb5ed92b5b59e3022045\"}"
+}

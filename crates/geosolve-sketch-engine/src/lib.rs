@@ -7,13 +7,21 @@ use std::rc::Rc;
 
 use geosolve_constraint_editor::{IntentNativeBinding, IntentValidationEvidence};
 mod authoring;
+mod point_gesture;
 mod profiles;
 mod session;
+mod terminal;
 pub use authoring::{
     AuthoringPrediction, AuthoringValueInverse, AuthoringValueWrite, PreparedAuthoringMutation,
     PreparedAuthoringSource, PreparedAuthoringValues,
 };
-pub use session::{EditableDesign, EditableSession, EditableSessionState};
+pub use point_gesture::{
+    MAX_POINT_GESTURE_SAMPLES, PointGestureCommand, PointGestureFrame, PointGestureHandle,
+    PointGestureSample, PointGestureTarget, PointGestureTerminal, RetainedPointGesture,
+};
+pub use session::{
+    EditableDesign, EditableSession, EditableSessionState, PreparedPointGestureCommit,
+};
 
 use geosolve_sketch::{
     CurveSpan, DesignCurve, DesignPoint, DesignPointId, DesignScalar, DocumentArcSweep, DocumentId,

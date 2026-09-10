@@ -1,0 +1,352 @@
+{
+  "inputSourceDigest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6",
+  "normalizedSource": "\"use geosolve sketch\";\nimport { sketch } from \"@geosolve/sketch-code\";\n\nexport default sketch(($) => {\n  const box = $.geometry.twoPointAlignedRectangle(\"box\", {\n    firstCorner: [0, 0],\n    oppositeCorner: [20, 10],\n  });\n  return {\n    box: box,\n  };\n});\n",
+  "ir": {
+    "format": "geosolve-managed-sketch-ir-v4",
+    "imports": [
+      {
+        "module": "@geosolve/sketch-code",
+        "bindings": [
+          "sketch"
+        ]
+      }
+    ],
+    "statements": [
+      {
+        "statement": "declaration",
+        "variable": "box",
+        "symbol": "box",
+        "builder_path": [
+          "geometry",
+          "twoPointAlignedRectangle"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "firstCorner",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "8c5ee3001e4eda174a32b3581b1fbe4ec6b138b01f65b31234e1e53cfdb1bea1"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "a1e1fabc841312f7ea4e8e0790be1d9d28703eb4ca00524475e352a229017f3d"
+                  }
+                ],
+                "site": "7c39ad5e39122c1e4dfff4d7af572c98c3695ae66a38b152e32131a7abd8d256"
+              },
+              "comments": []
+            },
+            {
+              "name": "oppositeCorner",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 20,
+                    "site": "c7a24a8e08cb977695bfd10f8ff163eb0b4b12d2b052d337b62b4586683b6963"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 10,
+                    "site": "300b850caa2fb565435f18960d338c0fe68541941ad1454e9e0a5e766e3f1acd"
+                  }
+                ],
+                "site": "86f3cee6667cc4ff2317073178790406b108dca6a823358e61eaa479ebfa7b26"
+              },
+              "comments": []
+            }
+          ],
+          "site": "72ef23ccbf06a10b4e61961ba363ca7af98c2e233d71dea6bdc020c5d7267f35"
+        },
+        "site": "b2e171e5e897e13528e2584d12583de093cc683f80b41aea1db1369741369cc4",
+        "comments": []
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "fields": [
+        {
+          "name": "box",
+          "value": {
+            "kind": "reference",
+            "declaration": "box",
+            "path": [],
+            "site": "235bef3a5a9536b98721054021fd8e55cdf739e3215f3d41276777418a9eb4b3"
+          },
+          "comments": []
+        }
+      ],
+      "site": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a"
+    },
+    "source_sites": [
+      {
+        "id": "b2e171e5e897e13528e2584d12583de093cc683f80b41aea1db1369741369cc4",
+        "kind": "declaration",
+        "span": {
+          "start": 117,
+          "end": 221
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "8c5ee3001e4eda174a32b3581b1fbe4ec6b138b01f65b31234e1e53cfdb1bea1",
+        "kind": "value",
+        "span": {
+          "start": 180,
+          "end": 181
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "a1e1fabc841312f7ea4e8e0790be1d9d28703eb4ca00524475e352a229017f3d",
+        "kind": "value",
+        "span": {
+          "start": 183,
+          "end": 184
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "7c39ad5e39122c1e4dfff4d7af572c98c3695ae66a38b152e32131a7abd8d256",
+        "kind": "value",
+        "span": {
+          "start": 179,
+          "end": 185
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "c7a24a8e08cb977695bfd10f8ff163eb0b4b12d2b052d337b62b4586683b6963",
+        "kind": "value",
+        "span": {
+          "start": 208,
+          "end": 210
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "300b850caa2fb565435f18960d338c0fe68541941ad1454e9e0a5e766e3f1acd",
+        "kind": "value",
+        "span": {
+          "start": 212,
+          "end": 214
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "86f3cee6667cc4ff2317073178790406b108dca6a823358e61eaa479ebfa7b26",
+        "kind": "value",
+        "span": {
+          "start": 207,
+          "end": 215
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "72ef23ccbf06a10b4e61961ba363ca7af98c2e233d71dea6bdc020c5d7267f35",
+        "kind": "value",
+        "span": {
+          "start": 160,
+          "end": 220
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "235bef3a5a9536b98721054021fd8e55cdf739e3215f3d41276777418a9eb4b3",
+        "kind": "value",
+        "span": {
+          "start": 243,
+          "end": 246
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      },
+      {
+        "id": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a",
+        "kind": "value",
+        "span": {
+          "start": 232,
+          "end": 251
+        },
+        "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6"
+      }
+    ],
+    "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6",
+    "ir_digest": "ea9e16fab32070b5179444d192ccc49f13711a091c6c53d497c16eb158e28525"
+  },
+  "artifact": {
+    "format": "geosolve-executed-sketch-artifact-v4",
+    "source_digest": "a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6",
+    "ir_digest": "ea9e16fab32070b5179444d192ccc49f13711a091c6c53d497c16eb158e28525",
+    "declarations": [
+      {
+        "declaration": "box",
+        "family": "geometry.twoPointAlignedRectangle",
+        "patch": null,
+        "site": "b2e171e5e897e13528e2584d12583de093cc683f80b41aea1db1369741369cc4",
+        "result": [
+          {
+            "kind": "point",
+            "path": [
+              "corners",
+              0
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "corners",
+              1
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "corners",
+              2
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "corners",
+              3
+            ]
+          },
+          {
+            "kind": "curve",
+            "path": [
+              "curves",
+              0
+            ]
+          },
+          {
+            "kind": "curve",
+            "path": [
+              "curves",
+              1
+            ]
+          },
+          {
+            "kind": "curve",
+            "path": [
+              "curves",
+              2
+            ]
+          },
+          {
+            "kind": "curve",
+            "path": [
+              "curves",
+              3
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "spans",
+              0
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "spans",
+              1
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "spans",
+              2
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "spans",
+              3
+            ]
+          }
+        ]
+      }
+    ],
+    "generated_members": [],
+    "groups": [],
+    "suppressions": [],
+    "value_consumers": [
+      {
+        "value_site": "8c5ee3001e4eda174a32b3581b1fbe4ec6b138b01f65b31234e1e53cfdb1bea1",
+        "target": {
+          "target": "declaration",
+          "declaration": "box",
+          "family": "geometry.twoPointAlignedRectangle"
+        },
+        "property": [
+          "firstCorner",
+          0
+        ]
+      },
+      {
+        "value_site": "a1e1fabc841312f7ea4e8e0790be1d9d28703eb4ca00524475e352a229017f3d",
+        "target": {
+          "target": "declaration",
+          "declaration": "box",
+          "family": "geometry.twoPointAlignedRectangle"
+        },
+        "property": [
+          "firstCorner",
+          1
+        ]
+      },
+      {
+        "value_site": "c7a24a8e08cb977695bfd10f8ff163eb0b4b12d2b052d337b62b4586683b6963",
+        "target": {
+          "target": "declaration",
+          "declaration": "box",
+          "family": "geometry.twoPointAlignedRectangle"
+        },
+        "property": [
+          "oppositeCorner",
+          0
+        ]
+      },
+      {
+        "value_site": "300b850caa2fb565435f18960d338c0fe68541941ad1454e9e0a5e766e3f1acd",
+        "target": {
+          "target": "declaration",
+          "declaration": "box",
+          "family": "geometry.twoPointAlignedRectangle"
+        },
+        "property": [
+          "oppositeCorner",
+          1
+        ]
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "value": {
+        "box": {
+          "kind": "reference",
+          "value": {
+            "declaration": "box",
+            "path": []
+          }
+        }
+      }
+    },
+    "artifact_digest": "61ce1c12db626e19d24be2ca432c16ec344ff37cee34da3954809b777b30bb9b"
+  },
+  "canonicalIrJson": "{\"format\":\"geosolve-managed-sketch-ir-v4\",\"imports\":[{\"module\":\"@geosolve/sketch-code\",\"bindings\":[\"sketch\"]}],\"statements\":[{\"statement\":\"declaration\",\"variable\":\"box\",\"symbol\":\"box\",\"builder_path\":[\"geometry\",\"twoPointAlignedRectangle\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"firstCorner\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":0.0,\"site\":\"8c5ee3001e4eda174a32b3581b1fbe4ec6b138b01f65b31234e1e53cfdb1bea1\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"a1e1fabc841312f7ea4e8e0790be1d9d28703eb4ca00524475e352a229017f3d\"}],\"site\":\"7c39ad5e39122c1e4dfff4d7af572c98c3695ae66a38b152e32131a7abd8d256\"},\"comments\":[]},{\"name\":\"oppositeCorner\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":20.0,\"site\":\"c7a24a8e08cb977695bfd10f8ff163eb0b4b12d2b052d337b62b4586683b6963\"},{\"kind\":\"number\",\"value\":10.0,\"site\":\"300b850caa2fb565435f18960d338c0fe68541941ad1454e9e0a5e766e3f1acd\"}],\"site\":\"86f3cee6667cc4ff2317073178790406b108dca6a823358e61eaa479ebfa7b26\"},\"comments\":[]}],\"site\":\"72ef23ccbf06a10b4e61961ba363ca7af98c2e233d71dea6bdc020c5d7267f35\"},\"site\":\"b2e171e5e897e13528e2584d12583de093cc683f80b41aea1db1369741369cc4\",\"comments\":[]}],\"output\":{\"kind\":\"object\",\"fields\":[{\"name\":\"box\",\"value\":{\"kind\":\"reference\",\"declaration\":\"box\",\"path\":[],\"site\":\"235bef3a5a9536b98721054021fd8e55cdf739e3215f3d41276777418a9eb4b3\"},\"comments\":[]}],\"site\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\"},\"source_sites\":[{\"id\":\"b2e171e5e897e13528e2584d12583de093cc683f80b41aea1db1369741369cc4\",\"kind\":\"declaration\",\"span\":{\"start\":117,\"end\":221},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"8c5ee3001e4eda174a32b3581b1fbe4ec6b138b01f65b31234e1e53cfdb1bea1\",\"kind\":\"value\",\"span\":{\"start\":180,\"end\":181},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"a1e1fabc841312f7ea4e8e0790be1d9d28703eb4ca00524475e352a229017f3d\",\"kind\":\"value\",\"span\":{\"start\":183,\"end\":184},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"7c39ad5e39122c1e4dfff4d7af572c98c3695ae66a38b152e32131a7abd8d256\",\"kind\":\"value\",\"span\":{\"start\":179,\"end\":185},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"c7a24a8e08cb977695bfd10f8ff163eb0b4b12d2b052d337b62b4586683b6963\",\"kind\":\"value\",\"span\":{\"start\":208,\"end\":210},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"300b850caa2fb565435f18960d338c0fe68541941ad1454e9e0a5e766e3f1acd\",\"kind\":\"value\",\"span\":{\"start\":212,\"end\":214},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"86f3cee6667cc4ff2317073178790406b108dca6a823358e61eaa479ebfa7b26\",\"kind\":\"value\",\"span\":{\"start\":207,\"end\":215},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"72ef23ccbf06a10b4e61961ba363ca7af98c2e233d71dea6bdc020c5d7267f35\",\"kind\":\"value\",\"span\":{\"start\":160,\"end\":220},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"235bef3a5a9536b98721054021fd8e55cdf739e3215f3d41276777418a9eb4b3\",\"kind\":\"value\",\"span\":{\"start\":243,\"end\":246},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"},{\"id\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\",\"kind\":\"value\",\"span\":{\"start\":232,\"end\":251},\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\"}],\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\",\"ir_digest\":\"ea9e16fab32070b5179444d192ccc49f13711a091c6c53d497c16eb158e28525\"}",
+  "canonicalArtifactJson": "{\"format\":\"geosolve-executed-sketch-artifact-v4\",\"source_digest\":\"a26f23549adfa2a8f5fa82e04f969eec0140727f3bba7026e5aafbbe3584e8c6\",\"ir_digest\":\"ea9e16fab32070b5179444d192ccc49f13711a091c6c53d497c16eb158e28525\",\"declarations\":[{\"declaration\":\"box\",\"family\":\"geometry.twoPointAlignedRectangle\",\"patch\":null,\"site\":\"b2e171e5e897e13528e2584d12583de093cc683f80b41aea1db1369741369cc4\",\"result\":[{\"kind\":\"point\",\"path\":[\"corners\",0]},{\"kind\":\"point\",\"path\":[\"corners\",1]},{\"kind\":\"point\",\"path\":[\"corners\",2]},{\"kind\":\"point\",\"path\":[\"corners\",3]},{\"kind\":\"curve\",\"path\":[\"curves\",0]},{\"kind\":\"curve\",\"path\":[\"curves\",1]},{\"kind\":\"curve\",\"path\":[\"curves\",2]},{\"kind\":\"curve\",\"path\":[\"curves\",3]},{\"kind\":\"curve_span\",\"path\":[\"spans\",0]},{\"kind\":\"curve_span\",\"path\":[\"spans\",1]},{\"kind\":\"curve_span\",\"path\":[\"spans\",2]},{\"kind\":\"curve_span\",\"path\":[\"spans\",3]}]}],\"generated_members\":[],\"groups\":[],\"suppressions\":[],\"value_consumers\":[{\"value_site\":\"8c5ee3001e4eda174a32b3581b1fbe4ec6b138b01f65b31234e1e53cfdb1bea1\",\"target\":{\"target\":\"declaration\",\"declaration\":\"box\",\"family\":\"geometry.twoPointAlignedRectangle\"},\"property\":[\"firstCorner\",0]},{\"value_site\":\"a1e1fabc841312f7ea4e8e0790be1d9d28703eb4ca00524475e352a229017f3d\",\"target\":{\"target\":\"declaration\",\"declaration\":\"box\",\"family\":\"geometry.twoPointAlignedRectangle\"},\"property\":[\"firstCorner\",1]},{\"value_site\":\"c7a24a8e08cb977695bfd10f8ff163eb0b4b12d2b052d337b62b4586683b6963\",\"target\":{\"target\":\"declaration\",\"declaration\":\"box\",\"family\":\"geometry.twoPointAlignedRectangle\"},\"property\":[\"oppositeCorner\",0]},{\"value_site\":\"300b850caa2fb565435f18960d338c0fe68541941ad1454e9e0a5e766e3f1acd\",\"target\":{\"target\":\"declaration\",\"declaration\":\"box\",\"family\":\"geometry.twoPointAlignedRectangle\"},\"property\":[\"oppositeCorner\",1]}],\"output\":{\"kind\":\"object\",\"value\":{\"box\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"box\",\"path\":[]}}}},\"artifact_digest\":\"61ce1c12db626e19d24be2ca432c16ec344ff37cee34da3954809b777b30bb9b\"}"
+}

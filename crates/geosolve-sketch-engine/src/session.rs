@@ -42,6 +42,29 @@ pub struct EditableSession {
     accepted: AcceptedEvaluation,
 }
 
+/// Independently replayed, unpublished point edit bound to one exact live session.
+/// Persist the candidate source/design in the host transaction before installing it.
+#[derive(Debug)]
+pub struct PreparedPointGestureCommit {
+    expected: CodeSessionIdentity,
+    history: SketchCodeSession,
+    accepted: AcceptedEvaluation,
+    design: EditableDesign,
+    source_design_digest: String,
+}
+
+impl PreparedPointGestureCommit {
+    pub fn result(&self) -> &crate::EngineAcceptedResult {
+        self.accepted.result()
+    }
+    pub fn design(&self) -> &EditableDesign {
+        &self.design
+    }
+    pub fn source_design_digest(&self) -> &str {
+        &self.source_design_digest
+    }
+}
+
 fn error(value: impl std::fmt::Display) -> EngineError {
     EngineError::Admission(value.to_string())
 }
@@ -134,6 +157,112 @@ impl EditableSession {
             generated: self.history.snapshot().generated.clone(),
             overrides: self.history.snapshot().interaction_overlay.clone(),
         }
+    }
+
+    /// Exports the complete accepted source project, including compiler authority,
+    /// dependency artifacts and source allocation high-water state.
+    ///
+    /// # Errors
+    /// Returns a missing-project or serialization failure without changing the session.
+    pub fn export_project_json(&self) -> Result<String, EngineError> {
+        self.code_snapshot()
+            .code_project
+            .as_ref()
+            .ok_or_else(|| error("missing managed project"))?
+            .to_canonical_json()
+            .map_err(error)
+    }
+
+    /// Process-independent identity of the complete accepted source/design input.
+    /// Unlike result/input IDs for individual evaluations, this survives cold reconstruction.
+    ///
+    /// # Errors
+    /// Returns a serialization failure without changing the accepted session.
+    pub fn source_design_digest(&self) -> Result<String, EngineError> {
+        source_design_digest(self.history.snapshot())
+    }
+
+    /// Replays a semantic gesture on server-owned native authority, certifies complete
+    /// terminal parity and stages one overlay/history contribution without publication.
+    ///
+    /// # Errors
+    /// Stale source/design, failed native replay, incomplete computed features or terminal
+    /// parity mismatches retain all accepted source, design, geometry and history.
+    pub fn prepare_point_gesture_commit(
+        &self,
+        command: &crate::PointGestureCommand,
+    ) -> Result<PreparedPointGestureCommit, EngineError> {
+        let terminal = self.replay_point_gesture(command)?;
+        let expected = self.token().clone();
+        let snapshot = self.history.snapshot();
+        let project = snapshot
+            .code_project
+            .as_ref()
+            .ok_or_else(|| error("missing managed project"))?;
+        let (materialized, overlay) = crate::terminal::materialize_terminal(
+            &self.accepted.0.materialized,
+            project,
+            &snapshot.generated,
+            &snapshot.interaction_overlay,
+            &terminal.lens,
+            &terminal.editor,
+            terminal.proposal.terminal_session(),
+        )
+        .map_err(error)?;
+        let digest = input_digest(project, &snapshot.generated, &overlay, Some(&expected))?;
+        let expansion = materialized.expansion.clone();
+        let accepted = publication(project, materialized, digest)?;
+        let prepared = self
+            .history
+            .prepare_project_overlay(
+                &expected,
+                overlay.clone(),
+                expansion,
+                serde_json::Value::String(accepted.result().result_id.clone()),
+                "Move semantic point",
+            )
+            .map_err(error)?;
+        let mut history = self.history.clone();
+        history.apply_prepared(prepared).map_err(error)?;
+        let source_design_digest = source_design_digest(history.snapshot())?;
+        let design = EditableDesign {
+            format: "geosolve-design-v1".into(),
+            project: snapshot.project.clone(),
+            generated: snapshot.generated.clone(),
+            overrides: overlay,
+        };
+        Ok(PreparedPointGestureCommit {
+            expected,
+            history,
+            accepted,
+            design,
+            source_design_digest,
+        })
+    }
+
+    /// Installs a fully validated server candidate after the host's durable transaction.
+    ///
+    /// # Errors
+    /// Rejects stale/foreign candidates without replacing accepted state or history.
+    pub fn apply_point_gesture_commit(
+        &mut self,
+        prepared: PreparedPointGestureCommit,
+    ) -> Result<AcceptedEvaluation, EngineError> {
+        self.authenticate(&prepared.expected)?;
+        self.install(prepared.history, prepared.accepted)
+    }
+
+    /// Synchronous server-owned replay and commit. The persistent host should instead
+    /// stage, durably record and then install through the two-step API above.
+    ///
+    /// # Errors
+    /// Returns preparation/publication errors, retaining the complete accepted state.
+    pub fn commit_point_gesture(
+        &mut self,
+        command: &crate::PointGestureCommand,
+    ) -> Result<AcceptedEvaluation, EngineError> {
+        let prepared = self.prepare_point_gesture_commit(command)?;
+        self.apply_point_gesture_commit(prepared)
     }
 
     /// Applies a complete authenticated source/dependency project in one history entry.
@@ -308,6 +437,18 @@ impl EditableSession {
         self.accepted = accepted.clone();
         Ok(accepted)
     }
+}
+
+fn source_design_digest(
+    snapshot: &geosolve_sketch_code::CodeSessionSnapshot,
+) -> Result<String, EngineError> {
+    let bytes = serde_json::to_vec(&(
+        &snapshot.code_project,
+        &snapshot.generated,
+        &snapshot.interaction_overlay,
+    ))
+    .map_err(error)?;
+    Ok(geosolve_sketch_intent::intent_content_digest(&bytes).to_string())
 }
 
 fn input_digest(
