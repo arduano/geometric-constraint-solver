@@ -454,3 +454,189 @@ project/design Redo, reopen/Undo and subsequent `geometry2` allocation. Forged h
 source, including matching forged hashes, remains subject to independent compilation.
 The complete gate and actual browser source Undo/Redo workflow pass in
 `20260910T022428-a1d7c652`; the qualified replacement is delivered.
+
+## M98-F019 — initial collaborative Inspector used server-local authority
+
+At collaborative revision zero, open the complete manifold and change Channel width
+from 12 to 11. The native browsing descriptor refused `These properties belong to
+an older source revision`; no semantic command reached the server and accepted
+source/model remained unchanged. The browser adapter had captured the initial
+server Inspector's authority before waiting for its independent browsing worker.
+That worker correctly refused a different native session's authority.
+
+The focused adapter regression
+`describes an initial parameter edit with the local Inspector authority after its worker finishes opening`
+first observed `server-inspector` instead of `local-inspector`
+(`target/m98/collaboration-inspector-authority-repro-r2.log`). The adapter now resolves
+local chrome after initialization, checks model/view compatibility, then describes
+the edit with that native authority. Inner metadata payload authority checks remain.
+The three focused adapter/controller/source-projection files pass ten cases and
+strict TypeScript (`collaboration-inspector-authority-repair.log`). The new development
+artifact includes the correction; dense browser requalification remains pending.
+
+## M98-F020 — full-canvas busy filter amplified multi-editor compositing
+
+The four-editor held-solve browser case on development-r1 passed source/model/reload
+checks but exceeded the unchanged 500 ms navigation target: p95 935.222 ms. Native
+wheel execution was 1.7–2.9 ms. A bounded A/B experiment removed only the solving
+overlay's `backdrop-filter: grayscale(1)`, retaining its gray translucent surface and
+animated spinner. Navigation p95 improved to 527.593 ms; text ACK was 191.944 ms
+(`collaboration-browser-css-ab-r6.log`). This implicates browser compositing rather
+than solver authority. The product now uses the existing gray layer without filtering
+the entire WebGL surface. Development-r2 passes the actual four-editor product test without CSS injection:
+p95 navigation488.092ms and text ACK112.877ms. Dense sample responsiveness remains
+under investigation; this is focused evidence, not integrated qualification.
+
+## M98-F021 — latest point replay omitted named scalar dependencies
+
+The actual compiler fixture `point-gesture-parameter.json` has lexical `width` owning
+public parameter `boreRadius`, and lexical `port` owning public circle `bore` whose
+radius references that parameter. Even replay against identical accepted sessions
+failed `point replay source owner missing at basis`. The native dependency guard
+indexed geometry declarations but followed references to scalar bindings absent
+from that index (`named-parameter-replay-repro-r3.log`).
+
+The guard now traverses named scalar bindings, preserves their semantic symbols,
+references, units and value structure, and includes their lifetimes in the server
+witness. Continuous dimensional values can change while discrete/reference changes
+still reject. Native regression
+`latest_point_replay_retains_named_parameter_dependencies_with_distinct_lexical_names`
+passes through the public session API, retaining exact project source, accepted
+geometry and independently validated residuals (`named-parameter-replay-repair.log`).
+Actual-WASM latest-replay passes five cases, including a later parameter value
+write and reference-to-literal refusal (`extraction-replay-actual-wasm-r4.log`);
+scoped strict Clippy and release engine/demo builds pass. No equations, tolerances,
+implicit branches or golden expectations changed.
+
+## M98-F022 — semantic scalar writes omitted binding owners
+
+The actual dense manifold browser edit of public `channelWidth`, path `[]`,
+from 12 to 11 mm reached the domain worker but rejected with `managed value owner
+is absent or ambiguous` (`collaboration-browser-dense-r3.log`). The shared
+`derive_managed_value_mutation` preparation helper indexed only declarations,
+although exact mutation application already supported named and ordinary scalar
+bindings. This differs from F021's historical point-replay dependency guard.
+
+The public Rust regression `semantic_value_preparation_resolves_parameter_symbols_and_ordinary_scalar_bindings`
+independently reproduces the failure with existing genuine compiler fixtures
+(`parameter-value-preparation-repro.log`). It covers public `width` with distinct
+lexical `x`, ordinary `sharedRadius`, exact prior values and retained compiler
+authority. Preparation now uses a named parameter's public symbol or an ordinary
+binding's lexical identity, matching exact mutation application; a named parameter's
+lexical alias does not acquire public identity. Focused native repair1PASS and scoped strict all-target Clippy pass
+(`parameter-value-preparation-repair.log`). Release engine/demo WASM builds pass
+(`parameter-value-wasm-r4.log`). Actual dense browser flows now publish manifold
+width12→11 and Gridfinity41.5→41 (`collaboration-browser-dense-r4.log`), preserving
+source/model invariants; the same run still fails responsiveness budgets. No solver
+equations or tolerances change.
+
+## M98-F023 — extraction metadata JSON order changed exact compiler meaning
+
+The actual-WASM extraction of a circle radius reached native publication but
+rejected `candidate IR differs from the one operation authorized by Rust`
+(`extraction-native-publication-repro.log`). Native preparation orders new options
+as label/description/isKeyParameter; the compiler used the incoming JSON object's
+key order, which changes across native JSON serialization. The package regression
+`parameter extraction has identical compiler receipts for every metadata key order`
+independently reproduces differing receipts (`extraction-metadata-order-repro.log`).
+
+New extraction metadata now uses the existing deterministic presentation encoder.
+All six key orders produce identical genuine compiler receipts, and actual-WASM
+extraction publishes with original comments, two fresh allocations, whole-binding
+promotion, exact source/design reopening and finite independently validated geometry
+(`extraction-atomic-source-repair.log`). The cold-session geometry comparison resolves
+fresh native local IDs through unique semantic owners while retaining the complete
+geometry and incidence graph. In-session identity assertions remain exact.
+
+## M98-F024 — extraction Undo compiled a dangling intermediate reference
+
+Concurrent extractions succeeded, but Alice's Undo failed `reference to unknown or
+forward binding parameter1` (`extraction-undo-repro.log`). Structural reconstruction
+removed the new parameter before restoring its consumer's old literal. The focused
+source-composition regression independently reproduces the dangling reference
+(`extraction-atomic-source-repro.log`).
+
+The internal SDK helper `rewriteManagedSketchIrValues` applies the existing bounded
+value CAS rules while old and recreated bindings exist. The domain then removes
+deleted owners and recompiles the complete candidate. The helper conveys no compiler
+receipt or publication authority. Two extraction/source cases and the actual HTTP
+concurrent-extraction test pass (`extraction-atomic-source-repair.log`), including
+personal Undo/Redo, distinct allocations, another editor's retained extraction and
+refusal to remove their later same-value parameter contribution. Full collateral and
+integrated qualification remain required.
+
+## M98-F025 — shared-text ownership scans delayed dense typing
+
+At `8e8331a` plus the recorded development-r3 integration, a real manifold text
+insertion took 1,647 ms to acknowledge; Gridfinity took 513 ms. Both exceed the
+unchanged 500 ms target. Diagnostic r5 localized 567 ms to server
+`stageUserTextChanges` and 218 ms to the client native edit. The text history owner
+looked up a stable cursor separately for every scalar, and current-frontier typing
+unnecessarily forked and re-imported the document.
+
+`geosolve-collaboration::text::history` now uses public bulk sequence iteration and
+the public cursor parser. An exact cursor-byte oracle compares 25,000 Unicode
+scalars through concurrent changes, deletion and reload, plus imported multiscalar
+and conflicting overwrite representations. Those uncommon representations retain
+the original lookup path. Current-frontier edits use existing atomic edit admission;
+stale-frontier and file-lifetime checks remain intact. No contribution guard or
+surrogate-boundary check was removed.
+
+Commit `3f2e085` passes all 113 native collaboration/adapter tests and strict scoped
+Clippy (`collaboration-text-native-collateral.log`). The rebuilt actual-WASM package
+passes all 44 cases, including 520 durable edits beyond the bounded Undo horizon
+(`collaboration-combined-collateral-r4.log`). Debug cursor traversal improved from
+778–904 ms to 103–110 ms with identical witnesses. This is owner-level performance
+evidence; the coherent r4 browser results are recorded below.
+
+## M98-F026 — suppressed geometry prevented collaborative publication
+
+The new real runtime suppression tests reproduced rejection with
+`point gesture has no independently accepted native position`. The compiler had
+correctly suppressed the circle, but `EditableSession::point_gesture_targets`
+still required accepted positions for its inactive native points. The public
+engine regression `explicitly_suppressed_geometry_has_no_advertised_point_gesture_targets`
+reproduces the exact failure using the
+genuine compiler fixture `point-gesture-suppressed.json`.
+
+The registry now omits only graph nodes explicitly marked suppressed. Missing
+active geometry still rejects. The regression independently checks validated
+acceptance, empty suppressed output, refused dragging and restored target handles.
+Native regression and strict engine Clippy pass (`capability-point-target-r1.log`);
+combined release WASM passes. Both runtime suppression/Undo/restart and same-value
+ownership cases pass in `collaboration-combined-collateral-r4.log`.
+
+## M98-F027 — detached navigation admitted a partially authored geometry draft
+
+Existing regression `local_canvas_navigation_handoff_preserves_armed_tool_and_uses_new_camera`
+failed during visibility collateral: after the first construction click and
+pointer-up, no pointer was captured, but a staged native draft still existed.
+`apply_interaction_state` guarded active pointers and pending mutations without
+checking that retained draft state.
+
+Admission now also refuses a geometry draft with `completed_stages > 0`. An empty
+armed tool remains navigable, and cancellation restores ordinary admission. The
+unchanged regression passes after repair; the seven other local-canvas collateral
+cases passed. Four visibility owner tests and strict all-target demo Clippy also
+pass (`capability-final-native-r1.log`, `capability-final-style-r3.log`). No solver,
+branch, golden expectation or acceptance assertion changed.
+
+## Combined browser qualification checkpoint
+
+Development-r4 now passes dense manifold navigation p95 422.32 ms / text ACK
+345.58 ms and Gridfinity 195.04 / 370.62 ms, retaining the 500 ms thresholds and
+zero navigation computation requests. The 32-client text case records p95 274.90 ms;
+its 2,844,454 received bytes include 882,816 SSE bytes. A real stalled TCP reader
+is retired below 128 KiB while healthy text ACK is 30.16 ms. Evidence:
+`collaboration-browser-development-r4.log`.
+
+Two first-run browser harness failures were corrected without product changes:
+Node timers can fire fractionally early, so the hold now rearms until its monotonic
+10,000 ms deadline; point gestures persist native design overrides, so the remote
+case verifies exact changed design and unchanged raw source, rather than requiring
+an unauthored source rewrite. Its exact terminal, one durable publication, reload
+and cold restart pass in `collaboration-browser-followup-r4.log`. Peer CodeMirror
+also receives text before release. The repeated four-context navigation measurement
+is 615.02 ms despite 2–4 ms native wheel work; this remains an open performance
+concern, not a passing result or waived target. Recovery browser and integrated
+qualification remain open.

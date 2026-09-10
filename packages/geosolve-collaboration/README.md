@@ -1,9 +1,10 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # @geosolve/collaboration
 
-Browser/Node bindings for GeoSolve's shared Rust source-text owner. Run this synchronous
-replica in a worker independent of compilation and solving. The package has no JavaScript
-CRDT, network transport or accepted-model publication authority.
+Browser/Node bindings for GeoSolve's shared Rust source-text owner, trusted authority
+adapters and HTTP/SSE client. Run the synchronous text replica in a worker independent
+of compilation and solving. The replica has no JavaScript CRDT or accepted-model
+publication authority; transport is a separate `/client` entrypoint.
 
 ```ts
 import { createSharedText } from "@geosolve/collaboration";
@@ -42,6 +43,28 @@ Build from the repo's pinned Nix shell with `npm run build` and `npm run build:w
 Bundlers can supply `wasmModule` and `wasm` bytes/URL. Node loads packaged WASM from disk;
 browsers load it relative to the module. Rust 1.90 is scoped to collaboration crates;
 existing workspace baseline remains 1.89. GPL-3.0-or-later.
+
+## Connected client
+
+`@geosolve/collaboration/client` exports `CollaborationClient`. It joins with a
+host-issued invitation and stable tab/client ID, authenticates requests with headers,
+consumes ordered SSE events and reconnects with exact pending request IDs. Supply
+`savePending` and restore its checkpoint as `pending` to retain unknown outcomes
+through page or process restart. A storage failure prevents transmission. Hosts with
+multiple tabs should fence each tab's storage through `assertOwned`.
+
+`writeText`, `editWorking`, `undoText` and `submit` share durable client admission
+order, so text before Apply reaches the server first while later typing stays outside
+the immutable capture. Model results arrive separately; reads and typing do not wait
+for a solve. `receipt(requestId)` resolves the original operation, and `retry()` sends
+only original pending payloads. Reusing an ID for changed content is rejected.
+
+`authoringPreview(request, signal?)` is an ephemeral authenticated RPC for hosts that
+enable server prediction. It is abortable, never enters the outbox, and is never retried
+automatically. Its terminal is semantic intent for ordinary `submit`, not publication
+authority. Rendering, camera, selection and picking remain local. See the repository's
+`docs/M98_AUTHORING_PREVIEW.md` for messages and resource bounds, and
+`docs/M98_COLLABORATION.md` for the reference server contract and qualification status.
 
 Tests require the native parity fixture built with
 `cargo build --locked -p geosolve-collaboration --example text_fixture` before `npm test`.

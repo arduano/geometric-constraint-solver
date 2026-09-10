@@ -8474,10 +8474,13 @@ merge or qualify that product.
   Integration and qualification remain in the unchecked amendment below.
 
 Focused runtime checkpoint: independent compiler/solver workers, durable HTTP/SSE client,
-incremental native text, point-property Undo, native structural history and retained
-construction are implemented. The collaboration document records component qualification;
-full workbench integration, durable text history, external mirrors and multi-client load
-qualification remain open. The qualified preview is preserved.
+native shared text and personal history, immutable Apply, latest-model gesture replay,
+structural/extraction/suppression Undo, external mirrors/CLI and configurable native
+prediction are implemented. Combined actual-WASM package44, runtime/domain/HTTP63 and
+frontend8 cases pass. The coherent development-r4 artifact includes personal visibility
+and the dense-text performance repair. Final browser fault/load qualification, remaining
+workbench capability review and clean integrated nomination remain open. The qualified
+preview is preserved; the amendment checklist records focused implementation progress.
 
 - [ ] Implement the approved [multi-editor collaboration amendment](docs/M98_COLLABORATION.md):
   reusable Rust authority/shared text, explicit Apply, semantic rebasing and per-user Undo,

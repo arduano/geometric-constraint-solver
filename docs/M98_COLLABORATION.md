@@ -80,14 +80,23 @@ are a stretch; full offline semantic reconciliation is deferred if substantially
 
 ## Ordered implementation
 
-- [ ] Rust document authority, operation ordering, protocol and resource limits.
-- [ ] Shared text, stable cursors, localized source patches and explicit Apply capture.
-- [ ] Authoritative semantic commits, source reconciliation and per-user Undo/Redo.
-- [ ] Durable restart, deduplication, external file/CLI gateway and recovery.
-- [ ] Dedicated WASM/TypeScript package and provisional authoring session.
+- [x] Rust document authority, operation ordering, protocol and resource limits.
+- [x] Shared text, stable cursors, localized source patches and explicit Apply capture.
+- [x] Authoritative semantic commits, source reconciliation and per-user Undo/Redo.
+- [x] Durable restart, deduplication, external file/CLI gateway and recovery.
+- [x] Dedicated WASM/TypeScript package and provisional authoring session.
 - [ ] Opt-in workbench collaboration, separate client contexts and prediction worker.
 - [ ] Fault, parity, browser and load qualification; verified replacement preview.
 - [ ] Supervising-user acceptance and milestone closure.
+
+The checked items have focused native, actual-WASM and runtime evidence. They do
+not substitute for integrated qualification. The coherent development-r4 build
+adds the server preview frontend, personal visibility, source suppression and the
+dense-text performance repair. Combined checks pass 44 package tests, 63 runtime/
+HTTP/domain/preview tests and eight actual-WASM frontend cases; eighteen focused
+frontend cases, strict types, demo Clippy and formatting also pass. Browser
+performance and fault coverage are running against its exact three WASM modules.
+The qualified preview remains unchanged.
 
 ## Acceptance
 
@@ -299,3 +308,116 @@ No integrated nomination or preview replacement has occurred. Durable text histo
 structural compiler replay, external mirrors/CLI, the complete collaborative UI and
 prediction workers, four-browser and 32-client load/fault qualification remain required.
 The milestone and supervising-user acceptance remain open.
+
+## Latest-model replay and browser integration checkpoint
+
+The amendment remains in implementation. Trusted admission now captures immutable
+historical accepted model/source/target/history checkpoints for gestures. Native
+construction authenticates its original trace, independently drafts on latest state,
+and permits only fresh declaration allocation with typed-reference renaming. Native
+point replay authenticates the old target and uniquely resolves its current semantic
+lens. The runtime checks original and latest object lifetimes, including inferred
+external operands; an old command cannot borrow a deleted/restored object's token.
+Accepted allocation results share the fsynced outcome and survive exact retries and
+restart. Earlier exact-basis APIs remain unchanged.
+
+The opt-in browser now connects local navigation, authoring prediction, native source
+text and Inspector workers, durable fenced tab outboxes, raw keystroke recovery,
+compiler-owned UTF-8 source correspondence and disposable presence. External mirror
+work runs in a bounded worker; installed CLI mutations share the same authority.
+The qualified preview is unchanged. Remaining work includes exposed authoring actions,
+preview fallback, browser/fault qualification and integrated nomination.
+
+Focused evidence uses the pinned Nix shell above:
+
+- `npm --prefix packages/geosolve-collaboration run build && node --test scripts/collaboration-host.test.mjs scripts/collaboration-http.test.mjs scripts/collaboration-runtime.test.mjs scripts/collaboration-cli.test.mjs`:
+  45 pass before the added latest-replay integration cases
+  (`collaboration-resume-runtime-r1.log`).
+- `npm --prefix packages/geosolve-collaboration test`: 43 pass
+  (`collaboration-package-resume-r1.log`).
+- `node --test --test-name-pattern="concurrent constructions|stale point gestures" scripts/collaboration-runtime.test.mjs`:
+  both initially reject stale bases; after integration, both pass in 16.25 s
+  (`latest-replay-runtime-r1.log`).
+- `node --test --test-name-pattern="queued gesture resumes" scripts/collaboration-runtime.test.mjs`:
+  passes in 10.37 s, retaining original queued basis through restart and refusing
+  inferred references to a restored lifetime (`latest-replay-queued-r1.log`).
+- Mirror worker nine cases and actual runtime external-save case pass
+  (`mirror-worker-runtime-final.log`).
+- The rebuilt development-r2 Vite bundle passes distribution validation: 22 files,
+  three exact WASM modules (`collaboration-ui-build-r2.log`, `collaboration-dist-r2.log`).
+  It is a development artifact, not nominated or served as the replacement preview.
+
+The 32-client text case passes; the real slow TCP/SSE reader is retired within the
+128 KiB subscriber bound and resumes exact text/model state while healthy clients
+continue (`collaboration-browser-slow-sse-r2.log`). Four-browser navigation and dense
+manifold editing exposed M98-F019/F020; their unchanged latency and authority assertions
+remain required. M98-F021 adds named-parameter replay coverage. See the hardening
+ledger for their individual reproduction and qualification status.
+
+## Latest-model replay and extraction integration
+
+Native/WASM latest construction and point replay authenticate the trusted original
+accepted checkpoint, re-evaluate on the current accepted model and return exact
+external lifetime requirements. The host persists the original checkpoint with the
+operation and checks lifetimes again before publication. Simultaneous construction,
+later point writes, disjoint parameter edits, deleted/restored operands, durable
+queued restart and caller-owned allocation results pass focused runtime coverage.
+Five actual-WASM replay cases pass, including named parameters whose public symbols
+differ from their lexical variables.
+
+Parameter extraction allocates monotonically on the server, retains current source
+ownership and publishes through unchanged native/compiler validation. Concurrent
+extraction, checked personal Undo/Redo and later foreign same-value ownership pass.
+Source reconstruction applies consumer CAS and structural changes before compiling
+the complete candidate. Metadata options produce identical compiler receipts
+regardless of JSON key order. F021–F024 in the hardening ledger record reproductions
+and repairs. No equation, tolerance, branch default or golden expectation changed.
+
+Focused evidence (pinned Nix shell as above):
+- `cargo test --locked -p geosolve-sketch-code --test m98_parameter_values`:1PASS;
+  strict scoped Clippy and engine/demo release WASM builds pass.
+- `node --test packages/geosolve-engine/test/latest-replay.test.mjs`:5PASS.
+- `node --test --test-name-pattern="concurrent constructions|stale point gestures|queued gesture resumes" scripts/collaboration-runtime.test.mjs`:3PASS.
+- `node --test --test-name-pattern="concurrent parameter extraction" scripts/collaboration-runtime.test.mjs`:1PASS.
+- `node --test packages/geosolve-sketch-code/dist/test/managed-clean.test.js`:46PASS;
+  `npm --prefix packages/geosolve-sketch-code run test:fixtures`:unchanged.
+- `node --test scripts/collaboration-domain-structure.test.mjs scripts/collaboration-domain-properties.test.mjs scripts/collaboration-domain-extraction.test.mjs`:15PASS.
+
+The optional [server authoring preview](M98_AUTHORING_PREVIEW.md) uses the same
+retained native semantics in bounded workers. Six actual-WASM owner tests and two
+HTTP/runtime cases pass; browser fallback integration remains underway.
+
+Development-r3 contains22files/14JS/1CSS/3WASM and passes artifact validation. Actual
+manifold width12→11 and Gridfinity41.5→41 edits publish and retain source/model
+invariants. Their dense text ACK and manifold navigation measurements still exceed
+the unchanged500ms budget. The four-editor,32-client and stalled-TCP cases passed
+the preceding focused run. Native source/history performance work, remaining
+workbench routes, browser fault/concurrency proof, clean integrated nomination and
+replacement preview verification remain open. No supervising acceptance or milestone
+closure is implied.
+
+
+### Personal visibility and source suppression (implementation)
+
+Explorer hide/show, isolate/restore and construction visibility now use the detached
+Rust canvas worker. The server seed supplies accepted declaration ownership for
+masking; the same filtered scene drives paint and picking. Each tab retains its
+own bounded hidden-row set, isolation baseline and construction policy across
+accepted-model replacement. Local Inspector projection applies that state without
+changing authored source, accepted geometry authority or history. Ordinary camera
+and hover updates reuse already-admitted visibility.
+
+Suppression uses the existing native managed-source mutation, explicit current
+semantic target lifetimes, server validation and durable publication. Per-user
+history records suppression separately from numeric values, using compiler-resolved
+reference paths for generated members; inverse application checks the exact prior
+activation. Explicit same-value writes retain ownership. Suppressed native geometry
+is excluded from the advertised point-drag targets by its native node state.
+
+The current collaborative construction engine supports Segment, Polyline,
+Center-radius Circle and Two-point aligned Rectangle. Their toolbar identities now
+match the native catalog. Other catalog tools remain visible with an unavailable
+reason. This availability projection does not qualify the remaining construction,
+constraint, dimension or modify authoring routes as complete; that coverage remains
+an explicit milestone limitation. Source/Inspector value edits remain available. Changing existing selected curve
+roles is likewise marked unavailable; selecting the role of new geometry remains local.

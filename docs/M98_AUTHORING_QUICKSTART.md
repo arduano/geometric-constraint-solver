@@ -93,3 +93,64 @@ Its page owns the controls and renderer and imports only the SDK and headless en
 Generator output does not grant reverse source-editing authority. Trusted generator code runs
 with its host's access; terminate a worker to preempt synchronous work. An inline callback
 already executing in the host cannot be interrupted by AbortSignal.
+
+## Opt-in shared folder authoring
+
+M98's collaboration amendment is in qualification. The existing single-editor
+preview remains the qualified product until the replacement passes the integrated
+gate. The shared host reuses the same editable TypeScript folder and compiler.
+
+Create an invitations JSON file containing trusted principals:
+
+```json
+[
+  { "token": "replace-with-a-random-secret-of-at-least-32-characters", "userId": "alice", "role": "editor" },
+  { "token": "replace-with-a-different-random-secret-at-least-32-characters", "userId": "bob", "role": "viewer" }
+]
+```
+
+Start the installed CLI with its bundled artifact:
+
+```bash
+geosolve serve ./manifold --collaboration true --initialize true \
+  --invitations ./invitations.json --authoring-preview client
+```
+
+A repository launch additionally supplies `--artifact <prepared-artifact-manifest>`.
+`--host <Tailscale-IP> --port <port>` binds a chosen interface. The command emits one
+invitation URL per principal. Each editor has an independent camera, selection,
+Inspector, visibility and tool state. CodeMirror shares raw typing, including invalid
+syntax. Apply captures the current draft; later typing remains unapplied. Canvas edits
+use the accepted model while the draft is incomplete, with visible reconciliation
+notices when safe source writeback is unavailable.
+
+`--authoring-preview disabled` is the default and uses client prediction.
+`client` enables optional server prediction while preferring the client; `server`
+prefers server prediction. The URL can override the advertised preference with
+`?collaboration=1&authoringPreview=server`. Both paths render and navigate locally.
+The current shared toolbox supports Segment, Polyline, Center-radius Circle,
+Two-point aligned Rectangle and native point dragging. Other canvas authoring tools
+show an unavailable reason. Existing source language and Inspector value/metadata,
+parameter extraction, suppression, deletion and ordering routes remain available.
+
+The CLI shares the same authority. Read a status checkpoint before an edit, retain
+stable `--user`/`--client` identities and supply a unique `--operation` per intent:
+
+```bash
+geosolve status ./manifold --collaboration true --user alice \
+  --client agent-alice --out expected.json
+geosolve apply ./manifold --collaboration true --user alice \
+  --client agent-alice --expected expected.json --operation apply-draft-001
+geosolve outcome ./manifold --collaboration true --user alice \
+  --client agent-alice --operation apply-draft-001
+```
+
+Retry an uncertain operation with its original ID and exact payload. `draft` accepts
+an `--edits` JSON file of native text/file edits; `text-undo`/`text-redo` change raw
+source. `undo`/`redo` change the caller's latest available model contribution and
+refuse to replace a newer contribution by another editor. External file saves feed
+the raw working draft through the same gateway; they do not silently Apply.
+
+[The protocol contract](M98_COLLABORATION.md) records authority, lifecycle, recovery
+and measured scale. [Server prediction](M98_AUTHORING_PREVIEW.md) documents its
+separate cancellation and resource limits.
