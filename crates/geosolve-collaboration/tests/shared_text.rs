@@ -459,3 +459,40 @@ fn explicit_unicode_compiler_spans_and_cursor_deletion_bias() {
     assert_eq!(document.resolve_cursor(&before).unwrap(), 0);
     assert_eq!(document.resolve_cursor(&after).unwrap(), 1);
 }
+
+#[test]
+fn historical_captures_authenticate_exact_heads_source_and_file_identity() {
+    let (mut alice, mut bob) = seeded("const width = 12;");
+    let original = alice.capture();
+    let original_id = alice.file_id("main.ts").unwrap();
+    alice.rename_file("main.ts", "renamed.ts").unwrap();
+    let renamed = alice.capture();
+    edit(&mut bob, 14, 2, "16");
+    alice.merge(&bob).unwrap();
+    alice.remove_file("renamed.ts").unwrap();
+    alice
+        .create_file("renamed.ts", "later invalid = (")
+        .unwrap();
+    let latest = alice.capture();
+    assert_eq!(alice.snapshot_at(original.revision()).unwrap(), original);
+    assert_eq!(
+        alice.file_ids_at(original.revision()).unwrap()["main.ts"],
+        original_id
+    );
+    assert_eq!(alice.snapshot_at(renamed.revision()).unwrap(), renamed);
+    assert_eq!(
+        alice.file_ids_at(renamed.revision()).unwrap()["renamed.ts"],
+        original_id
+    );
+    assert_ne!(
+        alice.file_ids_at(latest.revision()).unwrap()["renamed.ts"],
+        original_id
+    );
+    let foreign = SharedTextDocument::new(b"other-genesis", SharedTextLimits::default()).unwrap();
+    assert!(alice.snapshot_at(&foreign.revision()).is_err());
+    assert!(alice.file_ids_at(&foreign.revision()).is_err());
+    assert_eq!(alice.capture(), latest);
+    let restored =
+        SharedTextDocument::load(&alice.save(), b"restored", SharedTextLimits::default()).unwrap();
+    assert_eq!(restored.snapshot_at(original.revision()).unwrap(), original);
+}

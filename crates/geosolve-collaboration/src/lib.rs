@@ -14,3 +14,7 @@ pub mod journal;
 pub mod source_patch;
 
 pub mod targets;
+
+pub mod history;
+
+pub mod document;

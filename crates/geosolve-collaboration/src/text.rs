@@ -289,6 +289,42 @@ impl SharedTextDocument {
             files: read_files(&self.document, self.limits).expect("admitted shared text schema"),
         }
     }
+    /// Reconstructs exact source at an authenticated historical causal frontier.
+    /// No current typing or accepted-model state is substituted for those heads.
+    ///
+    /// # Errors
+    /// Rejects unknown/invalid heads, invalid historical schema and resource bounds.
+    pub fn snapshot_at(
+        &self,
+        revision: &TextRevision,
+    ) -> Result<SharedTextSnapshot, SharedTextError> {
+        let historical = self.document.fork_at(&self.validate_revision(revision)?)?;
+        let mut heads = historical
+            .get_heads()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        heads.sort();
+        Ok(SharedTextSnapshot {
+            revision: TextRevision { heads },
+            files: read_files(&historical, self.limits)?,
+        })
+    }
+    /// Reconstructs stable file identities at the same historical causal frontier.
+    ///
+    /// # Errors
+    /// Rejects unknown heads, invalid historical schema and resource bounds.
+    pub fn file_ids_at(
+        &self,
+        revision: &TextRevision,
+    ) -> Result<BTreeMap<String, String>, SharedTextError> {
+        let historical = self.document.fork_at(&self.validate_revision(revision)?)?;
+        read_files(&historical, self.limits)?;
+        Ok(file_layout(&historical)?
+            .into_iter()
+            .map(|(id, path)| (path, id))
+            .collect())
+    }
     /// Applies a batch in order as one change; only the complete result is installed.
     ///
     /// # Errors

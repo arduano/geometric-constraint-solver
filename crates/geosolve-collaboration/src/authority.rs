@@ -85,7 +85,7 @@ pub enum Completion {
     },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DocumentAuthority {
     document_id: String,
     document_epoch: String,
