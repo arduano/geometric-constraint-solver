@@ -855,3 +855,93 @@ The failed collateral receipt remains failed; all other 39 collateral cases pass
 Integrated qualification and preview delivery are pending.
 No equation, tolerance, branch choice or golden-oracle bytes change. Generated-polyline
 Undo remains the separately recorded open finding.
+
+### Qualification follow-up — provisional navigation witness
+
+Run `20260910T224940-a860c18d` on `8c2e2df` completed with unchanged source but
+failed collaboration browser qualification: nine of eleven cases passed. All three
+new drag/held-navigation regressions passed, as did the independent 49-workflow
+ordinary browser stage. This failed run does not qualify a release. Only its
+authenticated unchanged-input successful stages may supply later evidence.
+
+The older `remote server preview leaves browser navigation local and its finished
+point gesture commits durably` witness filtered every noninteractive draw item.
+Genuine native provisional geometry is intentionally noninteractive, so the witness
+compared empty arrays while geometry zoomed correctly. The corrected helper observes
+actual `wb-point`/`wb-curve` coordinates and radii in either state, excluding presence
+and UI chrome. It retains every timing, zero-RPC, accepted-authority, exact terminal,
+unrelated-point, reload and cold-restart assertion. This is a harness error, not a
+second product defect. Against the same prepared `8c2e2df` artifact the focused
+case passes, with 98.44 ms navigation p95 and zero navigation RPCs:
+
+```sh
+GEOSOLVE_DIST=target/release-gate/prepared/d51eb97d1929d48d2976470a92283560bf158d8f953382ce50fa670ce6035a9e/browser/geosolve-harness node --test --test-name-pattern="remote server preview leaves" scripts/collaboration-browser.test.mjs
+```
+
+The separate invalid-draft/Apply workflow exposed the genuine native selection
+reconciliation defect below. Its original browser assertions remain unchanged.
+
+### M98-F030 — Accepted reconstruction discarded personal selection and pins
+
+The same integrated run loses the selected `bore` after captured Apply reaches
+accepted revision 2, removing its radius row from Inspector. The public actual-WASM
+`InteractionHandle.replace` boundary independently reproduces selection length
+**1 → 0** when the exact same authored project/design is constructed twice in one
+native module. Camera remains unchanged. Each reconstruction allocates fresh native
+document/entity IDs, while its exact source-owned presentation symbol remains equal.
+Classification: **DEFECT**, owned by Rust `LocalInteraction::replace_json`; this is
+personal browsing state, not shared semantic target authority.
+
+The old replacement path validates raw previous native IDs against the next scene.
+Retaining the backend worker exposes this previously accidental dependency on
+restarted allocators. Exact reproduction and identity receipts are retained in
+`target/m98/coordination/drag-repair/recovery-review.md` and
+`recovery-native-before.log`. A new native regression also demonstrates that a
+colliding old numeric ID can incorrectly retain a different point.
+
+Rust now retains the authenticated presentation bindings and uses a separate partial
+map for replacement: exact surviving source symbols, compatible complete binding
+shapes and unambiguous correspondence in both directions. Translated selections
+and native/implicit curve occurrences must validate in the replacement scene.
+Missing or incompatible owners are discarded. Dimension pins/focus follow the same
+map; camera, visibility and navigation state remain personal. The strict complete
+mapping used by prediction is unchanged, and these bindings confer no shared edit
+authority. Five new owner tests cover surviving state, deletion/incompatibility,
+ambiguity, exact implicit occurrence and malformed-seed transactionality.
+
+`cargo test --locked -p geosolve-demo-web --lib local_interaction -- --nocapture`
+passes all 23 cases (190.37 s). Narrow warnings-denied Clippy, TypeScript and diff
+checks pass. The thin actual-WASM Inspector replacement regression demonstrably
+fails on the previous WASM. The rebuilt actual-WASM browsing suite passes all four
+cases. Its first post-build run exposed a new-test expectation that selecting only
+a circle center marked the whole declaration selected; the expected `partial`
+state now matches the existing native contract while requiring exact center
+identity and a populated radius Inspector. Final qualification is pending.
+An incidental development assertion assumed an allocator collision during parallel
+tests; that assumption was removed while retaining all ownership assertions and
+the separately captured real collision reproduction. No mathematical behavior,
+accepted source/design export, branch semantics or golden bytes change.
+
+Focused build/parity commands for F030 (pinned shell):
+
+```sh
+npm --prefix crates/geosolve-demo-web/frontend run build:release-artifacts -- --out "$PWD/target/m98/coordination/drag-repair/native-replacement-artifacts"
+cd crates/geosolve-demo-web/frontend && npx vitest run src/lib/collaboration-browsing-worker.test.ts
+```
+
+Release WASM and both browser bundles build successfully. The four-test parity suite
+passes after the above expectation correction. Original failed receipts are retained.
+
+The two previously failing browser workflows both pass against that rebuilt harness
+(37.76 s total), preserving the original invalid-draft/Apply assertions. Accepted
+radius is 6 at revision 2 while later shared working source remains at radius 8;
+the selected Inspector persists. Held server-preview navigation p95 is 97.50 ms
+with zero navigation RPCs, one exact durable terminal and successful cold reopen.
+
+```sh
+GEOSOLVE_DIST=target/m98/coordination/drag-repair/native-replacement-artifacts/geosolve-harness node --test --test-concurrency=1 --test-name-pattern="browser preserves invalid draft|remote server preview leaves" scripts/collaboration-browser-recovery.test.mjs scripts/collaboration-browser.test.mjs
+cargo fmt --all -- --check
+```
+
+Both commands pass. Combined integrated nomination and preserved preview delivery
+remain the final required steps; focused success does not establish release qualification.

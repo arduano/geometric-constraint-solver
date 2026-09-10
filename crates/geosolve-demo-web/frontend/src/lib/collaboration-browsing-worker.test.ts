@@ -180,3 +180,35 @@ describe("independent native browsing", () => {
     } finally { for (const handle of [...handles]) handle.free(); local?.free(); source?.free(); engine.dispose(); }
   });
 });
+
+
+it("retains the selected circle Inspector across genuine reconstructed accepted namespaces",async()=>{
+  await initializePresentation({module_or_path:await readFile(resolve(process.cwd(),"src/generated/geosolve_demo_web_bg.wasm"))});
+  const engine=await createEngine({wasmModule:{...engineWasm,default:initializeEngine},wasm:await readFile(resolve(process.cwd(),"../../../packages/geosolve-engine/dist/wasm/geosolve_sketch_engine_wasm_bg.wasm"))});
+  const workbenches:WorkbenchHandle[]=[];let local:InteractionHandle|undefined,browsing:BrowsingHandle|undefined;
+  try{
+    const compiled=JSON.parse(await readFile(resolve(process.cwd(),"../../geosolve-sketch-engine/tests/fixtures/authoring-radius-5.json"),"utf8"));
+    const project=engine.compileProject({project:"replacement-inspector",compiled,customFiles:{},artifacts:{},lock:{format:"geosolve-lock-v1",modules:{}}});
+    const session=engine.openEditableSession(project),accepted={project:session.exportProject(),design:session.exportDesign()};
+    const seed=()=>{
+      const workbench=new WorkbenchHandle(JSON.stringify({version:2,persistedProject:accepted.project}));workbenches.push(workbench);
+      workbench.dispatch(JSON.stringify({version:2,command:"workspace.project.apply",payload:accepted}));
+      return JSON.parse(workbench.interactionSnapshot()).seed;
+    };
+    const first=seed(),second=seed(),firstPoint=JSON.parse(first.scene).points[0],secondPoint=JSON.parse(second.scene).points[0];
+    expect(firstPoint.id).not.toBe(secondPoint.id);
+    local=new InteractionHandle(JSON.stringify(first));
+    local.pointer(JSON.stringify({version:2,phase:"down",pointerId:1,x:firstPoint.screen_position.x,y:firstPoint.screen_position.y,buttons:1,modifiers:{alt:false,ctrl:false,meta:false,shift:false}}));
+    const before=JSON.parse(local.state());
+    const replacement=JSON.parse(local.replace(JSON.stringify({seed:second,preserveSelection:true})));
+    expect(replacement.state.selection).toEqual([{Point:secondPoint.id}]);
+    expect(replacement.state.viewport).toEqual(before.viewport);
+    browsing=new BrowsingHandle(JSON.stringify({...accepted,seed:second}));
+    const chrome=JSON.parse(browsing.update(JSON.stringify(replacement.state))) as WorkbenchSnapshot;
+    // Selecting its center is a partial selection of the circle declaration.
+    expect(chrome.navigation?.rows).toContainEqual({id:"managed:bore",state:"partial"});
+    expect(chrome.parameters.some(parameter=>parameter.label.includes("radius")&&parameter.value==="5")).toBe(true);
+    expect(session.exportProject()).toBe(accepted.project);expect(session.exportDesign()).toEqual(accepted.design);
+    session.dispose();
+  }finally{browsing?.free();local?.free();for(const workbench of workbenches)workbench.free();engine.dispose();}
+});

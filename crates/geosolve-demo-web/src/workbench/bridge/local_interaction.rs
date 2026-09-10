@@ -11,6 +11,8 @@ use geosolve_constraint_editor::{
 use std::collections::BTreeMap;
 
 mod presence;
+#[cfg(test)]
+mod replacement_tests;
 mod visibility;
 #[cfg(test)]
 mod visibility_tests;
@@ -627,6 +629,73 @@ impl PresentationMapping {
             bindings,
         })
     }
+    /// Personal state may survive a source edit only for unambiguous owners
+    /// whose complete binding shape still agrees. Unlike prediction mapping,
+    /// absent or changed declarations are simply not reconciled.
+    fn for_replacement(source: &LocalInteraction, destination: &LocalInteraction) -> Self {
+        use geosolve_constraint_editor::IntentNativeBinding as Binding;
+        let source_document = source.scene.presentation_document();
+        let destination_document = destination.scene.presentation_document();
+        let mut result = Self {
+            source: source_document.id(),
+            destination: destination_document.id(),
+            bindings: BTreeMap::new(),
+        };
+        if result.source == result.destination {
+            return result;
+        }
+        let (Some(before), Some(after)) = (&source.bindings, &destination.bindings) else {
+            return result;
+        };
+        let compatible = |before: &Binding, after: &Binding| {
+            if std::mem::discriminant(before) != std::mem::discriminant(after) {
+                return false;
+            }
+            match (before, after) {
+                (Binding::Curve(before), Binding::Curve(after)) => {
+                    match (
+                        source_document.curve(*before),
+                        destination_document.curve(*after),
+                    ) {
+                        (Some(before), Some(after)) => {
+                            std::mem::discriminant(&before.definition)
+                                == std::mem::discriminant(&after.definition)
+                        }
+                        _ => false,
+                    }
+                }
+                _ => true,
+            }
+        };
+        let mut candidates = BTreeMap::<Binding, std::collections::BTreeSet<Binding>>::new();
+        let mut reverse = BTreeMap::<Binding, std::collections::BTreeSet<Binding>>::new();
+        for (symbol, before) in &before.nodes {
+            let Some(after) = after.nodes.get(symbol) else {
+                continue;
+            };
+            if before.len() != after.len()
+                || !before.iter().zip(after).all(|(a, b)| compatible(a, b))
+            {
+                continue;
+            }
+            for (before, after) in before.iter().zip(after) {
+                candidates.entry(*before).or_default().insert(*after);
+                reverse.entry(*after).or_default().insert(*before);
+            }
+        }
+        for (before, after) in candidates {
+            if after.len() == 1 {
+                let after = *after.first().expect("one candidate");
+                if reverse
+                    .get(&after)
+                    .is_some_and(|sources| sources.len() == 1)
+                {
+                    result.bindings.insert(before, after);
+                }
+            }
+        }
+        result
+    }
     fn binding(
         &self,
         source: geosolve_constraint_editor::IntentNativeBinding,
@@ -935,6 +1004,7 @@ pub(crate) struct LocalInteraction {
     host_size_received: bool,
     point_targets: BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>,
     presence_bindings: BTreeMap<String, Vec<geosolve_constraint_editor::IntentNativeBinding>>,
+    bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
     presence: presence::PresenceState,
 }
 impl LocalInteraction {
@@ -986,6 +1056,7 @@ impl LocalInteraction {
             host_size_received: seed.host_size_received,
             point_targets: seed.point_targets,
             presence_bindings: seed.presence_bindings,
+            bindings: seed.bindings,
             presence: presence::PresenceState::default(),
         })
     }
@@ -1179,19 +1250,21 @@ impl LocalInteraction {
         next.visibility = self.visibility.clone();
         next.visibility.reconcile(&next.visibility_seed);
         next.apply_visibility()?;
+        let mapping = PresentationMapping::for_replacement(self, &next);
         next.dimensions.state.mode = self.dimensions.state.mode;
         next.dimensions.state.pins = self
             .dimensions
             .state
             .pins
             .iter()
-            .copied()
+            .filter_map(|pin| mapping.layout_key(*pin).ok())
             .filter(|pin| next.dimensions.ids.values().any(|key| key == pin))
             .collect();
         next.dimensions.state.focus = self
             .dimensions
             .state
             .focus
+            .and_then(|focus| mapping.layout_key(focus).ok())
             .filter(|focus| next.dimensions.ids.values().any(|key| key == focus));
         if self.scene_key == next.scene_key {
             next.dimensions.state = self.dimensions.state.clone();
@@ -1207,7 +1280,15 @@ impl LocalInteraction {
             next.editor = self.editor.clone();
             next.dimensions.context.hovered = self.dimensions.context.hovered;
         } else if request.preserve_selection {
-            let mut selected = self.editor.selection_presentation_state();
+            let previous = self.editor.selection_presentation_state();
+            let mut selected = SelectionPresentationState {
+                items: previous
+                    .items
+                    .into_iter()
+                    .filter_map(|item| mapping.selection(item).ok())
+                    .collect(),
+                curve_picks: Vec::new(),
+            };
             selected.items.retain(|item| {
                 SelectionPresentationState {
                     items: vec![*item],
@@ -1216,20 +1297,25 @@ impl LocalInteraction {
                 .validate(&next.scene)
                 .is_ok()
             });
-            selected.curve_picks.retain(|pick| {
-                let item = SelectionItem::Curve(pick.span);
-                let valid = selected.items.contains(&item)
-                    && SelectionPresentationState {
-                        items: vec![item],
-                        curve_picks: vec![*pick],
-                    }
-                    .validate(&next.scene)
-                    .is_ok();
-                if !valid {
+            for pick in previous.curve_picks {
+                let Ok(item) = mapping.selection(SelectionItem::Curve(pick.span)) else {
+                    continue;
+                };
+                let mapped = mapping.curve_pick(pick, &next.scene).ok().filter(|pick| {
+                    selected.items.contains(&item)
+                        && SelectionPresentationState {
+                            items: vec![item],
+                            curve_picks: vec![*pick],
+                        }
+                        .validate(&next.scene)
+                        .is_ok()
+                });
+                if let Some(pick) = mapped {
+                    selected.curve_picks.push(pick);
+                } else {
                     selected.items.retain(|selected| *selected != item);
                 }
-                valid
-            });
+            }
             next.editor
                 .restore_selection_presentation(&next.scene, selected)
                 .map_err(|e| e.to_string())?;

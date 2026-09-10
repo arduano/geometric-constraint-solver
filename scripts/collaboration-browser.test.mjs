@@ -57,7 +57,9 @@ async function fixture(t,options={}){
 }
 const presented = page => page.locator("canvas").evaluate(canvas=>{
   const frame=canvas.__geosolvePresentedFrame;
-  return frame?JSON.stringify(frame.items.filter(item=>item.interactive&&item.layer!=="presence").map(({kind,id,center,points})=>({kind,id,center,points}))):null;
+  // Native provisional geometry is deliberately noninteractive. Observe the
+  // painted source geometry in either state, excluding presence and chrome.
+  return frame?JSON.stringify(frame.items.filter(item=>item.layer!=="presence"&&item.className.split(/\s/u).some(name=>name==="wb-point"||name==="wb-curve")).map(({kind,id,center,radius,points})=>({kind,id,center,radius,points}))):null;
 });
 async function ready(page){await page.getByRole("region",{name:"Shared document",exact:true}).waitFor({timeout:90_000});await page.locator('canvas[data-render-state="ready"]').waitFor({timeout:90_000});}
 async function resized(page){
