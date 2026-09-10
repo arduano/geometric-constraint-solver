@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { AuthoritySnapshot, Command, Connection, JournalRecord, Receipt } from "./host.js";
-import type { TextRevision } from "./index.js";
+import type { TextEdit, TextRevision } from "./index.js";
+import type { UserTextHistory } from "./source.js";
 export type { Command, Connection, Receipt, Outcome, JournalRecord } from "./host.js";
 
 export interface Participant { readonly userId:string; readonly clientId:string; readonly role:"editor"|"viewer" }
@@ -103,7 +104,7 @@ export class CollaborationClient<Document=unknown> {
     const state=await this.rpc<CollaborationState<Document>>("state");
     this.state=state;this.options.onState?.(state);return state;
   }
-  async textDelta(revision:TextRevision):Promise<{sourceSequence:number;workingRevision:TextRevision;changes:readonly (readonly number[])[]}>{
+  async textDelta(revision:TextRevision):Promise<{sourceSequence:number;workingRevision:TextRevision;changes:readonly (readonly number[])[];history:UserTextHistory}>{
     return this.rpc("text-state",{revision});
   }
   async scene<T>():Promise<{revision:number;value:T}>{
@@ -117,6 +118,14 @@ export class CollaborationClient<Document=unknown> {
   writeText(changes:readonly Uint8Array[],requestId=crypto.randomUUID()):Promise<unknown>{
     const item=this.add("text",requestId,{requestId,changes:changes.map(bytes=>Array.from(bytes))});
     return this.enqueue(item);
+  }
+  /** Ordered draft lifecycle and personal history use the same durable source
+   * gateway as typing. They do not apply or replace the accepted model. */
+  editFiles(edits:readonly Exclude<TextEdit,{kind:"splice"}>[],revision:TextRevision,requestId=crypto.randomUUID()):Promise<unknown>{
+    return this.enqueue(this.add("text",requestId,{requestId,action:"files",revision,edits}));
+  }
+  undoText(redo=false,requestId=crypto.randomUUID()):Promise<unknown>{
+    return this.enqueue(this.add("text",requestId,{requestId,action:redo?"redo":"undo"}));
   }
   /** Apply waits for this client's earlier text ACKs before server capture. */
   async submit(command:Command,requestId=crypto.randomUUID()):Promise<Receipt>{
@@ -156,7 +165,13 @@ export class CollaborationClient<Document=unknown> {
     // Persist immediately even if an earlier unknown outcome blocks admission.
     const saved=this.persist();
     const operation=this.ingressTail.then(async()=>{await saved;return this.sendPending(item);});
-    this.ingressTail=operation;
+    this.ingressTail=operation.catch(error=>{
+      // A fsynced source refusal is terminal. Unknown transport outcomes still
+      // block ordering until exact replay; a rejected Undo must not strand typing.
+      if(error instanceof CollaborationRequestError&&error.code==="text_rejected")return;
+      throw error;
+    });
+    void this.ingressTail.catch(()=>{});
     void saved.catch(()=>{});void operation.catch(()=>{});return operation;
   }
   private async sendPending(item:PendingRequest):Promise<unknown>{
@@ -167,7 +182,12 @@ export class CollaborationClient<Document=unknown> {
         const receipt=(result as {receipt:Receipt}).receipt;await this.observeReceipt(receipt);return receipt;
       }
       this.pending.delete(item.requestId);await this.persist();return result;
-    }catch(error){if(!(error instanceof CollaborationRequestError)||[401,503].includes(error.status))this.disconnected(error,this.epoch);throw error;}
+    }catch(error){
+      if(error instanceof CollaborationRequestError&&error.code==="text_rejected"){
+        this.pending.delete(item.requestId);await this.persist();
+      }else if(!(error instanceof CollaborationRequestError)||[401,503].includes(error.status))this.disconnected(error,this.epoch);
+      throw error;
+    }
   }
   private async observeReceipt(receipt:Receipt):Promise<void>{
     if(receipt.operation.userId!==this.connection?.userId||receipt.operation.clientId!==this.options.clientId)return;

@@ -82,7 +82,8 @@ export async function openDurableCollaborationHost(folder, {
         if (payload.operation !== undefined) {
           const key = operationKey(payload.operation);
           if (textReceipts.has(key) || typeof payload.requestDigest !== "string" || !/^[a-f0-9]{64}$/u.test(payload.requestDigest) || payload.ack === undefined) throw Error("Invalid durable text request receipt");
-          textReceipts.set(key, { digest: payload.requestDigest, ack: copy(payload.ack) });
+          if (payload.rejection !== undefined && (payload.rejection?.code !== "text_rejected" || typeof payload.rejection.message !== "string" || payload.rejection.message.length > 1024)) throw Error("Invalid durable text refusal");
+          textReceipts.set(key, { digest: payload.requestDigest, ack: copy(payload.ack), rejection: payload.rejection });
         }
       } else throw Error("Unknown collaboration host envelope kind");
     }
@@ -222,11 +223,29 @@ export async function openDurableCollaborationHost(folder, {
             const previous = textReceipts.get(operationKey(requested.operation));
             if (previous) {
               if (previous.digest !== requested.requestDigest) throw failure("operation_reused", "Text request ID was reused with different content");
+              if (previous.rejection) throw failure(previous.rejection.code, previous.rejection.message);
               return copy(previous.ack);
             }
             if (textReceipts.size >= 100_000) throw failure("backpressure", "Durable text receipt limit reached");
           }
-          const stage = await prepare();
+          let stage;
+          try { stage = await prepare(); }
+          catch (error) {
+            if (!requested) throw error;
+            // A transactional native refusal is also a final operation result.
+            // Keep exact source bytes and journal the refusal before returning;
+            // retry may never reinterpret this ID against a newer document.
+            const rejection = { code: "text_rejected", message: String(error.message ?? error).slice(0, 1024) };
+            try {
+              const snapshot = authority.snapshot();
+              const checkpoint = await storage.readBlob(textReferences.source);
+              const envelope = await storage.append({ format, kind: "text", acceptedRevision: snapshot.acceptedRevision, acceptedInput: snapshot.acceptedInput, ...requested, ack: null, rejection }, { source: checkpoint });
+              textReceipts.set(operationKey(requested.operation), { digest: requested.requestDigest, ack: null, rejection });
+              textReferences = envelope.attachments;
+              publish(envelope);
+            } catch (persistenceError) { poisoned = true; throw persistenceError; }
+            throw failure(rejection.code, rejection.message);
+          }
           if (!(stage?.checkpoint instanceof Uint8Array) || typeof stage.commit !== "function" || typeof stage.fail !== "function") throw Error("Invalid trusted text persistence stage");
           try {
             const snapshot = authority.snapshot();

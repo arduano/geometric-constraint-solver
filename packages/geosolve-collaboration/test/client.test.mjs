@@ -68,6 +68,20 @@ test("lost ACK retains exact pending bytes and replays the same ID on reconnect"
   }finally{f.client.dispose();}
 });
 
+test("durable text refusal clears only that request and permits later typing in admission order",async()=>{
+  const f=fixture({text:async(body)=>body.action==="undo"
+    ?new Response(JSON.stringify({error:{code:"text_rejected",message:"Another author owns this contribution"}}),{status:400,headers:{"Content-Type":"application/json"}})
+    :json({sourceSequence:2})});
+  try{
+    await f.client.connect();
+    const undo=f.client.undoText(false,"refused"),typing=f.client.writeText([Uint8Array.of(7)],"later");
+    await assert.rejects(undo,/Another author/);await typing;
+    assert.deepEqual(f.client.pendingRequests,[]);
+    assert.deepEqual(f.calls.filter(x=>x.route==="text").map(x=>x.body.requestId),["refused","later"]);
+    assert.equal(f.client.connected,true);
+  }finally{f.client.dispose();}
+});
+
 test("pending work cannot be sent into another document and persistence failure prevents transmission",async()=>{
   const f=fixture();await f.client.connect();await f.client.submit({kind:"undo",basisRevision:0,payload:{}},"undo");
   const pending=f.client.checkpoint();f.client.dispose();

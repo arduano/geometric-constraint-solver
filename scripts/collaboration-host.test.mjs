@@ -31,6 +31,18 @@ function deferred() { let resolve; const promise = new Promise((r) => { resolve 
 function submit(connection, requestId, basisRevision = 0) { return { connection, requestId, command: { kind: "semantic", basisRevision, payload: { property: "width", value: 14 } } }; }
 function accepted(input, install = () => {}) { return () => ({ completion: { status: "accepted", acceptedInput: input, summary: "Set width" }, checkpoints: checkpoints(input), install }); }
 
+test("rejected text intent keeps its original durable refusal across changed state and restart", async (t) => {
+  const { host, open } = await fixture(t);
+  const alice = await host.connect({ userId: "alice", role: "editor" }, "tab");
+  const request = { requestId: "refused-undo", payload: { action: "undo" } };
+  await assert.rejects(host.writeText(alice, () => { throw Error("Another author owns this contribution"); }, request), /Another author/u);
+  await host.close();
+  const restored = await open({ serverEpoch: "restart" }), joined = await restored.connect({ userId: "alice", role: "editor" }, "tab");
+  await assert.rejects(restored.writeText(joined, () => { assert.fail("A durable refusal must never be prepared again"); }, request), /Another author/u);
+  assert.equal(restored.snapshot().needsRecovery, false);
+  assert.equal(restored.snapshot().acceptedRevision, 0);
+});
+
 test("actual Rust admission and terminal ACK follow real fsync, restart retains exact original outcome", async (t) => {
   const hold = deferred(), reached = deferred(); let enabled = false;
   const { host, open } = await fixture(t, { storageOptions: { fault: async (point) => { if (enabled && point === "journal-synced") { reached.resolve(); await hold.promise; } } } });
