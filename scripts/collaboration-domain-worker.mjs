@@ -5,6 +5,8 @@ import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
 import { readWorkspaceSnapshot, evaluateWorkspaceSnapshot } from "./workspace-loader.mjs";
 import { engineModuleUrl, sdkDirectory } from "./workspace-runtime-paths.mjs";
+import { capturedManagedPropertyTouches } from "./collaboration-domain-syntax.mjs";
+import { enrichInventory, prepareStructuralSource, metadataChanges } from "./collaboration-domain-structure.mjs";
 
 const managed = await import(pathToFileURL(resolve(sdkDirectory, "managed.js")).href);
 const { capturedManagedDeclarationChanges } = await import(pathToFileURL(resolve(sdkDirectory, "apply-rebase.js")).href);
@@ -56,7 +58,7 @@ function preserveAllocator(project, old) {
 function modelFor(session, compiled) {
   return { format, entry: compiled.entry, project: session.exportProject(), design: session.exportDesign(), sourceDesignDigest: session.sourceDesignDigest(), patches: compiled.patches };
 }
-function inventory(compiled, project) {
+function inventory(compiled, project, source = compiled.compiled.normalizedSource) {
   const entry = compiled.entry, object = (declaration) => `${entry}#${declaration}`, objects = [], properties = [];
   // Use Rust's validated equation-free projection for both property values and
   // dependency addresses. No alternate expression evaluator or label inference.
@@ -82,7 +84,7 @@ function inventory(compiled, project) {
     objects.push({ object: object(declaration), declaration, dependencies: [...dependencies].sort().map(object) });
     visit(value, declaration, []);
   }
-  return { objects, properties };
+  return enrichInventory(compiled, source, { objects, properties });
 }
 async function reopen(engine, folder, files, model) {
   if (!model || model.format !== format || Object.keys(model).sort().join(",") !== "design,entry,format,patches,project,sourceDesignDigest") fail("invalid_model", "Expected complete collaboration model checkpoint");
@@ -102,8 +104,16 @@ async function reopen(engine, folder, files, model) {
 }
 function output(session, compiled, files, extra = {}) {
   const result = accepted(session), model = modelFor(session, compiled);
-  return { acceptedInput: inputIdentity(files, model.sourceDesignDigest), model, result, candidateFiles: files, inventory: inventory(compiled, model.project), pointTargets: session.pointGestureTargets(), ...extra };
+  const observed = inventory(compiled, model.project, files[compiled.entry]);
+  for (const item of observed.objects) {
+    const owns = (address) => pointOwnerDeclaration(address) === item.declaration;
+    item.payload.overrides = { drafts: model.design.overrides.drafts.filter(([address]) => owns(address)),
+      suppressed_children: model.design.overrides.suppressed_children.filter(([address]) => owns(address)) };
+    if (model.design.generated.overrides.some(([, override]) => override.address.invocation === item.declaration)) item.payload.unsupported = "Legacy generated value override requires a native restoration API";
+  }
+  return { acceptedInput: inputIdentity(files, model.sourceDesignDigest), model, result, candidateFiles: files, inventory: observed, pointTargets: session.pointGestureTargets(), ...extra };
 }
+const pointOwnerDeclaration = (address) => address.owner.address.owner === "direct_declaration" ? address.owner.address.declaration : address.owner.address.address.invocation;
 const addressKey = (address) => JSON.stringify(sorted(address));
 const pointTargetAddresses = (target) => target.target === "point" ? [target.address] : [target.lower_left, target.upper_right];
 function pointChanges(entry, before, after, ownedAddresses) {
@@ -123,6 +133,35 @@ function pointChanges(entry, before, after, ownedAddresses) {
     return [{ object: `${entry}#${declaration}`, declaration, address: sorted(address), before: old?.draft ?? null, after: value?.draft ?? null }];
   });
 }
+function observeStructuralChanges(before, after, explicitMutation) {
+  const previous = new Map(before.objects.map((item) => [item.object, item])), current = new Map(after.objects.map((item) => [item.object, item]));
+  const commonBefore = before.objects.filter((item) => current.has(item.object)).map((item) => item.object);
+  const commonAfter = after.objects.filter((item) => previous.has(item.object)).map((item) => item.object);
+  const orderChanged = !equal(commonBefore, commonAfter);
+  const dependencies = [], reorders = [];
+  for (const item of after.objects) {
+    const old = previous.get(item.object); if (!old) continue;
+    const values = explicitMutation?.mutation === "set_values" ? explicitMutation.values : explicitMutation?.mutation === "set_value" ? [explicitMutation] : [];
+    const explicitDependency = values.some((write) => write.declaration === item.declaration && (write.expected.kind === "reference" || write.value.kind === "reference"));
+    if (!equal(old.dependencies, item.dependencies) || explicitDependency) dependencies.push({ object: item.object, before: old.dependencies, after: item.dependencies });
+    if (orderChanged && !equal(old.position, item.position) || explicitMutation?.mutation === "reorder_declaration" && explicitMutation.declaration === item.declaration) reorders.push({ object: item.object, before: old.position, after: item.position });
+  }
+  return { dependencies, reorders };
+}
+function observedValueChanges(before, after, explicit = []) {
+  const key = ({ declaration, path }) => JSON.stringify([declaration, path]);
+  const prior = new Map(before.properties.map((property) => [key(property), property])), touched = new Set(explicit.map(key));
+  const changes = after.properties.flatMap((property) => {
+    const old = prior.get(key(property));
+    return old && (!equal(old.value, property.value) || touched.has(key(property))) ? [{ write: { declaration: property.declaration, path: property.path, value: property.value }, before: old.value }] : [];
+  });
+  // A native mutation inverse must never carry overlapping ancestor/child
+  // writes in one set_values request. Explicit writes keep their declared
+  // granularity; derived changes use the most specific available coordinate.
+  const prefix = (a, b) => a.length < b.length && a.every((segment, index) => equal(segment, b[index]));
+  return changes.filter(({ write }) => !changes.some(({ write: other }) => other.declaration === write.declaration
+    && (touched.has(key(other)) && prefix(other.path, write.path) || !touched.has(key(write)) && prefix(write.path, other.path))));
+}
 function checkedUpdate(update) {
   if (update.status !== "accepted") fail("candidate_rejected", update.diagnostics.map((item) => item.detail).join("; "));
   return update;
@@ -139,6 +178,12 @@ async function run(input) {
         if (outcome.status === "reconciled") { workingFiles[entry] = outcome.source; reconciliations.push({ kind: "reconciled", path: entry, patch: outcome.patch }); }
         else reconciliations.push({ kind: "pending", path: entry, reason: outcome.reason });
       }
+    } else if (contribution.kind === "structural") {
+      const { entry, acceptedSource, source } = contribution;
+      if (workingFiles[entry] === acceptedSource || workingFiles[entry] === source) {
+        const patch = exactPatch(workingFiles[entry], source); workingFiles[entry] = source;
+        reconciliations.push({ kind: "reconciled", path: entry, patch });
+      } else reconciliations.push({ kind: "pending", path: entry, reason: "Structural inverse overlaps a newer working draft; accepted geometry is retained" });
     } else if (contribution.kind === "point") {
       const path = contribution.entry;
       if (typeof workingFiles[path] !== "string") reconciliations.push({ kind: "pending", path, reason: "Working file was removed" });
@@ -216,15 +261,69 @@ async function run(input) {
       return output(session, reopened.compiled, input.files, { patches: [{ path: entry, patch: exactPatch(input.files[entry], input.files[entry]) }],
         preparedContribution: { kind: "point", entry }, pointChanges: pointChanges(entry, before, session.exportDesign(), ownedAddresses) });
     }
-    if (input.kind === "values") {
-      const prepared = session.prepareAuthoring({ kind: "values", writes: input.writes }, { expected: session.token });
+    if (input.kind === "structural_inverse") {
+      const next = prepareStructuralSource(reopened.compiled, input.files[reopened.compiled.entry], input.inverse);
+      const prepared = session.prepareAuthoring({ kind: "source", source: next.compiled.normalizedSource }, { expected: session.token });
+      const receipt = managed.compileManagedSource(prepared.request.candidateSource, { patches: reopened.compiled.patches });
+      checkedUpdate(session.applyAuthoring(prepared, { ticketDigest: prepared.request.ticket.ticketDigest, baseSourceDigest: prepared.request.current.ir.source_digest, candidateSourceDigest: receipt.ir.source_digest, compiled: receipt }));
+      const restored = input.inverse.structural.create ?? [];
+      if (restored.some((item) => item.payload.overrides?.drafts.length || item.payload.overrides?.suppressed_children.length)) {
+        const design = session.exportDesign(), overlays = structuredClone(design.overrides);
+        const targets = session.pointGestureTargets().flatMap(({ target }) => pointTargetAddresses(target));
+        const remap = (address) => {
+          const semanticAddress = ({ owner, ...rest }) => ({ ...rest, owner: owner.address });
+          if (address.field === "point") {
+            const candidates = targets.filter((target) => equal(semanticAddress(target), semanticAddress(address)));
+            if (candidates.length !== 1) fail("reconciliation_conflict", "Restored point has no unique fresh native target");
+            return candidates[0];
+          }
+          const owner = address.owner.address;
+          const active = design.generated.active.filter(([member]) => owner.owner === "generated_member" ? equal(member, owner.address) : member.invocation === owner.declaration && member.template[0] === "direct");
+          if (active.length !== 1) fail("reconciliation_conflict", "Restored suppression has no unique fresh native owner");
+          return { ...address, owner: { address: owner, ...active[0][1] } };
+        };
+        for (const item of restored) for (const kind of ["drafts", "suppressed_children"]) for (const [address, value] of item.payload.overrides?.[kind] ?? []) {
+          if (pointOwnerDeclaration(address) !== item.target.object.slice(reopened.compiled.entry.length + 1)) fail("reconciliation_conflict", "Restored overlay belongs to another object");
+          const fresh = remap(address);
+          if (overlays[kind].some(([current]) => equal(current, fresh))) fail("reconciliation_conflict", "Restored overlay conflicts with a retained property");
+          overlays[kind].push([fresh, value]);
+        }
+        checkedUpdate(await session.applyOverlay(overlays, { expected: session.token }));
+      }
+      const entry = reopened.compiled.entry, files = { ...input.files, [entry]: next.source }, compiled = { ...reopened.compiled, compiled: next.compiled };
+      const result = output(session, compiled, files, { valueChanges: [], patches: [{ path: entry, patch: exactPatch(input.files[entry], next.source) }],
+        preparedContribution: { kind: "structural", entry, acceptedSource: input.files[entry], source: next.source } });
+      for (const item of [...(input.inverse.structural.create ?? []).map((item) => ({ target: item.target, after: item.dependencies })), ...(input.inverse.structural.dependencies ?? [])]) {
+        if (input.inverse.structural.delete?.closure.some((target) => target.object === item.target.object)) continue;
+        const actual = result.inventory.objects.find((object) => object.object === item.target.object);
+        if (!actual || !equal(actual.dependencies, item.after.map((target) => target.object).sort())) fail("reconciliation_conflict", "Replayed compiler dependencies differ from native inverse");
+      }
+      return result;
+    }
+    if (["values", "mutation", "construction"].includes(input.kind)) {
+      const highWater = projectValue(input.model.project).managed.declaration_name_high_water ?? 0;
+      const prepared = input.kind === "construction" ? session.prepareConstruction(input.command, { expected: session.token })
+        : session.prepareAuthoring(input.kind === "values" ? { kind: "values", writes: input.writes }
+          : { kind: "mutation", mutation: input.mutation, candidate_name_high_water: input.candidateNameHighWater ?? highWater }, { expected: session.token });
       const current = prepared.request.current, mutation = prepared.request.ticket.mutation, entry = reopened.compiled.entry;
       const receipt = managed.applyManagedSketchSourceMutation(current, mutation, { source: input.files[entry], patches: input.model.patches });
       const canonical = managed.applyManagedSketchMutation(current, mutation, { patches: input.model.patches });
       if (canonical.compiled.canonicalIrJson !== receipt.compiled.canonicalIrJson || canonical.compiled.canonicalArtifactJson !== receipt.compiled.canonicalArtifactJson) fail("invalid_receipt", "Localized source differs from canonical native mutation");
-      const update = checkedUpdate(session.applyAuthoring(prepared, { ticketDigest: prepared.request.ticket.ticketDigest, ...canonical }));
+      let update;
+      if (input.kind === "construction") {
+        const candidate = session.resolveConstruction(prepared, { ticketDigest: prepared.request.ticket.ticketDigest, ...canonical });
+        update = checkedUpdate(session.applyConstructionCommit(candidate));
+        if (session.sourceDesignDigest() !== candidate.source_design_digest) fail("invalid_result", "Construction installation differs from its native candidate");
+      } else update = checkedUpdate(session.applyAuthoring(prepared, { ticketDigest: prepared.request.ticket.ticketDigest, ...canonical }));
       const files = { ...input.files, [entry]: receipt.source }, compiled = { ...reopened.compiled, compiled: receipt.compiled };
-      return output(session, compiled, files, { valueChanges: update.valueChanges, patches: [{ path: entry, patch: receipt.patch }], preparedContribution: { kind: "values", entry, current, mutation, acceptedSource: input.files[entry], patch: receipt.patch, patches: input.model.patches } });
+      const result = output(session, compiled, files, { valueChanges: update.valueChanges ?? [], ...(input.kind === "construction" ? { createdDeclarations: prepared.declarations } : {}),
+        patches: [{ path: entry, patch: receipt.patch }], preparedContribution: { kind: "values", entry, current, mutation, acceptedSource: input.files[entry], patch: receipt.patch, patches: input.model.patches } });
+      const prior = inventory(reopened.compiled, input.model.project, input.files[entry]);
+      result.structuralChanges = observeStructuralChanges(prior, result.inventory, mutation);
+      result.metadataChanges = metadataChanges(reopened.compiled, compiled, mutation);
+      if (input.kind === "mutation") result.valueChanges = observedValueChanges(prior, result.inventory,
+        mutation.mutation === "set_values" ? mutation.values : mutation.mutation === "set_value" ? [mutation] : []);
+      return result;
     }
     if (input.kind === "apply") {
       const basisFiles = input.capture.acceptedBasis.files, capturedFiles = input.capture.working.files;
@@ -237,9 +336,12 @@ async function run(input) {
       if (basis.entry !== latest.entry || captured.entry !== latest.entry) fail("reconciliation_conflict", "Concurrent entry lifecycle changes require explicit reconciliation");
       const files = Object.assign(Object.create(null), input.files), requiredStableDeclarations = [];
       requiredStableDeclarations.push(...capturedManagedDeclarationChanges(basisFiles[basis.entry], capturedFiles[captured.entry]));
+      const basisInventory = inventory(basis, compileProject(engine, basis), basisFiles[basis.entry]);
+      const capturedTouches = capturedManagedPropertyTouches(basisFiles[basis.entry], capturedFiles[captured.entry], basisInventory.properties);
+      requiredStableDeclarations.push(...capturedTouches.map(({ declaration }) => declaration));
       // A dependency change can alter every invocation without changing entry
       // text. Require the captured declaration lifetimes as a conservative guard.
-      if (!equal(basis.patches, captured.patches)) requiredStableDeclarations.push(...inventory(basis, compileProject(engine, basis)).objects.map(({ declaration }) => declaration));
+      if (!equal(basis.patches, captured.patches)) requiredStableDeclarations.push(...basisInventory.objects.map(({ declaration }) => declaration));
       if (requiredStableDeclarations.some((declaration) => input.invalidatedDeclarations?.includes(declaration))) fail("reconciliation_conflict", "Captured declaration lifetime changed");
       const paths = new Set([...Object.keys(basisFiles), ...Object.keys(capturedFiles), ...Object.keys(input.files)]);
       for (const path of paths) {
@@ -268,11 +370,15 @@ async function run(input) {
       }
       const changedPaths = [...paths].filter((path) => input.files[path] !== files[path]).sort();
       const result = output(session, compiled, files, { requiredStableDeclarations: [...new Set(requiredStableDeclarations)].sort(), patches: changedPaths.filter((path) => typeof input.files[path] === "string" && typeof files[path] === "string").map((path) => ({ path, patch: exactPatch(input.files[path], files[path]) })), preparedContribution: { kind: "apply", changedPaths, candidateFiles: files, capturedFiles } });
+      result.structuralChanges = observeStructuralChanges(inventory(latest, input.model.project, input.files[latest.entry]), result.inventory);
+      result.metadataChanges = metadataChanges(latest, compiled);
       const propertyKey = ({ object, path }) => JSON.stringify([object, path]);
       const previous = new Map(inventory(latest, input.model.project).properties.map((property) => [propertyKey(property), property]));
+      const touched = new Set(capturedManagedPropertyTouches(basisFiles[basis.entry], capturedFiles[captured.entry], result.inventory.properties)
+        .map(({ declaration, path }) => propertyKey({ object: `${compiled.entry}#${declaration}`, path })));
       result.valueChanges = result.inventory.properties.flatMap((property) => {
         const before = previous.get(propertyKey(property));
-        return before && !equal(before.value, property.value) ? [{ write: { declaration: property.declaration, path: property.path, value: property.value }, before: before.value }] : [];
+        return before && (!equal(before.value, property.value) || touched.has(propertyKey(property))) ? [{ write: { declaration: property.declaration, path: property.path, value: property.value }, before: before.value }] : [];
       });
       return result;
     }
