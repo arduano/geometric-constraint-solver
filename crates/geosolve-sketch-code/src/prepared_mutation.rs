@@ -145,6 +145,18 @@ pub fn derive_managed_value_mutation(
         .statements
         .iter()
         .filter_map(|statement| match statement {
+            ManagedStatement::Binding {
+                variable,
+                parameter,
+                value,
+                ..
+            } if parameter
+                .as_ref()
+                .map_or(variable.as_str(), |parameter| parameter.symbol.as_str())
+                == declaration.0 =>
+            {
+                Some(value)
+            }
             ManagedStatement::Declaration {
                 symbol, arguments, ..
             } if symbol == &declaration.0 => Some(arguments),
