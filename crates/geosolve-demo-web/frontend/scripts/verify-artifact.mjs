@@ -37,6 +37,14 @@ export async function verifyTransport(artifact, baseUrl) {
   return verified;
 }
 
+export function verifyWorkbenchWasmLoaded(manifest, baseUrl, wasmResponses) {
+  const modules = manifest.files.filter((file) => /^assets\/geosolve_demo_web_bg(?:-[A-Za-z0-9_-]+)?\.wasm$/.test(file.path));
+  if (modules.length !== 1) throw new Error("readiness requires exactly one nominated workbench WASM module");
+  const expectedUrl = new URL(modules[0].path, baseUrl).href;
+  if (!wasmResponses.has(expectedUrl)) throw new Error("readiness did not load the nominated WASM module");
+  return expectedUrl;
+}
+
 async function readiness(baseUrl, manifest) {
   const { chromium, expect: playwrightExpect } = await import("@playwright/test");
   // Worker evaluation leaves the page responsive before accepted geometry is ready.
@@ -84,9 +92,7 @@ async function readiness(baseUrl, manifest) {
         expect(renderer.state).toBe("ready");
         const screenshotSha256 = hash(await frame.screenshot());
         await expect(page.locator("header").getByText(/accepted · r/i)).toBeVisible();
-        const expectedWasm = manifest.files.find((file) => file.path.endsWith(".wasm"));
-        const expectedUrl = new URL(expectedWasm.path, baseUrl).href;
-        if (!wasmResponses.has(expectedUrl)) throw new Error("readiness did not load the nominated WASM module");
+        const expectedUrl = verifyWorkbenchWasmLoaded(manifest, baseUrl, wasmResponses);
         if (errors.length) throw new Error(errors.join("\n"));
         return { status: "passed", browserVersion: browser.version(), sample: "pc-water-manifold",
           wasmUrl: expectedUrl, geometryCount, screenshotSha256, renderer, errors };

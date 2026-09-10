@@ -141,6 +141,22 @@ class M98ReleaseTests(unittest.TestCase):
         self.assertNotEqual(paths['m98'], new_paths['m98'])
         self.assertNotEqual(old_key, changed.key(next(s for s in new_stages if s.id == 'prepare.m98')))
 
+    def test_actual_repository_discovery_retains_required_collaboration_authority(self):
+        # Synthetic fixtures derived from REQUIRED cannot detect a stale owner name.
+        repository = Path(__file__).resolve().parents[2]
+        inventories = {group: m98.inventory(repository, group) for group in m98.GROUPS}
+        package = 'packages/geosolve-collaboration/test'
+        actual = sorted(str(path.relative_to(repository)) for path in (repository / package).glob('*.test.mjs'))
+        self.assertEqual(inventories['collaboration.package'], actual)
+        authority = package + '/authority.test.mjs'
+        self.assertIn(authority, actual)
+        for name in actual:
+            self.write(name)
+        self.assertEqual(m98.inventory(self.root, 'collaboration.package'), actual)
+        (self.root / authority).unlink()
+        with self.assertRaisesRegex(ValueError, 'incomplete M98 owning test inventory: collaboration.package'):
+            m98.inventory(self.root, 'collaboration.package')
+
     def test_all_current_test_files_are_obligations_and_missing_required_family_rejects(self):
         repo = self.fixtures()
         extra = repo / 'scripts/workspace-extra.test.mjs'

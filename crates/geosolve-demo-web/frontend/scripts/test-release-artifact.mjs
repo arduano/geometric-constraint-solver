@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { frontendDirectory, hash, publicBase, readManifest, validateManifest, writeManifest } from "./release-artifact-lib.mjs";
 import { serveArtifact } from "./serve-artifact.mjs";
 import { buildArtifacts, prepareWasm } from "./build-release-artifacts.mjs";
-import { verifyTransport } from "./verify-artifact.mjs";
+import { verifyTransport, verifyWorkbenchWasmLoaded } from "./verify-artifact.mjs";
 const modules = ["geosolve_demo_web", "geosolve_sketch_engine_wasm", "geosolve_collaboration_wasm"];
 const wasmBytes = module => Buffer.from([0, 97, 115, 109, 1, 0, 0, 0, 0, 2, 1, 97 + modules.indexOf(module)]);
 
@@ -39,6 +39,30 @@ async function startServer(t, handler) {
   t.after(() => new Promise((accept) => server.close(accept)));
   return `http://127.0.0.1:${server.address().port}/`;
 }
+
+test("ordinary readiness requires its exact workbench WASM among optional collaboration modules", () => {
+  const baseUrl = "https://preview.example/geometric-constraint-solver/";
+  const paths = [
+    "assets/geosolve_collaboration_wasm_bg-CaFsKnrI.wasm",
+    "assets/geosolve_demo_web_bg-BgawRWrn.wasm",
+    "assets/geosolve_sketch_engine_wasm_bg-CdK2xYC8.wasm",
+  ];
+  const manifest = { files: paths.map((path) => ({ path })) };
+  const demoUrl = new URL(paths[1], baseUrl).href;
+  const observed = new Set([demoUrl]);
+  assert.deepEqual(paths, [...paths].sort());
+  assert.equal(verifyWorkbenchWasmLoaded(manifest, baseUrl, observed), demoUrl);
+  assert.equal(verifyWorkbenchWasmLoaded({ files: [...manifest.files].reverse() }, baseUrl, observed), demoUrl);
+  assert.equal(verifyWorkbenchWasmLoaded({ files: [manifest.files[1]] }, baseUrl, observed), demoUrl);
+  const plain = "assets/geosolve_demo_web_bg.wasm";
+  const plainUrl = new URL(plain, baseUrl).href;
+  assert.equal(verifyWorkbenchWasmLoaded({ files: [{ path: plain }] }, baseUrl, new Set([plainUrl])), plainUrl);
+  const optionalResponses = new Set([paths[0], paths[2]].map((path) => new URL(path, baseUrl).href));
+  assert.throws(() => verifyWorkbenchWasmLoaded(manifest, baseUrl, optionalResponses), /did not load the nominated WASM/);
+  assert.throws(() => verifyWorkbenchWasmLoaded(manifest, baseUrl, new Set([new URL(paths[1], "https://other.example/").href])), /did not load the nominated WASM/);
+  assert.throws(() => verifyWorkbenchWasmLoaded({ files: [manifest.files[0], manifest.files[2]] }, baseUrl, optionalResponses), /exactly one nominated workbench WASM/);
+  assert.throws(() => verifyWorkbenchWasmLoaded({ files: [...manifest.files, { path: plain }] }, baseUrl, new Set([...observed, plainUrl])), /exactly one nominated workbench WASM/);
+});
 
 test("an authenticated production copy serves identical bytes at its declared base without the harness route", async (t) => {
   const f = await fixture(t, { base: "/geometric-constraint-solver/" });

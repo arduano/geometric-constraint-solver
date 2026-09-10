@@ -8,11 +8,12 @@ the controls. Geometry, constraints and profile validation use the same Rust eng
 
 ## A local agent edit
 
-Install the three matching archives together in a new tools directory:
+Install the four matching archives together in a new tools directory:
 
 ```bash
 npm install --offline --ignore-scripts /path/geosolve-sketch-code-0.2.0.tgz \
-  /path/geosolve-engine-0.1.0.tgz /path/geosolve-cli-0.1.0.tgz
+  /path/geosolve-engine-0.1.0.tgz /path/geosolve-collaboration-0.1.0.tgz \
+  /path/geosolve-cli-0.1.0.tgz
 ./node_modules/.bin/geosolve init my-design
 ./node_modules/.bin/geosolve serve my-design --port 18109
 ```

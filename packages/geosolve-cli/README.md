@@ -3,14 +3,15 @@
 # GeoSolve local-folder CLI
 
 The CLI archive contains the compiler, Rust WASM engines and a frozen workbench. Install
-the three matching local archives together; no registry, Rust toolchain or source checkout
+the four matching local archives together; no registry, Rust toolchain or source checkout
 is needed. Node 22 or newer and Linux `flock` from util-linux are required. Each CLI archive
 targets the Linux CPU architecture recorded in its package metadata; the SDK and engine
 archives are architecture independent.
 
 ```bash
 npm install --offline --ignore-scripts /path/geosolve-sketch-code-0.2.0.tgz \
-  /path/geosolve-engine-0.1.0.tgz /path/geosolve-cli-0.1.0.tgz
+  /path/geosolve-engine-0.1.0.tgz /path/geosolve-collaboration-0.1.0.tgz \
+  /path/geosolve-cli-0.1.0.tgz
 ./node_modules/.bin/geosolve init my-design
 ./node_modules/.bin/geosolve inspect my-design
 ./node_modules/.bin/geosolve check my-design

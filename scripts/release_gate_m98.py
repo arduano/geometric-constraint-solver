@@ -40,7 +40,7 @@ REQUIRED = {
                     "workspace-navigation", "workspace-transaction-review", "file-workspace-bake"),
     "collaboration.node": ("collaboration-host", "collaboration-http", "collaboration-storage", "collaboration-runtime",
                            "collaboration-domain", "collaboration-domain-extraction", "collaboration-preview", "collaboration-source-integration", "collaboration-mirror", "collaboration-mirror-worker", "collaboration-cli"),
-    "collaboration.package": ("host", "semantic", "shared-text", "source", "client"),
+    "collaboration.package": ("authority", "semantic", "shared-text", "source", "client"),
     "collaboration.frontend": ("collaboration-adapter", "collaboration-authoring-controller", "collaboration-authoring-worker", "collaboration-browsing-worker",
                                "collaboration-remote-authoring", "collaboration-source-projection", "collaboration-storage", "collaboration-tab-identity",
                                "local-interaction-worker", "worker-workbench-adapter"),

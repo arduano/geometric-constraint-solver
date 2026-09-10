@@ -664,3 +664,42 @@ empty browser-error and observer-error assertions. No response or storage is fak
 
 The complete focused browser inventory now has passing evidence. Clean integrated
 nomination and verified replacement delivery remain open.
+
+### Integrated qualification harness corrections
+
+Clean run `20260910T191453-62d4d77b` on `17f900a` records 256 passing stages,
+including the complete native workspace, headless sample workflows, release WASM
+and optimized WASM lifecycle. It stops at `prepare.m98` with
+`incomplete M98 owning test inventory: collaboration.package`; it is not a
+qualified release. The registry required nonexistent `host.test.mjs`, while the
+actual authority owner is `authority.test.mjs`. Synthetic fixtures generated from
+the same registry had concealed that drift. The corrected registry preserves its
+five required families. A regression discovers all ten groups in the real
+repository and proves that deleting the authority file still rejects the inventory.
+All 17 runner owner tests pass (`collaboration-inventory-owner-r1.log`).
+
+The ordinary artifact readiness checker separately assumed that the first sorted
+WASM file was the workbench module. With collaboration, demo and engine modules,
+it selected collaboration instead. The actual development-r5 endpoint reproduced
+24 passing byte/MIME routes followed by `readiness did not load the nominated
+WASM module` (`artifact-readiness-repro-receipt.json`). The checker now requires
+exactly one nominated demo module and its exact loaded URL. Missing, ambiguous,
+wrong-origin and optional-only module observations still fail. All 25 artifact
+owner tests pass (`artifact-readiness-owner-r1.log`); the unchanged development-r5
+bytes then pass all 24 routes and actual-WASM readiness
+(`artifact-readiness-repaired-receipt.json`). No runtime or mathematical code changed.
+
+Focused commands use the pinned Nix shell:
+
+```bash
+python3 -m unittest discover -s scripts/tests -p test_release_m98.py
+node --test crates/geosolve-demo-web/frontend/scripts/test-release-artifact.mjs
+node target/m98/reproduce-artifact-readiness.mjs
+node target/m98/reproduce-artifact-readiness.mjs repaired
+```
+
+The quickstart and packaged CLI README now include the fourth collaboration archive
+in offline installation. Because that README is a package input, its archive must
+be freshly qualified. The resumed integrated runner will authenticate unchanged
+passing evidence and execute affected or unfinished stages; the failed run remains
+failed and does not qualify any replacement preview.
