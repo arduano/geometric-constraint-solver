@@ -52,7 +52,8 @@ class M98ReleaseTests(unittest.TestCase):
             self.write(f'{base}/{m98.FRONTEND}/src/lib/{name}.test.ts')
         for name in ('scripts/file-workspace.test.mjs','scripts/workspace-browser.test.mjs','scripts/package-m98.test.mjs',
                      'examples/generator-website/scripts/generator.test.mjs',
-                     'examples/generator-website/scripts/browser.test.mjs', 'scripts/collaboration-browser.test.mjs'):
+                     'examples/generator-website/scripts/browser.test.mjs', 'scripts/collaboration-browser.test.mjs',
+                     'scripts/collaboration-browser-recovery.test.mjs'):
             self.write(f'{base}/{name}')
         return self.root / base
 
@@ -169,6 +170,8 @@ class M98ReleaseTests(unittest.TestCase):
         collaboration_browser = next(s for s in stages if s.id == 'collaboration.browser')
         self.assertIn('prepare.browser', collaboration_browser.dependencies)
         self.assertNotIn('scripts/collaboration-browser.test.mjs', m98.inventory(repo, 'collaboration.node'))
+        self.assertNotIn('scripts/collaboration-browser-recovery.test.mjs', m98.inventory(repo, 'collaboration.node'))
+        self.assertIn('scripts/collaboration-browser-recovery.test.mjs', m98.inventory(repo, 'collaboration.browser'))
         (repo/'packages/geosolve-engine/test/new.test.mjs').write_text('// added after prep')
         with self.assertRaisesRegex(ValueError,'inventory changed'):
             gate.m98_stages(self.root, {'m98':'target/capture','browser':'target/browser'})
@@ -194,6 +197,8 @@ class M98ReleaseTests(unittest.TestCase):
           assert.equal(process.env.GEOSOLVE_M98_PACKAGES,undefined);
           assert.equal(process.env.GEOSOLVE_M98_PACKAGE_OUT,undefined);
           assert.equal(process.env.GEOSOLVE_M98_DIST,undefined);
+          assert.equal(process.env.GEOSOLVE_BROWSER_DIAGNOSTIC_NO_BACKDROP,undefined);
+          assert.equal(process.env.GEOSOLVE_BROWSER_DIAGNOSTIC_NO_TOOLBAR_BACKDROP,undefined);
           writeFileSync("packages/geosolve-engine/dist/runtime.js","private changed bytes");
           mkdirSync("target/m98/bake",{recursive:true});
           writeFileSync("target/m98/bake/shape.json",'{"regions":[]}');
@@ -203,7 +208,9 @@ class M98ReleaseTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()), patch.dict(os.environ, {
                 'NODE_OPTIONS':'--not-a-real-node-flag', 'GEOSOLVE_DIST':'/foreign',
                 'GEOSOLVE_LOADER_TEST_SDK_DIRECTORY':'/foreign', 'GEOSOLVE_M98_PACKAGES':'/foreign',
-                'GEOSOLVE_M98_PACKAGE_OUT':'/foreign', 'GEOSOLVE_M98_DIST':'/foreign'}):
+                'GEOSOLVE_M98_PACKAGE_OUT':'/foreign', 'GEOSOLVE_M98_DIST':'/foreign',
+                'GEOSOLVE_BROWSER_DIAGNOSTIC_NO_BACKDROP':'1',
+                'GEOSOLVE_BROWSER_DIAGNOSTIC_NO_TOOLBAR_BACKDROP':'1'}):
             m98.run(self.root, captured, 'engine.node', output)
         self.assertEqual(before, gate.hash_output(captured))
         self.assertFalse((output / 'repository').exists())
@@ -257,6 +264,10 @@ class M98ReleaseTests(unittest.TestCase):
     def test_missing_collaboration_browser_and_frontend_owners_fail_closed(self):
         repo = self.fixtures()
         (repo / 'scripts/collaboration-browser.test.mjs').unlink()
+        with self.assertRaisesRegex(ValueError, 'missing'):
+            m98.inventory(repo, 'collaboration.browser')
+        (repo / 'scripts/collaboration-browser.test.mjs').write_text('// restored fixture\n')
+        (repo / 'scripts/collaboration-browser-recovery.test.mjs').unlink()
         with self.assertRaisesRegex(ValueError, 'missing'):
             m98.inventory(repo, 'collaboration.browser')
         (repo / m98.FRONTEND / 'src/lib/collaboration-storage.test.ts').unlink()

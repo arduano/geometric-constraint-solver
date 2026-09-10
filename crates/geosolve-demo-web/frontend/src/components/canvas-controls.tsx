@@ -5,7 +5,7 @@ import type { DimensionDisplayMode } from "../lib/adapter";
 
 export function CanvasControls({ disabled = false, gridVisible, dimensionMode = "focused", onDimensionMode, onCommand }: { disabled?: boolean; gridVisible: boolean; dimensionMode?: DimensionDisplayMode; onDimensionMode: (mode: DimensionDisplayMode) => void; onCommand: (command: "view.grid.toggle" | "view.fit" | "view.origin") => void }) {
   return (
-    <fieldset disabled={disabled} role="toolbar" aria-label="Canvas view" className="absolute right-3 top-3 z-20 flex max-w-[calc(100%_-_1.5rem)] flex-wrap items-center justify-end gap-0.5 rounded-md border border-border bg-surface/95 p-1 shadow-panel backdrop-blur-sm">
+    <fieldset disabled={disabled} role="toolbar" aria-label="Canvas view" className="absolute right-3 top-3 z-20 flex max-w-[calc(100%_-_1.5rem)] flex-wrap items-center justify-end gap-0.5 rounded-md border border-border bg-surface/95 p-1 shadow-panel">
       <label className="flex items-center gap-1 pl-2 text-[11px] text-muted">
         <span>Dimensions</span>
         <select aria-label="Dimension display" value={dimensionMode} onChange={(event) => onDimensionMode(event.target.value as DimensionDisplayMode)} title="Focused shows key dimensions, measurements for your selection and pins. All shows every dimension. Hidden clears the canvas." className="h-8 rounded border border-transparent bg-surface pl-1 pr-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-raised focus-visible:border-accent">

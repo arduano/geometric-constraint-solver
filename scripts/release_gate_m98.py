@@ -30,7 +30,7 @@ GROUPS = {
     "collaboration.node": ("scripts/collaboration-*.test.mjs",),
     "collaboration.package": ("packages/geosolve-collaboration/test/*.test.mjs",),
     "collaboration.frontend": tuple(FRONTEND + "/" + pattern for pattern in FRONTEND_RUNTIME_TESTS),
-    "collaboration.browser": ("scripts/collaboration-browser.test.mjs",),
+    "collaboration.browser": ("scripts/collaboration-browser.test.mjs", "scripts/collaboration-browser-recovery.test.mjs"),
 }
 BROWSER_GROUPS = {"folder.browser", "package.m98", "collaboration.browser"}
 REQUIRED = {
@@ -39,10 +39,10 @@ REQUIRED = {
                     "workspace-bridge", "workspace-project", "workspace-cli", "workspace-generator",
                     "workspace-navigation", "workspace-transaction-review", "file-workspace-bake"),
     "collaboration.node": ("collaboration-host", "collaboration-http", "collaboration-storage", "collaboration-runtime",
-                           "collaboration-domain", "collaboration-source-integration", "collaboration-mirror", "collaboration-mirror-worker", "collaboration-cli"),
+                           "collaboration-domain", "collaboration-domain-extraction", "collaboration-preview", "collaboration-source-integration", "collaboration-mirror", "collaboration-mirror-worker", "collaboration-cli"),
     "collaboration.package": ("host", "semantic", "shared-text", "source", "client"),
     "collaboration.frontend": ("collaboration-adapter", "collaboration-authoring-controller", "collaboration-authoring-worker", "collaboration-browsing-worker",
-                               "collaboration-source-projection", "collaboration-storage", "collaboration-tab-identity",
+                               "collaboration-remote-authoring", "collaboration-source-projection", "collaboration-storage", "collaboration-tab-identity",
                                "local-interaction-worker", "worker-workbench-adapter"),
 }
 
@@ -193,7 +193,8 @@ def run(root, prepared, group, output, browser_package=None):
         raise ValueError("M98 discovered test inventory differs from preparation")
     environment = os.environ.copy()
     for name in ("NODE_OPTIONS", "NODE_PATH", "GEOSOLVE_DIST", "GEOSOLVE_LOADER_TEST_SDK_DIRECTORY",
-                 "GEOSOLVE_M98_PACKAGES", "GEOSOLVE_M98_PACKAGE_OUT", "GEOSOLVE_M98_DIST"):
+                 "GEOSOLVE_M98_PACKAGES", "GEOSOLVE_M98_PACKAGE_OUT", "GEOSOLVE_M98_DIST",
+                 "GEOSOLVE_BROWSER_DIAGNOSTIC_NO_BACKDROP", "GEOSOLVE_BROWSER_DIAGNOSTIC_NO_TOOLBAR_BACKDROP"):
         environment.pop(name, None)
     environment["GEOSOLVE_BROWSER_EVIDENCE"] = str(output / "browser")
     environment["npm_config_cache"] = str(output / "npm-cache")
