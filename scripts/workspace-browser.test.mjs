@@ -169,10 +169,17 @@ test("M98-F016/F017 folder canvas navigates and selects locally during a stalled
 
 test("M98-F017 local folder authoring previews, multi-click Finish, exact point drag and history retain the local camera",{timeout:90000},async(t)=>{
   const f=await setup(t,undefined,{initScript:()=>{
-    window.m98LocalUpdates=[];window.m98PointerInputs=[];
+    window.m98LocalUpdates=[];window.m98PointerInputs=[];window.m98PointerTerminals=[];
     const NativeWorker=window.Worker;
     window.Worker=class extends NativeWorker {
-      constructor(...args){super(...args);this.addEventListener("message",({data})=>{if(data?.result?.frame&&data.result.state)window.m98LocalUpdates.push(structuredClone(data.result));});}
+      constructor(...args){super(...args);this.requests=new Map();this.addEventListener("message",({data})=>{
+        const request=this.requests.get(data?.id);this.requests.delete(data?.id);
+        if(data?.result?.frame&&data.result.state){
+          window.m98LocalUpdates.push(structuredClone(data.result));
+          if(request?.method==="pointer"&&request.input?.phase==="up")window.m98PointerTerminals.push({input:request.input,state:structuredClone(data.result.state)});
+        }
+      });}
+      postMessage(message,...rest){if(message?.method==="pointer")this.requests.set(message.id,structuredClone(message));return super.postMessage(message,...rest);}
     };
     for(const phase of ["down","move","up"])window.addEventListener(`pointer${phase}`,(event)=>{
       const host=document.querySelector('[role="application"]');if(!host?.contains(event.target))return;
@@ -223,9 +230,18 @@ test("M98-F017 local folder authoring previews, multi-click Finish, exact point 
   assert.ok((await geometry(page)).length>initialGeometry.length,"new polyline has actual accepted painted spans");
   await select.click();await settled();
   await page.mouse.move(box.x+40,box.y+40);await page.mouse.wheel(0,-70);
+  const terminalCount=await page.evaluate(()=>window.m98PointerTerminals.length);
   await page.mouse.down({button:"middle"});await page.mouse.move(box.x+55,box.y+51);await page.mouse.up({button:"middle"});
-  await expect.poll(async()=>JSON.stringify((await localState()).viewport)).not.toBe(JSON.stringify(JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).viewport));
-  const camera=(await localState()).viewport;
+  // Browser pointer-up delivery precedes the asynchronous native acknowledgement.
+  // A viewport differing from the server can already be satisfied by the wheel;
+  // take the history baseline only after this pan's exact terminal has arrived.
+  await expect.poll(()=>page.evaluate(()=>window.m98PointerTerminals.length)).toBe(terminalCount+1);
+  const terminal=await page.evaluate(()=>window.m98PointerTerminals.at(-1));
+  const terminalInput=await page.evaluate(()=>window.m98PointerInputs.filter(input=>input.phase==="up").at(-1));
+  assert.deepEqual(terminal.input,terminalInput);
+  const camera=terminal.state.viewport;
+  assert.deepEqual((await localState()).viewport,camera);
+  assert.notDeepEqual(camera,JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).viewport);
   await page.getByRole("button",{name:"Undo",exact:true}).click();await expect.poll(()=>readSource(folder)).toBe(initialSource);await settled();
   assert.deepEqual((await localState()).viewport,camera,"Undo cannot rewind local navigation");
   await page.getByRole("button",{name:"Redo",exact:true}).click();await expect.poll(()=>readSource(folder)).toBe(authoredSource);await settled();

@@ -703,3 +703,33 @@ in offline installation. Because that README is a package input, its archive mus
 be freshly qualified. The resumed integrated runner will authenticate unchanged
 passing evidence and execute affected or unfinished stages; the failed run remains
 failed and does not qualify any replacement preview.
+
+### Folder camera history baseline waited for the wrong event
+
+Run `20260910T195659-44d843d6` records 261 passing stages and one failed folder
+browser file. Its 49 ordinary browser workflows all pass without retries or skips;
+ten of eleven folder workflows pass. The failing local-authoring history test
+captures its camera after browser pointer-up delivery, using a viewport/server
+inequality that the preceding wheel event already satisfies. The native pan reply
+can still be pending at that point.
+
+The expected centre is `[-1.754866693126985, 1.571693828701786]`; both the actual
+client and server centres after Undo are `[-2.0873650025576267, 1.8155259222842568]`.
+At zoom `45.113011328344676`, their displacement is exactly the requested
+15-pixel right / 11-pixel down pan. Undo retained the completed local camera; the
+harness had captured a pre-pan baseline. This is a harness race, not a new native
+interaction defect.
+
+The existing test now matches worker request/reply IDs, waits for that pan's
+pointer-up acknowledgement and compares its input to the actual DOM terminal
+before capturing the history baseline. Strict camera equality, exact point-drag
+samples and publication/history assertions remain unchanged. The full focused
+authoring workflow passes in 10.22 s (`folder-camera-harness-r1.log`) against the
+second run's unchanged prepared browser artifact:
+
+```bash
+GEOSOLVE_DIST=<prepared-geosolve-harness> GEOSOLVE_BROWSER_EVIDENCE=target/m98/folder-camera-harness-r1 node --test --test-name-pattern="local folder authoring previews" scripts/workspace-browser.test.mjs
+```
+
+The failed run remains failed. The next integrated nomination must account for
+the corrected harness and all remaining collaboration, package and release stages.
