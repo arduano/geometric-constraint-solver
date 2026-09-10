@@ -8468,6 +8468,16 @@ merge or qualify that product.
 
 ## M98 — reliable project authoring and embeddable TypeScript engine
 
+- [x] Add focused-tested collaboration foundations: ordered durable operation ledger,
+  stable target lifetimes/deletion closures, shared Rust/Automerge source, native/WASM text
+  parity, localized managed source patches and headless authoring preparation.
+  Integration and qualification remain in the unchecked amendment below.
+
+- [ ] Implement the approved [multi-editor collaboration amendment](docs/M98_COLLABORATION.md):
+  reusable Rust authority/shared text, explicit Apply, semantic rebasing and per-user Undo,
+  durable recovery, local authoring prediction and opt-in workbench collaboration.
+- [ ] Qualify four-browser collaboration and the eight-editor/24-viewer fault/load targets.
+
 - [x] Implement the authorized [local canvas boundary](docs/M98_LOCAL_CANVAS.md): local
   accepted-scene navigation/picking/selection, server sketch edits and exact reconciliation.
 - [x] Qualify stalled-server responsiveness, shared native prediction parity and replacement delivery.

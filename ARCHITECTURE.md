@@ -2979,3 +2979,12 @@ may settle in the background; acknowledgement must not rewind later clicks. Duri
 server edits the delayed veil remains visible while local navigation works. Exact server
 construction/inference frames are retained only when their viewport and selection match the
 current client; navigation uses the detached accepted scene instead of reusing stale pixels.
+
+## M98 collaboration amendment — implementation in progress
+
+[The approved contract](docs/M98_COLLABORATION.md) separates shared working source,
+server-accepted source/model and per-client presentation/prediction. Rust collaboration
+state orders durable semantic operations, while Automerge synchronizes raw source with
+explicit UTF-16 indexing. This does not weaken existing compiler/prepared-input/residual
+authority. Single-editor serving and the qualified local canvas remain the baseline until
+the collaboration amendment passes its own integration and load gates.

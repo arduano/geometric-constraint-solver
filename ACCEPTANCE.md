@@ -5605,3 +5605,10 @@ manifold Fit/history costs and Linux/worker/topology limitations remain explicit
 - [x] Local canvas boundary, stalled-server behavior and native prediction parity qualified.
 - [x] Local canvas replacement previews and original manifold preservation verified.
 - [ ] M98 milestone closure after acceptance.
+
+## M98 multi-editor collaboration amendment — pending
+
+[The approved acceptance matrix](docs/M98_COLLABORATION.md#acceptance) requires durable
+server order and deduplication, independent validated semantic commits, concurrent invalid
+text and canvas editing, checked per-user Undo, native/WASM parity and real browser/load
+qualification. The earlier M98 gate qualifies the single-editor baseline only.

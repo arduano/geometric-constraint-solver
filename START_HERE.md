@@ -1,7 +1,11 @@
 # GeoSolve active handoff
 
-Current roadmap: **M97 is accepted and closed. M98 real-world authoring and embedding is
-implemented, mechanically qualified and available for supervising-user review.**
+Current roadmap: **M97 is accepted and closed. M98 collaboration hardening is in implementation.**
+
+The approved [multi-editor amendment](docs/M98_COLLABORATION.md) extends the previously
+qualified M98 authoring product. Shared draft text, server-ordered semantic edits, per-user
+Undo, durable recovery and local authoring prediction are active work. The qualified preview
+and original manifold folder remain preserved until a replacement passes qualification.
 
 [M97 closure and fresh-session handoff](docs/M97_CLOSURE.md) records the supervising
 user's acceptance and unchanged qualified product. Accepted source

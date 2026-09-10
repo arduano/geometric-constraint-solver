@@ -6,6 +6,10 @@ Implementation authorized on 2026-09-09 after the prototype review. This superse
 its fast-track limits; original handoffs remain historical evidence. M97 is accepted
 and closed; M98 stays open until integrated qualification and supervising-user acceptance.
 
+The [approved collaboration amendment](M98_COLLABORATION.md) extends this baseline with
+concurrent editors and shared TypeScript authoring. Its ordered checklist is active; the
+single-editor implementation and qualification below remain the preserved baseline.
+
 ## Approved product
 
 - Linux local folder/CLI workflow, complete local TypeScript/patch dependency snapshots,
