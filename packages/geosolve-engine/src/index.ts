@@ -5,6 +5,7 @@ import { EditableSession, type EditableNativeHandle, type EditableDesign } from 
 export { EditableSession, type EditableSessionToken, type EditableSessionState, type EditableDesign, type EditableUpdate } from "./session.js";
 export type { AuthoringAction, AuthoringReceipt, AuthoringUpdate, AuthoringValueChange, AuthoringValueWrite, PreparedAuthoring } from "./session.js";
 export { RetainedPointGesture, type PointGestureCommand, type PointGestureFrame, type PointGestureHandle, type PointGestureSample, type PointGestureTarget, type PointGestureTerminal, type PointGestureViewport, type PointOwnerAddress, type PointWritableAddress, type PreparedPointGestureCommit } from "./point-gesture.js";
+export { ConstructionPrediction, type ConstructionTool, type ConstructionEvent, type ConstructionSample, type ConstructionCommand, type ConstructionGuide, type ConstructionFrame, type PreparedConstruction, type PreparedConstructionCommit } from "./construction.js";
 
 export interface EngineNativeHandle extends Partial<EditableNativeHandle> {
   compileProjectJson(json: string): string;

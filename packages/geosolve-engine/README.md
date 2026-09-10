@@ -74,6 +74,22 @@ authority until installation. Dropping/releasing a candidate preserves the live
 session. Foreign, consumed and stale preparations cannot publish. Exact source/design
 bases must match; latest-state gesture rebase is not yet supported.
 
+Construction uses `beginConstruction(tool, { expected, gestureId, viewport, role? })`
+for `segment`, `polyline`, `center_radius_circle` and `two_point_aligned_rectangle`.
+The returned prediction accepts ordered `move`, `click`, `complete` and `step_back`
+events. Each pointer event independently controls inference suppression and recipe
+regularization. Render the shared native preview and inference guides from each frame
+together with `sceneJSON()`. A correction-ready diagnostic remains local to the draft.
+
+`finish()` returns a semantic command, including the resolved source references and
+branch choices. The trusted server calls `prepareConstruction`, runs its exact compiler
+request, then calls `resolveConstruction` with that receipt. This returns an unpublished
+project/design/digest candidate; persist it before `applyConstructionCommit`. Compiler
+preparations and durable candidates are separately owned and one use. Neither a client
+scene nor a copied candidate object can become accepted server authority. Construction
+uses the default shared inference cohort; explicit candidate cycling and advanced tool
+variants remain outside this API.
+
 `exportProject()`, `exportDesign()` and `sourceDesignDigest()` provide complete durable
 accepted inputs. Reopening those inputs independently revalidates geometry and preserves
 the digest. Individual evaluation IDs include session state and are not recovery IDs.

@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 mod authoring;
+mod construction;
 mod point_gesture;
 
 #[derive(Deserialize)]
@@ -38,6 +39,7 @@ pub struct EngineAdapter {
     point_gestures: BTreeMap<String, point_gesture::HeldGesture>,
     point_commits: BTreeMap<String, point_gesture::HeldPointCommit>,
     point_sequence: u64,
+    constructions: BTreeMap<String, construction::HeldConstruction>,
     accepted: Option<AcceptedEvaluation>,
 }
 
@@ -145,6 +147,7 @@ impl EngineAdapter {
             self.authoring.retain(|_, prepared| prepared.session != id);
             self.point_gestures.retain(|_, held| held.session != id);
             self.point_commits.retain(|_, held| held.session != id);
+            self.constructions.retain(|_, held| held.session != id);
             self.sessions.remove(&id).is_some()
         })
     }
@@ -294,6 +297,72 @@ mod wasm {
         pub fn new() -> Self {
             console_error_panic_hook::set_once();
             Self(EngineAdapter::new())
+        }
+
+        #[wasm_bindgen(js_name = beginEditableConstruction)]
+        pub fn begin_editable_construction(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .begin_editable_construction(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = advanceEditableConstruction)]
+        pub fn advance_editable_construction(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .advance_editable_construction(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableConstructionScene)]
+        pub fn editable_construction_scene(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_construction_scene(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = finishEditableConstruction)]
+        pub fn finish_editable_construction(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .finish_editable_construction(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = cancelEditableConstruction)]
+        pub fn cancel_editable_construction(&mut self, json: &str) -> Result<(), JsValue> {
+            self.0
+                .cancel_editable_construction(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = prepareEditableConstruction)]
+        pub fn prepare_editable_construction(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .prepare_editable_construction(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = resolveEditableConstruction)]
+        pub fn resolve_editable_construction(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .resolve_editable_construction(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = applyEditableConstructionCommit)]
+        pub fn apply_editable_construction_commit(
+            &mut self,
+            json: &str,
+        ) -> Result<String, JsValue> {
+            self.0
+                .apply_editable_construction_commit(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = releaseEditableConstruction)]
+        pub fn release_editable_construction(&mut self, json: &str) -> Result<(), JsValue> {
+            self.0
+                .release_editable_construction(json)
+                .map_err(|error| JsValue::from_str(&error))
         }
 
         #[wasm_bindgen(js_name = editablePointGestureTargets)]

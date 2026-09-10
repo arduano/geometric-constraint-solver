@@ -2,6 +2,7 @@
 import type { AcceptedResult, EvaluationFailure } from "./index.js";
 import type { CompiledManagedSource, ManagedValue, SemanticPathSegment } from "@geosolve/sketch-code/ir";
 import { RetainedPointGesture, decodePointValue, type PointGestureNativeHandle, type PointGestureHandle, type PointGestureTarget, type PointGestureViewport, type PointGestureCommand, type PreparedPointGestureCommit } from "./point-gesture.js";
+import { ConstructionPrediction, type ConstructionNativeHandle, type ConstructionTool, type ConstructionCommand, type PreparedConstruction, type PreparedConstructionCommit } from "./construction.js";
 
 export interface AuthoringValueWrite {
   readonly declaration: string;
@@ -47,7 +48,7 @@ export interface EditableDesign {
   readonly generated: unknown;
   readonly overrides: unknown;
 }
-export interface EditableNativeHandle extends Partial<PointGestureNativeHandle> {
+export interface EditableNativeHandle extends Partial<PointGestureNativeHandle>, Partial<ConstructionNativeHandle> {
   openEditableSession(json: string): string;
   editableSessionState(id: string): string;
   applyEditableProject(json: string): string;
@@ -77,6 +78,8 @@ export class EditableSession {
   private readonly native: EditableNativeHandle;
   private readonly preparations = new Set<PreparedAuthoring>();
   private readonly pointPreparations = new Set<PreparedPointGestureCommit>();
+  private readonly constructionPreparations = new Set<PreparedConstruction>();
+  private readonly constructionCommits = new Set<PreparedConstructionCommit>();
   constructor(private readonly host: EditableSessionHost, project: unknown, options: { design?: EditableDesign | string } = {}) {
     if (!host.isLive()) throw Error("Engine has been disposed");
     const native = host.native;
@@ -91,6 +94,41 @@ export class EditableSession {
   get state(): EditableSessionState { return this.current; }
   get token(): EditableSessionToken { return this.current.token; }
   get accepted(): AcceptedResult { return this.current.result; }
+
+  beginConstruction(tool: ConstructionTool, options: { expected: EditableSessionToken; gestureId: number; viewport: PointGestureViewport; role?: "profile" | "construction" }): ConstructionPrediction {
+    const native = this.constructionNative();
+    const held = decodePointValue<{ ticket: string }>(native.beginEditableConstruction(JSON.stringify({
+      session: this.token.session, expected: options.expected, gesture_id: options.gestureId, tool,
+      viewport: options.viewport, role: options.role ?? "profile",
+    })));
+    return new ConstructionPrediction(native, () => this.assertLive(), { session: this.token.session, ticket: held.ticket, gesture_id: options.gestureId });
+  }
+  /** Trusted server replays the gesture and prepares its own exact compiler request. */
+  prepareConstruction(command: ConstructionCommand, options: { expected: EditableSessionToken }): PreparedConstruction {
+    const prepared = decodePointValue<PreparedConstruction>(this.constructionNative().prepareEditableConstruction(JSON.stringify({ session: this.token.session, expected: options.expected, command })));
+    this.constructionPreparations.add(prepared); return prepared;
+  }
+  /** Returns an unpublished candidate after receipt authentication and whole native parity. */
+  resolveConstruction(prepared: PreparedConstruction, receipt: AuthoringReceipt): PreparedConstructionCommit {
+    this.assertLive();
+    if (!this.constructionPreparations.has(prepared)) throw Error("Construction preparation is foreign, released or already consumed");
+    const candidate = decodePointValue<PreparedConstructionCommit>(this.constructionNative().resolveEditableConstruction(JSON.stringify({ session: this.token.session, ticket: prepared.ticket, receipt })));
+    this.constructionPreparations.delete(prepared); this.constructionCommits.add(candidate); return candidate;
+  }
+  /** Trusted synchronous publication after the host's durable transaction completes. */
+  applyConstructionCommit(prepared: PreparedConstructionCommit): EditableUpdate {
+    this.assertLive();
+    if (!this.constructionCommits.has(prepared)) throw Error("Construction commit is foreign, released or already consumed");
+    const native = this.constructionNative();
+    const result = this.update(() => native.applyEditableConstructionCommit(JSON.stringify({ session: this.token.session, ticket: prepared.ticket })));
+    if (result.status === "accepted") this.constructionCommits.delete(prepared); return result;
+  }
+  releaseConstruction(prepared: PreparedConstruction | PreparedConstructionCommit): void {
+    this.assertLive();
+    if (!this.constructionPreparations.has(prepared as PreparedConstruction) && !this.constructionCommits.has(prepared as PreparedConstructionCommit)) return;
+    this.constructionNative().releaseEditableConstruction(JSON.stringify({ session: this.token.session, ticket: prepared.ticket }));
+    this.constructionPreparations.delete(prepared as PreparedConstruction); this.constructionCommits.delete(prepared as PreparedConstructionCommit);
+  }
 
   pointGestureTargets(): readonly PointGestureHandle[] {
     return decodePointValue(this.pointNative().editablePointGestureTargets(String(this.token.session)));
@@ -183,6 +221,7 @@ export class EditableSession {
     this.disposed = true;
     this.preparations.clear();
     this.pointPreparations.clear();
+    this.constructionPreparations.clear(); this.constructionCommits.clear();
     if (this.host.isLive()) this.native.closeEditableSession(String(this.token.session));
   }
   private update(action: () => string): EditableUpdate {
@@ -214,6 +253,13 @@ export class EditableSession {
       if (typeof this.native[name] !== "function") throw Error("This engine build does not support retained point gestures");
     }
     return this.native as PointGestureNativeHandle;
+  }
+  private constructionNative(): ConstructionNativeHandle {
+    this.assertLive();
+    for (const name of ["beginEditableConstruction", "advanceEditableConstruction", "editableConstructionScene", "finishEditableConstruction", "cancelEditableConstruction", "prepareEditableConstruction", "resolveEditableConstruction", "applyEditableConstructionCommit", "releaseEditableConstruction"] as const) {
+      if (typeof this.native[name] !== "function") throw Error("This engine build does not support construction prediction");
+    }
+    return this.native as ConstructionNativeHandle;
   }
 }
 function encode(value: unknown): string { return typeof value === "string" ? value : JSON.stringify(value); }

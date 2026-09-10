@@ -9,20 +9,20 @@ use geosolve_constraint_editor::{
     ComputedFeatureSnapshot, IntentNativeBinding, NativeCurveSpanSource, ProjectionalEditorSession,
 };
 use geosolve_sketch::{
-    CurveSpan, DocumentObjectRelabel, OperationControl, OperationOutcome,
+    CurveSpan, DocumentObjectId, DocumentObjectRelabel, OperationControl, OperationOutcome,
     RetainedSketchDocumentSession, SketchHardValidity,
 };
 use geosolve_sketch_code::{
     CodeInteractionOverlay, CodePointEdit, CodeProject, CodeRectangleCorner, CodeWritableAddress,
     ExpandedCodeProject, ExpandedPort, ExpandedSemanticTarget, ExpandedWritablePoint,
-    KeyedReconcileState, MaterializedCodeProject,
+    KeyedReconcileState, MaterializedCodeProject, SemanticSymbol,
     materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited,
     stage_point_drags,
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
 };
-use geosolve_sketch_intent::{GeometryRecipeKind, IntentNodeKind};
+use geosolve_sketch_intent::{GeometryRecipeKind, IntentKey, IntentNodeKind, NodeId};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy)]
@@ -1547,6 +1547,7 @@ fn canonical_terminal_point_bundle(
 fn recomputable_code_line_branches(
     editor: &ProjectionalEditorSession,
     expansion: &ExpandedCodeProject,
+    declaration_label_projections: &[PreparedDeclarationLabelProjection],
 ) -> Result<BTreeSet<geosolve_sketch::CurveId>, String> {
     let intent = editor.coordinator().intent();
     let accepted = editor
@@ -1615,7 +1616,18 @@ fn recomputable_code_line_branches(
         // use it only for that authenticated transition. Ordinary code drags
         // have no projection and continue to require the exact expansion
         // alias.
-        let node = intent.graph().node_by_symbol(&port.alias);
+        let node = intent.graph().node_by_symbol(&port.alias).or_else(|| {
+            declaration_label_projections
+                .iter()
+                .find(|projection| projection.declaration == provenance.declaration)
+                .and_then(|projection| {
+                    let node = intent.graph().node(projection.node)?;
+                    (node.symbol == projection.terminal_symbol
+                        || expansion.declaration_for_alias(&node.symbol)
+                            == Some(&projection.declaration))
+                    .then_some(node)
+                })
+        });
         let node = node
             .ok_or_else(|| format!("generated segment `{}` disappeared", address.display_path()))?;
         let output = node.port_by_selector(port.selector).ok_or_else(|| {
@@ -1725,6 +1737,7 @@ pub(super) fn materialize_terminal(
         &materialized.editor,
         &materialized.expansion,
         &bundle,
+        &[],
     )?;
     Ok((materialized, overlay))
 }
@@ -1738,6 +1751,7 @@ fn validate_terminal_parity(
     staged: &ProjectionalEditorSession,
     expansion: &ExpandedCodeProject,
     bundle: &CanonicalTerminalPointBundle,
+    declaration_label_projections: &[PreparedDeclarationLabelProjection],
 ) -> Result<(), String> {
     let terminal_authority = terminal
         .editor
@@ -1796,8 +1810,13 @@ fn validate_terminal_parity(
     {
         return Err("terminal computed preview contains a non-current feature".into());
     }
-    let mut recomputable = recomputable_code_line_branches(terminal.editor, expansion)?;
-    recomputable.extend(recomputable_code_line_branches(staged, expansion)?);
+    let mut recomputable =
+        recomputable_code_line_branches(terminal.editor, expansion, declaration_label_projections)?;
+    recomputable.extend(recomputable_code_line_branches(
+        staged,
+        expansion,
+        declaration_label_projections,
+    )?);
     let terminal_accepted = terminal
         .session
         .accepted_state_for_current_input()
@@ -1813,6 +1832,14 @@ fn validate_terminal_parity(
         &bundle.placements,
         &bundle.rectangle_projections,
     )?;
+    let declaration_object_relabels = authenticated_declaration_object_relabels(
+        terminal.editor,
+        staged,
+        expansion,
+        declaration_label_projections,
+        &terminal_design,
+        staged_authority.session.design_document(),
+    )?;
     let design = documents_match_for_terminal_parity(
         terminal.editor,
         staged,
@@ -1820,7 +1847,7 @@ fn validate_terminal_parity(
         staged_authority.session.design_document(),
         &bundle.rectangle_projections,
         &recomputable,
-        &[],
+        &declaration_object_relabels,
     )?;
     let accepted = documents_match_for_terminal_parity(
         terminal.editor,
@@ -1829,7 +1856,7 @@ fn validate_terminal_parity(
         staged_accepted,
         &bundle.rectangle_projections,
         &recomputable,
-        &[],
+        &declaration_object_relabels,
     )?;
     let same_documents = design.matches()
         && accepted.matches()
@@ -1967,4 +1994,177 @@ fn append_named_rectangle_projections(
             });
     }
     Ok(())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct PreparedDeclarationLabelProjection {
+    pub node: NodeId,
+    pub terminal_symbol: IntentKey,
+    pub declaration: SemanticSymbol,
+}
+
+pub(super) fn validate_construction_parity(
+    terminal: &ProjectionalEditorSession,
+    staged: &ProjectionalEditorSession,
+    expansion: &ExpandedCodeProject,
+    projections: &[PreparedDeclarationLabelProjection],
+) -> Result<(), String> {
+    validate_terminal_parity(
+        TerminalPointPreview::from_accepted(terminal)?,
+        staged,
+        expansion,
+        &CanonicalTerminalPointBundle {
+            placements: Vec::new(),
+            rectangle_projections: Vec::new(),
+        },
+        projections,
+    )
+}
+
+fn document_object_for_native_binding(binding: IntentNativeBinding) -> Option<DocumentObjectId> {
+    match binding {
+        IntentNativeBinding::Point(id) => Some(DocumentObjectId::Point(id)),
+        IntentNativeBinding::Scalar(id) => Some(DocumentObjectId::Scalar(id)),
+        IntentNativeBinding::Curve(id) => Some(DocumentObjectId::Curve(id)),
+        IntentNativeBinding::Contact(id) => Some(DocumentObjectId::Contact(id)),
+        IntentNativeBinding::Constraint(id) => Some(DocumentObjectId::Constraint(id)),
+        IntentNativeBinding::Dimension(id) => Some(DocumentObjectId::Dimension(id)),
+        IntentNativeBinding::Parameter(id) => Some(DocumentObjectId::Parameter(id)),
+        IntentNativeBinding::ExternalBinding(id) => Some(DocumentObjectId::ExternalBinding(id)),
+        IntentNativeBinding::CurveSpan(_)
+        | IntentNativeBinding::Source(_)
+        | IntentNativeBinding::ComputedFeature(_)
+        | IntentNativeBinding::ComputedFeatureCorner(_)
+        | IntentNativeBinding::Logical(_) => None,
+    }
+}
+
+fn document_object_label(
+    document: &geosolve_sketch::SketchDocument,
+    object: DocumentObjectId,
+) -> Option<&str> {
+    match object {
+        DocumentObjectId::Point(id) => document.point(id).map(|value| value.label.as_str()),
+        DocumentObjectId::Scalar(id) => document.scalar(id).map(|value| value.label.as_str()),
+        DocumentObjectId::Curve(id) => document.curve(id).map(|value| value.label.as_str()),
+        DocumentObjectId::Contact(id) => document.contact(id).map(|value| value.label.as_str()),
+        DocumentObjectId::Constraint(id) => {
+            document.constraint(id).map(|value| value.label.as_str())
+        }
+        DocumentObjectId::Dimension(id) => document.dimension(id).map(|value| value.label.as_str()),
+        DocumentObjectId::Parameter(id) => document.parameter(id).map(|value| value.label.as_str()),
+        DocumentObjectId::ExternalBinding(id) => document
+            .external_binding(id)
+            .map(|value| value.label.as_str()),
+    }
+}
+
+fn authenticated_declaration_object_relabels(
+    terminal: &ProjectionalEditorSession,
+    staged: &ProjectionalEditorSession,
+    expansion: &ExpandedCodeProject,
+    projections: &[PreparedDeclarationLabelProjection],
+    terminal_document: &geosolve_sketch::SketchDocument,
+    staged_document: &geosolve_sketch::SketchDocument,
+) -> Result<Vec<DocumentObjectRelabel>, String> {
+    if projections.is_empty() {
+        return Ok(Vec::new());
+    }
+    let terminal_authority = terminal
+        .coordinator()
+        .accepted_materialization()
+        .ok_or_else(|| "declaration relabel witness has no terminal native authority".to_owned())?;
+    let staged_authority = staged
+        .coordinator()
+        .accepted_materialization()
+        .ok_or_else(|| "declaration relabel witness has no staged native authority".to_owned())?;
+    let terminal_graph = terminal.coordinator().intent().graph();
+    let staged_graph = staged.coordinator().intent().graph();
+    let mut witnessed_terminal_nodes = BTreeSet::new();
+    let mut witnessed_staged_nodes = BTreeSet::new();
+    let mut witnessed_objects = BTreeSet::new();
+    let mut relabels = Vec::new();
+    for projection in projections {
+        if !witnessed_terminal_nodes.insert(projection.node) {
+            return Err("declaration relabel witness repeats a terminal persistent node".into());
+        }
+        let terminal_node = terminal_graph.node(projection.node).ok_or_else(|| {
+            format!(
+                "declaration relabel witness lost terminal node {}",
+                projection.node
+            )
+        })?;
+        if terminal_node.symbol != projection.terminal_symbol {
+            return Err("declaration relabel witness terminal symbol is stale".into());
+        }
+        let mut staged_matches = staged_graph.nodes().values().filter(|node| {
+            expansion.declaration_for_alias(&node.symbol) == Some(&projection.declaration)
+        });
+        let staged_node = staged_matches.next().ok_or_else(|| {
+            format!(
+                "declaration relabel witness lost staged declaration `{}`",
+                projection.declaration.0
+            )
+        })?;
+        if staged_matches.next().is_some() {
+            return Err(format!(
+                "declaration relabel witness staged declaration `{}` is not unique",
+                projection.declaration.0
+            ));
+        }
+        if !witnessed_staged_nodes.insert(staged_node.id) {
+            return Err("declaration relabel witness repeats a staged persistent node".into());
+        }
+        let terminal_owner = terminal_authority
+            .ownership
+            .node(projection.node)
+            .ok_or_else(|| "declaration relabel witness has no terminal native owner".to_owned())?;
+        let staged_owner = staged_authority
+            .ownership
+            .node(staged_node.id)
+            .ok_or_else(|| "declaration relabel witness has no staged native owner".to_owned())?;
+        if terminal_owner.owned != staged_owner.owned {
+            return Err(format!(
+                "declaration relabel witness changed native ownership for `{}`: terminal={:?} staged={:?}",
+                projection.declaration.0, terminal_owner.owned, staged_owner.owned
+            ));
+        }
+        let terminal_prefix = projection.terminal_symbol.as_str();
+        let staged_prefix = staged_node.symbol.as_str();
+        for object in terminal_owner
+            .owned
+            .iter()
+            .filter_map(|binding| document_object_for_native_binding(*binding))
+        {
+            if !witnessed_objects.insert(object) {
+                return Err("declaration relabel witness repeats one native object".into());
+            }
+            let current = document_object_label(terminal_document, object).ok_or_else(|| {
+                "declaration relabel witness terminal object disappeared".to_owned()
+            })?;
+            let replacement = document_object_label(staged_document, object).ok_or_else(|| {
+                "declaration relabel witness staged object disappeared".to_owned()
+            })?;
+            let suffix = current.strip_prefix(terminal_prefix).ok_or_else(|| {
+                "declaration-owned native label does not carry the exact terminal symbol prefix"
+                    .to_owned()
+            })?;
+            if !suffix.is_empty() && !suffix.starts_with('.') {
+                return Err(
+                    "declaration-owned native label has a non-canonical symbol suffix".into(),
+                );
+            }
+            let expected = format!("{staged_prefix}{suffix}");
+            if replacement != expected {
+                return Err(
+                    "declaration-owned native label is not the exact staged alias projection"
+                        .into(),
+                );
+            }
+            if current != replacement {
+                relabels.push(DocumentObjectRelabel::new(object, current, replacement));
+            }
+        }
+    }
+    Ok(relabels)
 }

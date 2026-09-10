@@ -102,5 +102,30 @@ and design reproduces it. Individual evaluation `input_digest` values include pr
 state and should not serve as durable recovery identities.
 
 `AuthoringPrediction::apply_overlay` is a whole semantic update and must not be called for
-every pointer frame. Ordinary construction workers, latest-state gesture rebase and browser
-bindings remain separate integration work.
+every pointer frame.
+
+`begin_construction` retains `Segment`, `Polyline`, `CenterRadiusCircle` or
+`TwoPointAlignedRectangle` drafting on an isolated accepted coordinator. Ordered Move/Click,
+Complete and `StepBack` samples use the existing shared inference and recipe regularization.
+Frames expose resolved model-space preview and inference guides; `scene_json` exports the
+detached scene. Terminal plans validate through `apply_construction_editor_effect` on the
+fork. These local drafts never change the live engine's source, design or history.
+
+`finish` produces a bounded semantic `ConstructionCommand`, including source-level resolved
+operand and branch witnesses. The server's `prepare_construction` replays the exact basis
+and requires those semantic witnesses to match before preparing a managed compiler request.
+Shared reverse projection preserves true source references and inferred constraints; the
+existing monotonic name allocation preserves native allocation order. The compiler receipt
+passes through `resolve_construction`, which independently stages native geometry and proves
+whole-model terminal parity, including exact authenticated declaration label transitions.
+
+`PreparedConstructionCommit` exposes complete project/design/result/digest and created
+declaration names. The host persists those inputs and lifecycle changes before calling
+`apply_construction_commit`. Foreign/stale candidates cannot publish; failed receipt or
+parity validation keeps all live source, geometry, history and allocation state. Model-space
+positions and explicit source references reconstruct through ordinary cold opening.
+
+Construction uses the default shared inference cohort; explicit candidate cycling and
+advanced construction variants are outside this boundary. Stale source/design commands
+reject before replay; latest-state rebase and browser worker/UI integration remain separate
+work. Focused native/WASM validation does not establish end-to-end interaction latency.

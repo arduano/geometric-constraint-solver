@@ -7,6 +7,8 @@ use std::rc::Rc;
 
 use geosolve_constraint_editor::{IntentNativeBinding, IntentValidationEvidence};
 mod authoring;
+mod construction;
+mod construction_names;
 mod point_gesture;
 mod profiles;
 mod session;
@@ -14,6 +16,11 @@ mod terminal;
 pub use authoring::{
     AuthoringPrediction, AuthoringValueInverse, AuthoringValueWrite, PreparedAuthoringMutation,
     PreparedAuthoringSource, PreparedAuthoringValues,
+};
+pub use construction::{
+    ConstructionCommand, ConstructionEvent, ConstructionFrame, ConstructionGuide,
+    ConstructionPrediction, ConstructionSample, ConstructionTerminal, ConstructionTool,
+    MAX_CONSTRUCTION_SAMPLES, PreparedConstruction, PreparedConstructionCommit,
 };
 pub use point_gesture::{
     MAX_POINT_GESTURE_SAMPLES, PointGestureCommand, PointGestureFrame, PointGestureHandle,

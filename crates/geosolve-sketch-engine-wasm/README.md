@@ -33,6 +33,17 @@ heap size. Closing a session or freeing the engine drops all its retained and st
 handles. Browser prediction should run in its own authoring worker/engine instance
 so long native work cannot block accepted-scene navigation.
 
+Construction bindings retain native drafting through begin/advance/scene/finish/cancel.
+`prepareEditableConstruction` independently replays the client's semantic command and
+returns an exact compiler ticket. `resolveEditableConstruction` authenticates that receipt
+and stages a complete project/design/digest/result candidate; it consumes the compiler
+preparation only on success. The trusted host durably persists it before synchronous
+`applyEditableConstructionCommit`. A separate table caps 24 construction handles and
+64 MiB of logical semantic inputs/outputs, reserving the bounded gesture trace in advance.
+Replacing a compiler ticket with its validated candidate works even when the table is full.
+Session disposal drops prediction and both preparation stages. These handles are trusted
+process ownership, not a substitute for the host's user/document/lifecycle admission.
+
 Build and package with `node packages/geosolve-engine/scripts/build-wasm.mjs` in the
 workspace Nix environment. The script uses the pinned `wasm-bindgen` version from
 the workspace lockfile.

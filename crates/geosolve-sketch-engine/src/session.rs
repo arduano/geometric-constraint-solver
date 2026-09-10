@@ -70,6 +70,24 @@ fn error(value: impl std::fmt::Display) -> EngineError {
 }
 
 impl EditableSession {
+    pub(super) fn fork_for_preparation(&self) -> Self {
+        Self {
+            history: self.history.clone(),
+            authorities: self.authorities.clone(),
+            accepted: self.accepted.clone(),
+        }
+    }
+
+    pub(super) fn install_prepared_session(
+        &mut self,
+        expected: &CodeSessionIdentity,
+        candidate: Self,
+    ) -> Result<AcceptedEvaluation, EngineError> {
+        self.authenticate(expected)?;
+        *self = candidate;
+        Ok(self.accepted.clone())
+    }
+
     pub(super) fn code_snapshot(&self) -> &geosolve_sketch_code::CodeSessionSnapshot {
         self.history.snapshot()
     }
