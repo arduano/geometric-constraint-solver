@@ -136,6 +136,17 @@ impl EditableSession {
             .expansion
             .writable_points
             .iter()
+            .filter(|lens| {
+                // Source suppression retains semantic lenses for restoration,
+                // but those nodes own no active accepted point to drag.
+                !materialized
+                    .editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node_by_symbol(&lens.handle.alias)
+                    .is_some_and(|node| node.suppressed)
+            })
             .map(|lens| {
                 let point = expanded_port_point(&materialized.editor, &lens.handle)
                     .ok_or_else(|| error("semantic point has no accepted native owner"))?;

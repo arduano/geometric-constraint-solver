@@ -18,6 +18,7 @@ fn project(name: &str) -> String {
         "constrained" => include_str!("fixtures/point-gesture-constrained.json"),
         "computed" => include_str!("fixtures/point-gesture-computed.json"),
         "parameter" => include_str!("fixtures/point-gesture-parameter.json"),
+        "suppressed" => include_str!("fixtures/point-gesture-suppressed.json"),
         _ => panic!("unknown fixture"),
     };
     CodeProject::managed(
@@ -534,5 +535,33 @@ fn latest_point_replay_retains_named_parameter_dependencies_with_distinct_lexica
     assert_eq!(
         latest.export_project_json().unwrap(),
         basis.export_project_json().unwrap()
+    );
+}
+
+#[test]
+fn explicitly_suppressed_geometry_has_no_advertised_point_gesture_targets() {
+    let active = EditableSession::open(&project("circle"), None).unwrap();
+    let target = active.point_gesture_targets().unwrap().remove(0).target;
+    let suppressed = EditableSession::open(&project("suppressed"), None).unwrap();
+    let before = suppressed.state();
+    assert!(
+        suppressed
+            .accepted()
+            .result()
+            .validation
+            .hard_residuals_validated
+    );
+    assert!(suppressed.accepted().result().geometry.points.is_empty());
+    assert!(suppressed.point_gesture_targets().unwrap().is_empty());
+    assert!(
+        suppressed
+            .begin_point_gesture(target, 1, viewport())
+            .is_err()
+    );
+    assert_eq!(suppressed.state(), before);
+    let restored = EditableSession::open(&project("circle"), None).unwrap();
+    assert_eq!(
+        restored.point_gesture_targets().unwrap().len(),
+        active.point_gesture_targets().unwrap().len()
     );
 }

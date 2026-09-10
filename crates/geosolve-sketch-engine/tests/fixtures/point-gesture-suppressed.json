@@ -1,0 +1,304 @@
+{
+  "inputSourceDigest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063",
+  "normalizedSource": "\"use geosolve sketch\";\nimport { sketch, mm } from \"@geosolve/sketch-code\";\n\nexport default sketch(($) => {\n  const bore = $.geometry.centerRadiusCircle(\"bore\", {\n    center: [0, 0],\n    radius: mm(2),\n  });\n  $.suppress(bore);\n  return {\n    bore: bore,\n  };\n});\n",
+  "ir": {
+    "format": "geosolve-managed-sketch-ir-v4",
+    "imports": [
+      {
+        "module": "@geosolve/sketch-code",
+        "bindings": [
+          "sketch",
+          "mm"
+        ]
+      }
+    ],
+    "statements": [
+      {
+        "statement": "declaration",
+        "variable": "bore",
+        "symbol": "bore",
+        "builder_path": [
+          "geometry",
+          "centerRadiusCircle"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "center",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "aa16ca3c6b2a19cb003b9b765f282a8e723f1e0d96728199b1c81024d9d42694"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "cff4302bfaf0d39da3ac33e18bc83150876fba02879220c17d61589e186b0c21"
+                  }
+                ],
+                "site": "6ef373c3efa82644473a8d72e492fbb3a8167387ebece8f682880e18daf52c63"
+              },
+              "comments": []
+            },
+            {
+              "name": "radius",
+              "value": {
+                "kind": "call",
+                "callee": "mm",
+                "arguments": [
+                  {
+                    "kind": "number",
+                    "value": 2,
+                    "site": "6e7d6d8952745f7bafa9e3e2b13561dbe0f548192817348d57cfb5f099ef9ca9"
+                  }
+                ],
+                "site": "663634984b4f7589aa46cf8b0a1ff0095ed39044dfb2a5bd4f5d36d5ca99d14d"
+              },
+              "comments": []
+            }
+          ],
+          "site": "ae17134a082b7524e8d08f843ba849925d2a1b24fc08ee4334914f6c0e1d0632"
+        },
+        "site": "cfed6bd2bdc0de33296c84df6222da830b4d258898ce9fd92ff0acb4d81f1a43",
+        "comments": []
+      },
+      {
+        "statement": "suppression",
+        "target": {
+          "declaration": "bore",
+          "path": [],
+          "site": "9cf1ed6e8468ccb37c610ebeb841fc26a58c5a68b1162c9eb289f9e1b76ac330"
+        },
+        "site": "2efa46d1674c2de39ed6de576084aaa93c56fced1a0137c4f4a9a382a9b59c59",
+        "comments": []
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "fields": [
+        {
+          "name": "bore",
+          "value": {
+            "kind": "reference",
+            "declaration": "bore",
+            "path": [],
+            "site": "c285f90a00b8fcae2f645c325db3e656194582d408fbbfc78f49474a98828809"
+          },
+          "comments": []
+        }
+      ],
+      "site": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a"
+    },
+    "source_sites": [
+      {
+        "id": "cfed6bd2bdc0de33296c84df6222da830b4d258898ce9fd92ff0acb4d81f1a43",
+        "kind": "declaration",
+        "span": {
+          "start": 122,
+          "end": 205
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "aa16ca3c6b2a19cb003b9b765f282a8e723f1e0d96728199b1c81024d9d42694",
+        "kind": "value",
+        "span": {
+          "start": 175,
+          "end": 176
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "cff4302bfaf0d39da3ac33e18bc83150876fba02879220c17d61589e186b0c21",
+        "kind": "value",
+        "span": {
+          "start": 178,
+          "end": 179
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "6ef373c3efa82644473a8d72e492fbb3a8167387ebece8f682880e18daf52c63",
+        "kind": "value",
+        "span": {
+          "start": 174,
+          "end": 180
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "6e7d6d8952745f7bafa9e3e2b13561dbe0f548192817348d57cfb5f099ef9ca9",
+        "kind": "value",
+        "span": {
+          "start": 197,
+          "end": 198
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "663634984b4f7589aa46cf8b0a1ff0095ed39044dfb2a5bd4f5d36d5ca99d14d",
+        "kind": "value",
+        "span": {
+          "start": 194,
+          "end": 199
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "ae17134a082b7524e8d08f843ba849925d2a1b24fc08ee4334914f6c0e1d0632",
+        "kind": "value",
+        "span": {
+          "start": 160,
+          "end": 204
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "9cf1ed6e8468ccb37c610ebeb841fc26a58c5a68b1162c9eb289f9e1b76ac330",
+        "kind": "suppression_reference",
+        "span": {
+          "start": 220,
+          "end": 224
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "2efa46d1674c2de39ed6de576084aaa93c56fced1a0137c4f4a9a382a9b59c59",
+        "kind": "suppression",
+        "span": {
+          "start": 209,
+          "end": 225
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "c285f90a00b8fcae2f645c325db3e656194582d408fbbfc78f49474a98828809",
+        "kind": "value",
+        "span": {
+          "start": 248,
+          "end": 252
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      },
+      {
+        "id": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a",
+        "kind": "value",
+        "span": {
+          "start": 236,
+          "end": 257
+        },
+        "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063"
+      }
+    ],
+    "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063",
+    "ir_digest": "7229bc4d60673f24a38fe9e367596288fa06dcea5a3ef38a158fe316a7f22dbe"
+  },
+  "artifact": {
+    "format": "geosolve-executed-sketch-artifact-v4",
+    "source_digest": "3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063",
+    "ir_digest": "7229bc4d60673f24a38fe9e367596288fa06dcea5a3ef38a158fe316a7f22dbe",
+    "declarations": [
+      {
+        "declaration": "bore",
+        "family": "geometry.centerRadiusCircle",
+        "patch": null,
+        "site": "cfed6bd2bdc0de33296c84df6222da830b4d258898ce9fd92ff0acb4d81f1a43",
+        "result": [
+          {
+            "kind": "point",
+            "path": [
+              "center"
+            ]
+          },
+          {
+            "kind": "curve",
+            "path": [
+              "curve"
+            ]
+          },
+          {
+            "kind": "scalar",
+            "path": [
+              "radius"
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "span"
+            ]
+          }
+        ]
+      }
+    ],
+    "generated_members": [],
+    "groups": [],
+    "suppressions": [
+      {
+        "site": "2efa46d1674c2de39ed6de576084aaa93c56fced1a0137c4f4a9a382a9b59c59",
+        "target": {
+          "declaration": "bore",
+          "path": [],
+          "site": "9cf1ed6e8468ccb37c610ebeb841fc26a58c5a68b1162c9eb289f9e1b76ac330"
+        }
+      }
+    ],
+    "value_consumers": [
+      {
+        "value_site": "aa16ca3c6b2a19cb003b9b765f282a8e723f1e0d96728199b1c81024d9d42694",
+        "target": {
+          "target": "declaration",
+          "declaration": "bore",
+          "family": "geometry.centerRadiusCircle"
+        },
+        "property": [
+          "center",
+          0
+        ]
+      },
+      {
+        "value_site": "cff4302bfaf0d39da3ac33e18bc83150876fba02879220c17d61589e186b0c21",
+        "target": {
+          "target": "declaration",
+          "declaration": "bore",
+          "family": "geometry.centerRadiusCircle"
+        },
+        "property": [
+          "center",
+          1
+        ]
+      },
+      {
+        "value_site": "663634984b4f7589aa46cf8b0a1ff0095ed39044dfb2a5bd4f5d36d5ca99d14d",
+        "target": {
+          "target": "declaration",
+          "declaration": "bore",
+          "family": "geometry.centerRadiusCircle"
+        },
+        "property": [
+          "radius"
+        ]
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "value": {
+        "bore": {
+          "kind": "reference",
+          "value": {
+            "declaration": "bore",
+            "path": []
+          }
+        }
+      }
+    },
+    "artifact_digest": "f1676de06c0499aaa3ddfbf1201ee483fe63a553296d406584fe121d77530825"
+  },
+  "canonicalIrJson": "{\"format\":\"geosolve-managed-sketch-ir-v4\",\"imports\":[{\"module\":\"@geosolve/sketch-code\",\"bindings\":[\"sketch\",\"mm\"]}],\"statements\":[{\"statement\":\"declaration\",\"variable\":\"bore\",\"symbol\":\"bore\",\"builder_path\":[\"geometry\",\"centerRadiusCircle\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"center\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":0.0,\"site\":\"aa16ca3c6b2a19cb003b9b765f282a8e723f1e0d96728199b1c81024d9d42694\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"cff4302bfaf0d39da3ac33e18bc83150876fba02879220c17d61589e186b0c21\"}],\"site\":\"6ef373c3efa82644473a8d72e492fbb3a8167387ebece8f682880e18daf52c63\"},\"comments\":[]},{\"name\":\"radius\",\"value\":{\"kind\":\"call\",\"callee\":\"mm\",\"arguments\":[{\"kind\":\"number\",\"value\":2.0,\"site\":\"6e7d6d8952745f7bafa9e3e2b13561dbe0f548192817348d57cfb5f099ef9ca9\"}],\"site\":\"663634984b4f7589aa46cf8b0a1ff0095ed39044dfb2a5bd4f5d36d5ca99d14d\"},\"comments\":[]}],\"site\":\"ae17134a082b7524e8d08f843ba849925d2a1b24fc08ee4334914f6c0e1d0632\"},\"site\":\"cfed6bd2bdc0de33296c84df6222da830b4d258898ce9fd92ff0acb4d81f1a43\",\"comments\":[]},{\"statement\":\"suppression\",\"target\":{\"declaration\":\"bore\",\"path\":[],\"site\":\"9cf1ed6e8468ccb37c610ebeb841fc26a58c5a68b1162c9eb289f9e1b76ac330\"},\"site\":\"2efa46d1674c2de39ed6de576084aaa93c56fced1a0137c4f4a9a382a9b59c59\",\"comments\":[]}],\"output\":{\"kind\":\"object\",\"fields\":[{\"name\":\"bore\",\"value\":{\"kind\":\"reference\",\"declaration\":\"bore\",\"path\":[],\"site\":\"c285f90a00b8fcae2f645c325db3e656194582d408fbbfc78f49474a98828809\"},\"comments\":[]}],\"site\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\"},\"source_sites\":[{\"id\":\"cfed6bd2bdc0de33296c84df6222da830b4d258898ce9fd92ff0acb4d81f1a43\",\"kind\":\"declaration\",\"span\":{\"start\":122,\"end\":205},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"aa16ca3c6b2a19cb003b9b765f282a8e723f1e0d96728199b1c81024d9d42694\",\"kind\":\"value\",\"span\":{\"start\":175,\"end\":176},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"cff4302bfaf0d39da3ac33e18bc83150876fba02879220c17d61589e186b0c21\",\"kind\":\"value\",\"span\":{\"start\":178,\"end\":179},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"6ef373c3efa82644473a8d72e492fbb3a8167387ebece8f682880e18daf52c63\",\"kind\":\"value\",\"span\":{\"start\":174,\"end\":180},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"6e7d6d8952745f7bafa9e3e2b13561dbe0f548192817348d57cfb5f099ef9ca9\",\"kind\":\"value\",\"span\":{\"start\":197,\"end\":198},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"663634984b4f7589aa46cf8b0a1ff0095ed39044dfb2a5bd4f5d36d5ca99d14d\",\"kind\":\"value\",\"span\":{\"start\":194,\"end\":199},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"ae17134a082b7524e8d08f843ba849925d2a1b24fc08ee4334914f6c0e1d0632\",\"kind\":\"value\",\"span\":{\"start\":160,\"end\":204},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"9cf1ed6e8468ccb37c610ebeb841fc26a58c5a68b1162c9eb289f9e1b76ac330\",\"kind\":\"suppression_reference\",\"span\":{\"start\":220,\"end\":224},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"2efa46d1674c2de39ed6de576084aaa93c56fced1a0137c4f4a9a382a9b59c59\",\"kind\":\"suppression\",\"span\":{\"start\":209,\"end\":225},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"c285f90a00b8fcae2f645c325db3e656194582d408fbbfc78f49474a98828809\",\"kind\":\"value\",\"span\":{\"start\":248,\"end\":252},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"},{\"id\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\",\"kind\":\"value\",\"span\":{\"start\":236,\"end\":257},\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\"}],\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\",\"ir_digest\":\"7229bc4d60673f24a38fe9e367596288fa06dcea5a3ef38a158fe316a7f22dbe\"}",
+  "canonicalArtifactJson": "{\"format\":\"geosolve-executed-sketch-artifact-v4\",\"source_digest\":\"3b46c79724f61cd13db9d85f75cd6f2ce2f54680c924e9c05d1a31c0bcccd063\",\"ir_digest\":\"7229bc4d60673f24a38fe9e367596288fa06dcea5a3ef38a158fe316a7f22dbe\",\"declarations\":[{\"declaration\":\"bore\",\"family\":\"geometry.centerRadiusCircle\",\"patch\":null,\"site\":\"cfed6bd2bdc0de33296c84df6222da830b4d258898ce9fd92ff0acb4d81f1a43\",\"result\":[{\"kind\":\"point\",\"path\":[\"center\"]},{\"kind\":\"curve\",\"path\":[\"curve\"]},{\"kind\":\"scalar\",\"path\":[\"radius\"]},{\"kind\":\"curve_span\",\"path\":[\"span\"]}]}],\"generated_members\":[],\"groups\":[],\"suppressions\":[{\"site\":\"2efa46d1674c2de39ed6de576084aaa93c56fced1a0137c4f4a9a382a9b59c59\",\"target\":{\"declaration\":\"bore\",\"path\":[],\"site\":\"9cf1ed6e8468ccb37c610ebeb841fc26a58c5a68b1162c9eb289f9e1b76ac330\"}}],\"value_consumers\":[{\"value_site\":\"aa16ca3c6b2a19cb003b9b765f282a8e723f1e0d96728199b1c81024d9d42694\",\"target\":{\"target\":\"declaration\",\"declaration\":\"bore\",\"family\":\"geometry.centerRadiusCircle\"},\"property\":[\"center\",0]},{\"value_site\":\"cff4302bfaf0d39da3ac33e18bc83150876fba02879220c17d61589e186b0c21\",\"target\":{\"target\":\"declaration\",\"declaration\":\"bore\",\"family\":\"geometry.centerRadiusCircle\"},\"property\":[\"center\",1]},{\"value_site\":\"663634984b4f7589aa46cf8b0a1ff0095ed39044dfb2a5bd4f5d36d5ca99d14d\",\"target\":{\"target\":\"declaration\",\"declaration\":\"bore\",\"family\":\"geometry.centerRadiusCircle\"},\"property\":[\"radius\"]}],\"output\":{\"kind\":\"object\",\"value\":{\"bore\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"bore\",\"path\":[]}}}},\"artifact_digest\":\"f1676de06c0499aaa3ddfbf1201ee483fe63a553296d406584fe121d77530825\"}"
+}
