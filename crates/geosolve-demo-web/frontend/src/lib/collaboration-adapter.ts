@@ -59,6 +59,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
   private seed?:InteractionSeed;
   private view?:AuthoringView;
   private acceptedFrame?:WorkbenchSnapshot["frame"];
+  private prediction?:AuthoringPreview;
   private panning?:number;
   private remoteWork?:()=>void;
   private readonly activeRemoteOperations=new Set<string>();
@@ -150,6 +151,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     this.authoring=new CollaborationAuthoringController(authoring,{
       paint:preview=>this.presentPrediction(preview),
       changed:()=>{if(this.installed)this.notify(this.projectText());},
+      cleared:()=>this.restoreAcceptedFrame(),
       error:error=>{this.notice=String(error);this.notify();},
       commit:(model,command,kind)=>this.commitGesture(model,command,kind),
     });
@@ -159,6 +161,10 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     this.opening=(async()=>{
       const state=await this.client.connect();
       this.initializeAuthoring(state.document.authoringPreview);
+      // Start independent native reconstruction from the authenticated model
+      // while shared text and the accepted presentation finish loading.
+      const connection=this.client.connection;
+      if(connection)this.authoring?.replace({...state.document.model,revision:state.document.accepted.modelRevision,documentEpoch:connection.documentEpoch});
       this.latestText=await this.text.open(state.document.textActor,state.document.textCheckpoint);
       this.displayedText=this.latestText.snapshot;
       this.displayedBranches.set(this.displayId,this.displayedText);
@@ -223,7 +229,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     return this.queueLocal(async()=>{
       if(generation!==this.browsingGeneration||JSON.stringify(view.state)!==JSON.stringify(this.view?.state))throw Error("Your selection changed; select the item again");
       const update=await this.local.update("restoreSelection",{expected:view.state,state:result.state});
-      if(update){this.installLocal(update);this.installChrome(result.chrome);}
+      if(update){await this.installLocal(update);this.installChrome(result.chrome);}
       return this.projectText();
     });
   }
@@ -273,6 +279,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     if(this.editingBlockedReason)throw Error(this.editingBlockedReason);
     const id=collaborationRequestId(),finish=this.activity.begin();
     const terminal=new Promise<Receipt>((resolve,reject)=>this.operations.set(id,{finish,resolve,reject}));
+    void terminal.catch(()=>{});
     try{
       const receipt=await this.client.submit(command,id);
       if(receipt.outcome){this.operations.delete(id);finish();return receipt;}
@@ -314,7 +321,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
       const navigating=this.panning===input.pointerId;
       const drawing=this.authoring&&this.authoring.tool!=="select"&&!navigating;
       const update=drawing?null:await this.local.update("pointer",input);
-      if(update)this.installLocal(update);
+      if(update)await this.installLocal(update);
       if(navigating&&input.phase==="up")this.panning=undefined;
       if(this.local.authoringPointer&&this.view){
         const projection=await this.local.authoringPointer({x:input.x,y:input.y,captured:input.phase!=="down"});
@@ -370,10 +377,11 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     if(scene.revision===this.modelRevision)return this.projectText();
     return this.queueLocal(async()=>{
       if(scene.revision<this.modelRevision)return this.snapshot();
+      if(scene.revision===this.modelRevision)return this.projectText();
       const snapshot=assertWorkbenchSnapshot(scene.value.snapshot);
       this.catalog=assertToolCatalog(scene.value.toolCatalog);
       const local=this.installed?await this.local.replace(scene.value.seed,true):await this.local.construct(scene.value.seed);
-      this.modelRevision=scene.revision;this.seed=scene.value.seed;this.view={seed:this.seed,state:local.state};this.acceptedFrame=local.frame;this.schedulePresencePaint();
+      this.prediction=undefined;this.modelRevision=scene.revision;this.seed=scene.value.seed;this.view={seed:this.seed,state:local.state};this.acceptedFrame=local.frame;this.schedulePresencePaint();
       this.installed={...snapshot,...projectSourceNavigation(snapshot.navigation,snapshot.explorer,this.state?.document.sourceProjection),
         selection:snapshot.selection&&{...snapshot.selection,source:snapshot.selection.source&&projectAuthoredSource(snapshot.selection.source,this.state?.document.sourceProjection)},frame:local.frame};
       const document=this.state?.document,connection=this.client.connection;
@@ -393,15 +401,21 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     return this.queueLocal(async()=>{
       if(!this.installed)return null;
       const update:LocalInteractionUpdate|null=await this.local.update(method,input);if(!update)return null;
-      this.installLocal(update);if(this.view)this.authoring?.render(this.view);return this.installed;
+      await this.installLocal(update);return this.installed;
     });
   }
-  private installLocal(update:LocalInteractionUpdate){
+  private async installLocal(update:LocalInteractionUpdate){
     this.acceptedFrame=update.frame;
     const previous=JSON.stringify(this.view?.state);
     if(this.seed)this.view={seed:this.seed,state:update.state};
-    this.installed=stampCanvasSnapshot(markCanvasOnlySnapshot({...this.installed!,frame:update.frame}),++this.sequence);
-    if(JSON.stringify(update.state)!==previous)this.scheduleBrowsing();
+    const changed=JSON.stringify(update.state)!==previous,prediction=this.prediction;
+    if(changed&&this.view&&prediction?.presentation&&this.local.projectPrediction){
+      const construction=prediction.construction?{preview:prediction.construction.preview,inference_guides:prediction.construction.inference_guides}:undefined;
+      const projected=await this.local.projectPrediction({presentation:prediction.presentation,view:this.view,construction});
+      if(this.prediction===prediction)this.prediction={...prediction,view:this.view,frame:projected.frame};
+    }
+    this.installed=stampCanvasSnapshot(markCanvasOnlySnapshot({...this.installed!,frame:this.prediction?this.predictedFrame():update.frame}),++this.sequence);
+    if(changed){this.scheduleBrowsing();if(this.view&&(!prediction?.presentation||!this.local.projectPrediction))this.authoring?.render(this.view);}
   }
   private scheduleBrowsing(){
     if(!this.browsing||!this.view)return;
@@ -409,9 +423,10 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     void(async()=>{
       do{
         this.browsingAgain=false;
-        const generation=this.browsingGeneration;await this.browsingReady;
-        const view=this.view!;
-        const result=await this.browsing!.present(view);
+        const generation=this.browsingGeneration;
+        let result;
+        try{await this.browsingReady;const view=this.view!;result=await this.browsing!.present(view);}
+        catch(error){if(generation!==this.browsingGeneration||this.disposed)continue;throw error;}
         if(!this.installed||this.disposed||generation!==this.browsingGeneration||result.model.revision!==this.modelRevision||JSON.stringify(result.view.state)!==JSON.stringify(this.view?.state))continue;
         this.installChrome(result.chrome);
         this.notify(this.projectText());
@@ -428,11 +443,19 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     this.installed=stampCanvasSnapshot({...this.installed!,...chrome,...projected,authoringDocument:authoringDocument??undefined,selection:selection?{...selection,source:selection.source&&projectAuthoredSource(selection.source,this.state?.document.sourceProjection)}:undefined,
       presentation:{...this.installed!.presentation,selectedGeometryRole:selectedGeometryRole??undefined,constructionVisible:constructionVisible??this.installed!.presentation.constructionVisible,visibilityRestoreAvailable:visibilityRestoreAvailable??this.installed!.presentation.visibilityRestoreAvailable}},++this.sequence);
   }
-  private restoreAcceptedFrame(){if(this.installed&&this.acceptedFrame)this.installed=stampCanvasSnapshot(markCanvasOnlySnapshot({...this.installed,frame:this.acceptedFrame}),++this.sequence);}
+  private restoreAcceptedFrame(){this.prediction=undefined;if(this.installed&&this.acceptedFrame)this.installed=stampCanvasSnapshot(markCanvasOnlySnapshot({...this.installed,frame:this.acceptedFrame}),++this.sequence);}
   private presentPrediction(preview:AuthoringPreview){
     if(!this.installed||preview.model.revision!==this.modelRevision||preview.model.documentEpoch!==this.client.connection?.documentEpoch
+      ||preview.model.sourceDesignDigest!==this.state?.document.model.sourceDesignDigest
       ||JSON.stringify(preview.view.state)!==JSON.stringify(this.view?.state))return;
-    this.installed=stampCanvasSnapshot(markCanvasOnlySnapshot({...this.installed,frame:{...preview.frame,scene:{...preview.frame.scene,items:[...preview.frame.scene.items,...(this.acceptedFrame?.scene.items.filter(item=>item.layer==="presence")??[])]}}}),++this.sequence);this.notify(this.installed);
+    this.prediction=preview;
+    this.installed=stampCanvasSnapshot(markCanvasOnlySnapshot({...this.installed,frame:this.predictedFrame()}),++this.sequence);this.notify(this.installed);
+  }
+  private predictedFrame():WorkbenchSnapshot["frame"]{
+    const frame=this.prediction!.frame;
+    // Presence is independent from document geometry. Accepted picking still
+    // owns every hit test, but cannot flash its old coordinates over prediction.
+    return {...frame,scene:{...frame.scene,items:[...frame.scene.items.filter(item=>item.layer!=="presence"),...(this.acceptedFrame?.scene.items.filter(item=>item.layer==="presence")??[])]}};
   }
   private async commitGesture(model:AuthoringModel,gesture:PointGestureCommand|ConstructionCommand,kind:"point"|"construction"){
     if(model.revision!==this.modelRevision||model.documentEpoch!==this.client.connection?.documentEpoch)throw Error("The accepted sketch changed during drawing; draw again on the current sketch");
@@ -447,7 +470,6 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
       payload={action:"point_gesture",targets,gesture};
     }
     const receipt=await this.submit({kind:"semantic",basisRevision:model.revision,payload});
-    this.restoreAcceptedFrame();
     if(receipt.outcome?.status==="rejected")throw Error(receipt.outcome.message);
     this.notify(await this.refresh());
   }
@@ -473,7 +495,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
         const declarations=new Map(this.state?.document.inventory.objects.map(item=>[item.object,item.declaration]));
         const presence=[...this.peers.values()].map(peer=>({...peer,clientId:JSON.stringify([peer.userId,peer.clientId]),selection:peer.selection.flatMap(object=>{const declaration=declarations.get(object);return declaration?[declaration]:[];})}));
         const update=await this.local.update("presence",{sceneKey:this.seed.sceneKey,presence});
-        if(update){this.installLocal(update);this.notify(this.installed);if(this.view)this.authoring?.render(this.view);}
+        if(update){await this.installLocal(update);this.notify(this.installed);}
       }).catch(()=>{});
     },100);
   }

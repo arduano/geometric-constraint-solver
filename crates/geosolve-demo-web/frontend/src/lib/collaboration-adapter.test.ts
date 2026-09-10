@@ -4,18 +4,20 @@ import { CollaborativeWorkbenchAdapter, type CollaborativeTextClient, type Colla
 import { MockWorkbenchAdapter } from "./mock-adapter";
 import type { LocalInteractionClient, LocalInteractionUpdate } from "./local-interaction-adapter";
 import type { TextWorkerUpdate } from "./collaboration-text-adapter";
-import type { WorkbenchSnapshot } from "./adapter";
+import type { PointerSample, WorkbenchSnapshot } from "./adapter";
+import type { AuthoringModel, AuthoringPreview, AuthoringView, LocalAuthoringClient } from "./collaboration-authoring-adapter";
+import type { AuthoringPointer } from "./local-interaction-adapter";
 import type { LocalBrowsingClient } from "./collaboration-browsing-adapter";
 
 const handles:CollaborativeWorkbenchAdapter[]=[];
 afterEach(()=>{for(const handle of handles.splice(0))handle.dispose();});
 function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(yes=>{resolve=yes;});return{promise,resolve};}
-async function fixture(fixtureOptions:{textResponse?:()=>Promise<Response>;browsing?:LocalBrowsingClient;navigation?:WorkbenchSnapshot["navigation"]}={}){
+async function fixture(fixtureOptions:{textResponse?:()=>Promise<Response>;browsing?:LocalBrowsingClient;navigation?:WorkbenchSnapshot["navigation"];authoring?:LocalAuthoringClient;onTextOpen?:()=>void}={}){
   const mock=new MockWorkbenchAdapter(),snapshot=await mock.snapshot(),toolCatalog=await mock.toolCatalog();
   snapshot.authoringDocument={authority:"server-inspector",title:"Sketch",description:"",areKeyConstraintsByDefault:false,editable:true};
   if(fixtureOptions.navigation)snapshot.navigation=fixtureOptions.navigation;
   const textSnapshot:TextWorkerUpdate={snapshot:{revision:{heads:[]},files:{"sketch.ts":"const a = 1;"}},changes:[],checkpoint:[],history:{undo:0,redo:0}};
-  const text:CollaborativeTextClient={open:async()=>textSnapshot,edit:async()=>textSnapshot,receive:async()=>textSnapshot,undo:async()=>textSnapshot,redo:async()=>textSnapshot,snapshot:async()=>textSnapshot,dispose:()=>{}};
+  const text:CollaborativeTextClient={open:async()=>{fixtureOptions.onTextOpen?.();return textSnapshot;},edit:async()=>textSnapshot,receive:async()=>textSnapshot,undo:async()=>textSnapshot,redo:async()=>textSnapshot,snapshot:async()=>textSnapshot,dispose:()=>{}};
   let localCount=0;
   const view:LocalInteractionUpdate={frame:snapshot.frame,state:{},selectionChanged:false,serverFrameCompatible:false};
   const local:LocalInteractionClient={construct:async()=>view,replace:async()=>view,update:async()=>({ ...view,frame:{...view.frame,ariaLabel:`local ${++localCount}`}}),state:async()=>({}),dispose:()=>{}};
@@ -25,17 +27,17 @@ async function fixture(fixtureOptions:{textResponse?:()=>Promise<Response>;brows
   const fetch=vi.fn(async(url:URL|RequestInfo,options?:RequestInit)=>{
     const route=new URL(String(url)).pathname.split("/").at(-1)!;requests.push(route);
     if(route==="join")return json({connection:{protocol:1,documentId:"doc",documentEpoch:"epoch",userId:"alice",clientId:"tab",role:"editor"},token:"a".repeat(64)});
-    if(route==="state")return json({authority:{acceptedRevision:0,acceptedInput:"a",latestSequence:0},document,participants:[],presence:[]});
-    if(route==="scene")return json({snapshot,seed:{},toolCatalog},{"X-Geosolve-Revision":"0"});
+    if(route==="state")return json({authority:{acceptedRevision:document.accepted.modelRevision,acceptedInput:"a",latestSequence:0},document,participants:[],presence:[]});
+    if(route==="scene")return json({snapshot,seed:{},toolCatalog},{"X-Geosolve-Revision":String(document.accepted.modelRevision)});
     if(route==="events")return new Response(new ReadableStream({start(controller){options?.signal?.addEventListener("abort",()=>{try{controller.close();}catch{}});}}),{headers:{"Content-Type":"text/event-stream"}});
     if(route==="commands")return held.promise;
     if(route==="text")return fixtureOptions.textResponse?fixtureOptions.textResponse():json({sourceSequence:1});
     if(route==="text-state")return json({sourceSequence:1,workingRevision:document.working.revision,changes:[],history:document.textHistory});
     throw Error(`Unexpected ${route}`);
   });
-  const adapter=new CollaborativeWorkbenchAdapter({baseUrl:"http://test/api/collaboration/",inviteToken:"invite",clientId:"tab",fetch:fetch as typeof globalThis.fetch},local,text,null,fixtureOptions.browsing??null);
+  const adapter=new CollaborativeWorkbenchAdapter({baseUrl:"http://test/api/collaboration/",inviteToken:"invite",clientId:"tab",fetch:fetch as typeof globalThis.fetch},local,text,fixtureOptions.authoring??null,fixtureOptions.browsing??null);
   handles.push(adapter);await adapter.construct();
-  return{adapter,requests,held,json,localCount:()=>localCount,snapshot,text,document,textSnapshot};
+  return{adapter,requests,held,json,localCount:()=>localCount,snapshot,text,document,textSnapshot,local,view};
 }
 
 it("keeps local navigation and dimension browsing independent of a held semantic request",async()=>{
@@ -180,4 +182,155 @@ it("preserves the full catalog and labels unavailable authoring capabilities",as
   expect(catalog.sections.flatMap(section=>section.commands).map(command=>command.toolId)).toEqual(native.sections.flatMap(section=>section.commands).map(command=>command.toolId));
   expect(catalog.select.unavailableReason).toBeUndefined();
   expect(catalog.sections.flatMap(section=>section.commands).every(command=>Boolean(command.unavailableReason))).toBe(true);
+});
+
+
+// The native authoring owner validates mathematics; this thin adapter witness
+// records exactly which accepted/provisional coordinates it exposes to the UI.
+async function dragFixture(){
+  const base=(await new MockWorkbenchAdapter().snapshot()).frame;
+  const frame=(x:number,authority:"accepted"|"provisional"):WorkbenchSnapshot["frame"]=>({...base,ariaLabel:`${authority} x=${x}`,scene:{...base.scene,provenance:{...base.scene.provenance,scene:authority},items:[{
+    id:"moving-point",kind:"circle",center:[x,0],radius:3,layer:"geometry",semanticKey:"point",className:"",accessibleLabel:"Point",interactive:authority==="accepted",metadata:{},
+    style:{fill:"white",stroke:null,strokeWidth:0,dash:[],opacity:1,lineCap:"round",lineJoin:"round",nonScalingStroke:true,textBaseline:"central",letterSpacing:0,fontFamily:"sans-serif",fontSize:12,fontWeight:400,textAnchor:"middle",shadow:null},
+  }]}});
+  const target={target:"point" as const,address:{project:"doc",owner:{address:{owner:"direct_declaration" as const,declaration:"circle"},allocation:1,generation:1},output:[],field:"point" as const}};
+  const viewport={screen_size:[1000,700] as const,model_center:[0,0] as const,pixels_per_model_unit:10};
+  let model!:AuthoringModel,lastView!:AuthoringView,x=0;
+  const samples:{sequence:number;position:readonly[number,number]}[]=[];
+  const preview=():AuthoringPreview=>({kind:"preview",model,view:lastView,frame:frame(x,"provisional"),presentation:JSON.stringify({opaqueCandidate:x})});
+  const worker:LocalAuthoringClient={
+    replace:vi.fn<LocalAuthoringClient["replace"]>(async next=>{model=next;return {kind:"ready",model};}),
+    beginPoint:vi.fn(async input=>{lastView=input.view;return preview();}),
+    advancePoint:vi.fn(async(sample,view)=>{samples.push(sample);x=sample.position[0];lastView=view;return preview();}),
+    finishPoint:vi.fn<LocalAuthoringClient["finishPoint"]>(async()=>({kind:"point",model,terminal:{command:{basis:"digest",gesture_id:1,target,viewport,samples},accepted_position:[x,0]}})),
+    beginConstruction:vi.fn(),advanceConstruction:vi.fn(),finishConstruction:vi.fn(),
+    render:vi.fn(async view=>{lastView=view;return preview();}),cancel:vi.fn<LocalAuthoringClient["cancel"]>(async()=>({kind:"cancelled",model})),dispose:vi.fn(),
+  };
+  const f=await fixture({authoring:worker});
+  f.view.frame=frame(0,"accepted");
+  f.local.authoringPointer=async input=>({target,viewport,position:[input.x,0]} satisfies AuthoringPointer);
+  Object.assign(f.adapter.state!.document,{targets:{circle:{object:"circle",generation:0}},inventory:{objects:[{object:"circle",declaration:"circle",dependencies:[]}],properties:[]}});
+  const displayed:{authority:string;x:number}[]=[];
+  const record=(snapshot?:WorkbenchSnapshot|null)=>{const circle=snapshot?.frame.scene.items.find(item=>item.id==="moving-point");if(circle?.kind==="circle")displayed.push({authority:snapshot!.frame.scene.provenance.scene,x:circle.center[0]});};
+  f.adapter.subscribe(record);
+  const pointer=async(phase:PointerSample["phase"],position:number)=>{
+    record(await f.adapter.pointer({version:2,phase,pointerId:1,x:position,y:0,buttons:phase==="up"?0:1,modifiers:{alt:false,ctrl:false,meta:false,shift:false}}));
+  };
+  return {...f,worker,displayed,pointer,record,frame};
+}
+
+it("retains the displayed drag through pointer/presence frames and its pending terminal, then installs only its new accepted geometry",async()=>{
+  const f=await dragFixture();
+  await f.pointer("down",0);await f.pointer("move",5);
+  await vi.waitFor(()=>expect(f.displayed.at(-1)).toEqual({authority:"provisional",x:5}));
+  f.displayed.length=0;
+  await f.pointer("move",10);await f.pointer("up",12);
+  await vi.waitFor(()=>expect(f.requests).toContain("commands"));
+  // Presence and other canvas-only frames still originate in accepted picking.
+  f.record(await f.adapter.dispatch({version:2,command:"dimensions.hover.clear"}));
+  f.view.state={viewport:{zoom:20}};
+  f.record(await f.adapter.wheel({version:2,x:50,y:50,deltaX:0,deltaY:-20,ctrl:false}));
+  await vi.waitFor(()=>expect(f.worker.render).toHaveBeenCalledWith(expect.objectContaining({state:f.view.state})));
+  const pan={version:2 as const,pointerId:2,x:50,y:50,buttons:4,modifiers:{alt:false,ctrl:false,meta:false,shift:false}};
+  await f.adapter.pointer({...pan,phase:"down"});
+  f.view.state={viewport:{zoom:20,center:[2,1]}};
+  f.record(await f.adapter.pointer({...pan,phase:"move",x:70,y:60}));
+  await vi.waitFor(()=>expect(f.worker.render).toHaveBeenCalledWith(expect.objectContaining({state:f.view.state})));
+  f.record(await f.adapter.pointer({...pan,phase:"up",x:70,y:60,buttons:0}));
+  await new Promise(resolve=>setTimeout(resolve,125));
+  expect(f.displayed.length).toBeGreaterThan(2);
+  expect(f.displayed.every(frame=>frame.authority==="provisional"&&frame.x>=5)).toBe(true);
+  expect(f.displayed.at(-1)).toEqual({authority:"provisional",x:12});
+  const before=f.displayed.length,requestId=f.adapter.pending[0]!.requestId;
+  Object.assign(f.document.accepted,{modelRevision:1});f.view.frame=f.frame(12,"accepted");f.snapshot.frame=f.view.frame;
+  f.held.resolve(f.json({receipt:{operation:{userId:"alice",clientId:"tab",requestId},admission:1,outcome:{status:"accepted",revision:1,accepted_input:"new",summary:"Moved point"}}}));
+  await vi.waitFor(()=>expect(f.displayed.at(-1)).toEqual({authority:"accepted",x:12}));
+  expect(f.displayed.slice(before).every(frame=>frame.x===12)).toBe(true);
+});
+
+it("restores the complete accepted frame on cancellation and on a rejected shared drag",async()=>{
+  for(const outcome of ["cancel","reject"]){
+    const f=await dragFixture();await f.pointer("down",0);await f.pointer("move",6);
+    await vi.waitFor(()=>expect(f.displayed.at(-1)).toEqual({authority:"provisional",x:6}));
+    if(outcome==="cancel")f.record(await f.adapter.cancel({version:2,reason:"escape"}));
+    else{
+      await f.pointer("up",8);await vi.waitFor(()=>expect(f.requests).toContain("commands"));
+      const requestId=f.adapter.pending[0]!.requestId;
+      f.held.resolve(f.json({receipt:{operation:{userId:"alice",clientId:"tab",requestId},admission:1,outcome:{status:"rejected",code:"fixture",message:"Explicit branch rejected"}}}));
+    }
+    await vi.waitFor(()=>expect(f.displayed.at(-1)).toEqual({authority:"accepted",x:0}));
+    expect((await f.adapter.snapshot()).frame.scene.items[0]!.interactive).toBe(true);
+    if(outcome==="reject")await vi.waitFor(()=>expect(f.adapter.notice).toContain("Explicit branch rejected"));
+  }
+});
+
+it("discards a superseded browsing request without surfacing its worker replacement notice",async()=>{
+  const mock=await new MockWorkbenchAdapter().snapshot(),entered=deferred<void>();
+  let reject!:(error:Error)=>void,count=0;
+  let model={documentEpoch:"epoch",revision:0,sourceDesignDigest:"digest"};
+  const chrome={explorer:mock.explorer,navigation:mock.navigation,dimensions:mock.dimensions,parameters:mock.parameters,problems:mock.problems,selection:null,selectedGeometryRole:null,authoringDocument:null};
+  const browsing:LocalBrowsingClient={
+    replace:vi.fn(async next=>{model=next;if(next.revision>0)reject(Error("Browsing model was replaced"));return {kind:"ready" as const,model};}),
+    present:vi.fn(async view=>{if(++count===1){entered.resolve();await new Promise<void>((_,no)=>{reject=no;});}return {kind:"chrome" as const,model,view,chrome};}),
+    navigate:vi.fn(),describe:vi.fn(),dispose:vi.fn(),
+  };
+  const f=await fixture({browsing});await entered.promise;
+  Object.assign(f.document.accepted,{modelRevision:1});
+  const notices:string[]=[];f.adapter.subscribe(()=>notices.push(f.adapter.notice));
+  await f.adapter.refresh();await vi.waitFor(()=>expect(browsing.present).toHaveBeenCalledTimes(2));
+  expect(notices.some(notice=>notice.includes("Browsing model was replaced"))).toBe(false);
+  expect(f.adapter.notice).toBe("Shared document is up to date");
+});
+
+it("retires a held prediction when a peer replaces its accepted model",async()=>{
+  const f=await dragFixture(),held=deferred<AuthoringPreview>();
+  const old={kind:"preview" as const,model:vi.mocked(f.worker.replace).mock.calls[0]![0],view:{seed:{},state:{}},frame:f.frame(8,"provisional")};
+  f.worker.beginPoint=vi.fn(()=>held.promise);
+  await f.pointer("down",0);await f.pointer("move",8);
+  await vi.waitFor(()=>expect(f.worker.beginPoint).toHaveBeenCalledOnce());
+  Object.assign(f.document.accepted,{modelRevision:1});f.view.frame=f.frame(30,"accepted");f.snapshot.frame=f.view.frame;
+  f.record(await f.adapter.refresh());const replaced=f.displayed.length;
+  held.resolve(old);await f.pointer("up",10);await Promise.resolve();
+  expect(f.displayed.at(-1)).toEqual({authority:"accepted",x:30});
+  expect(f.displayed.slice(replaced).every(frame=>frame.authority==="accepted"&&frame.x===30)).toBe(true);
+  expect(f.requests).not.toContain("commands");
+});
+
+it("reprojects the last native candidate locally while subsequent authoring compute is held",async()=>{
+  const f=await dragFixture(),held=deferred<AuthoringPreview>();
+  f.local.projectPrediction=vi.fn(async input=>({...f.view,state:input.view.state,frame:f.frame(JSON.parse(input.presentation).opaqueCandidate,"provisional")}));
+  await f.pointer("down",0);await f.pointer("move",5);
+  await vi.waitFor(()=>expect(f.displayed.at(-1)).toEqual({authority:"provisional",x:5}));
+  const advance=f.worker.advancePoint;f.worker.advancePoint=vi.fn(()=>held.promise);
+  await f.pointer("move",9);await vi.waitFor(()=>expect(f.worker.advancePoint).toHaveBeenCalledOnce());
+  f.view.state={viewport:{zoom:30}};
+  f.record(await f.adapter.wheel({version:2,x:50,y:50,deltaX:0,deltaY:-30,ctrl:false}));
+  expect(f.local.projectPrediction).toHaveBeenCalledWith(expect.objectContaining({presentation:JSON.stringify({opaqueCandidate:5}),view:expect.objectContaining({state:f.view.state})}));
+  expect(f.worker.render).not.toHaveBeenCalled();
+  expect(f.displayed.at(-1)).toEqual({authority:"provisional",x:5});
+  // Explicit cancellation owns the display even if held computation returns later.
+  f.record(await f.adapter.cancel({version:2,reason:"escape"}));
+  held.resolve(await advance({sequence:2,position:[9,0]},{seed:{},state:{}}));
+  await Promise.resolve();
+  expect(f.displayed.at(-1)).toEqual({authority:"accepted",x:0});
+  expect(f.requests).not.toContain("commands");
+});
+
+it("installs simultaneous refreshes of the same accepted scene exactly once",async()=>{
+  const f=await dragFixture(),entered=deferred<void>(),replacement=deferred<void>();Object.assign(f.document.accepted,{modelRevision:1});
+  f.local.replace=vi.fn(async()=>{entered.resolve();await replacement.promise;return f.view;});
+  const first=f.adapter.refresh();await entered.promise;const second=f.adapter.refresh();
+  await vi.waitFor(()=>expect(f.requests.filter(route=>route==="scene")).toHaveLength(3));
+  replacement.resolve();await Promise.all([first,second]);
+  expect(f.worker.replace).toHaveBeenCalledTimes(2); // Initial model, then revision 1.
+  expect(f.local.replace).toHaveBeenCalledOnce();
+});
+
+it("starts native authoring reconstruction before shared text and scene loading, without delaying navigation",async()=>{
+  const ready=deferred<Awaited<ReturnType<LocalAuthoringClient["replace"]>>>();
+  const authoring:LocalAuthoringClient={replace:vi.fn(()=>ready.promise),beginPoint:vi.fn(),advancePoint:vi.fn(),finishPoint:vi.fn(),beginConstruction:vi.fn(),advanceConstruction:vi.fn(),finishConstruction:vi.fn(),render:vi.fn(),cancel:vi.fn(),dispose:vi.fn()};
+  const f=await fixture({authoring,onTextOpen:()=>expect(authoring.replace).toHaveBeenCalledOnce()});
+  expect((await f.adapter.wheel({version:2,x:50,y:50,deltaX:0,deltaY:-30,ctrl:false}))?.frame.ariaLabel).toBe("local 1");
+  expect(authoring.replace).toHaveBeenCalledOnce();
+  ready.resolve({kind:"ready",model:vi.mocked(authoring.replace).mock.calls[0]![0]});
 });

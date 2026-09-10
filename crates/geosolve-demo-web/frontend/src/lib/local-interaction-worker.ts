@@ -12,7 +12,7 @@ export interface LocalInteractionUpdate {
   /** Rust verified the authoritative preview matches this exact camera and selection. */
   serverFrameCompatible: boolean;
 }
-export type LocalInteractionMethod = "authoringPointer" | "restoreSelection" | "presence" | "construct" | "replace" | "dispatch" | "pointer" | "wheel" | "resize" | "cancel" | "state";
+export type LocalInteractionMethod = "projectPrediction" | "authoringPointer" | "restoreSelection" | "presence" | "construct" | "replace" | "dispatch" | "pointer" | "wheel" | "resize" | "cancel" | "state";
 export interface LocalInteractionRequest { id: number; method: LocalInteractionMethod; input?: unknown; }
 export type LocalInteractionResponse = { id: number; result: LocalInteractionUpdate | InteractionState | null } | { id: number; error: string };
 export interface InteractionHandle {
@@ -33,6 +33,7 @@ export type InteractionConstructor = new (seed: string) => InteractionHandle;
 export function createLocalInteractionHandler(
   constructor: Promise<InteractionConstructor>,
   reply: (response: LocalInteractionResponse) => void,
+  renderPrediction?: (request:string)=>string,
 ) {
   let handle: InteractionHandle | undefined;
   let tail = Promise.resolve();
@@ -50,6 +51,13 @@ export function createLocalInteractionHandler(
         } else {
           if (!handle) throw Error("Local interaction has not been initialized");
           if (data.method === "state") result = handle.state();
+          else if (data.method === "projectPrediction") {
+            if(!renderPrediction)throw Error("Native prediction reprojection is unavailable");
+            const input=data.input as {presentation:string;view:{state:InteractionState};construction?:unknown};
+            if(typeof input?.presentation!=="string"||JSON.stringify(input.view?.state)!==JSON.stringify(JSON.parse(handle.state())))throw Error("Prediction belongs to an obsolete local view");
+            const frame=JSON.parse(renderPrediction(JSON.stringify({...JSON.parse(input.presentation),view:input.view,construction:input.construction??null})));
+            result=JSON.stringify({frame,state:input.view.state,selectionChanged:false,serverFrameCompatible:false});
+          }
           else if (["replace", "dispatch", "pointer", "wheel", "resize", "cancel", "authoringPointer", "restoreSelection", "presence"].includes(data.method)) {
             result = handle[data.method](JSON.stringify(data.input));
           } else throw Error("Unsupported local interaction operation");
@@ -69,5 +77,5 @@ if (typeof document === "undefined" && typeof self !== "undefined") {
     if (!Constructor) throw Error("This build does not support local canvas interaction");
     return Constructor;
   });
-  self.onmessage = createLocalInteractionHandler(constructor, (response) => self.postMessage(response));
+  self.onmessage = createLocalInteractionHandler(constructor, (response) => self.postMessage(response), wasm.renderAuthoringPreview);
 }

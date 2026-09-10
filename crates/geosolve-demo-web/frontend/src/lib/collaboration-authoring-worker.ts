@@ -27,6 +27,8 @@ export interface AuthoringPreview {
   readonly model: AuthoringModelIdentity;
   readonly view: AuthoringView;
   readonly frame: WorkbenchSnapshot["frame"];
+  /** Opaque native candidate geometry for solve-free local reprojection. */
+  readonly presentation?: string;
   readonly point?: PointGestureFrame;
   readonly construction?: ConstructionFrame;
 }
@@ -56,16 +58,18 @@ export function createAuthoringWorkerHandler(runtime: Promise<AuthoringRuntime>,
   let native: AuthoringRuntime | undefined, session: Session | undefined, model: AuthoringModelIdentity | undefined;
   let generation = 0, point: RetainedPointGesture | undefined, construction: ConstructionPrediction | undefined;
   let pointFrame: PointGestureFrame | undefined, constructionFrame: ConstructionFrame | undefined;
+  let retainedPresentation: string | undefined;
   let tail = Promise.resolve();
   void runtime.catch(() => undefined);
   const cancel = () => {
+    retainedPresentation = undefined;
     try { point?.cancel(); } finally { point = undefined; pointFrame = undefined; }
     try { construction?.cancel(); } finally { construction = undefined; constructionFrame = undefined; }
   };
   const paint = (view: AuthoringView): AuthoringPreview => {
-    const scene = point?.presentationJSON() ?? construction?.presentationJSON();
+    const scene = point?.presentationJSON() ?? construction?.presentationJSON() ?? retainedPresentation;
     if (!scene || !native || !model) throw Error("No active authoring prediction");
-    return { kind: "preview", model, view, frame: native.render(scene, view, constructionFrame), point: pointFrame, construction: constructionFrame };
+    return { kind: "preview", model, view, frame: native.render(scene, view, constructionFrame), presentation: scene, point: pointFrame, construction: constructionFrame };
   };
   return ({ data }: MessageEvent<AuthoringWorkerRequest>) => {
     const run = async () => {
@@ -89,6 +93,7 @@ export function createAuthoringWorkerHandler(runtime: Promise<AuthoringRuntime>,
           if (!session || !model || data.generation !== generation) throw Error("Authoring request belongs to an obsolete accepted model");
           if (data.method === "beginPoint" || data.method === "beginConstruction") {
             if (point || construction) throw Error("Finish or cancel the active authoring gesture");
+            retainedPresentation = undefined;
             const options = { expected: session.token, gestureId: data.gestureId, viewport: data.viewport };
             if (data.method === "beginPoint") point = session.beginPointGesture(data.target, options);
             else construction = session.beginConstruction(data.tool, { ...options, role: data.role });
@@ -107,11 +112,11 @@ export function createAuthoringWorkerHandler(runtime: Promise<AuthoringRuntime>,
             result = paint(data.view);
           } else if (data.method === "finishPoint") {
             if (!point) throw Error("No active point gesture");
-            try { result = { kind: "point", model, terminal: point.finish() }; }
+            try { const presentation = point.presentationJSON();result = { kind: "point", model, terminal: point.finish() };retainedPresentation = presentation; }
             finally { point = undefined; pointFrame = undefined; }
           } else if (data.method === "finishConstruction") {
             if (!construction) throw Error("No active construction gesture");
-            try { result = { kind: "construction", model, command: construction.finish() }; }
+            try { const presentation = construction.presentationJSON();result = { kind: "construction", model, command: construction.finish() };retainedPresentation = presentation; }
             finally { construction = undefined; constructionFrame = undefined; }
           } else if (data.method === "render") result = paint(data.view);
           else if (data.method === "cancel") { cancel(); result = { kind: "cancelled", model }; }

@@ -104,6 +104,7 @@ export class LocalAuthoringWorker implements LocalAuthoringClient {
           : request.action.method === "cancel" ? "cancelled" : "preview";
         if (!data.result || data.result.kind !== expected || !data.result.model || !data.result.model.documentEpoch || !Number.isSafeInteger(data.result.model.revision) || !data.result.model.sourceDesignDigest) throw Error("Invalid authoring worker response");
         if (data.result.kind === "preview") {
+          if (data.result.presentation!==undefined&&typeof data.result.presentation!=="string") throw Error("Invalid native authoring presentation");
           if (!data.result.view || typeof data.result.frame?.ariaLabel !== "string" || data.result.frame.scene.provenance.scene !== "provisional") throw Error("Invalid provisional authoring frame");
           freezeDrawFrame(data.result.frame.scene);
           if (data.result.frame.scene.items.some(item => item.interactive)) throw Error("Provisional authoring paint cannot own picking");

@@ -8,7 +8,7 @@ import initializeEngine, * as engineWasm from "../../../../../packages/geosolve-
 import { createAuthoringWorkerHandler, type AuthoringAction, type AuthoringModel, type AuthoringResult, type AuthoringRuntime, type AuthoringView, type AuthoringWorkerRequest, type AuthoringWorkerResponse } from "./collaboration-authoring-worker";
 import { LocalAuthoringWorker } from "./collaboration-authoring-adapter";
 import { LocalInteractionWorker } from "./local-interaction-adapter";
-import type { LocalInteractionResponse } from "./local-interaction-worker";
+import { createLocalInteractionHandler, type LocalInteractionResponse, type LocalInteractionRequest, type LocalInteractionUpdate } from "./local-interaction-worker";
 import { MockWorkbenchAdapter } from "./mock-adapter";
 
 const model: AuthoringModel = { documentEpoch: "doc-one", revision: 1, sourceDesignDigest: "source-design", project: "{}", design: { format: "geosolve-design-v1", project: "project", generated: {}, overrides: {} } };
@@ -87,7 +87,7 @@ describe("separate authoring worker", () => {
     const engine = await createEngine({ wasmModule: { ...engineWasm, default: initializeEngine }, wasm: bytes });
     const fixture = JSON.parse(await readFile(resolve(process.cwd(), "../../geosolve-sketch-engine/tests/fixtures/point-gesture-constrained.json"), "utf8"));
     await initializePresentation({ module_or_path: await readFile(resolve(process.cwd(), "src/generated/geosolve_demo_web_bg.wasm")) });
-    let session: EditableSession | undefined, workbench: WorkbenchHandle | undefined, interaction: InteractionHandle | undefined;
+    let session: EditableSession | undefined, workbench: WorkbenchHandle | undefined, interaction: InteractionHandle | undefined, reprojectInteraction: InteractionHandle | undefined;
     let genuineView = view;
     const runtime: AuthoringRuntime = {
       open: input => { session = engine.openEditableSession(input.project, { design: input.design }); return session; },
@@ -126,7 +126,34 @@ describe("separate authoring worker", () => {
       expect(session!.pointGestureTargets().map(handle=>handle.target)).toContainEqual(target);
       await send({ method: "beginPoint", target, gestureId: 71, viewport, view: genuineView });
       await send({ method: "advancePoint", samples: [{ sequence: 1, position: [1, 2] }, { sequence: 2, position: [2, 3] }], view: genuineView });
+      const lastPoint = await send({ method: "render", view: genuineView });
       const point = await send({ method: "finishPoint" });
+      const retainedPoint = await send({ method: "render", view: genuineView });
+      let localId=0;
+      const localWaiters=new Map<number,{resolve:(value:unknown)=>void;reject:(error:Error)=>void}>();
+      const localHandler=createLocalInteractionHandler(Promise.resolve(class extends InteractionHandle { constructor(seed:string){super(seed);reprojectInteraction=this;} }),response=>{
+        const waiter=localWaiters.get(response.id)!;localWaiters.delete(response.id);
+        if("error" in response)waiter.reject(Error(response.error));else waiter.resolve(response.result);
+      },renderAuthoringPreview);
+      const local=(method:LocalInteractionRequest["method"],input?:unknown)=>new Promise<unknown>((resolve,reject)=>{
+        const id=++localId;localWaiters.set(id,{resolve,reject});localHandler(new MessageEvent("message",{data:{id,method,input}}));
+      });
+      await local("construct",pair.seed);
+      const zoomed=await local("wheel",{version:2,x:300,y:250,deltaX:0,deltaY:-90,ctrl:false}) as LocalInteractionUpdate;
+      const localView={seed:pair.seed,state:zoomed.state};
+      const stateBefore=await local("state"),hitBefore=await local("authoringPointer",{x:screen.x,y:screen.y});
+      if(retainedPoint.kind!=="preview"||!retainedPoint.presentation)throw Error("Missing native candidate presentation");
+      const projected=await local("projectPrediction",{presentation:retainedPoint.presentation,view:localView}) as LocalInteractionUpdate;
+      const expected=JSON.parse(renderAuthoringPreview(JSON.stringify({...JSON.parse(retainedPoint.presentation),view:localView,construction:null})));
+      expect(projected.frame).toEqual(expected);
+      expect(projected.frame).not.toEqual(retainedPoint.frame);
+      expect(projected.frame.scene.provenance.scene).toBe("provisional");
+      expect(projected.frame.scene.items.every(item=>!item.interactive)).toBe(true);
+      expect(await local("state")).toEqual(stateBefore);
+      expect(await local("authoringPointer",{x:screen.x,y:screen.y})).toEqual(hitBefore);
+      await expect(local("projectPrediction",{presentation:retainedPoint.presentation,view:genuineView})).rejects.toThrow("obsolete local view");
+      expect(retainedPoint.kind === "preview" && retainedPoint.frame).toEqual(lastPoint.kind === "preview" && lastPoint.frame);
+      expect({ project: session!.exportProject(), design: session!.exportDesign(), token: session!.token }).toEqual(original);
       expect(point.kind).toBe("point");
       if (point.kind === "point") { expect(point.terminal.command.samples).toHaveLength(2); expect(point.terminal.command.basis).toBe(accepted.sourceDesignDigest); }
       await send({ method: "beginConstruction", tool: "segment", role: "profile", gestureId: 72, viewport, view: genuineView });
@@ -137,10 +164,15 @@ describe("separate authoring worker", () => {
       ], view: genuineView });
       expect(update.kind === "preview" && update.construction?.completed).toBe(true);
       const construction = await send({ method: "finishConstruction" });
+      const retainedConstruction = await send({ method: "render", view: genuineView });
+      expect(retainedConstruction.kind === "preview" && retainedConstruction.frame.scene.provenance.scene).toBe("provisional");
+      expect(retainedConstruction.kind === "preview" && retainedConstruction.frame.scene.items.every(item => !item.interactive)).toBe(true);
+      await send({ method: "cancel" });
+      await expect(send({ method: "render", view: genuineView })).rejects.toThrow("No active authoring prediction");
       expect(construction.kind).toBe("construction");
       if (construction.kind === "construction") { expect(construction.command.samples).toHaveLength(3); expect(construction.command.expected_declarations.length).toBeGreaterThan(0); }
       expect({ project: session!.exportProject(), design: session!.exportDesign(), token: session!.token }).toEqual(original);
       await expect(send({ method: "replace", model: { ...accepted, sourceDesignDigest: "forged" } }, 2)).rejects.toThrow("disagrees");
-    } finally { interaction?.free(); workbench?.free(); engine.dispose(); }
+    } finally { reprojectInteraction?.free(); interaction?.free(); workbench?.free(); engine.dispose(); }
   });
 });

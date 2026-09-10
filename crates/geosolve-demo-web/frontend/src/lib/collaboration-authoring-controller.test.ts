@@ -19,7 +19,7 @@ async function fixture(){
     finishPoint:vi.fn<LocalAuthoringClient["finishPoint"]>(async()=>({kind:"point",model,terminal:{command:{basis:"basis",gesture_id:1,target,viewport:projection.viewport,samples:[]},accepted_position:[2,0]}})),
     beginConstruction:vi.fn(async()=>preview),advanceConstruction:vi.fn(async()=>preview),finishConstruction:vi.fn<LocalAuthoringClient["finishConstruction"]>(async()=>({kind:"construction",model,command:{basis:"basis",gesture_id:1,viewport:projection.viewport,tool:"segment",role:"profile",samples:[],expected_declarations:[]}})),
     render:vi.fn(async()=>preview),cancel:vi.fn<LocalAuthoringClient["cancel"]>(async()=>({kind:"cancelled",model})),dispose:vi.fn()};
-  const callbacks={paint:vi.fn(),changed:vi.fn(),error:vi.fn(),commit:vi.fn(async()=>{})};
+  const callbacks={paint:vi.fn(),changed:vi.fn(),cleared:vi.fn(),error:vi.fn(),commit:vi.fn(async()=>{})};
   const controller=new CollaborationAuthoringController(worker,callbacks);controller.replace(model);
   return {controller,worker,callbacks,preview};
 }
@@ -59,4 +59,55 @@ it("advertises exactly the native collaborative construction tools and refuses u
   expect(catalog.sections.flatMap(section=>section.commands).filter(command=>supportsCollaborativeConstruction(command.toolId)).map(command=>command.toolId).sort()).toEqual(["center-radius-circle","polyline","segment","two-point-aligned-rectangle"]);
   expect(()=>f.controller.select("fillet")).toThrow(/not connected/);
   expect(f.controller.tool).toBe("select");f.controller.dispose();
+});
+
+it("reprojects the retained native terminal while publication is held and ignores new drawing until its outcome",async()=>{
+  const f=await fixture(),publication=deferred<void>();f.callbacks.commit=vi.fn(()=>publication.promise);
+  f.controller.pointer(pointer("down",0),projection,view);f.controller.pointer(pointer("move",5),projection,view);f.controller.pointer(pointer("up",8),projection,view);
+  await vi.waitFor(()=>expect(f.callbacks.commit).toHaveBeenCalledOnce());
+  const navigated={...view,state:{viewport:{zoom:20}}};
+  f.controller.render(navigated);
+  f.controller.pointer(pointer("down",0),projection,view);f.controller.pointer(pointer("move",5),projection,view);
+  await vi.waitFor(()=>expect(f.worker.render).toHaveBeenCalledWith(navigated));
+  expect(f.worker.beginPoint).toHaveBeenCalledOnce();
+  expect(f.worker.cancel).not.toHaveBeenCalled();
+  publication.resolve();await vi.waitFor(()=>expect(f.worker.cancel).toHaveBeenCalledOnce());
+  expect(f.callbacks.cleared).toHaveBeenCalledTimes(2);f.controller.dispose();
+});
+
+it("does not let a cancelled in-flight prediction failure cancel the next gesture",async()=>{
+  const f=await fixture();let reject!:(error:Error)=>void;
+  f.worker.beginPoint=vi.fn().mockImplementationOnce(()=>new Promise<AuthoringPreview>((_,no)=>{reject=no;})).mockResolvedValue(f.preview);
+  f.controller.pointer(pointer("down",0),projection,view);f.controller.pointer(pointer("move",5),projection,view);
+  await vi.waitFor(()=>expect(f.worker.beginPoint).toHaveBeenCalledOnce());
+  f.controller.cancel();
+  f.controller.pointer(pointer("down",0),projection,view);f.controller.pointer(pointer("move",8),projection,view);f.controller.pointer(pointer("up",10),projection,view);
+  reject(Error("Cancelled obsolete prediction"));
+  await vi.waitFor(()=>expect(f.callbacks.commit).toHaveBeenCalledOnce());
+  expect(f.callbacks.error).not.toHaveBeenCalled();f.controller.dispose();
+});
+
+it("batches queued point painting while preserving the exact terminal sequence",async()=>{
+  const f=await fixture(),hold=deferred<AuthoringPreview>();f.worker.beginPoint=vi.fn(()=>hold.promise);
+  f.controller.pointer(pointer("down",0),projection,view);
+  for(let x=4;x<=24;x++)f.controller.pointer(pointer("move",x),{...projection,position:[x,0]},view);
+  f.controller.pointer(pointer("up",25),{...projection,position:[25,0]},view);
+  await vi.waitFor(()=>expect(f.worker.beginPoint).toHaveBeenCalledOnce());hold.resolve(f.preview);
+  await vi.waitFor(()=>expect(f.callbacks.commit).toHaveBeenCalledOnce());
+  expect(vi.mocked(f.worker.advancePoint).mock.calls.map(([sample])=>sample)).toEqual(Array.from({length:22},(_,index)=>({sequence:index+1,position:[index+4,0]})));
+  expect(f.callbacks.paint).toHaveBeenCalledTimes(2); // Begin plus the batched final frame.
+  f.controller.dispose();
+});
+
+it("keeps an identical accepted model open without invalidating its retained gesture",async()=>{
+  const f=await fixture();
+  f.controller.pointer(pointer("down",0),projection,view);f.controller.pointer(pointer("move",5),projection,view);
+  await vi.waitFor(()=>expect(f.callbacks.paint).toHaveBeenCalled());
+  f.controller.replace(structuredClone(model));
+  f.controller.pointer(pointer("up",8),projection,view);
+  await vi.waitFor(()=>expect(f.callbacks.commit).toHaveBeenCalledOnce());
+  expect(f.worker.replace).toHaveBeenCalledOnce();
+  f.controller.replace({...model,project:'{"changed":true}'});
+  expect(f.worker.replace).toHaveBeenCalledTimes(2);
+  f.controller.dispose();
 });
