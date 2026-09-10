@@ -236,3 +236,66 @@ semantic/lifecycle history, durable text Undo, external file/CLI mirror reconcil
 construction prediction, collaborative workbench UI, browser/load/fault qualification,
 release-gate registration and integrated clean nomination. The qualified preview remains
 unchanged, and supervising-user acceptance remains open.
+
+## Runtime and collaboration client checkpoint
+
+The actual folder runtime now composes native source, target and personal property
+history with independent compiler/solver workers and fsynced authority publication.
+Cold restart recompiles the captured raw files, authenticates the complete canonical
+project/design and restores original operation receipts. Captured Apply, invalid raw
+text, disjoint personal Undo and same-value property ownership pass actual HTTP/folder
+tests. Point gestures independently replay on the server; their history records exact
+changed companion properties, and inverse replay preserves independent later edits.
+
+The reusable HTTP/SSE client persists exact pending request IDs and payloads before
+transmission, retains unknown outcomes, retries original requests after reconnect and
+keeps per-client text/Apply/later-text admission ordered. Committed text deltas import
+into existing native replicas without replacing unsent typing. Authorization stays in
+headers; bounded event decoding handles split Unicode, truncation and slow streams.
+The reference runtime reserves `geosolve.server.*` for server-owned contribution barriers.
+
+Structural personal history now has one native timeline for properties, creation,
+deletion, dependency writes and statement ordering. Delete Undo allocates fresh target
+generations. Create Undo refuses later other-user contributions and expanded dependency
+closures. Runtime compiler descriptors and structural inverse replay still need integration.
+Native/WASM retained construction covers segment, polyline, circle and aligned rectangle,
+with independently replayed inference, correction and Step Back. Its browser authoring
+worker and server runtime connection remain in progress.
+
+A combined runtime check exposed an intermittent Apply/text-save overlap: disposable
+source preparation ran while a native text stage was awaiting fsync. The runtime now
+runs short source preparation and cleanup through `host.withCommittedState`; compilation
+and solving remain outside that queue. The existing native pending-stage guard is
+unchanged. A held-fsync host regression and all eight actual folder cases pass.
+
+Focused commands used the pinned Nix shell already documented above:
+
+- `cargo test --locked -p geosolve-collaboration -p geosolve-collaboration-wasm`:
+  65 core and 20 adapter cases pass; warnings-denied Clippy and formatting pass
+  (`structural-history-final-native.log`, `structural-history-final-style.log`).
+- `npm --prefix packages/geosolve-collaboration run build`, `run build:wasm` and
+  `test`: release WASM and 33 package cases pass (`structural-history-wasm-r1.log`).
+- `node --test scripts/collaboration-domain-point.test.mjs scripts/collaboration-domain-scene.test.mjs`:
+  six pass, including independently constructed local scene handles and canonical
+  same-value point ownership (`collaboration-domain-point-scene-final-r2.log`). The
+  added actual native tool catalog passes the focused scene case
+  (`collaboration-scene-catalog-checks.log`). Original eight domain cases also pass.
+- `node --test scripts/collaboration-host.test.mjs scripts/collaboration-runtime.test.mjs`:
+  all nine host cases pass. The runtime rerun after correcting the reserved identity
+  to the native identifier alphabet passes all eight cases
+  (`collaboration-source-preparation-race-checks-r2.log`). The prior illegal `@` prefix
+  was correctly rejected by native history; that validation was preserved.
+- Native construction: 20 engine, two code-owner and two adapter cases pass, with
+  scoped strict Clippy. The release engine WASM package passes all 17 cases
+  (`construction-actual-wasm-final.log`). The code-owner regression fixes an existing
+  lowering mismatch that discarded authored `regularized: true`; no equations changed.
+- Frontend preparation: seven CodeMirror cases and two collaboration-adapter cases
+  pass (`collaboration-adapter-checks.log`). The adapter checks use explicit transport
+  fixtures and prove queue separation, not actual browser latency. The CodeMirror
+  change distinguishes local edits from received source and keeps remote changes out
+  of local Undo. The new adapter is not yet mounted in the workbench.
+
+No integrated nomination or preview replacement has occurred. Durable text history,
+structural compiler replay, external mirrors/CLI, the complete collaborative UI and
+prediction workers, four-browser and 32-client load/fault qualification remain required.
+The milestone and supervising-user acceptance remain open.

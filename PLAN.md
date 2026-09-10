@@ -8473,6 +8473,12 @@ merge or qualify that product.
   parity, localized managed source patches and headless authoring preparation.
   Integration and qualification remain in the unchecked amendment below.
 
+Focused runtime checkpoint: independent compiler/solver workers, durable HTTP/SSE client,
+incremental native text, point-property Undo, native structural history and retained
+construction are implemented. The collaboration document records component qualification;
+full workbench integration, durable text history, external mirrors and multi-client load
+qualification remain open. The qualified preview is preserved.
+
 - [ ] Implement the approved [multi-editor collaboration amendment](docs/M98_COLLABORATION.md):
   reusable Rust authority/shared text, explicit Apply, semantic rebasing and per-user Undo,
   durable recovery, local authoring prediction and opt-in workbench collaboration.
