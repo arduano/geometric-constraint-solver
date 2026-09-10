@@ -128,3 +128,48 @@ test("binary text handshake survives durable source staging and invalidates dele
     host.forgetPeer("alice");client.forgetPeer("server");
   }finally{host.dispose();client.dispose();}
 });
+
+test("known unpersisted source staging can abort but uncertain storage still requires recovery",async()=>{
+  const host=await open();
+  try{
+    const before=host.checkpoint(),head=host.snapshot().working.revision;
+    const edits=[{kind:"splice",path:"main.ts",start_utf16:14,delete_utf16:2,insert:"14"}];
+    const first=host.stageHostEdits(edits,head);
+    host.discardUnpersistedStage(first);
+    assert.equal(host.checkpoint(),before);assert.equal(host.snapshot().needsRecovery,false);
+    const second=host.stageHostEdits(edits,head);
+    assert.notEqual(second.stageId,first.stageId);
+    assert.throws(()=>host.commitStage(first),/stale/);
+    host.failStage(second);
+    assert.equal(host.snapshot().needsRecovery,true);
+    assert.throws(()=>host.discardUnpersistedStage(second),/stale/);
+  }finally{host.dispose();}
+});
+
+test("committed incremental text preserves local pending edits and excludes unpersisted server changes",async()=>{
+  const host=await open();
+  const alice=await createSharedText({actor:actor("alice"),checkpoint:host.textCheckpoint()});
+  const bob=await createSharedText({actor:actor("bob"),checkpoint:host.textCheckpoint()});
+  try{
+    const basis=alice.capture().revision;
+    alice.edit([{kind:"splice",path:"main.ts",start_utf16:14,delete_utf16:2,insert:"16"}]);
+    bob.edit([{kind:"splice",path:"helper.ts",start_utf16:0,delete_utf16:0,insert:"// pending bob 😀\n"}]);
+    const staged=host.stageTextChanges(alice.changesSince(basis),actor("alice"));
+    assert.deepEqual(host.textChangesSince(basis).changes,[]);
+    host.commitStage(staged);
+    const delta=host.textChangesSince(basis);
+    assert.equal(delta.sourceSequence,1);assert.equal(delta.changes.length,1);
+    bob.applyServerChanges(delta.changes.map(bytes=>Uint8Array.from(bytes)));
+    assert.equal(bob.capture().files["main.ts"],"const width = 16;\n");
+    assert.match(bob.capture().files["helper.ts"],/^\/\/ pending bob 😀/u);
+    const write=host.stageTextChanges(bob.changesSince(delta.workingRevision),actor("bob"));
+    host.commitStage(write);
+    const final=host.textChangesSince(delta.workingRevision);
+    alice.applyServerChanges(final.changes.map(bytes=>Uint8Array.from(bytes)));
+    assert.deepEqual(alice.capture(),host.snapshot().working);
+    assert.throws(()=>host.textChangesSince({heads:["0".repeat(64)]}),/revision|heads/u);
+    bob.undo();
+    assert.equal(bob.capture().files["main.ts"],"const width = 16;\n");
+    assert.equal(bob.capture().files["helper.ts"],files["helper.ts"]);
+  }finally{host.dispose();alice.dispose();bob.dispose();}
+});

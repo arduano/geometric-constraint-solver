@@ -55,6 +55,7 @@ export interface SourceNativeHandle {
   snapshot():string;
   checkpoint():string;
   textCheckpoint():Uint8Array;
+  textChangesSince(revisionJson:string):string;
   generateSyncMessage(peer:string):Uint8Array|undefined;
   forgetPeer(peer:string):void;
   stageTextSync(peer:string,message:Uint8Array,actor:Uint8Array):string;
@@ -69,6 +70,7 @@ export interface SourceNativeHandle {
   stageValidatedPublication(ticket:string,acceptedInput:string,workingJson:string,reconciliationsJson:string):string;
   commitStage(id:string):string;
   failStage(id:string):void;
+  discardUnpersistedStage(id:string):void;
   free():void;
 }
 export interface SourceWasmModule {
@@ -95,6 +97,10 @@ export class TrustedSourceHost {
   snapshot():SourceSnapshot {this.live();return decode(this.native.snapshot());}
   checkpoint():string {this.live();return this.native.checkpoint();}
   textCheckpoint():Uint8Array {this.live();return this.native.textCheckpoint();}
+  /** Read committed deltas without retaining per-client server handshakes. */
+  textChangesSince(revision:TextRevision):{readonly sourceSequence:number;readonly workingRevision:TextRevision;readonly changes:readonly (readonly number[])[]} {
+    this.live();return decode(this.native.textChangesSince(encode(revision)));
+  }
   generateSyncMessage(peer:string):Uint8Array|undefined {this.live();unicode(peer);return this.native.generateSyncMessage(peer);}
   forgetPeer(peer:string):void {this.live();unicode(peer);this.native.forgetPeer(peer);}
   /** Host must bind actor to authenticated editor session before calling. */
@@ -141,6 +147,8 @@ export class TrustedSourceHost {
     return snapshot;
   }
   failStage(stage:SourceStage):void {this.stageOwned(stage);this.native.failStage(stage.stageId);this.pending=undefined;this.captures.clear();this.prepared.clear();}
+  /** Only before any filesystem append starts; uncertain writes require failStage. */
+  discardUnpersistedStage(stage:SourceStage):void {this.stageOwned(stage);this.native.discardUnpersistedStage(stage.stageId);this.pending=undefined;}
   async receiveText(peer:string,message:Uint8Array,actor:Uint8Array,persist:PersistSourceStage):Promise<SourceSnapshot> {return this.persist(this.stageTextSync(peer,message,actor),persist);}
   async receiveTextChanges(changes:readonly Uint8Array[],actor:Uint8Array,persist:PersistSourceStage):Promise<SourceSnapshot> {return this.persist(this.stageTextChanges(changes,actor),persist);}
   async editWorking(edits:readonly TextEdit[],expected:TextRevision,persist:PersistSourceStage):Promise<SourceSnapshot> {return this.persist(this.stageHostEdits(edits,expected),persist);}

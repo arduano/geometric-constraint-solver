@@ -261,3 +261,36 @@ fn restore_authenticates_inner_epoch_and_source_model_sequence_relationship() {
         TrustedSourceHost::restore(&config("new"), b"new", &invalid_epoch.to_string()).is_err()
     );
 }
+
+#[test]
+fn known_unpersisted_source_stage_discards_without_poison_and_old_stage_cannot_reappear() {
+    let mut state = host();
+    let before = state.checkpoint().unwrap();
+    let revision = snapshot(&state)["working"]["revision"].to_string();
+    let edits =
+        json!([{"kind":"splice","path":"main.ts","start_utf16":14,"delete_utf16":2,"insert":"14"}])
+            .to_string();
+    let first = decode(&state.stage_host_edits(&revision, &edits).unwrap());
+    state
+        .discard_unpersisted_stage(first["stageId"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(state.checkpoint().unwrap(), before);
+    assert_eq!(snapshot(&state)["needsRecovery"], false);
+    let second = decode(&state.stage_host_edits(&revision, &edits).unwrap());
+    assert_ne!(first["stageId"], second["stageId"]);
+    assert!(
+        state
+            .commit_stage(first["stageId"].as_str().unwrap())
+            .is_err()
+    );
+    state
+        .fail_stage(second["stageId"].as_str().unwrap())
+        .unwrap();
+    assert!(
+        state
+            .discard_unpersisted_stage(second["stageId"].as_str().unwrap())
+            .is_err()
+    );
+    assert_eq!(snapshot(&state)["needsRecovery"], true);
+    assert_eq!(state.checkpoint().unwrap(), before);
+}

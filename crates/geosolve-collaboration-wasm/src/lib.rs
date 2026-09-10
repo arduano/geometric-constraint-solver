@@ -165,6 +165,20 @@ impl SharedTextReplica {
         )
     }
 
+    /// Client-only import from an authenticated server. All authors in these
+    /// bytes were already admitted by the authority; server ingress must use
+    /// `apply_changes_from` instead. Local pending edits and Undo are retained.
+    ///
+    /// # Errors
+    /// Rejects invalid history, missing dependencies and resource bounds atomically.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = applyServerChanges))]
+    pub fn apply_server_changes(&mut self, changes_json: &str) -> Result<String, String> {
+        self.document
+            .apply_changes(&parse::<Vec<Vec<u8>>>(changes_json)?)
+            .map_err(error)?;
+        self.capture()
+    }
+
     /// Imports session-owned native change bytes.
     ///
     /// # Errors

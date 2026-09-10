@@ -170,7 +170,10 @@ export async function openDurableCollaborationHost(folder, {
           return await enqueue(async () => {
             let publication;
             try { publication = await finish(); }
-            catch (error) { publication = { completion: { status: "rejected", code: "reconciliation_rejected", message: String(error).slice(0, 1024) } }; }
+            catch (error) {
+              if (error.recoveryRequired) { poisoned = true; throw error; }
+              publication = { completion: { status: "rejected", code: "reconciliation_rejected", message: String(error).slice(0, 1024) } };
+            }
             const accepted = publication?.completion?.status === "accepted";
             let checkpoints;
             try { checkpoints = accepted ? checkpointBytes(publication.checkpoints) : {}; }

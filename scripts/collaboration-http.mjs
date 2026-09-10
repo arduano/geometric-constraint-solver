@@ -32,7 +32,7 @@ function sendJson(response, status, value) {
  * domain adapters. A network body can never call completion/install/rebuild.
  * Canvas camera/picking/selection stay local; no navigation route exists here.
  */
-export function createCollaborationHttpServer({ host, invitations, execute, captureApply, receiveText, documentSnapshot, scene, limits: overrides, allowedOrigins = [] }) {
+export function createCollaborationHttpServer({ host, invitations, execute, captureApply, receiveText, textDelta, documentSnapshot, scene, limits: overrides, allowedOrigins = [] }) {
   if (!host || !(invitations instanceof Map) || !invitations.size || typeof execute !== "function") throw Error("A durable host, trusted invitations and domain worker are required");
   const limits = limitsOf(overrides), origins = new Set(allowedOrigins);
   const sessions = new Map(), streams = new Set(), presence = new Map(), pendingJoins = new Set();
@@ -153,6 +153,11 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
       if (stopped) throw problem("unavailable", "Collaboration transport is stopping", 503);
       if (sessions.get(session.token) !== session) throw problem("unauthorized", "This document connection has ended", 401);
       host.resume(session.connection, host.snapshot().latestSequence);
+      if (route === "text-state") {
+        if (!textDelta) throw problem("unavailable", "Incremental shared text is not ready", 503);
+        exact(body, ["revision"]);
+        sendJson(response, 200, textDelta(session.connection, body.revision)); return;
+      }
       if (route === "commands") {
         exact(body, ["requestId", "command"]);
         const request = { connection: session.connection, requestId: body.requestId, command: body.command };
@@ -190,15 +195,17 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
     } finally { activeRequests--; }
   });
   server.requestTimeout = 30_000; server.headersTimeout = 10_000; server.keepAliveTimeout = 5_000;
+  const stop = () => { if (stopped) return; stopped = true; unsubscribe(); for (const stream of streams) stream.close(); };
   return { server, kick, stats: () => ({ sessions: sessions.size, pendingJoins: pendingJoins.size, streams: streams.size, presence: presence.size, activeRequests, workerBusy: processing, subscriberBytes: [...streams].reduce((sum, stream) => sum + stream.bufferedBytes(), 0) }),
+    stop,
     close() {
       if (closing) return closing;
-      stopped = true; unsubscribe(); for (const stream of streams) stream.close();
+      stop();
       closing = (async () => {
         await new Promise((resolve, reject) => { server.close((error) => error && error.code !== "ERR_SERVER_NOT_RUNNING" ? reject(error) : resolve()); server.closeIdleConnections(); });
         // The caller may keep the host alive or attach a new transport. Release
         // native sessions after in-flight joins/leaves finish, preserving its cap.
-        try { for (const session of sessions.values()) await host.disconnect(session.connection); }
+        try { for (const session of sessions.values()) if (!host.snapshot().needsRecovery) await host.disconnect(session.connection); }
         finally { sessions.clear(); presence.clear(); cachedScene = undefined; }
       })();
       return closing;

@@ -32,6 +32,7 @@ export interface CollaborationNativeHandle {
   receiveSyncMessageFrom(peer: string, bytes: Uint8Array, actor: Uint8Array): string;
   forgetPeer(peer: string): void;
   changesSince(revisionJson: string): string;
+  applyServerChanges(changesJson: string): string;
   applyChangesFrom(changesJson: string, actor: Uint8Array): string;
   cursor(path: string, utf16: number, after: boolean): string;
   resolveCursor(cursorJson: string): string;
@@ -92,6 +93,11 @@ export class SharedText {
   applyChangesFrom(changes: readonly Uint8Array[], actor: Uint8Array): TextSnapshot {
     this.live(); checkActor(actor);
     return decode(this.native.applyChangesFrom(encode(changes.map((bytes) => Array.from(bytes))), actor));
+  }
+  /** Client-only receive from authenticated authority. Server ingress must use
+   * applyChangesFrom to authenticate each novel writer. Preserves local edits. */
+  applyServerChanges(changes: readonly Uint8Array[]): TextSnapshot {
+    this.live(); return decode(this.native.applyServerChanges(encode(changes.map((bytes) => Array.from(bytes)))));
   }
   /** Bias controls surviving-neighbor fallback after deletion, not insertion affinity. */
   cursor(path: string, utf16: number, deletionBias: "before" | "after" = "after"): TextCursor {

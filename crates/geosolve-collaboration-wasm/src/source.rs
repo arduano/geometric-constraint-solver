@@ -168,6 +168,24 @@ impl TrustedSourceHost {
     pub fn text_checkpoint(&self) -> Vec<u8> {
         self.document.working().save()
     }
+    /// Stateless committed text delta. The frontier must be one previously
+    /// received from the server, excluding any unacknowledged local changes.
+    ///
+    /// # Errors
+    /// Rejects unknown heads, malformed input and bounded output overflow.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = textChangesSince))]
+    pub fn text_changes_since(&self, revision_json: &str) -> Result<String, String> {
+        let changes = self
+            .document
+            .working()
+            .changes_since(&parse(revision_json)?)
+            .map_err(error)?;
+        json(&serde_json::json!({
+            "sourceSequence": self.sequence,
+            "workingRevision": self.document.working().revision(),
+            "changes": changes,
+        }))
+    }
     /// Disposable handshake generation uses committed text only.
     ///
     /// # Errors
@@ -419,6 +437,22 @@ impl TrustedSourceHost {
         self.prepared.clear();
         Ok(())
     }
+
+    /// Discard only a known unpersisted candidate when another participant in
+    /// the host transaction rejects preparation. Once an append has started,
+    /// the host must use `fail_stage` and recover from durable storage instead.
+    ///
+    /// # Errors
+    /// Rejects wrong/reused stage IDs and poisoned hosts without changing state.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = discardUnpersistedStage))]
+    pub fn discard_unpersisted_stage(&mut self, stage_id: &str) -> Result<(), String> {
+        self.healthy()?;
+        if self.pending.as_ref().is_none_or(|item| item.id != stage_id) {
+            return Err("unknown source stage".into());
+        }
+        self.pending = None;
+        Ok(())
+    }
 }
 impl TrustedSourceHost {
     fn from_document(
@@ -549,12 +583,7 @@ impl TrustedSourceHost {
             .filter(|n| *n <= MAX_REVISION)
             .ok_or("source sequence exhausted")?;
         let checkpoint = self.envelope(&candidate, sequence)?;
-        let id = format!(
-            "{}:{}:{}",
-            self.server_epoch,
-            self.instance,
-            source_digest(&checkpoint)
-        );
+        let id = format!("{}:{}", self.handle("stage")?, source_digest(&checkpoint));
         let response = json(
             &serde_json::json!({"status":"staged","stageId":id,"sequence":sequence,"checkpointJson":checkpoint,"accepted":candidate.accepted(),"workingRevision":candidate.working().revision()}),
         )?;
