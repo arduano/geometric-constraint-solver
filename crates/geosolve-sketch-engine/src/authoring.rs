@@ -7,11 +7,11 @@
 //! compilation and publication; they do not grant client or per-user publication authority.
 
 use geosolve_sketch_code::{
-    CodeInteractionOverlay, CompiledManagedSource, ManagedMutationAuthority, ManagedSketchMutation,
-    ManagedValue, PreparedManagedMutationReceipt, PreparedManagedMutationRequest,
-    PreparedManagedSourceRequest, ProjectKey, SemanticOutputPath, SemanticSymbol,
-    derive_managed_value_mutation, prepare_managed_mutation, prepare_managed_source,
-    validate_prepared_managed_mutation, validate_prepared_managed_source,
+    CodeInteractionOverlay, CompiledManagedSource, ManagedMutationAuthority, ManagedPresentation,
+    ManagedSketchMutation, ManagedStatement, ManagedValue, PreparedManagedMutationReceipt,
+    PreparedManagedMutationRequest, PreparedManagedSourceRequest, ProjectKey, SemanticOutputPath,
+    SemanticSymbol, derive_managed_value_mutation, prepare_managed_mutation,
+    prepare_managed_source, validate_prepared_managed_mutation, validate_prepared_managed_source,
 };
 use serde::{Deserialize, Serialize};
 
@@ -146,6 +146,81 @@ impl EditableSession {
             )
             .map_err(error)?,
         })
+    }
+
+    /// Derives parameter identity from the current accepted source namespace.
+    /// The host authenticates the source owner's durable generation before calling;
+    /// browser-proposed names never participate in this allocation.
+    ///
+    /// # Errors
+    /// Rejects unavailable/nonliteral source values, invalid presentation or exhausted names.
+    pub fn prepare_parameter_extraction(
+        &self,
+        declaration: SemanticSymbol,
+        path: SemanticOutputPath,
+        presentation: ManagedPresentation,
+    ) -> Result<PreparedAuthoringMutation, EngineError> {
+        let (authority, compiled) = self.managed_authority()?;
+        let mut occupied = std::collections::BTreeSet::new();
+        let mut symbols = std::collections::BTreeSet::new();
+        let mut binding = None;
+        for import in &compiled.ir.imports {
+            occupied.extend(import.bindings.iter().map(String::as_str));
+        }
+        for statement in &compiled.ir.statements {
+            match statement {
+                ManagedStatement::Declaration {
+                    variable, symbol, ..
+                } => {
+                    occupied.extend([variable.as_str(), symbol.as_str()]);
+                    symbols.insert(symbol.as_str());
+                }
+                ManagedStatement::Binding {
+                    variable,
+                    parameter,
+                    ..
+                } => {
+                    occupied.insert(variable.as_str());
+                    if let Some(parameter) = parameter {
+                        occupied.insert(parameter.symbol.as_str());
+                        symbols.insert(parameter.symbol.as_str());
+                    } else if variable == &declaration.0 && path.0.is_empty() {
+                        binding = Some(variable.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut high_water = authority.declaration_name_high_water;
+        // Promoting a whole scalar binding keeps its existing source identity when
+        // possible. New inline bindings reserve a never-decreasing namespace slot.
+        let symbol = if let Some(variable) = binding
+            .as_ref()
+            .filter(|name| !symbols.contains(name.as_str()))
+        {
+            variable.clone()
+        } else {
+            loop {
+                high_water = high_water
+                    .checked_add(1)
+                    .filter(|value| *value <= geosolve_sketch_code::MAX_CODE_SESSION_WIRE_INTEGER)
+                    .ok_or_else(|| error("managed parameter-name allocator is exhausted"))?;
+                let candidate = format!("parameter{high_water}");
+                if !occupied.contains(candidate.as_str()) {
+                    break candidate;
+                }
+            }
+        };
+        self.prepare_managed_mutation(
+            ManagedSketchMutation::ExtractParameter {
+                declaration: declaration.0,
+                path: path.0,
+                variable: binding.unwrap_or_else(|| symbol.clone()),
+                symbol,
+                presentation,
+            },
+            high_water,
+        )
     }
 
     /// Authenticates the live accepted input and compiler receipt, then publishes atomically

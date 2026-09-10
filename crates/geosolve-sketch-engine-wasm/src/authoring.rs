@@ -5,7 +5,8 @@
 
 use crate::{EngineAdapter, decode_session_request};
 use geosolve_sketch_code::{
-    CodeSessionIdentity, ManagedSketchMutation, PreparedManagedMutationReceipt,
+    CodeSessionIdentity, ManagedPresentation, ManagedSketchMutation,
+    PreparedManagedMutationReceipt, SemanticOutputPath, SemanticSymbol,
 };
 use geosolve_sketch_engine::{
     AuthoringValueWrite, PreparedAuthoringMutation, PreparedAuthoringSource,
@@ -25,6 +26,11 @@ enum Action {
     Mutation {
         mutation: ManagedSketchMutation,
         candidate_name_high_water: u64,
+    },
+    ExtractParameter {
+        declaration: SemanticSymbol,
+        path: SemanticOutputPath,
+        presentation: ManagedPresentation,
     },
     Source {
         source: String,
@@ -86,6 +92,15 @@ impl EngineAdapter {
             } => Prepared::Mutation(
                 session
                     .prepare_managed_mutation(mutation, candidate_name_high_water)
+                    .map_err(|e| e.to_string())?,
+            ),
+            Action::ExtractParameter {
+                declaration,
+                path,
+                presentation,
+            } => Prepared::Mutation(
+                session
+                    .prepare_parameter_extraction(declaration, path, presentation)
                     .map_err(|e| e.to_string())?,
             ),
             Action::Source { source } => Prepared::Source(

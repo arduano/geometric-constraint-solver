@@ -12,6 +12,7 @@ export interface AuthoringValueWrite {
 export type AuthoringAction =
   | { readonly kind: "values"; readonly writes: readonly AuthoringValueWrite[] }
   | { readonly kind: "mutation"; readonly mutation: unknown; readonly candidate_name_high_water: number }
+  | { readonly kind: "extract_parameter"; readonly declaration: string; readonly path: readonly SemanticPathSegment[]; readonly presentation: { readonly label?: string; readonly description?: string; readonly isKeyParameter?: boolean } }
   | { readonly kind: "source"; readonly source: string };
 export interface PreparedAuthoring {
   readonly ticket: string;

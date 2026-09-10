@@ -1486,8 +1486,11 @@ fn validate_high_water(
                 ));
             }
         }
+        // Standalone extraction historically supplies exact names without
+        // consuming a namespace slot. Server allocation may advance the same
+        // persistent high-water mark; the authenticated ticket binds that value.
+        ManagedSketchMutation::ExtractParameter { .. } => {}
         ManagedSketchMutation::SetMetadata { .. }
-        | ManagedSketchMutation::ExtractParameter { .. }
         | ManagedSketchMutation::ReorderDeclaration { .. }
         | ManagedSketchMutation::SetSuppressed { .. }
         | ManagedSketchMutation::SetValue { .. }

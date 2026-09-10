@@ -72,6 +72,70 @@ fn scalar(result: &EngineAcceptedResult, id: DesignScalarId) -> f64 {
 }
 
 #[test]
+fn parameter_extraction_uses_current_persistent_namespace_without_publication() {
+    let mut current =
+        CodeProject::managed(ProjectKey("parameter-extraction".into()), compiled(2)).unwrap();
+    current.managed.declaration_name_high_water = 7;
+    let session = EditableSession::open(&current.to_canonical_json().unwrap(), None).unwrap();
+    let before = session.state();
+    let prepared = session
+        .prepare_parameter_extraction(
+            SemanticSymbol("bore".into()),
+            SemanticOutputPath(vec![ManagedPathSegment::Field("radius".into())]),
+            geosolve_sketch_code::ManagedPresentation {
+                label: Some("Bore radius".into()),
+                is_key_parameter: Some(true),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        prepared
+            .request()
+            .ticket
+            .candidate_declaration_name_high_water,
+        8
+    );
+    let ManagedSketchMutation::ExtractParameter {
+        declaration,
+        path,
+        symbol,
+        variable,
+        presentation,
+    } = &prepared.request().ticket.mutation
+    else {
+        panic!("native extraction")
+    };
+    assert_eq!(declaration, "bore");
+    assert_eq!(path, &[ManagedPathSegment::Field("radius".into())]);
+    assert_eq!(symbol, "parameter8");
+    assert_eq!(variable, symbol);
+    assert_eq!(presentation.label.as_deref(), Some("Bore radius"));
+    assert_eq!(presentation.is_key_parameter, Some(true));
+    assert_eq!(session.state(), before);
+    assert!(
+        session
+            .prepare_parameter_extraction(
+                SemanticSymbol("missing".into()),
+                SemanticOutputPath::default(),
+                geosolve_sketch_code::ManagedPresentation::default()
+            )
+            .is_err()
+    );
+    assert!(
+        session
+            .prepare_parameter_extraction(
+                SemanticSymbol("bore".into()),
+                SemanticOutputPath(vec![ManagedPathSegment::Field("center".into())]),
+                geosolve_sketch_code::ManagedPresentation::default()
+            )
+            .is_err()
+    );
+    assert_eq!(session.state(), before);
+    assert_eq!(radius(session.accepted().result()), 2.0);
+}
+
+#[test]
 fn managed_receipts_publish_atomically_and_reject_replay_forgery_and_semantic_mismatch() {
     let mut session = EditableSession::open(&project(2), None).unwrap();
     let initial = session.state();
