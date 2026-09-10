@@ -1938,26 +1938,37 @@ impl WorkbenchBridge {
         }
     }
 
+    fn suppression_source_mutation(
+        &self,
+        id: &str,
+        suppressed: bool,
+    ) -> Result<ManagedSketchMutation, String> {
+        if let Some(DeclarationRowTarget::Managed {
+            closure_role: ManagedDeclarationClosureRole::Helper { root },
+            ..
+        }) = self.declaration_row_target(id)
+        {
+            return Err(format!(
+                "Profile Offset helper declarations cannot be suppressed independently of `{}`",
+                root.0
+            ));
+        }
+        Ok(ManagedSketchMutation::SetSuppressed {
+            target: self.managed_row_target(id)?,
+            suppressed,
+        })
+    }
+
     fn set_declaration_suppressed(&mut self, id: &str, suppressed: bool) -> Result<(), String> {
         if self.code_project.is_some() {
-            if let Some(DeclarationRowTarget::Managed {
-                closure_role: ManagedDeclarationClosureRole::Helper { root },
-                ..
-            }) = self.declaration_row_target(id)
-            {
-                return Err(format!(
-                    "Profile Offset helper declarations cannot be suppressed independently of `{}`",
-                    root.0
-                ));
-            }
-            let target = self.managed_row_target(id)?;
+            let mutation = self.suppression_source_mutation(id, suppressed)?;
             return self.begin_structured_managed_mutation(
                 if suppressed {
                     "Suppress declaration"
                 } else {
                     "Restore declaration"
                 },
-                ManagedSketchMutation::SetSuppressed { target, suppressed },
+                mutation,
             );
         }
         match self.declaration_row_target(id) {
@@ -3732,8 +3743,19 @@ impl WorkbenchBridge {
         let rows = self.explorer_snapshot();
         let mut hidden_rows = Vec::new();
         collect_effectively_hidden_leaves(&rows, &mut hidden_rows);
+        self.explorer_scene_items(scene, hidden_rows)
+            .into_values()
+            .flatten()
+            .collect()
+    }
+
+    fn explorer_scene_items(
+        &self,
+        scene: &EditorScene,
+        rows: impl IntoIterator<Item = String>,
+    ) -> std::collections::BTreeMap<String, Vec<SelectionItem>> {
         let Some(materialization) = self.editor().coordinator().accepted_materialization() else {
-            return Vec::new();
+            return std::collections::BTreeMap::new();
         };
         // Resolve one accepted declaration projection for the entire visibility
         // batch. Rebuilding the panel for every hidden generated row turns dense
@@ -3751,8 +3773,8 @@ impl WorkbenchBridge {
                 .map(|declaration| (intent_panel_row_id(&declaration.symbol), declaration.node))
                 .collect::<std::collections::BTreeMap<_, _>>()
         });
-        let mut nodes = std::collections::BTreeSet::new();
-        for id in hidden_rows {
+        let mut nodes = std::collections::BTreeMap::new();
+        for id in rows {
             let target = managed.as_ref().map_or_else(
                 || {
                     ordinary
@@ -3772,12 +3794,13 @@ impl WorkbenchBridge {
                 None => None,
             };
             if let Some(node) = node {
-                nodes.insert(node);
+                nodes.insert(id, node);
             }
         }
 
-        let mut hidden = std::collections::BTreeSet::new();
-        for node in nodes {
+        let mut result = std::collections::BTreeMap::new();
+        for (id, node) in nodes {
+            let mut hidden = std::collections::BTreeSet::new();
             let Some(owner) = materialization.ownership.node(node) else {
                 continue;
             };
@@ -3826,8 +3849,9 @@ impl WorkbenchBridge {
                     | geosolve_constraint_editor::IntentNativeBinding::Logical(_) => {}
                 }
             }
+            result.insert(id, hidden.into_iter().collect());
         }
-        hidden.into_iter().collect()
+        result
     }
 
     fn snapshot(&mut self) -> Result<BridgeSnapshot, String> {

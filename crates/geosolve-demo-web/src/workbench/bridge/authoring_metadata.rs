@@ -292,7 +292,9 @@ impl WorkbenchBridge {
         payload: serde_json::Value,
     ) -> Result<(), String> {
         if command == "authoring.parameter.extract" {
-            return self.extract_authoring_parameter(decode_payload(payload)?);
+            let mutation = self.extraction_source_mutation(payload)?;
+            return self
+                .begin_selected_structured_managed_mutation("Make named parameter", mutation);
         }
         let mutation = self.metadata_source_mutation(payload)?;
         self.begin_selected_structured_managed_mutation("Edit source properties", mutation)
@@ -348,7 +350,11 @@ impl WorkbenchBridge {
         })
     }
 
-    fn extract_authoring_parameter(&mut self, request: ExtractRequest) -> Result<(), String> {
+    pub(super) fn extraction_source_mutation(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<ManagedSketchMutation, String> {
+        let request: ExtractRequest = decode_payload(payload)?;
         self.validate_metadata_authority(&request.authority)?;
         let code = self.code_project.as_ref().unwrap();
         let manifest = code.managed_controls_cached()?;
@@ -420,13 +426,12 @@ impl WorkbenchBridge {
             is_key_parameter: request.is_key_parameter,
             is_key_constraint: None,
         };
-        let mutation = ManagedSketchMutation::ExtractParameter {
+        Ok(ManagedSketchMutation::ExtractParameter {
             declaration: control.source.declaration.0.clone(),
             path: control.source.path.0.clone(),
             variable: symbol.clone(),
             symbol,
             presentation,
-        };
-        self.begin_selected_structured_managed_mutation("Make named parameter", mutation)
+        })
     }
 }

@@ -11,6 +11,10 @@ use geosolve_constraint_editor::{
 use std::collections::BTreeMap;
 
 mod presence;
+mod visibility;
+#[cfg(test)]
+mod visibility_tests;
+use visibility::{VisibilitySeed, VisibilityState};
 
 const FORMAT: &str = "geosolve-local-interaction-v1";
 
@@ -37,6 +41,10 @@ struct InteractionSeed {
     grid_visible: bool,
     policy: GeometryInteractionPolicy,
     dimensions: LocalDimensionSeed,
+    #[serde(default)]
+    visibility_seed: VisibilitySeed,
+    #[serde(default)]
+    visibility: VisibilityState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -57,6 +65,8 @@ struct InteractionState {
     dimension_mode: String,
     dimension_pins: Vec<String>,
     dimension_focus: Option<String>,
+    #[serde(default)]
+    visibility: VisibilityState,
 }
 
 #[derive(Serialize)]
@@ -114,6 +124,22 @@ impl WorkbenchBridge {
             .retained_scene
             .as_ref()
             .ok_or("No accepted interaction scene")?;
+        // Retain the unhidden accepted geometry so a tab can restore personal
+        // visibility without a server round trip or reconstructing the model.
+        let full_scene;
+        let scene = if self.explorer_visibility.hidden_rows.is_empty() {
+            scene
+        } else {
+            full_scene = self
+                .authority
+                .scene_presentation(
+                    self.camera.viewport(),
+                    super::super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+                )
+                .scene
+                .ok_or("No complete accepted visibility scene")?;
+            &full_scene
+        };
         let seed = InteractionSeed {
             format: FORMAT.into(),
             scene_key: self.local_scene_key(),
@@ -137,6 +163,8 @@ impl WorkbenchBridge {
             grid_visible: self.grid_visible,
             policy: self.editor().editor().geometry_interaction_policy(),
             dimensions: self.local_dimension_seed(),
+            visibility_seed: VisibilitySeed::new(self, scene),
+            visibility: self.local_visibility_state(),
             bindings: self.editor().presentation_bindings(),
             point_targets: self
                 .code_project
@@ -166,6 +194,11 @@ impl WorkbenchBridge {
         if self.pending_managed_mutation.is_some()
             || self.captured_pointer.is_some()
             || self.editor().editor().active_pointer_gesture().is_some()
+            || self
+                .editor()
+                .editor()
+                .geometry_draft_status()
+                .is_some_and(|draft| draft.completed_stages > 0)
         {
             return Err("Finish the active edit before applying local presentation".into());
         }
@@ -180,6 +213,9 @@ impl WorkbenchBridge {
             || state.dimension_pins.len() > DimensionPresentationState::MAX_PINS
         {
             return Err("Local selection or pins exceed their bound".into());
+        }
+        if state.visibility != self.local_visibility_state() {
+            self.validate_local_visibility(&state.visibility)?;
         }
         self.validate_local_dimension_pins(&state.dimension_pins)?;
         if let Some(focus) = &state.dimension_focus {
@@ -203,6 +239,7 @@ impl WorkbenchBridge {
         self.host_size = state.viewport.screen_size;
         self.host_size_received = true;
         self.grid_visible = state.grid_visible;
+        self.apply_local_visibility(&state.visibility);
         self.apply_local_dimension_preferences(
             mode,
             &state.dimension_pins,
@@ -349,7 +386,10 @@ impl BrowsingPresentation {
             .as_deref()
             .map(|id| self.native_dimension_id(id))
             .transpose()?;
-        self.bridge.apply_interaction_state(state)
+        self.bridge.apply_interaction_state(state)?;
+        self.bridge.refresh_current_scene();
+        self.native_key = self.bridge.local_scene_key();
+        Ok(())
     }
     fn native_dimension_id(&self, source: &str) -> Result<String, String> {
         self.dimension_ids
@@ -369,6 +409,8 @@ impl BrowsingPresentation {
             "authoringDocument":snapshot.authoring_document,"selection":snapshot.selection,
             "parameters":snapshot.parameters,"problems":snapshot.problems,
             "selectedGeometryRole":snapshot.presentation.selected_geometry_role,
+            "constructionVisible":snapshot.presentation.construction_visible,
+            "visibilityRestoreAvailable":snapshot.presentation.visibility_restore_available,
         }))
     }
     pub(crate) fn navigate_json(&mut self, encoded: &str) -> Result<String, String> {
@@ -446,9 +488,19 @@ impl BrowsingPresentation {
             "authoring.metadata.set" => {
                 Some(self.bridge.metadata_source_mutation(request.payload)?)
             }
+            "authoring.parameter.extract" => {
+                Some(self.bridge.extraction_source_mutation(request.payload)?)
+            }
             "declaration.move" => self
                 .bridge
                 .declaration_move_mutation(&decode_payload(request.payload)?)?,
+            "declaration.suppression.set" => {
+                let payload: DeclarationSuppressionPayload = decode_payload(request.payload)?;
+                Some(
+                    self.bridge
+                        .suppression_source_mutation(&payload.id, payload.suppressed)?,
+                )
+            }
             "declaration.delete" => {
                 let payload: SelectionPayload = decode_payload(request.payload)?;
                 if let Some(DeclarationRowTarget::Managed {
@@ -800,8 +852,7 @@ pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
         local.scene.presentation_document().id(),
         scene.presentation_document().id(),
     )?;
-    mapping.dimensions(&mut local.dimensions)?;
-    local.scene = scene;
+    local.replace_prediction_scene(scene, &state.visibility, &mapping)?;
     local.camera = camera(state.viewport)?;
     local.grid_visible = state.grid_visible;
     local
@@ -871,6 +922,9 @@ pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
 pub(crate) struct LocalInteraction {
     scene_key: String,
     scene: EditorScene,
+    full_scene: EditorScene,
+    visibility_seed: VisibilitySeed,
+    visibility: VisibilityState,
     title: String,
     editor: ConstraintEditor,
     camera: super::super::scene::CanvasCamera,
@@ -897,8 +951,10 @@ impl LocalInteraction {
         {
             return Err("Local presentation bindings belong to another scene".into());
         }
+        seed.visibility_seed.validate(&seed.visibility)?;
         let mut editor = ConstraintEditor::default();
         editor.set_geometry_interaction_policy(seed.policy);
+        seed.visibility.apply_policy(&mut editor);
         editor
             .restore_selection_presentation(
                 &scene,
@@ -909,9 +965,17 @@ impl LocalInteraction {
             )
             .map_err(|e| e.to_string())?;
         let camera = camera(scene.viewport)?;
+        let full_scene = scene.clone();
+        let mut scene = scene;
+        scene
+            .hide_items(seed.visibility_seed.hidden_items(&seed.visibility))
+            .map_err(|e| e.to_string())?;
         Ok(Self {
             scene_key: seed.scene_key,
             scene,
+            full_scene,
+            visibility_seed: seed.visibility_seed,
+            visibility: seed.visibility,
             title: seed.title,
             editor,
             camera,
@@ -933,6 +997,7 @@ impl LocalInteraction {
             selection: self.editor.selection().to_vec(),
             curve_picks: self.editor.selection_presentation_state().curve_picks,
             grid_visible: self.grid_visible,
+            visibility: self.visibility.clone(),
             dimension_mode: mode_name(self.dimensions.state.mode).into(),
             dimension_focus: self
                 .dimensions
@@ -1026,6 +1091,30 @@ impl LocalInteraction {
         })
         .map_err(|e| e.to_string())
     }
+    fn replace_prediction_scene(
+        &mut self,
+        scene: EditorScene,
+        state: &VisibilityState,
+        mapping: &PresentationMapping,
+    ) -> Result<(), String> {
+        mapping.dimensions(&mut self.dimensions)?;
+        self.scene = scene;
+        self.visibility_seed
+            .mask_prediction(&mut self.scene, state, mapping)?;
+        state.apply_policy(&mut self.editor);
+        Ok(())
+    }
+    fn apply_visibility(&mut self) -> Result<(), String> {
+        self.visibility_seed.validate(&self.visibility)?;
+        let mut scene = self.full_scene.clone();
+        scene
+            .hide_items(self.visibility_seed.hidden_items(&self.visibility))
+            .map_err(|e| e.to_string())?;
+        self.visibility.apply_policy(&mut self.editor);
+        self.scene = scene;
+        self.dimension_hover = None;
+        Ok(())
+    }
     fn compose_frame(&mut self) -> Result<FrameSnapshot, String> {
         if self.scene.viewport != self.camera.viewport() {
             self.scene
@@ -1087,6 +1176,9 @@ impl LocalInteraction {
         next.camera = self.camera;
         next.host_size_received = self.host_size_received;
         next.grid_visible = self.grid_visible;
+        next.visibility = self.visibility.clone();
+        next.visibility.reconcile(&next.visibility_seed);
+        next.apply_visibility()?;
         next.dimensions.state.mode = self.dimensions.state.mode;
         next.dimensions.state.pins = self
             .dimensions
@@ -1144,9 +1236,11 @@ impl LocalInteraction {
         }
         next.editor
             .set_geometry_interaction_policy(request.seed.policy);
+        next.visibility.apply_policy(&mut next.editor);
         // Exact server draft/inference paint may survive an unchanged local view.
         // Navigation never paints a preview in an obsolete camera coordinate space.
         let server_frame_compatible = request.seed.semantic_preview
+            && next.visibility == request.seed.visibility
             && next.scene.viewport == next.camera.viewport()
             && next.state().selection == request.seed.selection
             && next.state().curve_picks == request.seed.curve_picks;
@@ -1324,6 +1418,14 @@ impl LocalInteraction {
         let transient = request.command.starts_with("dimensions.hover")
             || request.command.starts_with("dimensions.navigation.");
         match request.command.as_str() {
+            "explorer.visibility.set"
+            | "explorer.visibility.isolate"
+            | "explorer.visibility.restore"
+            | "view.construction.toggle" => {
+                self.visibility_seed
+                    .dispatch(&mut self.visibility, &request)?;
+                self.apply_visibility()?;
+            }
             "view.fit" => {
                 self.reset_navigation();
                 self.camera.fit_scene(&self.scene);
@@ -1867,6 +1969,25 @@ mod tests {
             )
             .unwrap(),
             serde_json::json!({"mutation":"set_metadata","target":{"target":"declaration","declaration":"length"},"property":"isKeyConstraint","value":{"kind":"bool","value":true}})
+        );
+        let extraction = describe(
+            "authoring.parameter.extract",
+            serde_json::json!({"authority":authority,"id":control["id"],"label":"Named length","description":"Preserve the driving span","isKeyParameter":true}),
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(
+                &browsing.describe_json(&extraction).unwrap()
+            )
+            .unwrap(),
+            serde_json::json!({"mutation":"extract_parameter","declaration":"length","path":["value"],"symbol":"parameter1","variable":"parameter1","presentation":{"label":"Named length","description":"Preserve the driving span","isKeyParameter":true}})
+        );
+        assert!(browsing.bridge.pending_managed_mutation.is_none());
+        let mut stale_extraction: serde_json::Value = serde_json::from_str(&extraction).unwrap();
+        stale_extraction["payload"]["authority"] = serde_json::json!("older source authority");
+        assert!(
+            browsing
+                .describe_json(&stale_extraction.to_string())
+                .is_err()
         );
         let move_edit = describe(
             "declaration.move",
