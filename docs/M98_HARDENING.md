@@ -814,6 +814,18 @@ independently held authoring and server completion pass at 30–171 ms, with zer
 model/scene/preview requests. Final integrated measurements supersede these focused
 development timings.
 
+Final review reproduced the same held-navigation problem in the optional server
+prediction route: its renderer forwarded a frame but omitted the already available
+opaque native presentation. The actual browser's held server-prediction case failed
+with `wheel waited for held prediction` (`remote-before.log`). Forwarding that same
+native presentation enables the navigation worker's existing exact-view reprojection;
+it adds no server authority or solving to navigation. The held authoring/terminal
+pan, wheel and resize regression now exercises both client and server prediction.
+Nomination `20260910T224255-cf8bbde7` was deliberately interrupted after successful
+preflight and workspace preparation to include this correction. It remains incomplete
+and does not qualify a release; unchanged completed evidence is eligible only through
+the authenticated runner.
+
 ### M98-F029 — Repeated cold domain and scene reconstruction on each shared edit
 
 The same isolated browser reproduction records roughly 3.3–3.7 seconds from release

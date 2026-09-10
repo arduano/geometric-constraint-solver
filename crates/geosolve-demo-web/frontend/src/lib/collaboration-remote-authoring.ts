@@ -118,7 +118,7 @@ export class RemoteAuthoringTransport extends EventTarget implements Transport {
     else {
       if (result.kind !== "preview" || !("view" in request) || typeof result.presentation !== "string" || !/^[a-f0-9]{64}$/u.test(result.ticket)) throw Error("Unexpected authoring preview response");
       this.ticket = result.ticket; this.cached = result;
-      const preview: Omit<AuthoringPreview, "frame"> = { kind: "preview", model, view: request.view, point: result.point, construction: result.construction };
+      const preview: Omit<AuthoringPreview, "frame"> = { kind: "preview", model, view: request.view, presentation: result.presentation, point: result.point, construction: result.construction };
       this.renderer.postMessage({ id: request.id, generation, presentation: result.presentation, result: preview } satisfies RemotePaintRequest);
     }
   }

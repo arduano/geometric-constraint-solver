@@ -176,9 +176,9 @@ test("shared circle dragging paints continuously through pending acceptance and 
   }
 });
 
-test("predicted geometry pans zooms and resizes while authoring and server completion are independently held",{timeout:120_000},async t=>{
+for(const mode of ["client","server"])test(`${mode} predicted geometry pans zooms and resizes while authoring and server completion are independently held`,{timeout:120_000},async t=>{
   const terminal=deferred();let serverHeld=false;
-  const f=await fixture(t,{domainOptions:{beforeJob:async input=>{if(input.kind==="point_gesture"){serverHeld=true;await terminal.promise;}}}});
+  const f=await fixture(t,{authoringPreview:{enabled:mode==="server",preferred:mode},domainOptions:{beforeJob:async input=>{if(input.kind==="point_gesture"){serverHeld=true;await terminal.promise;}}}});
   f.cleanup.push(()=>terminal.resolve());
   const browser=await f.browser(),context=await browser.newContext({viewport:{width:1280,height:900}});
   await context.addInitScript(()=>{
@@ -187,7 +187,7 @@ test("predicted geometry pans zooms and resizes while authoring and server compl
     window.Worker=class extends NativeWorker{
       constructor(url,options){
         super(url,options);
-        if(!String(url).includes("collaboration-authoring-worker"))return;
+        if(!/collaboration-(?:authoring-worker|remote-authoring-renderer)/u.test(String(url)))return;
         this.addEventListener("message",event=>{
           if(!window.geosolveHoldAuthoring||event.data?.result?.kind!=="preview")return;
           event.stopImmediatePropagation();window.geosolveHeldAuthoring=true;
@@ -201,7 +201,7 @@ test("predicted geometry pans zooms and resizes while authoring and server compl
   const page=await context.newPage(),errors=[],requests=[],measurements=[];
   page.on("pageerror",error=>errors.push(String(error)));
   page.on("request",request=>{if(/\/api\/collaboration\/(?:commands|authoring-preview|scene)$/u.test(new URL(request.url()).pathname))requests.push(request.url());});
-  await page.goto(`${f.origin}/?collaboration=1&authoringPreview=client#invite=editor-0`);await ready(page);
+  await page.goto(`${f.origin}/?collaboration=1&authoringPreview=${mode}#invite=editor-0`);await ready(page);
   await page.getByRole("group",{name:"Workspace layout",exact:true}).getByRole("button",{name:"design",exact:true}).click();await resized(page);
   const canvas=page.locator("canvas"),box=await canvas.boundingBox();
   const location=await canvas.evaluate(canvas=>{

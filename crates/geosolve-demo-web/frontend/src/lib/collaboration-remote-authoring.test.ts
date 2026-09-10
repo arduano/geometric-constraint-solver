@@ -45,7 +45,8 @@ describe("server prediction with local presentation", () => {
     const f = await fixture();
     try {
       expect(f.rpc).not.toHaveBeenCalled();
-      await f.client.beginPoint({ target, gestureId: 7, viewport, view });
+      const first = await f.client.beginPoint({ target, gestureId: 7, viewport, view });
+      expect(first.presentation).toBe("native presentation");
       expect(f.rpc.mock.calls[0][0]).toEqual({ action: "begin", basis, kind: "point", target, gestureId: 7, viewport });
       const a = f.client.advancePoint({ sequence: 1, position: [1, 2] }, view);
       const b = f.client.advancePoint({ sequence: 2, position: [3, 4] }, view);
