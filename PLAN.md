@@ -8468,66 +8468,55 @@ merge or qualify that product.
 
 ## M98 — reliable project authoring and embeddable TypeScript engine
 
-- [x] Add focused-tested collaboration foundations: ordered durable operation ledger,
-  stable target lifetimes/deletion closures, shared Rust/Automerge source, native/WASM text
-  parity, localized managed source patches and headless authoring preparation.
-  Integration and qualification remain in the unchecked amendment below.
-
-Focused runtime checkpoint: independent compiler/solver workers, durable HTTP/SSE client,
-native shared text and personal history, immutable Apply, latest-model gesture replay,
-structural/extraction/suppression Undo, external mirrors/CLI and configurable native
-prediction are implemented. Combined actual-WASM package44, runtime/domain/HTTP63 and
-frontend8 cases pass. The coherent development-r5 artifact includes personal visibility,
-the dense-text performance repair and the toolbar compositing correction. All eight
-browser/fault/load scenarios have focused passing evidence, including four editors
-during a ten-second held solve, 32 clients and actual browser outbox recovery. GUI
-construction supports Segment, Polyline, Center-radius Circle and aligned Rectangle;
-other tools disclose their unavailable routes. Clean integrated nomination and verified
-replacement delivery remain open. The qualified preview is preserved; the amendment
-checklist records focused implementation progress.
-
-- [ ] Implement the approved [multi-editor collaboration amendment](docs/M98_COLLABORATION.md):
+- [x] Add collaboration foundations: ordered durable operation ledger, stable target
+  lifetimes/deletion closures, shared Rust/Automerge source, native/WASM text parity,
+  localized managed source patches and headless authoring preparation.
+- [x] Implement the approved [multi-editor collaboration amendment](docs/M98_COLLABORATION.md):
   reusable Rust authority/shared text, explicit Apply, semantic rebasing and per-user Undo,
   durable recovery, local authoring prediction and opt-in workbench collaboration.
-- [ ] Qualify four-browser collaboration and the eight-editor/24-viewer fault/load targets.
+- [x] Qualify four-browser collaboration and the eight-editor/24-viewer fault/load targets.
+- [x] Verify exact qualified static and collaborative replacement previews.
+- [ ] Obtain supervising-user acceptance and close M98.
+
+Status: **collaboration mechanically qualified and delivered; supervising-user acceptance
+and milestone closure remain open**. Clean source `513463f` passes **288/288
+obligations** in `20260910T204328-4a05c31a` (32 fresh, 256 authenticated reused;
+44m4.890s). [Final qualification](docs/M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records authenticated evidence and preserves all failed nomination attempts.
+
+Independent compiler/solver workers, shared raw text and personal history, immutable
+Apply, latest-model gesture replay, structural/extraction/suppression Undo, external
+mirrors/CLI and configurable native prediction are qualified. The integrated browser
+and load coverage includes four editors during a ten-second held solve, 32 clients,
+lost-ACK outbox recovery, invalid source and server restart. Browser Rust owns navigation,
+picking, selection and personal visibility; the server validates and persists edits.
+GUI construction supports Segment, Polyline, Center-radius Circle and Two-point aligned
+Rectangle, plus native point dragging; broader GUI tools disclose unavailable routes.
+
+Exact production and all four archives are frozen and installed offline. New static
+`http://100.94.63.83:18110/` and collaborative port 18111 each pass 24 exact HTTP routes
+and actual-WASM readiness. Private invitations and delivery receipts are linked in the
+final qualification report. The original
+manifold's seven authored files, 40 mm reservoir, 12 mm channels and preceding services
+remain preserved. The canvas dims after 500 ms of slow work while local navigation
+continues. No supervising-user acceptance or milestone closure is implied.
 
 - [x] Implement the authorized [local canvas boundary](docs/M98_LOCAL_CANVAS.md): local
   accepted-scene navigation/picking/selection, server sketch edits and exact reconciliation.
 - [x] Qualify stalled-server responsiveness, shared native prediction parity and replacement delivery.
-
 - [x] Reproduce M98-F016 delayed hover/zoom/click under asynchronous navigation and add
   exact scheduler regressions; preserve gesture terminals, semantic samples and wheel anchors.
 - [x] Qualify the navigation queue/transfer repair and refresh the existing previews.
   [Latency repair evidence](docs/M98_NAVIGATION_LATENCY.md).
 
-Status: **implementation and local canvas boundary mechanically qualified and delivered;
-supervising-user acceptance remains open**.
-Candidate `d5f9e40` passes 261/261 obligations in `20260910T022428-a1d7c652`
-(23 fresh, 238 authenticated reused; 31m30.382s). Browser Rust owns navigation, picking,
-selection and dimension presentation; the server retains solving, edits and persistence.
-All 17 sample-opening checks and 49 standalone workflows pass, alongside 110 folder Node
-cases and 11 folder browser workflows. Stalled-server navigation, exact native prediction,
-semantic handoff and retained local view/selection pass. Both replacement previews pass
-served-byte and actual-WASM checks with zero navigation RPCs, preserving all seven existing
-manifold files and leaving the editing lease unclaimed. Fast work does not flash; slow
-server work dims the accepted canvas after 500 ms while local browsing continues.
-M97 is accepted and merged into this worktree.
-[Approved scope and ordered checklist](docs/M98_IMPLEMENTATION_PLAN.md) owns implementation,
-hardening and qualification. The user selected complete project support,
-a headless Node/browser TS engine, editable/generator modes, optional source-declared
-inputs, Linux filesystem qualification, explicit design sidecar and one active UI editor.
-
-The recorder, dedicated native/WASM engine, editable session API, complete local loader,
-revision-checked CLI, one-editor bridge, publication journal/design sidecar and complete
-computed-profile export are implemented with focused tests. Offline archives and the
-standalone generator website pass clean-install/browser smoke checks. Transaction/worker
-hardening, navigation measurements and browser migration pass the clean integrated gate.
-[Qualification and preview](docs/M98_QUALIFICATION.md) records current source `d5f9e40`, all 261 obligations
-(23 fresh, 238 authenticated reused), and replacement verification for static
-`http://100.94.63.83:18106/` and the installed manifold folder on Tailscale port 18108.
-Final delivery evidence is `target/m98/local-canvas-preview-verification.json` and
-`target/m98/local-canvas-static-preview-verification.json`. [Implementation findings](docs/M98_HARDENING.md)
-records exact reproductions and repairs; no supervising-user acceptance or closure is implied.
+The preceding local-canvas source `d5f9e40` remains served at static
+`http://100.94.63.83:18106/` and editable-folder Tailscale port 18108, with its qualified
+261-obligation gate and byte-verified delivery preserved. M97 is accepted and merged into
+this worktree. The [approved baseline](docs/M98_IMPLEMENTATION_PLAN.md) includes complete
+projects, a headless Node/browser TypeScript engine, editable/generator modes,
+source-declared inputs, Linux filesystem qualification and an inspectable design sidecar.
+Its original single-editor bridge remains available alongside opt-in collaboration.
+[Implementation findings](docs/M98_HARDENING.md) record exact reproductions and repairs.
 
 ### Historical fast-track prototype
 

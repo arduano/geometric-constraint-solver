@@ -4,18 +4,20 @@
 
 Implementation authorized on 2026-09-09 after the prototype review. This supersedes
 its fast-track limits; original handoffs remain historical evidence. M97 is accepted
-and closed; M98 stays open until integrated qualification and supervising-user acceptance.
+and closed; M98 supervising-user acceptance and milestone closure remain open.
 
 The [approved collaboration amendment](M98_COLLABORATION.md) extends this baseline with
-concurrent editors and shared TypeScript authoring. Its ordered checklist is active; the
-single-editor implementation and qualification below remain the preserved baseline.
+concurrent editors and shared TypeScript authoring. It is mechanically qualified on
+`513463f` and delivered with exact served-byte and browser verification. The original single-editor
+implementation remains available alongside the opt-in shared host.
 
 ## Approved product
 
 - Linux local folder/CLI workflow, complete local TypeScript/patch dependency snapshots,
   source edits in both directions, structured diagnostics and revision-checked agent edits.
-- Existing workbench with one bridge owner per canonical folder and one active UI editor;
-  explicit handoff, exact pending-edit authority, recovery and capabilities before interaction.
+- Original single-editor workbench with one bridge owner per canonical folder, one active
+  UI editor and explicit handoff; opt-in collaboration extends it with concurrent invited
+  editors, shared raw TypeScript and server-ordered validated model edits.
 - Local Rust/WASM canvas navigation, picking, selection and dimension presentation over
   detached accepted scenes, with server-owned sketch edits and exact state reconciliation.
 - A headless TypeScript engine usable in Node and browsers without React/demo dependencies,
@@ -33,8 +35,9 @@ single-editor implementation and qualification below remain the preserved baseli
   personal; corruption cannot prevent valid source reconstruction.
 - Complete accepted manifold profile export, including computed walls/arcs/caps/seal; named
   output/region selection, bounded model-space sampling and independent topology validation.
-- Installable engine/authoring/CLI archives, a maintained agent CLI example, the manifold
-  folder and a custom Gridfinity-style website using only headless engine and authoring SDK.
+- Installable engine/authoring/collaboration/CLI archives, a maintained agent CLI example,
+  the manifold folder and a custom Gridfinity-style website using only the headless engine
+  and authoring SDK.
 
 ## Ordered work
 
@@ -55,13 +58,24 @@ single-editor implementation and qualification below remain the preserved baseli
 - [x] Qualify and deliver the [navigation latency repair](M98_NAVIGATION_LATENCY.md).
 - [x] Implement and qualify the [local canvas boundary](M98_LOCAL_CANVAS.md), including
   stalled-server responsiveness, shared native semantics and preserved user-folder delivery.
+- [x] Implement and qualify the [multi-editor amendment](M98_COLLABORATION.md), including
+  shared draft/accepted separation, checked personal history, durable recovery and browser/load proof.
+- [x] Verify exact qualified static and collaborative replacement previews.
 - [ ] Obtain supervising-user acceptance and close M98.
 
-Local canvas candidate `d5f9e40` passes all 261 obligations in
-`20260910T022428-a1d7c652` (23 fresh, 238 authenticated reused). Both previews serve
-verified frozen/installed artifacts; all seven original manifold files are preserved and
-the new editing lease is unclaimed. Evidence: `target/m98/local-canvas-preview-verification.json`
-and `target/m98/local-canvas-static-preview-verification.json`. Human acceptance and closure remain open.
+Collaboration candidate `513463f` passes all 288 obligations in
+`20260910T204328-4a05c31a` (32 fresh, 256 authenticated reused; 44m4.890s).
+[Final qualification](M98_QUALIFICATION.md#qualified-multi-editor-collaboration) records
+signed evidence. Exact production and four archives are frozen and installed offline;
+the new static port 18110 and collaborative port 18111 pass exact served-byte and
+browser verification.
+The original manifold's seven authored files and preceding previews remain preserved.
+Human acceptance and milestone closure remain open.
+
+The preceding local-canvas candidate `d5f9e40` passed all 261 obligations in
+`20260910T022428-a1d7c652`. Its unchanged previews remain on ports 18106/18108, with
+historical delivery evidence in `target/m98/local-canvas-preview-verification.json`
+and `target/m98/local-canvas-static-preview-verification.json`.
 
 Stages may develop independently behind their explicit APIs, with focused verification before
 integration. No new solver primitive/equation, unsafe code, FFI solver, solid kernel, enclosure
@@ -117,11 +131,11 @@ bytes; do not promise atomic CAS against uncooperative external writers holding 
 
 ## Evidence ledger
 
-[M98-F001/F002 focused hardening](M98_HARDENING.md) records the reproduced
-failures and current transport/cache/session repairs with focused owner checks. Final
-[qualification and preview](M98_QUALIFICATION.md) include the loading amendment on clean `a68fffa`
-with all 261 obligations passing; the early checkpoints below are historical and supervising-user
-acceptance remains open.
+[Focused hardening](M98_HARDENING.md) records reproductions, owning-layer repairs and
+nomination harness corrections. [Final qualification](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records clean collaboration source `513463f` with all 288 obligations passing and both
+replacement previews verified. Supervising-user acceptance remains open. The early checkpoints
+below preserve historical baseline evidence.
 
 
 Merge `1584a5a` integrates M97 `3152f33` with the earlier M98 prototype. It resolves additive
@@ -129,13 +143,12 @@ bridge modules, preserves folder draft tracking and M97 metadata controls, and i
 M97 docs. This is integration source, not new qualification. The accepted M97 artifact stays at
 `http://100.94.63.83:18105/` and is never rebuilt by this milestone.
 
-The checked implementation items have focused owner evidence, not milestone acceptance.
-Native/session/profile implementation is recorded in [M98_ENGINE_IMPLEMENTATION.md](M98_ENGINE_IMPLEMENTATION.md).
-The [authoring quickstart](M98_AUTHORING_QUICKSTART.md) provides a complete agent handoff/edit/retry
-workflow and a small generator host. The current transaction/worker/cache findings and exact regressions are recorded in
-[M98_HARDENING.md](M98_HARDENING.md). Package smoke installs all three archives offline
-and runs a browser application using only the installed SDK/engine. Navigation measurements are recorded in [M98_NAVIGATION.md](M98_NAVIGATION.md). Browser/HTTP
-migration is complete, including source-draft downloads, actual failed-write recovery, invalid
-source retention and route isolation. The final clean gate passes 261/261 obligations, and both frozen-workbench and installed-folder
-previews have fresh byte/browser evidence. [The nomination](M98_QUALIFICATION.md) preserves
-performance limits and leaves supervising-user acceptance and closure unchecked.
+The checked implementation items have automated qualification, not supervising-user acceptance.
+[Engine implementation](M98_ENGINE_IMPLEMENTATION.md) records native/session/profile ownership.
+The [authoring quickstart](M98_AUTHORING_QUICKSTART.md) provides agent handoff/edit/retry,
+shared folder startup and a small generator host. The current package smoke installs all
+four matching archives offline and runs a browser application using only the installed
+SDK/engine. [Baseline navigation](M98_NAVIGATION.md) and
+[collaboration evidence](M98_COLLABORATION.md) preserve their separate measurements.
+The [nomination](M98_QUALIFICATION.md) records current qualification and verified
+preview delivery, with supervising-user acceptance and closure unchecked.

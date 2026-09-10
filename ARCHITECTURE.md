@@ -2938,7 +2938,8 @@ identity, keyed reconciliation and overrides, without a solved-geometry copy. De
 history is bounded, reconstructed after current authored state and never trusted as source
 or digest authority during Undo. Generator mode has no reverse-edit authority.
 
-Each canonical Linux folder has one advisory bridge lock and one active editor lease.
+In the original single-editor mode, each canonical Linux folder has one advisory bridge
+lock and one active editor lease.
 Requests bind installed source, session epoch, lease, interaction revision and immutable
 intent; an observed snapshot grants nothing until the host installs it. Operation IDs resolve
 lost responses before stale-authority checks. A recoverable journal retains original,
@@ -2980,11 +2981,36 @@ server edits the delayed veil remains visible while local navigation works. Exac
 construction/inference frames are retained only when their viewport and selection match the
 current client; navigation uses the detached accepted scene instead of reusing stale pixels.
 
-## M98 collaboration amendment — implementation in progress
+## M98 collaboration amendment — mechanically qualified
 
-[The approved contract](docs/M98_COLLABORATION.md) separates shared working source,
-server-accepted source/model and per-client presentation/prediction. Rust collaboration
-state orders durable semantic operations, while Automerge synchronizes raw source with
-explicit UTF-16 indexing. This does not weaken existing compiler/prepared-input/residual
-authority. Single-editor serving and the qualified local canvas remain the baseline until
-the collaboration amendment passes its own integration and load gates.
+[The collaboration contract](docs/M98_COLLABORATION.md) separates shared working source,
+server-accepted source/model and each client's presentation/prediction. The reusable Rust
+`geosolve-collaboration` crate, its dedicated WASM adapter and TypeScript package own
+protocol state and raw Automerge text with explicit UTF-16 indexing. Incomplete source
+synchronizes before parsing. Apply captures an immutable draft revision and publishes
+only after the existing compiler receipts and independent model validation succeed.
+
+One authoritative server admits semantic operations in order, replays intent against the
+latest accepted model and authenticates original target lifetimes and explicit branches.
+Stable generations, server ID allocation and checked contribution inverses prevent stale
+commands or personal Undo from acquiring another editor's changes. Accepted checkpoints,
+source, history and operation outcomes persist before acknowledgement; exact operation
+retries recover their original result after lost acknowledgements and restart. External
+file mirrors and CLI edits use the same gateway.
+
+HTTP commands and bounded SSE distinguish durable document events from disposable
+presence. Separate compiler/solver workers leave text and read paths available during
+model work. Dedicated browser Rust/WASM workers own local navigation, picking, selection,
+visibility and provisional authoring; prediction grants no server publication authority.
+Optional server prediction uses the same native semantics. Editor/viewer invitations bind
+trusted identities, and each client retains independent camera, tool and Inspector state.
+Browser outboxes persist pending intent and recover uncertain operation outcomes.
+
+[Integrated qualification](docs/M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+passes all 288 obligations on `513463f`, including four-browser and 32-client fault/load
+coverage. GUI construction currently covers Segment, Polyline, Center-radius Circle and
+Two-point aligned Rectangle, plus native point dragging. Broader GUI tools, production
+identity providers and full offline semantic reconciliation remain outside this delivery.
+The original single-editor mode and previews remain available. Both new Tailscale
+previews serve byte-verified qualified artifacts. Supervising-user acceptance and
+milestone closure remain open.

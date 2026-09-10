@@ -733,3 +733,21 @@ GEOSOLVE_DIST=<prepared-geosolve-harness> GEOSOLVE_BROWSER_EVIDENCE=target/m98/f
 
 The failed run remains failed. The next integrated nomination must account for
 the corrected harness and all remaining collaboration, package and release stages.
+
+
+### Final collaboration nomination and delivery
+
+Clean `513463f` passes all 288 obligations in `20260910T204328-4a05c31a`,
+including the corrected folder authoring/history workflow and all eight collaboration
+browser/fault/load cases. The two previous attempts retain their failed outcomes.
+[Final qualification](M98_QUALIFICATION.md#qualified-multi-editor-collaboration) records
+32 fresh and 256 authenticated reused results plus exact frozen/installed delivery.
+
+The initial task-local delivery verifier expected standalone frame provenance
+`accepted`; shared local navigation correctly reports `accepted-presentation`, as
+covered by the native local-interaction owner. Correcting that ignored helper only
+allows the same qualified bytes to pass editor/viewer, three-WASM, independent-camera
+and source/model retention checks. Failed and passing receipts are retained. Both
+24-route Tailscale verifications pass and all seven original authored files, original
+authority and existing preview services remain unchanged. No new product defect,
+equation, tolerance, branch or golden change was introduced by this delivery.

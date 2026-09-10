@@ -97,9 +97,10 @@ already executing in the host cannot be interrupted by AbortSignal.
 
 ## Opt-in shared folder authoring
 
-M98's collaboration amendment is in qualification. The existing single-editor
-preview remains the qualified product until the replacement passes the integrated
-gate. The shared host reuses the same editable TypeScript folder and compiler.
+M98's collaboration amendment is mechanically qualified and delivered with exact
+served-byte and browser verification. [The nomination](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records the exact candidate and evidence. The opt-in shared host reuses the editable
+TypeScript folder and compiler; the original single-editor mode remains available.
 
 Create an invitations JSON file containing trusted principals:
 
@@ -116,6 +117,11 @@ Start the installed CLI with its bundled artifact:
 geosolve serve ./manifold --collaboration true --initialize true \
   --invitations ./invitations.json --authoring-preview client
 ```
+
+Use `--initialize true` once to create a new collaborative history from the folder's
+source. Restart the same folder with the same invitations and omit `--initialize true`.
+Initialization does not migrate legacy single-editor semantic overrides or history;
+preserve that original folder when preparing a separate collaborative copy.
 
 A repository launch additionally supplies `--artifact <prepared-artifact-manifest>`.
 `--host <Tailscale-IP> --port <port>` binds a chosen interface. The command emits one

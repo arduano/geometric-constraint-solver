@@ -2,13 +2,131 @@
 
 # M98 implementation and review candidate
 
-M98 and its local canvas amendment are mechanically qualified and delivered on 2026-09-10.
+M98, its local canvas boundary and multi-editor collaboration amendment are mechanically
+qualified and delivered on 2026-09-10.
 Supervising-user acceptance and milestone closure remain open. Work is isolated on
 `m98/file-workspace`; accepted M97 remains unchanged.
 
+## Qualified multi-editor collaboration
+
+Candidate `513463f822083385edaccded05d8ed901e479dab`, tree
+`ef01e9bf183e7e5712a7d1a82dab2ff6c8026d98`, passes **288/288 obligations** in
+`20260910T204328-4a05c31a`: **32 fresh and 256 authenticated reused results**,
+**44m4.890s**. Independent receipt verification confirms complete release,
+clean-source and unchanged-source flags and every linked passing receipt.
+Evidence: `target/m98/collaboration-final-qualification.json`.
+
+The reusable Rust collaboration crate, dedicated WASM adapter and TypeScript package
+compose shared raw Automerge text with server-ordered validated semantic operations.
+Immutable Apply, checked personal Undo/Redo, stable target lifetimes, durable operation
+outcomes, lost-ACK recovery, browser outboxes, external mirrors and the CLI use the
+same authority. Each editor retains local Rust/WASM navigation, selection and tools;
+client/server authoring prediction uses shared native semantics. Accepted model,
+unfinished working source and provisional presentation remain separate.
+No solver equation, tolerance, hard/soft priority, implicit branch or golden expectation
+changed. Compiler receipts and independent residual validation still control acceptance.
+
+The integrated gate passes formatting, strict Clippy, workspace/headless tests,
+release WASM, optimized-WASM lifecycle, seven native/WASM parity suites, licensing,
+package checks and all 271 unchanged golden cases. The performance stage passes in
+188.4 s; the independently validated 256-moving-body sparse crossover takes 129.39 s.
+All 49 ordinary browser workflows retain authenticated unchanged-input evidence.
+Fresh M98 coverage passes 22 engine cases, 111 folder Node cases, 11 folder browser
+workflows, two generator cases, one browser-embedding case and two offline-package
+cases. Collaboration passes 132 runtime cases, 44 actual-WASM package cases,
+50 frontend assertions and all eight real-browser recovery/load scenarios, with
+no failed, skipped, cancelled or todo cases.
+
+Integrated collaboration browser measurements on this host:
+
+| Case | Local navigation p95 | Text acknowledgement | Evidence |
+| --- | ---: | ---: | --- |
+| Four concurrent browser editors | 370.34 ms | 87.92 ms | Ten-second held solve; zero navigation computation RPCs |
+| Dense manifold | 317.51 ms | 304.10 ms | Ten-second held solve; peer-visible typing |
+| Gridfinity | 130.38 ms | 320.71 ms | Ten-second held solve; retained source metadata |
+| Eight editors and 24 viewers | — | p95 302.24 ms | 24 text operations; disconnected subscriber recovery |
+| Server authoring prediction | 88.61 ms | — | Held preview reply; one durable point terminal and cold restart |
+
+The 32-client case sends 34,111 bytes and receives 2,855,265 bytes, including
+891,654 SSE bytes. Peak ingress is eight; sampled process RSS grows from
+664,215,552 to 701,243,392 bytes. A genuinely paused TCP reader reaches 120,128 bytes
+under its 131,072-byte subscriber bound, is retired, and reconnects successfully while
+nine healthy subscribers continue. These are bounded reference-host observations,
+including Chromium software rendering and event delivery; they do not establish
+60 Hz, arbitrary document size or unlimited users. Detailed diagnostics live in
+`target/release-gate/runs/20260910T204328-4a05c31a/stages/collaboration.browser/output.log`.
+
+The new static preview is `http://100.94.63.83:18110/`; the invited collaborative
+manifold is on `http://100.94.63.83:18111/`. Private editor/viewer invitation URLs
+and process records are in
+`target/m98/collaboration-preview-location-20260910T204328-4a05c31a.json`.
+The four matching offline archives and 23-file production artifact are frozen from
+authenticated gate receipts, installed offline with an empty npm cache and verified
+file by file, without rebuilding. Both endpoints pass all 24 exact HTTP/MIME routes.
+Static actual-WASM manifold readiness passes; collaborative editor/viewer readiness
+loads all three nominated WASM modules and presents 182 geometry items without errors.
+Local zoom is observed at 84.88 ms with an independent peer camera, zero navigation
+RPCs and zero document mutations.
+
+The original seven authored manifold files are preserved byte for byte, including
+the user's 40 mm reservoir and 12 mm channels. The shared preview uses a separate
+copy and a fresh collaboration journal; legacy semantic overrides/history are not
+migrated. Its copied legacy overrides were empty. Initial shared accepted revision
+is zero and input is `f9717c6194f43f064b5caf8a723d6ef8e7a8fdff4e62d1bb59edc503d308c126`.
+Verification preserves accepted/working source, model and authority. The original
+18106/18108 services remain live with original current/accepted hash
+`01fe512c5221bccbc1a032eb32480101005c9ca3571f99e504a1619647b3d59a`.
+
+Delivery evidence:
+
+- `target/m98/installed-collaboration-preview-20260910T204328-4a05c31a.json`
+- `target/m98/collaboration-static-verification-r1.json`
+- `target/m98/installed-collaboration-preview-20260910T204328-4a05c31a/collaboration-verification-r2.json`
+- `target/m98/installed-collaboration-preview-20260910T204328-4a05c31a/collaboration-preview.png`
+- `target/m98/collaboration-delivery-preservation.json`
+
+The gate, installation, launch and browser commands use the pinned shell; the
+receipt verifier and freeze helper run directly with the same available Python:
+
+```bash
+nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source --run 'COMMAND'
+```
+
+```bash
+./scripts/release-gate.sh --plan --since d5f9e40
+./scripts/release-gate.sh --since d5f9e40
+python3 target/m98/verify-qualification.py 20260910T204328-4a05c31a
+python3 target/m98/freeze-preview.py 20260910T204328-4a05c31a
+python3 target/m98/install-collaboration-preview.py 20260910T204328-4a05c31a
+python3 target/m98/launch-collaboration-preview.py 20260910T204328-4a05c31a
+env GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome node target/m98/verify-collaboration-preview.mjs target/m98/installed-collaboration-preview-20260910T204328-4a05c31a/verification-config-r2.json
+```
+
+The exact static `npm --prefix crates/geosolve-demo-web/frontend run verify:artifact`
+invocation, including absolute manifest/directory/receipt paths and endpoint, is retained
+in `target/m98/collaboration-static-verification-r1.log`. Every command above passed.
+The first two integrated attempts remain failed historical runs: the M98 owning-file
+inventory and folder camera-baseline harness repairs are documented in
+[M98_HARDENING.md](M98_HARDENING.md). The initial delivery verifier incorrectly expected
+standalone scene provenance `accepted`; local presentation intentionally reports
+`accepted-presentation`. Correcting only the ignored helper makes the same bytes pass;
+the failed receipt remains preserved. No qualified product changes followed nomination.
+
+GUI construction supports Segment, Polyline, Center-radius Circle and Two-point aligned
+Rectangle, plus native point dragging. Other GUI tools explicitly report unavailable
+routes; full source and supported Inspector authoring remain available. Trusted invitation
+roles are the reference identity boundary; production identity providers and full offline
+semantic reconciliation remain outside this milestone. Restart the shared folder with
+its existing invitations and journal, omitting the first-launch `--initialize true`.
+**Supervising-user acceptance and M98 closure remain open.**
+
+The documentation-only handoff is checked with
+`./scripts/release-gate.sh --docs-only --since 513463f`; it preserves this qualified
+product identity and the installed preview bytes.
+
 ## Qualified local canvas boundary
 
-Current candidate `d5f9e4048b428939a0bcd40c8a3433d4601fbd9b`, tree
+Preceding candidate `d5f9e4048b428939a0bcd40c8a3433d4601fbd9b`, tree
 `54975cf96815643f74f6b1b67e1e93883e07ca6b`, passes **261/261 obligations** in
 `20260910T022428-a1d7c652`: **23 fresh and 238 authenticated reused results**, in
 **31m30.382s**. Every linked passing receipt authenticates, and complete release,

@@ -1,15 +1,24 @@
 # GeoSolve active handoff
 
-Current roadmap: **M97 is accepted and closed. M98 collaboration hardening is ready for integrated qualification.**
+Current roadmap: **M97 is accepted and closed. M98 collaboration is mechanically qualified and delivered; supervising-user acceptance remains open.**
 
-The approved [multi-editor amendment](docs/M98_COLLABORATION.md) extends the previously
-qualified M98 authoring product. Shared draft text, server-ordered semantic edits, per-user
-Undo, durable recovery and configurable client/server authoring prediction are implemented
-with focused owner and browser evidence. Four-editor navigation during a ten-second held
-solve and the 32-client load case pass focused checks; the clean integrated gate and
-verified replacement delivery remain required. GUI construction currently supports four
-native tools, with broader tools explicitly unavailable. The qualified preview and original
-manifold folder remain preserved until a replacement passes qualification.
+The [multi-editor amendment](docs/M98_COLLABORATION.md) passes all **288 obligations**
+from clean source `513463f` in `20260910T204328-4a05c31a`: 32 fresh and 256 authenticated
+reused results in 44m4.890s. [Final qualification](docs/M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records shared unfinished TypeScript, server-ordered validated edits, personal Undo/Redo,
+durable recovery and configurable client/server authoring prediction. Four-browser
+collaboration and the eight-editor/24-viewer fault/load cases pass the integrated gate.
+Camera, selection, visibility and tool context remain personal; ordinary navigation needs
+no HTTP request.
+
+Exact qualified artifacts and all four archives are frozen and installed offline. New
+static `http://100.94.63.83:18110/` and invited collaborative port 18111 pass exact
+served-byte and browser verification. Private invitation URLs are recorded in
+`target/m98/collaboration-preview-location-20260910T204328-4a05c31a.json`. The preceding previews and the original manifold folder remain preserved,
+including the user's 40 mm reservoir and 12 mm channels. GUI construction supports Segment,
+Polyline, Center-radius Circle and Two-point aligned Rectangle, plus native point dragging;
+other canvas authoring tools disclose their unavailable routes. M98 supervising-user
+acceptance and milestone closure remain open.
 
 [M97 closure and fresh-session handoff](docs/M97_CLOSURE.md) records the supervising
 user's acceptance and unchanged qualified product. Accepted source
@@ -30,33 +39,20 @@ record the accepted scope and limits. No M97 blocker or acceptance action remain
 The previous M97 previews remain documented at ports 18104 and 18103; M96's accepted
 channel checkpoint remains in [M96_CLOSURE.md](docs/M96_CLOSURE.md).
 
-**M98 local canvas interaction is mechanically qualified and delivered.**
-Clean candidate `d5f9e40` passes all 261 obligations in
-`20260910T022428-a1d7c652` (23 fresh, 238 authenticated reused; 31m30.382s).
-[The boundary and regression report](docs/M98_LOCAL_CANVAS.md) and
-[final qualification](docs/M98_QUALIFICATION.md#qualified-local-canvas-boundary) record
-shared Rust camera/picking/selection/dimension behavior in the browser, server-owned
-sketch edits, and exact reconciliation after delayed replies. Ordinary navigation needs
-no HTTP request. Source, scene, revision, epoch and editing-lease guards remain enforced.
+The preceding [local canvas delivery](docs/M98_LOCAL_CANVAS.md) remains available from
+qualified `d5f9e40` at static `http://100.94.63.83:18106/` and editable-folder Tailscale
+port 18108. Its [qualification](docs/M98_QUALIFICATION.md#qualified-local-canvas-boundary)
+records 261 passing obligations and both byte-verified previews. The original folder
+session URL remains in `target/m98/tailnet-folder-location.json`; its source and accepted
+state are preserved. These services retain the original single-editor lease behavior.
 
-Static `http://100.94.63.83:18106/` and editable-folder Tailscale port 18108 serve exact
-qualified artifacts. The current folder session URL is recorded in
-`target/m98/tailnet-folder-location.json` and `target/m98/local-canvas-preview-verification.json`.
-Both sets of 14 HTTP routes and actual-WASM readiness pass. All seven existing manifold
-files and current/accepted source hashes are unchanged; read-only verification leaves the
-new editing lease unclaimed. Installed-manifold zoom/pan become visible in 302.9/219.4 ms,
-including browser event delivery, polling and software rendering, with zero navigation RPCs.
-The integrated stalled-server case observes local zoom in 133.4 ms before the held edit
-reply at 1,580.4 ms, retaining exact final camera/selection. These are not 60 Hz claims.
-
-The canvas still greys out after 500 ms of remote work while local browsing continues.
-Inspector details and semantic edits may await the server. The preceding queue/transfer
-repair and loading amendment remain historical evidence in
-[the latency report](docs/M98_NAVIGATION_LATENCY.md) and
-[loading report](docs/M98_LOADING_FEEDBACK.md). M98 supervising-user acceptance and
-milestone closure remain open. Work only in the existing `m98/file-workspace` worktree;
-the primary checkout and accepted M97 product remain unchanged. The old M97 preview at
-port 18105 was unavailable during this delivery and was not restarted.
+The canvas greys out after 500 ms of remote work while local browsing continues.
+Inspector details and semantic edits may await the server. The preceding
+[latency repair](docs/M98_NAVIGATION_LATENCY.md) and
+[loading amendment](docs/M98_LOADING_FEEDBACK.md) remain historical evidence.
+Work only in the existing `m98/file-workspace` worktree; the primary checkout and accepted
+M97 product remain unchanged. The old M97 preview at port 18105 was unavailable during
+the preceding local-canvas delivery and was not restarted.
 
 [The ordered implementation plan](docs/M98_IMPLEMENTATION_PLAN.md) records the approved
 M98 scope. [Authoring quickstart](docs/M98_AUTHORING_QUICKSTART.md) covers CLI edits,

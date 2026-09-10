@@ -5606,9 +5606,29 @@ manifold Fit/history costs and Linux/worker/topology limitations remain explicit
 - [x] Local canvas replacement previews and original manifold preservation verified.
 - [ ] M98 milestone closure after acceptance.
 
-## M98 multi-editor collaboration amendment — pending
+## M98 multi-editor collaboration amendment — mechanically qualified and delivered
 
-[The approved acceptance matrix](docs/M98_COLLABORATION.md#acceptance) requires durable
-server order and deduplication, independent validated semantic commits, concurrent invalid
-text and canvas editing, checked per-user Undo, native/WASM parity and real browser/load
-qualification. The earlier M98 gate qualifies the single-editor baseline only.
+Clean source `513463f822083385edaccded05d8ed901e479dab` passes **288/288 obligations**
+in `20260910T204328-4a05c31a`: 32 fresh and 256 authenticated reused results in
+44m4.890s. [Final qualification](docs/M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records independently authenticated receipts. The earlier M98 deliveries above remain
+the preserved single-editor baseline.
+
+Qualification covers [the approved matrix](docs/M98_COLLABORATION.md#acceptance): durable
+server order and deduplication, independently validated semantic commits, concurrent
+invalid text and canvas editing, checked per-user Undo, native/WASM parity and browser
+fault recovery. Four real editors during a ten-second held solve and the eight-editor/
+24-viewer load case pass the integrated gate. GUI construction supports Segment, Polyline,
+Center-radius Circle and Two-point aligned Rectangle, plus native point dragging;
+broader GUI authoring parity is not claimed.
+
+Exact production and all four package archives are frozen and installed offline. New
+static port 18110 and collaborative port 18111 each pass 24 exact HTTP/MIME routes
+and actual-WASM readiness. Collaborative editor/viewer controls, independent local
+navigation and unchanged source/model/authority also pass. The original manifold folder, its seven authored files and preceding
+previews remain preserved. Human acceptance and M98 closure remain open.
+
+- [x] Collaboration implementation and integrated authority/parity/browser/fault/load qualification.
+- [x] Exact qualified collaborative replacement preview verification.
+- [ ] Supervising-user acceptance of the amended M98 scope.
+- [ ] M98 milestone closure after acceptance.

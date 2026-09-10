@@ -4,8 +4,10 @@
 
 Implementation authorized after the local canvas delivery. This amendment extends M98
 with a reusable Rust collaboration core and the existing workbench as its reference host.
-The qualified single-editor product at `d5f9e40` remains the preview until a replacement
-passes qualification. M98 supervising-user acceptance and closure remain open.
+Candidate `513463f` passes all 288 obligations in `20260910T204328-4a05c31a` and is
+delivered on Tailscale ports 18110/18111. [Final qualification and preview evidence](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records the exact artifacts and measured limits. The single-editor preview and original
+manifold are preserved. M98 supervising-user acceptance and closure remain open.
 
 ## Product contract
 
@@ -20,7 +22,7 @@ The reusable `geosolve-collaboration` Rust crate owns protocol and collaboration
 with dedicated WASM bindings and a TypeScript package. Shared text uses Automerge 0.11
 with explicit UTF-16 indexing on native and WASM and stable cursors. Compiler UTF-8 spans
 must be converted explicitly. Automerge requires Rust 1.90; the new collaboration crates
-will declare that scoped minimum rather than misrepresent the existing 1.89 declaration.
+declare that scoped minimum rather than misrepresent the existing 1.89 declaration.
 
 Semantic operations name stable targets, generations, operands and explicit branches.
 No operation implicitly targets another editor's selection. Server admission order controls
@@ -85,18 +87,14 @@ are a stretch; full offline semantic reconciliation is deferred if substantially
 - [x] Authoritative semantic commits, source reconciliation and per-user Undo/Redo.
 - [x] Durable restart, deduplication, external file/CLI gateway and recovery.
 - [x] Dedicated WASM/TypeScript package and provisional authoring session.
-- [ ] Opt-in workbench collaboration, separate client contexts and prediction worker.
-- [ ] Fault, parity, browser and load qualification; verified replacement preview.
+- [x] Opt-in workbench collaboration, separate client contexts and prediction worker.
+- [x] Fault, parity, browser and load qualification; verified replacement preview.
 - [ ] Supervising-user acceptance and milestone closure.
 
-The checked items have focused native, actual-WASM and runtime evidence. They do
-not substitute for integrated qualification. The coherent development-r4 build
-adds the server preview frontend, personal visibility, source suppression and the
-dense-text performance repair. Combined checks pass 44 package tests, 63 runtime/
-HTTP/domain/preview tests and eight actual-WASM frontend cases; eighteen focused
-frontend cases, strict types, demo Clippy and formatting also pass. Browser
-performance and fault coverage are running against its exact three WASM modules.
-The qualified preview remains unchanged.
+The complete clean gate passes 288/288 obligations (32 fresh, 256 authenticated reused;
+44m4.890s), including all eight collaboration browser/fault/load scenarios. Both new
+previews pass exact served-byte and actual-WASM verification. [The final nomination](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records commands, coverage, timing, preserved user files and the four-tool GUI limit.
 
 ## Acceptance
 
@@ -113,6 +111,9 @@ release. On the reference host, target p95 local navigation and text ACK below 5
 record bandwidth, queue/memory growth and slow-client recovery rather than infer scalability
 from architecture. Focused checks precede the integrated authenticated gate and served-byte
 verification. No implementation checkpoint alone establishes milestone completion.
+
+The development checkpoints below preserve their original results and then-outstanding
+work. The qualified contract and final nomination above supersede their progress statements.
 
 ## Foundation implementation checkpoint
 
@@ -470,6 +471,8 @@ performance scheduling and final qualification.
 env -u GEOSOLVE_BROWSER_DIAGNOSTIC_NO_BACKDROP -u GEOSOLVE_BROWSER_DIAGNOSTIC_NO_TOOLBAR_BACKDROP GEOSOLVE_DIST=target/m98/geosolve-collaboration-development-r5 GEOSOLVE_BROWSER_TRACE=1 node --test --test-name-pattern="four real browser editors" scripts/collaboration-browser.test.mjs
 ```
 
-Full clean integrated qualification and replacement preview verification remain
-open. The last qualified preview is preserved. The GUI construction scope is the
-four native tools documented above; broader GUI tool parity is not claimed.
+Final clean integrated qualification and both replacement preview verifications pass
+from `513463f` in `20260910T204328-4a05c31a`; [the nomination](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records exact evidence. The preceding preview is preserved. GUI construction remains
+the four native tools documented above; broader GUI tool parity is not claimed.
+Supervising-user acceptance and milestone closure remain open.
