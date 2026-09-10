@@ -172,3 +172,67 @@ locked release WASM build and seven actual-WASM cases pass against the same text
 Package dry-run contains nine files; no registry publication occurred. Full-history validation
 currently runs on each text admission, so load targets remain unmeasured. Native inverse
 tokens are runtime-local and source ownership anchors have a 64 KiB span bound.
+
+## Durable composition and authoring checkpoint
+
+The amendment remains in implementation. Native point replay and its actual-WASM
+bindings now retain complete solver-coupled terminal geometry. Shared source has distinct
+accepted and working states, durable immutable Apply captures with historical file IDs,
+compiler-owned invalid-draft reconciliation and conservative three-way captured Apply
+rebase. Checked property contribution history preserves same-value ownership and personal
+Undo/Redo across native checkpoint restoration. These do not yet complete structural Undo.
+
+The trusted WASM authority/source adapters expose staged checkpoints: committed reads
+stay unchanged until asynchronous filesystem persistence completes. The Node reference
+host stores content-addressed model/source/target/history bytes before one fsynced journal
+envelope, and restores original operation outcomes after lost acknowledgements. Text
+request IDs also deduplicate across restart; reuse with different content or across the
+text/model namespaces rejects. Apply admission stores the immutable native capture and
+its authenticated old accepted basis. Captured-file compilation cannot read omitted
+files from a newer disk mirror.
+
+HTTP commands and SSE now have tested invited roles, bounded concurrent admission,
+reconnect cleanup, ordered replay, coalesced disposable presence and bounded subscriber
+buffers. A held domain callback allows text persistence and later admission. This proves
+queue separation; actual CPU offloading, browser responsiveness and load targets await
+the domain worker/workbench integration. Accepted scene transport caches immutable encoded
+bytes per model input. No canvas-navigation route was added.
+
+Focused evidence, all through the pinned Nix shell documented above:
+
+- `cargo test --locked -p geosolve-collaboration --test history --test document`:
+  14 pass, including corruption refusal and exact Apply recovery. Scoped warnings-denied
+  Clippy passes (`engine-authoring-adapter-clippy-final.log`).
+- `npm --prefix packages/geosolve-sketch-code run test:runtime`: 83 pass; build,
+  fixtures, bundled samples, types and managed checks pass unchanged
+  (`captured-apply-rebase-final.log`).
+- `cargo test --locked -p geosolve-sketch-engine --test point_gesture --test managed_authoring --test editable_session`:
+  17 pass; scoped strict Clippy and WASM check pass (`terminal-publication-final.log`).
+- `cargo test --locked -p geosolve-sketch-engine-wasm --test point_gesture --test authoring`:
+  seven pass. `node packages/geosolve-engine/scripts/build-wasm.mjs` and
+  `node --test packages/geosolve-engine/test/*.test.mjs`: release WASM and 13 package
+  cases pass (`point-gesture-actual-wasm.log`).
+- Collaboration source/authority adapter checks: nine native adapter cases and 17
+  actual-WASM package cases pass with release WASM, strict Clippy and TypeScript builds
+  (`source-wasm-owner-final-r2.log`). Semantic ledger binding is the next adapter slice.
+- `node --test scripts/collaboration-http.test.mjs scripts/collaboration-host.test.mjs scripts/collaboration-storage.test.mjs`:
+  30 pass (`collaboration-text-dedup-checks.log`). These use real native authority and
+  filesystem persistence with an explicit fixture domain codec, not geometry evidence.
+- `node --test scripts/collaboration-source-integration.test.mjs`: two pass using
+  actual native source/authority with filesystem persistence, including held model work,
+  invalid source recovery and queued immutable Apply after restart.
+- `node --test scripts/workspace-loader.test.mjs`: nine pass, including the complete
+  captured-files boundary (`collaboration-captured-loader-checks.log`).
+
+No equations, solver tolerances, hard/soft semantics or implicit branch choices changed.
+The independent terminal parity helper preserves writable companions, rectangle semantics,
+consumer detachment and computed branch/contact state. Stale gesture bases currently
+reject. The existing demo still owns its prior terminal implementation; adoption of the
+shared implementation remains integration work. Native preparation and actual WASM are
+component evidence, not an end-to-end visible latency claim.
+
+Still required: actual compiler/solver workers in the reference document host, full
+semantic/lifecycle history, durable text Undo, external file/CLI mirror reconciliation,
+construction prediction, collaborative workbench UI, browser/load/fault qualification,
+release-gate registration and integrated clean nomination. The qualified preview remains
+unchanged, and supervising-user acceptance remains open.

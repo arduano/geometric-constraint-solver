@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Thin JSON/binary adapter over the shared Rust text owner. No JavaScript CRDT.
 
+pub mod authority;
+pub use authority::TrustedDocumentHost;
+pub mod source;
+pub use source::TrustedSourceHost;
+pub mod semantic;
+pub use semantic::TrustedSemanticHost;
+
 use std::collections::VecDeque;
 
 use geosolve_collaboration::{

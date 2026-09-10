@@ -21,7 +21,7 @@ const stage = mkdtempSync(resolve(packageRoot, ".wasm-"));
 try {
   run("wasm-bindgen", ["--target", "web", "--out-dir", stage, "--out-name", "geosolve_collaboration_wasm", resolve(metadata.target_directory, "wasm32-unknown-unknown", release ? "release" : "debug", "geosolve_collaboration_wasm.wasm")]);
   const declarations = readFileSync(resolve(stage, "geosolve_collaboration_wasm.d.ts"), "utf8");
-  for (const method of ["export class SharedTextReplica", "generateSyncMessage(", "receiveSyncMessageFrom(", "anchorRange(", "undo("]) if (!declarations.includes(method)) throw Error(`Missing native contract: ${method}`);
+  for (const method of ["export class TrustedSemanticHost", "stageValidatedRecord(", "stageValidatedTransaction(", "stageValidatedInverse(", "prepareUndo(", "prepareRedo(", "authenticateDelete(", "export class TrustedSourceHost", "stageTextChanges(", "prepareApplyUpdate(", "restoreApplyCapture(", "stageValidatedPublication(", "export class TrustedDocumentHost", "stageAdmission(", "stageValidatedCompletion(", "commitStage(", "failStage(", "export class SharedTextReplica", "generateSyncMessage(", "receiveSyncMessageFrom(", "anchorRange(", "undo("]) if (!declarations.includes(method)) throw Error(`Missing native contract: ${method}`);
   const output = resolve(packageRoot, "dist/wasm");
   if (existsSync(output)) rmSync(output, { recursive: true });
   renameSync(stage, output);

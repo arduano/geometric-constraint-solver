@@ -51,3 +51,118 @@ The suite runs real WASM and checks native/WASM checkpoint exchange in both dire
 Authenticated text ingress refuses file lifecycle changes; the server orders those
 separately. Raw same-text splices retain new character identity. Oversized (>64 KiB)
 WASM splice contributions remain valid raw edits but clear instance-local Undo history.
+
+## Trusted server authority
+
+The separate `@geosolve/collaboration/host` entrypoint wraps the Rust
+`DocumentAuthority`. Keep this handle in the trusted server process. Client request
+handlers may submit commands; they must never invoke validated completion or assign
+principal roles from an untrusted request body.
+
+```ts
+import { createDocumentAuthorityHost } from "@geosolve/collaboration/host";
+
+const host = await createDocumentAuthorityHost({
+  configuration: { documentId, documentEpoch, serverEpoch, initialInput },
+  records: recoveredJournalRecords,
+});
+const connection = host.connect(authenticatedPrincipal, clientId, freshSessionId);
+const receipt = await host.admit(commandRequest, async ({ recordJson }) => {
+  await journal.appendAndSync(recordJson);
+});
+```
+
+`admit` stages a private cloned core, calls the asynchronous host persistence callback,
+and returns the receipt only after explicit native commit. A duplicate returns its
+original durable receipt without invoking persistence again. While one write is pending,
+`snapshot`, `receipt`, `resume` and `checkpoint` show committed state; mutations reject
+with pending backpressure. The independent shared-text handle remains usable.
+
+`beginNext` yields a descriptor backed by a real native prepared ticket. Pass that exact
+object to `complete` only after independently evaluating the command against its exact
+accepted input. For an accepted completion, the callback must durably commit associated
+source/design/model snapshots with the terminal record in one recoverable transaction.
+This library neither runs the solver nor establishes geometric acceptance from JSON.
+
+Low-level `stageAdmission`, `stageValidatedCompletion`, `commitStage` and `failStage`
+are available for host transaction coordinators. A stage's `recordJson` is the exact
+pending journal record, not an ACK. Commit the same stage object only after persistence;
+any uncertain append calls `failStage`, permanently requiring reconstruction. Restore
+under a fresh process epoch from the actual disk journal, then independently rebuild
+accepted geometry before serving edits. Old connections and worker tickets cannot resume
+publication; original operation receipts survive restart and reconnect.
+
+The adapter caps serialized checkpoints at 128 MiB and configured core ledger bytes at
+64 MiB. It retains one pending full ledger clone during asynchronous persistence. This is
+a correctness boundary; it does not establish large-ledger latency or load qualification.
+Production identity, filesystem transactions and HTTP/SSE transport remain host-owned.
+
+## Independent working and accepted source
+
+The trusted `/host` entrypoint also exports `createTrustedSourceHost`. Construct it with
+`{ configuration: { documentEpoch, serverEpoch, initialInput, files, limits? }, actor }`,
+or provide its durable `checkpointJson` when restarting. The host independently validates
+initial/reconstructed accepted geometry; raw working TypeScript may be incomplete.
+
+`captureApply()` returns a runtime handle, immutable working source and accepted basis,
+and exact `captureJson` for durable admission. Later typing continues. After restart,
+`restoreApplyCapture(captureJson, authenticatedAcceptedBasis)` verifies the recorded
+basis against the trusted journal input and reconstructs old files/identities from exact
+CRDT heads. The returned new handle belongs to the restored host. Captures and preparation
+tickets have bounded storage; call `release` when no longer needed.
+
+Prepare compiler-owned canvas patches with `prepareCanvasUpdate`, or compiler-rebased
+captured files with `prepareApplyUpdate`. These tickets do not block raw text work while
+an external model job solves. `stageValidatedPublication` takes a genuine retained ticket,
+independently validated model input and reconciliation prepared against the latest working
+heads. It preserves invalid draft text with pending notices where ownership is unavailable.
+
+`stageTextSync`/`stageTextChanges` bind incoming typing to the host-authenticated editor
+actor; `receiveText`/`receiveTextChanges` await asynchronous envelope persistence before
+text ACK. `stageHostEdits`/`editWorking` serve already ordered external/file edits. One
+pending source write blocks mutation; committed accepted/working snapshots remain readable.
+Use `textCheckpoint` to seed client CRDT replicas and reset disposable peer handshakes
+on reconnect. This adapter does not establish roles or lifecycle admission order.
+
+For accepted publication, the transaction coordinator persists the source stage's exact
+checkpoint with model/design and the authority stage's terminal record before synchronously
+committing both. `failStage` poisons uncertain source writes until reconstruction from disk.
+Per-user draft Undo stacks are not durable here. Historical Apply capture restoration is
+supported; pending model preparation tickets are re-created after restart.
+
+## Semantic target and contribution authority
+
+The trusted `/host` entrypoint exports `createTrustedSemanticHost` over the actual Rust
+`TargetLedger` and `ContributionHistory`. Initialize with
+`{ configuration: { documentEpoch, serverEpoch, objects: [{ object, dependencies }] } }`.
+The compiler supplies canonical object names and dependency names; forward references
+work because Rust allocates all names before installing dependencies. `current` returns
+the server-allocated generation, and `planDelete`/`authenticateDelete` retain the exact
+reviewed dependent closure. Never derive these identities from canvas labels.
+
+`stageValidatedRecord` records independently validated property before/after values.
+`stageValidatedTransaction` stages creation, exact deletion and dependency changes with
+optional property recording in one transaction. Existing target references include their
+generation; `{ kind: "created", object }` resolves only a name created by this transaction.
+The caller supplies `basisRevision` and its exact successor `revision`; stale work rejects.
+Same-value writes acquire contribution ownership, so Undo cannot overwrite another user's
+later same-value contribution. Property keys and observations come from the trusted engine.
+
+`prepareUndo`/`prepareRedo` return descriptive changes backed by opaque native inverse
+plans. Independently validate their effect on the model, then call `stageValidatedInverse`
+with the exact retained object. Intervening committed edits invalidate preparation tickets.
+Use `release` for unused plans. The adapter caps retained plans at 32 and their serialized
+changes at 64 MiB; target limits can be lowered below core defaults, never increased.
+
+Persist a stage's exact `targetsJson` and `historyJson` with model/source and the authority
+terminal record in one recoverable envelope, then call `commitStage`. The async `record`,
+`transact` and `inverse` helpers await a persistence callback before committing. Reads stay
+committed during a pending write; mutation rejects. `failStage` requires reconstruction.
+`checkpoint()` returns `{ documentEpoch, revision, targetsJson, historyJson }`; supply that
+checkpoint to the factory when restarting under a fresh server epoch. The host authenticates
+this pair against its journal and independently rebuilds the model before serving edits.
+
+Property history survives restart, including checked Redo. Structural creation/deletion
+Undo requires a further core extension and is not claimed here. Lifecycle-only transactions
+advance the accepted revision without pretending to be property history contributions.
+This adapter does not establish solver validity, server load capacity or client responsiveness.
