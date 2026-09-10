@@ -3,7 +3,9 @@ import { freezeDrawFrame } from "./canvas-scene";
 import type { InteractionSeed, InteractionState, LocalInteractionMethod, LocalInteractionRequest, LocalInteractionResponse, LocalInteractionUpdate } from "./local-interaction-worker";
 export type { InteractionSeed, InteractionState, LocalInteractionUpdate } from "./local-interaction-worker";
 
+export interface AuthoringPointer { viewport: import("../../../../../packages/geosolve-engine/src/index").PointGestureViewport; position: readonly [number,number]; target: import("../../../../../packages/geosolve-engine/src/index").PointGestureTarget | null }
 export interface LocalInteractionClient {
+  authoringPointer?(input: {x:number;y:number;captured?:boolean}): Promise<AuthoringPointer>;
   construct(seed: InteractionSeed): Promise<LocalInteractionUpdate>;
   replace(seed: InteractionSeed, preserveSelection: boolean): Promise<LocalInteractionUpdate>;
   update(method: Exclude<LocalInteractionMethod, "construct" | "replace" | "state">, input: unknown): Promise<LocalInteractionUpdate | null>;
@@ -22,6 +24,7 @@ export class LocalInteractionWorker implements LocalInteractionClient {
     worker.addEventListener("error", this.error);
     worker.addEventListener("messageerror", this.messageError);
   }
+  authoringPointer(input: {x:number;y:number;captured?:boolean}) { return this.request<AuthoringPointer>("authoringPointer",input); }
   construct(seed: InteractionSeed) { return this.request<LocalInteractionUpdate>("construct", seed); }
   replace(seed: InteractionSeed, preserveSelection: boolean) { return this.request<LocalInteractionUpdate>("replace", { seed, preserveSelection }); }
   update(method: Exclude<LocalInteractionMethod, "construct" | "replace" | "state">, input: unknown) { return this.request<LocalInteractionUpdate | null>(method, input); }

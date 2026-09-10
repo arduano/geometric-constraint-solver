@@ -2249,6 +2249,85 @@ fn draft_arc(
         draft_mark(p, viewport, point, name);
     }
 }
+/// Paints resolved prediction geometry without a document or publication handle.
+/// The caller must retain its accepted picking scene separately.
+///
+/// # Errors
+/// Rejects invalid viewports and non-finite or invalid drawing primitives.
+pub fn compose_prediction_guides(
+    viewport: Viewport,
+    preview: Option<&ConstructionPreviewGeometry>,
+    guides: &[DraftGuideGeometry],
+) -> Result<DrawFrame, DrawFrameError> {
+    if let Some(ConstructionPreviewGeometry::Rectangle { first, second }) = preview
+        && first
+            .iter()
+            .chain(second.iter())
+            .any(|value| !value.is_finite())
+    {
+        return Err(DrawFrameError("invalid prediction rectangle".into()));
+    }
+    Viewport::new(
+        viewport.screen_size,
+        viewport.model_center,
+        viewport.pixels_per_model_unit,
+    )
+    .map_err(|error| DrawFrameError(error.to_string()))?;
+    let mut painter = Painter {
+        frame: DrawFrame {
+            format: "geosolve-draw-frame-v1",
+            view_box: [0.0, 0.0, viewport.screen_size[0], viewport.screen_size[1]],
+            background: "#151619",
+            provenance: BTreeMap::from([("scene".into(), "provisional".into())]),
+            items: Vec::new(),
+        },
+        occurrences: BTreeMap::new(),
+        invalid: None,
+    };
+    if let Some(preview) = preview {
+        draw_preview_geometry(&mut painter, preview, viewport);
+    }
+    for (index, guide) in guides.iter().enumerate() {
+        let base = format!("prediction-guide:{index}");
+        let style = DrawStyle::stroke("#79d6ca", 1.8).dashed(&[7.0, 4.0]);
+        match guide {
+            DraftGuideGeometry::Point { position } => {
+                painter.circle(
+                    &base,
+                    "inferenceGuides",
+                    "wb-inference-guide-point",
+                    None,
+                    style,
+                    viewport.model_to_screen(*position),
+                    7.0,
+                );
+            }
+            DraftGuideGeometry::Segment { start, end } => {
+                painter.line(
+                    &base,
+                    "inferenceGuides",
+                    "wb-inference-guide-segment",
+                    None,
+                    style,
+                    &[
+                        viewport.model_to_screen(*start),
+                        viewport.model_to_screen(*end),
+                    ],
+                );
+            }
+        }
+    }
+    if let Some(error) = painter.invalid {
+        return Err(error);
+    }
+    for item in &mut painter.frame.items {
+        item.id = format!("prediction:{}", item.id);
+        item.interactive = false;
+    }
+    painter.frame.validate()?;
+    Ok(painter.frame)
+}
+
 fn draw_inference_guides(
     p: &mut Painter,
     resolution: &DraftInferenceResolution,

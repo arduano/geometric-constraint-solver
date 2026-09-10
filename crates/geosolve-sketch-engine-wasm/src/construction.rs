@@ -148,6 +148,15 @@ impl EngineAdapter {
     }
     /// # Errors
     /// Rejects foreign/consumed prediction handles or unavailable detached scene.
+    pub fn editable_construction_presentation(&self, json: &str) -> Result<String, String> {
+        let input: PredictionRequest = decode_session_request(json)?;
+        self.construction_prediction(&input)?
+            .presentation_json()
+            .map_err(|e| e.to_string())
+    }
+
+    /// # Errors
+    /// Rejects foreign/consumed handles or unavailable presentation.
     pub fn editable_construction_scene(&self, json: &str) -> Result<String, String> {
         let input: PredictionRequest = decode_session_request(json)?;
         self.construction_prediction(&input)?

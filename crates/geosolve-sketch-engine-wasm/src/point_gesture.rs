@@ -153,6 +153,16 @@ impl EngineAdapter {
     ///
     /// # Errors
     /// Rejects foreign/consumed gestures and failed provisional scene serialization.
+    pub fn editable_point_gesture_presentation(&self, json: &str) -> Result<String, String> {
+        let input: GestureRequest = decode_session_request(json)?;
+        self.gesture(&input)?
+            .gesture
+            .presentation_json()
+            .map_err(|e| e.to_string())
+    }
+
+    /// # Errors
+    /// Rejects foreign/consumed handles or unavailable presentation.
     pub fn editable_point_gesture_scene(&self, json: &str) -> Result<String, String> {
         let input: GestureRequest = decode_point_request(json)?;
         self.gesture(&input)?

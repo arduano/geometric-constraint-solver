@@ -52,6 +52,7 @@ export interface ConstructionNativeHandle {
   beginEditableConstruction(json: string): string;
   advanceEditableConstruction(json: string): string;
   editableConstructionScene(json: string): string;
+  editableConstructionPresentation(json: string): string;
   finishEditableConstruction(json: string): string;
   cancelEditableConstruction(json: string): void;
   prepareEditableConstruction(json: string): string;
@@ -70,6 +71,10 @@ export class ConstructionPrediction {
     return decodePointValue(this.native.advanceEditableConstruction(JSON.stringify({ ...this.routing, sample })));
   }
   /** Render this detached scene together with the frame's preview and inference guides. */
+  presentationJSON(): string {
+    this.assertLive(); return this.native.editableConstructionPresentation(JSON.stringify(this.routing));
+  }
+  /** Detached geometry without namespace correspondence. */
   sceneJSON(): string { this.assertLive(); return this.native.editableConstructionScene(JSON.stringify(this.routing)); }
   finish(): ConstructionCommand {
     this.assertLive();

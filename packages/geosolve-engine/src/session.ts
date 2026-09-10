@@ -249,14 +249,14 @@ export class EditableSession {
   }
   private pointNative(): PointGestureNativeHandle {
     this.assertLive();
-    for (const name of ["editablePointGestureTargets", "beginEditablePointGesture", "advanceEditablePointGesture", "editablePointGestureScene", "finishEditablePointGesture", "cancelEditablePointGesture", "prepareEditablePointCommit", "applyEditablePointCommit", "releaseEditablePointCommit"] as const) {
+    for (const name of ["editablePointGestureTargets", "beginEditablePointGesture", "advanceEditablePointGesture", "editablePointGestureScene", "editablePointGesturePresentation", "finishEditablePointGesture", "cancelEditablePointGesture", "prepareEditablePointCommit", "applyEditablePointCommit", "releaseEditablePointCommit"] as const) {
       if (typeof this.native[name] !== "function") throw Error("This engine build does not support retained point gestures");
     }
     return this.native as PointGestureNativeHandle;
   }
   private constructionNative(): ConstructionNativeHandle {
     this.assertLive();
-    for (const name of ["beginEditableConstruction", "advanceEditableConstruction", "editableConstructionScene", "finishEditableConstruction", "cancelEditableConstruction", "prepareEditableConstruction", "resolveEditableConstruction", "applyEditableConstructionCommit", "releaseEditableConstruction"] as const) {
+    for (const name of ["beginEditableConstruction", "advanceEditableConstruction", "editableConstructionScene", "editableConstructionPresentation", "finishEditableConstruction", "cancelEditableConstruction", "prepareEditableConstruction", "resolveEditableConstruction", "applyEditableConstructionCommit", "releaseEditableConstruction"] as const) {
       if (typeof this.native[name] !== "function") throw Error("This engine build does not support construction prediction");
     }
     return this.native as ConstructionNativeHandle;

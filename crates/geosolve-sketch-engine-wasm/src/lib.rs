@@ -313,6 +313,13 @@ mod wasm {
                 .map_err(|error| JsValue::from_str(&error))
         }
 
+        #[wasm_bindgen(js_name = editableConstructionPresentation)]
+        pub fn editable_construction_presentation(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_construction_presentation(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
         #[wasm_bindgen(js_name = editableConstructionScene)]
         pub fn editable_construction_scene(&self, json: &str) -> Result<String, JsValue> {
             self.0
@@ -383,6 +390,13 @@ mod wasm {
         pub fn advance_editable_point_gesture(&mut self, json: &str) -> Result<String, JsValue> {
             self.0
                 .advance_editable_point_gesture(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editablePointGesturePresentation)]
+        pub fn editable_point_gesture_presentation(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_point_gesture_presentation(json)
                 .map_err(|error| JsValue::from_str(&error))
         }
 

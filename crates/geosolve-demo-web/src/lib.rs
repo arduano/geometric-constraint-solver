@@ -63,6 +63,13 @@ mod workbench;
 mod wasm {
     use wasm_bindgen::prelude::*;
 
+    /// Paints a detached native authoring prediction without granting picking or edit authority.
+    #[wasm_bindgen(js_name = renderAuthoringPreview)]
+    pub fn render_authoring_preview(request: &str) -> Result<String, JsValue> {
+        crate::workbench::bridge::local_interaction::authoring_preview_json(request)
+            .map_err(|error| JsValue::from_str(&error))
+    }
+
     /// Browser-local accepted presentation. It has no solver, source or persistence owner.
     #[wasm_bindgen]
     pub struct InteractionHandle {
@@ -81,6 +88,12 @@ mod wasm {
         pub fn new(seed: &str) -> Result<InteractionHandle, JsValue> {
             crate::workbench::bridge::local_interaction::LocalInteraction::new(seed)
                 .map(|local| Self { local })
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        #[wasm_bindgen(js_name = authoringPointer)]
+        pub fn authoring_pointer(&self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .authoring_pointer_json(request)
                 .map_err(|e| JsValue::from_str(&e))
         }
         pub fn state(&self) -> Result<String, JsValue> {

@@ -137,6 +137,7 @@ pub use intent_editor::{
     DelegatedComputedFilletRadiusProposal, MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES,
     ProjectionalDelegatedPointPointerOutcome, ProjectionalEditorConstructionOutcome,
     ProjectionalEditorError, ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
+    ProjectionalPresentationBindings,
 };
 pub use intent_feature_authoring::{
     ProjectionalFilletAuthoringError, ProjectionalFilletPatch, projectional_fillet_patch,

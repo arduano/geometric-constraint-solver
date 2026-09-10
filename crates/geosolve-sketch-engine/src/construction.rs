@@ -496,10 +496,23 @@ impl ConstructionPrediction {
         Ok(diagnostic)
     }
 
-    /// Detached accepted/provisional scene; draft guides are reported separately per frame.
+    /// Detached scene plus exact semantic/native presentation correspondence.
     ///
     /// # Errors
-    /// Returns scene publication/encoding errors without changing accepted engine state.
+    /// Rejects unavailable native presentation or its encoding failure.
+    pub fn presentation_json(&self) -> Result<String, EngineError> {
+        let bindings = self
+            .editor
+            .presentation_bindings()
+            .ok_or_else(|| error("prediction presentation bindings are unavailable"))?;
+        serde_json::to_string(&serde_json::json!({"scene":self.scene_json()?, "bindings":bindings}))
+            .map_err(error)
+    }
+
+    /// Detached provisional geometry without namespace correspondence.
+    ///
+    /// # Errors
+    /// Rejects unavailable or unrepresentable provisional scenes.
     pub fn scene_json(&self) -> Result<String, EngineError> {
         self.editor
             .scene(self.command.viewport, CHORD_TOLERANCE_PIXELS)

@@ -304,7 +304,20 @@ impl RetainedPointGesture {
         })
     }
 
-    /// A detached presentation payload cannot authorize editing in another coordinator.
+    /// Detached scene plus exact semantic/native presentation correspondence.
+    ///
+    /// # Errors
+    /// Rejects unavailable native presentation or its encoding failure.
+    pub fn presentation_json(&self) -> Result<String, EngineError> {
+        let bindings = self
+            .editor
+            .presentation_bindings()
+            .ok_or_else(|| error("prediction presentation bindings are unavailable"))?;
+        serde_json::to_string(&serde_json::json!({"scene":self.scene_json()?, "bindings":bindings}))
+            .map_err(error)
+    }
+
+    /// Detached provisional geometry without namespace correspondence.
     ///
     /// # Errors
     /// Rejects unavailable or unrepresentable provisional scenes.

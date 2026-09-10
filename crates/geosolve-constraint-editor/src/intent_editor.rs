@@ -28,6 +28,39 @@ use geosolve_sketch_intent::{
 use geosolve_sketch_topology::{OffsetOperandRequest, PreparedOffsetOperandQuery};
 use thiserror::Error;
 
+/// Stable source symbols paired with native presentation identities. These rows
+/// describe a namespace translation; they carry no materialization authority.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectionalPresentationBindings {
+    pub document: DocumentId,
+    pub nodes: std::collections::BTreeMap<IntentKey, Vec<IntentNativeBinding>>,
+}
+
+impl ProjectionalEditorSession {
+    /// Returns exact native ownership under stable authored/generated symbols.
+    /// No geometry is inferred from labels, coordinates or allocator arithmetic.
+    #[must_use]
+    pub fn presentation_bindings(&self) -> Option<ProjectionalPresentationBindings> {
+        let accepted = self.coordinator().accepted_materialization()?;
+        let document = self.presentation_session()?.design_document().id();
+        let nodes = self
+            .coordinator()
+            .intent()
+            .graph()
+            .nodes()
+            .values()
+            .filter_map(|node| {
+                accepted
+                    .ownership
+                    .node(node.id)
+                    .map(|owner| (node.symbol.clone(), owner.owned.clone()))
+            })
+            .collect();
+        Some(ProjectionalPresentationBindings { document, nodes })
+    }
+}
+
 use crate::intent_bootstrap::{
     decode_flat_intent_accepted_bootstrap, decode_flat_intent_accepted_bootstrap_prefix,
     flat_intent_accepted_bootstrap_materialization_map,

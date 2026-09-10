@@ -34,6 +34,10 @@ struct InteractionSeed {
     grid_visible: bool,
     policy: GeometryInteractionPolicy,
     dimensions: LocalDimensionSeed,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    point_targets: BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -128,6 +132,13 @@ impl WorkbenchBridge {
             grid_visible: self.grid_visible,
             policy: self.editor().editor().geometry_interaction_policy(),
             dimensions: self.local_dimension_seed(),
+            bindings: self.editor().presentation_bindings(),
+            point_targets: self
+                .code_project
+                .as_ref()
+                .map(|code| code.local_point_targets(self.editor()))
+                .transpose()?
+                .unwrap_or_default(),
         };
         serde_json::to_string(&serde_json::json!({"snapshot":snapshot,"seed":seed}))
             .map_err(|e| e.to_string())
@@ -183,6 +194,327 @@ impl WorkbenchBridge {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum PredictionGuide {
+    Point { position: [f64; 2] },
+    Polyline { points: Vec<[f64; 2]>, closed: bool },
+    Rectangle { first: [f64; 2], second: [f64; 2] },
+    Circle { center: [f64; 2], radius: f64 },
+}
+impl PredictionGuide {
+    fn preview(self) -> geosolve_constraint_editor::ConstructionPreviewGeometry {
+        use geosolve_constraint_editor::ConstructionPreviewGeometry as Geometry;
+        match self {
+            Self::Point { position } => Geometry::Point { position },
+            Self::Polyline { mut points, closed } => {
+                if closed && let Some(first) = points.first().copied() {
+                    points.push(first);
+                }
+                Geometry::Polyline { points }
+            }
+            Self::Rectangle { first, second } => Geometry::Rectangle { first, second },
+            Self::Circle { center, radius } => Geometry::Circle { center, radius },
+        }
+    }
+    fn inference(self) -> Result<geosolve_constraint_editor::DraftGuideGeometry, String> {
+        use geosolve_constraint_editor::DraftGuideGeometry as Geometry;
+        match self {
+            Self::Point { position } => Ok(Geometry::Point { position }),
+            Self::Polyline {
+                points,
+                closed: false,
+            } if points.len() == 2 => Ok(Geometry::Segment {
+                start: points[0],
+                end: points[1],
+            }),
+            _ => Err("Unsupported native prediction inference guide".into()),
+        }
+    }
+}
+
+struct PresentationMapping {
+    source: geosolve_sketch::DocumentId,
+    destination: geosolve_sketch::DocumentId,
+    bindings: BTreeMap<
+        geosolve_constraint_editor::IntentNativeBinding,
+        geosolve_constraint_editor::IntentNativeBinding,
+    >,
+}
+impl PresentationMapping {
+    fn new(
+        source: Option<&geosolve_constraint_editor::ProjectionalPresentationBindings>,
+        destination: Option<&geosolve_constraint_editor::ProjectionalPresentationBindings>,
+        source_document: geosolve_sketch::DocumentId,
+        destination_document: geosolve_sketch::DocumentId,
+    ) -> Result<Self, String> {
+        let mut bindings = BTreeMap::new();
+        if source_document != destination_document {
+            let (Some(source), Some(destination)) = (source, destination) else {
+                return Err("Prediction namespace correspondence is unavailable".into());
+            };
+            if source.document != source_document || destination.document != destination_document {
+                return Err("Prediction namespace correspondence belongs to another scene".into());
+            }
+            for (symbol, before) in &source.nodes {
+                let after = destination
+                    .nodes
+                    .get(symbol)
+                    .ok_or("Prediction lost a source-owned declaration")?;
+                if before.len() != after.len() {
+                    return Err("Prediction declaration ownership changed".into());
+                }
+                for (before, after) in before.iter().zip(after) {
+                    if std::mem::discriminant(before) != std::mem::discriminant(after) {
+                        return Err("Prediction declaration ownership kind changed".into());
+                    }
+                    if let Some(previous) = bindings.insert(*before, *after)
+                        && previous != *after
+                    {
+                        return Err("Prediction namespace correspondence is ambiguous".into());
+                    }
+                }
+            }
+        }
+        Ok(Self {
+            source: source_document,
+            destination: destination_document,
+            bindings,
+        })
+    }
+    fn binding(
+        &self,
+        source: geosolve_constraint_editor::IntentNativeBinding,
+    ) -> Result<geosolve_constraint_editor::IntentNativeBinding, String> {
+        if self.source == self.destination {
+            return Ok(source);
+        }
+        self.bindings
+            .get(&source)
+            .copied()
+            .ok_or_else(|| "Prediction has no exact presentation binding".into())
+    }
+    fn selection(&self, item: SelectionItem) -> Result<SelectionItem, String> {
+        use geosolve_constraint_editor::IntentNativeBinding as Binding;
+        Ok(match item {
+            SelectionItem::Point(point) => match self.binding(Binding::Point(point))? {
+                Binding::Point(point) => SelectionItem::Point(point),
+                _ => return Err("Prediction point binding changed kind".into()),
+            },
+            SelectionItem::Curve(span) => match self.binding(Binding::Curve(span.curve))? {
+                Binding::Curve(curve) => SelectionItem::Curve(geosolve_sketch::CurveSpan {
+                    curve,
+                    segment: span.segment,
+                }),
+                _ => return Err("Prediction curve binding changed kind".into()),
+            },
+            SelectionItem::Dimension(dimension) => {
+                match self.binding(Binding::Dimension(dimension))? {
+                    Binding::Dimension(dimension) => SelectionItem::Dimension(dimension),
+                    _ => return Err("Prediction dimension binding changed kind".into()),
+                }
+            }
+            SelectionItem::Constraint(constraint) => {
+                match self.binding(Binding::Constraint(constraint))? {
+                    Binding::Constraint(constraint) => SelectionItem::Constraint(constraint),
+                    _ => return Err("Prediction constraint binding changed kind".into()),
+                }
+            }
+            SelectionItem::Feature(feature) => {
+                match self.binding(Binding::ComputedFeature(feature))? {
+                    Binding::ComputedFeature(feature) => SelectionItem::Feature(feature),
+                    _ => return Err("Prediction feature binding changed kind".into()),
+                }
+            }
+            SelectionItem::FeatureCorner(corner) => match (
+                self.binding(Binding::ComputedFeature(corner.feature))?,
+                self.binding(Binding::ComputedFeatureCorner(corner.corner))?,
+            ) {
+                (Binding::ComputedFeature(feature), Binding::ComputedFeatureCorner(corner)) => {
+                    SelectionItem::FeatureCorner(geosolve_sketch_features::ComputedCornerRef {
+                        feature,
+                        corner,
+                    })
+                }
+                _ => return Err("Prediction corner binding changed kind".into()),
+            },
+            SelectionItem::Datum(datum) => SelectionItem::Datum(datum),
+        })
+    }
+    fn layout_key(
+        &self,
+        key: geosolve_constraint_editor::AnnotationLayoutKey,
+    ) -> Result<geosolve_constraint_editor::AnnotationLayoutKey, String> {
+        use geosolve_constraint_editor::IntentNativeBinding as Binding;
+        if key.document != self.source {
+            return Err("Prediction annotation belongs to another document".into());
+        }
+        let Binding::Source(source) = self.binding(Binding::Source(key.source))? else {
+            return Err("Prediction annotation source changed kind".into());
+        };
+        Ok(geosolve_constraint_editor::AnnotationLayoutKey {
+            document: self.destination,
+            source,
+            item: self.selection(key.item)?,
+            ..key
+        })
+    }
+    fn dimensions(&self, dimensions: &mut LocalDimensionSeed) -> Result<(), String> {
+        if self.source == self.destination {
+            return Ok(());
+        }
+        dimensions.ids = dimensions
+            .ids
+            .iter()
+            .map(|(id, key)| Ok((id.clone(), self.layout_key(*key)?)))
+            .collect::<Result<_, String>>()?;
+        dimensions.layout = AnnotationLayoutState::from_entries(
+            dimensions
+                .layout
+                .entries()
+                .into_iter()
+                .map(|entry| {
+                    Ok(geosolve_constraint_editor::AnnotationLayoutEntry {
+                        key: self.layout_key(entry.key)?,
+                        placement: entry.placement,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+        );
+        dimensions.context.generated = dimensions
+            .context
+            .generated
+            .iter()
+            .map(|item| self.selection(*item))
+            .collect::<Result<_, _>>()?;
+        dimensions.context.default_priority = dimensions
+            .context
+            .default_priority
+            .iter()
+            .map(|item| self.selection(*item))
+            .collect::<Result<_, _>>()?;
+        dimensions.context.hovered = dimensions
+            .context
+            .hovered
+            .map(|item| self.selection(item))
+            .transpose()?;
+        dimensions.context.active = dimensions
+            .context
+            .active
+            .map(|item| self.selection(item))
+            .transpose()?;
+        // Namespace-specific automatic caches are rebuilt once against the exact
+        // prediction scene; authored priorities/manual placements are retained.
+        dimensions.state = DimensionPresentationState::default();
+        Ok(())
+    }
+}
+
+/// Converts a detached native prediction into paint only. No accepted-scene owner
+/// or native editing handle is constructed from this transport.
+pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct View {
+        seed: InteractionSeed,
+        state: InteractionState,
+    }
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Construction {
+        preview: Option<PredictionGuide>,
+        inference_guides: Vec<PredictionGuide>,
+    }
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Request {
+        scene: String,
+        bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
+        view: View,
+        construction: Option<Construction>,
+    }
+    let request: Request = decode_request(encoded)?;
+    let state = request.view.state;
+    if state.format != FORMAT || state.scene_key != request.view.seed.scene_key {
+        return Err("Prediction view belongs to a stale accepted scene".into());
+    }
+    let mut local = LocalInteraction::new(
+        &serde_json::to_string(&request.view.seed).map_err(|error| error.to_string())?,
+    )?;
+    let scene = EditorScene::from_detached_json(&request.scene).map_err(|e| e.to_string())?;
+    let mapping = PresentationMapping::new(
+        request.view.seed.bindings.as_ref(),
+        request.bindings.as_ref(),
+        local.scene.presentation_document().id(),
+        scene.presentation_document().id(),
+    )?;
+    mapping.dimensions(&mut local.dimensions)?;
+    local.scene = scene;
+    local.camera = camera(state.viewport)?;
+    local.grid_visible = state.grid_visible;
+    local
+        .editor
+        .restore_selection_presentation(
+            &local.scene,
+            SelectionPresentationState {
+                items: state
+                    .selection
+                    .into_iter()
+                    .map(|item| mapping.selection(item))
+                    .collect::<Result<_, _>>()?,
+                // Paint has no curve-pick authority. Accepted navigation retains
+                // exact native/implicit occurrence contexts independently.
+                curve_picks: Vec::new(),
+            },
+        )
+        .map_err(|e| e.to_string())?;
+    local.dimensions.state.mode = mode(&state.dimension_mode)?;
+    if state.dimension_pins.len() > DimensionPresentationState::MAX_PINS {
+        return Err("Too many prediction dimension pins".into());
+    }
+    let key = |id: &String| {
+        local
+            .dimensions
+            .ids
+            .get(id)
+            .copied()
+            .ok_or_else(|| "Stale prediction dimension".to_string())
+    };
+    local.dimensions.state.pins = state
+        .dimension_pins
+        .iter()
+        .map(key)
+        .collect::<Result<_, _>>()?;
+    local.dimensions.state.focus = state.dimension_focus.as_ref().map(key).transpose()?;
+    local.dimensions.context.navigation_active = true;
+    let mut frame = local.compose_frame()?;
+    if let Some(construction) = request.construction {
+        let preview = construction.preview.map(PredictionGuide::preview);
+        let guides = construction
+            .inference_guides
+            .into_iter()
+            .map(PredictionGuide::inference)
+            .collect::<Result<Vec<_>, _>>()?;
+        let overlay = geosolve_sketch_render::compose_prediction_guides(
+            state.viewport,
+            preview.as_ref(),
+            &guides,
+        )
+        .map_err(|e| e.to_string())?;
+        frame.scene.items.extend(overlay.items);
+    }
+    frame
+        .scene
+        .provenance
+        .insert("scene".into(), "provisional".into());
+    for item in &mut frame.scene.items {
+        item.interactive = false;
+    }
+    frame.scene.validate().map_err(|e| e.to_string())?;
+    frame.aria_label = format!("{} provisional sketch viewport", local.title);
+    serde_json::to_string(&frame).map_err(|e| e.to_string())
+}
+
 /// Detached presentation session shared by native tests and the browser worker.
 pub(crate) struct LocalInteraction {
     scene_key: String,
@@ -195,6 +527,7 @@ pub(crate) struct LocalInteraction {
     pan: Option<CanvasPanGesture>,
     dimension_hover: Option<(SelectionItem, ScreenPoint)>,
     host_size_received: bool,
+    point_targets: BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>,
 }
 impl LocalInteraction {
     pub(crate) fn new(encoded: &str) -> Result<Self, String> {
@@ -226,6 +559,7 @@ impl LocalInteraction {
             pan: None,
             dimension_hover: None,
             host_size_received: seed.host_size_received,
+            point_targets: seed.point_targets,
         })
     }
     fn state(&self) -> InteractionState {
@@ -252,6 +586,28 @@ impl LocalInteraction {
                 .collect(),
         }
     }
+    pub(crate) fn authoring_pointer_json(&self, encoded: &str) -> Result<String, String> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Input {
+            x: f64,
+            y: f64,
+            #[serde(default)]
+            captured: bool,
+        }
+        let input: Input = decode_request(encoded)?;
+        let position = self
+            .normalized_position([input.x, input.y], input.captured)
+            .ok_or("Invalid authoring pointer position")?;
+        let item = self.editor.select_pointer_item(&self.scene, position);
+        let target = match item {
+            Some(SelectionItem::Point(point)) => self.point_targets.get(&point),
+            _ => None,
+        };
+        serde_json::to_string(&serde_json::json!({"viewport":self.camera.viewport(),
+            "position":self.camera.viewport().screen_to_model(position),"target":target}))
+        .map_err(|e| e.to_string())
+    }
     pub(crate) fn state_json(&self) -> Result<String, String> {
         serde_json::to_string(&self.state()).map_err(|e| e.to_string())
     }
@@ -263,6 +619,16 @@ impl LocalInteraction {
         selection_changed: bool,
         server_frame_compatible: bool,
     ) -> Result<String, String> {
+        let frame = self.compose_frame()?;
+        serde_json::to_string(&InteractionUpdate {
+            frame,
+            state: self.state(),
+            selection_changed,
+            server_frame_compatible,
+        })
+        .map_err(|e| e.to_string())
+    }
+    fn compose_frame(&mut self) -> Result<FrameSnapshot, String> {
         if self.scene.viewport != self.camera.viewport() {
             self.scene
                 .reproject_viewport(self.camera.viewport())
@@ -299,16 +665,10 @@ impl LocalInteraction {
             self.camera.viewport(),
         )
         .map_err(|e| e.to_string())?;
-        serde_json::to_string(&InteractionUpdate {
-            frame: FrameSnapshot {
-                scene,
-                aria_label: format!("{} accepted sketch viewport", self.title),
-            },
-            state: self.state(),
-            selection_changed,
-            server_frame_compatible,
+        Ok(FrameSnapshot {
+            scene,
+            aria_label: format!("{} accepted sketch viewport", self.title),
         })
-        .map_err(|e| e.to_string())
     }
     pub(crate) fn replace_json(&mut self, encoded: &str) -> Result<String, String> {
         #[derive(Deserialize)]
@@ -690,6 +1050,51 @@ mod tests {
         let local = LocalInteraction::new(&result["seed"].to_string()).unwrap();
         (bridge, local)
     }
+    #[test]
+    fn authoring_prediction_paint_uses_current_view_and_never_picking_authority() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        let pair: serde_json::Value =
+            serde_json::from_str(&bridge.interaction_snapshot_json().unwrap()).unwrap();
+        let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
+        let source = bridge.export_project_json().unwrap();
+        local
+            .wheel_json(
+                r#"{"version":2,"x":300.0,"y":250.0,"deltaX":0.0,"deltaY":-70.0,"ctrl":false}"#,
+            )
+            .unwrap();
+        let viewport = local.camera.viewport();
+        let view = serde_json::json!({"seed":pair["seed"],"state":local.state()});
+        let input = serde_json::json!({"scene":pair["seed"]["scene"],"view":view,
+            "construction":{"preview":{"kind":"circle","center":[12.0,7.0],"radius":3.0},
+            "inference_guides":[{"kind":"point","position":[12.0,7.0]}]}});
+        let frame: serde_json::Value =
+            serde_json::from_str(&authoring_preview_json(&input.to_string()).unwrap()).unwrap();
+        assert_eq!(frame["scene"]["provenance"]["scene"], "provisional");
+        let items = frame["scene"]["items"].as_array().unwrap();
+        assert!(items.iter().all(|item| item["interactive"] == false));
+        let circle = items
+            .iter()
+            .find(|item| item["className"] == "wb-draft-circle")
+            .unwrap();
+        let expected = viewport.model_to_screen([12.0, 7.0]);
+        assert_eq!(
+            circle["center"],
+            serde_json::json!([expected.x, expected.y])
+        );
+        assert_eq!(
+            circle["radius"],
+            serde_json::json!(3.0 * viewport.pixels_per_model_unit)
+        );
+        assert_eq!(bridge.export_project_json().unwrap(), source);
+        let mut stale = input.clone();
+        stale["view"]["state"]["sceneKey"] = "obsolete".into();
+        assert!(authoring_preview_json(&stale.to_string()).is_err());
+        let mut invalid = input;
+        invalid["construction"]["preview"]["radius"] = (-1.0).into();
+        assert!(authoring_preview_json(&invalid.to_string()).is_err());
+        assert_eq!(bridge.export_project_json().unwrap(), source);
+    }
+
     #[test]
     fn local_canvas_replays_camera_and_selection_without_authoring() {
         let (mut bridge, mut local) = seeded();

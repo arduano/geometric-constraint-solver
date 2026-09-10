@@ -2335,6 +2335,44 @@ impl CodeProjectWorkbench {
         }))
     }
 
+    pub(crate) fn local_point_targets(
+        &self,
+        editor: &ProjectionalEditorSession,
+    ) -> Result<BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>, String> {
+        let Some(expansion) = self.session.snapshot().accepted_expansion.as_ref() else {
+            return Ok(BTreeMap::new());
+        };
+        let mut groups = BTreeMap::<_, Vec<_>>::new();
+        for lens in &expansion.writable_points {
+            if let Some(point) = expanded_port_point(editor, &lens.handle) {
+                groups.entry(point).or_default().push(lens.clone());
+            }
+        }
+        let mut targets = BTreeMap::new();
+        for (point, candidates) in groups {
+            // Preserve the existing native producer/reference disambiguation.
+            // Ambiguity is unavailable, never a nearest-position fallback.
+            let Ok(Some(lens)) = select_semantic_point_drag_lens(expansion, &candidates, None)
+            else {
+                continue;
+            };
+            let target = match lens.edit {
+                CodePointEdit::Point { address } => {
+                    serde_json::json!({"target":"point","address":address})
+                }
+                CodePointEdit::RectangleCorner {
+                    lower_left,
+                    upper_right,
+                    corner,
+                    ..
+                } => serde_json::json!({
+                    "target":"rectangle_corner","lower_left":lower_left,"upper_right":upper_right,"corner":corner}),
+            };
+            targets.insert(point, target);
+        }
+        Ok(targets)
+    }
+
     /// Authenticates a code-owned point against the accepted semantic draft
     /// overlay before pointer motion begins. Unsupported code-owned points
     /// fail closed instead of becoming opaque delegated checkpoints.

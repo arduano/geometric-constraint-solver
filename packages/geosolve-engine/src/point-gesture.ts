@@ -66,6 +66,7 @@ export interface PointGestureNativeHandle {
   beginEditablePointGesture(json: string): string;
   advanceEditablePointGesture(json: string): string;
   editablePointGestureScene(json: string): string;
+  editablePointGesturePresentation(json: string): string;
   finishEditablePointGesture(json: string): string;
   cancelEditablePointGesture(json: string): void;
   prepareEditablePointCommit(json: string): string;
@@ -88,6 +89,10 @@ export class RetainedPointGesture {
     return decodePointValue(this.native.advanceEditablePointGesture(JSON.stringify({ ...this.routing, sample })));
   }
   /** Detached JSON consumed only by the presentation adapter. */
+  presentationJSON(): string {
+    this.assertLive(); return this.native.editablePointGesturePresentation(JSON.stringify(this.routing));
+  }
+  /** Detached geometry without namespace correspondence. */
   sceneJSON(): string {
     this.assertLive(); return this.native.editablePointGestureScene(JSON.stringify(this.routing));
   }

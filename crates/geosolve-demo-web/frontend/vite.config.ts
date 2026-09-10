@@ -61,6 +61,7 @@ function releaseDocuments(): Plugin {
 export default defineConfig({
   plugins: [react(), releaseDocuments()],
   worker: { format: "es" },
+  server: { fs: { allow: [frontendDirectory, resolve(repositoryRoot, "packages")] } },
   base: publicBase,
   build: {
     assetsDir: "assets",

@@ -788,6 +788,21 @@ impl EditorScene {
 }
 
 impl ConstraintEditor {
+    /// Exact selectable owner under the ordinary Select pointer resolver.
+    /// This read-only query neither selects nor starts an editing gesture.
+    #[must_use]
+    pub fn select_pointer_item(
+        &self,
+        scene: &EditorScene,
+        position: ScreenPoint,
+    ) -> Option<SelectionItem> {
+        if self.tool != EditorTool::Select || !position.is_finite() {
+            return None;
+        }
+        self.resolve_select_pointer_target(scene, position, &[])
+            .map(|target| target.hit().item)
+    }
+
     /// Applies the ordinary Select-mode hit resolver without beginning an edit.
     ///
     /// This is the local selection boundary for hosts whose geometry edits are
