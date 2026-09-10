@@ -26,7 +26,7 @@ class ReleaseProfileTests(unittest.TestCase):
         policy_path = self.root / gate.POLICY_PATH
         policy_path.parent.mkdir(parents=True)
         policy_path.write_text(json.dumps(self.policy))
-        for package in ("geosolve-headless", "geosolve-demo-web", "geosolve-sketch-engine-wasm"):
+        for package in ("geosolve-headless", "geosolve-demo-web", "geosolve-sketch-engine-wasm", "geosolve-collaboration", "geosolve-collaboration-wasm"):
             crate = self.root / "crates" / package
             (crate / "src").mkdir(parents=True)
             (crate / "Cargo.toml").write_text(f'[package]\nname="{package}"\nversion="0.1.0"\n')
@@ -164,7 +164,7 @@ class ReleaseProfileTests(unittest.TestCase):
 
     def test_frontend_preflight_disables_mutable_test_cache(self):
         frontend = next(stage for stage in gate.preflight_stages() if stage.id == "preflight.frontend")
-        self.assertIn(gate.npm(gate.FRONTEND, "test", "--", "--no-cache"), frontend.commands)
+        self.assertTrue(any(command[:6] == gate.npm(gate.FRONTEND, "test", "--", "--no-cache") for command in frontend.commands))
         self.assertIn(gate.npm(gate.FRONTEND, "run", "check:licenses"), frontend.commands)
         self.assertIn(gate.npm(gate.FRONTEND, "run", "check:language-sdk"), frontend.commands)
 

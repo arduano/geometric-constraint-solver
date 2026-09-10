@@ -8,5 +8,5 @@
   "os": ["linux"],
   "bin": { "geosolve": "bin/geosolve.mjs" },
   "files": ["bin", "runtime", "README.md", "LICENSE", "THIRD_PARTY_LICENSES.md"],
-  "dependencies": { "@geosolve/sketch-code": "0.2.0", "@geosolve/engine": "0.1.0" }
+  "dependencies": { "@geosolve/sketch-code": "0.2.0", "@geosolve/engine": "0.1.0", "@geosolve/collaboration": "0.1.0" }
 }

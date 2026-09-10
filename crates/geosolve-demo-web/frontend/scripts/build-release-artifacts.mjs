@@ -6,10 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { frontendDirectory, hash, publicBase, run, writeManifest } from "./release-artifact-lib.mjs";
 
-const wasmFile = "geosolve_demo_web_bg.wasm";
-const requiredBindings = ["geosolve_demo_web.js", "geosolve_demo_web.d.ts", "geosolve_demo_web_bg.wasm.d.ts"];
-
-async function readWasmPackage(directory) {
+async function readWasmPackage(directory, module = "geosolve_demo_web") {
   const root = await lstat(directory);
   if (!root.isDirectory() || root.isSymbolicLink()) throw new Error("WASM package must be a real directory");
   const files = [];
@@ -25,10 +22,11 @@ async function readWasmPackage(directory) {
   }
   await walk(directory);
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-  for (const name of [wasmFile, ...requiredBindings]) {
+  const wasmName = `${module}_bg.wasm`;
+  for (const name of [wasmName, `${module}.js`, `${module}.d.ts`, `${module}_bg.wasm.d.ts`]) {
     if (!files.some((file) => file.path === name && file.contents.length > 0)) throw new Error(`WASM package missing required nonempty file: ${name}`);
   }
-  const wasm = files.find((file) => file.path === wasmFile).contents;
+  const wasm = files.find((file) => file.path === wasmName).contents;
   if (!wasm.subarray(0, 8).equals(Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]))) throw new Error("WASM package contains an invalid WASM header");
   // Hash the same captured bytes that are installed. The gate separately authenticates
   // this package's input identity and build receipt before supplying --wasm-package.
@@ -64,7 +62,7 @@ export async function prepareWasm({ packageDirectory, frontendRoot = frontendDir
   };
 }
 
-export async function buildArtifacts({ out, base: requestedBase = "./", wasmPackage }, { frontendRoot = frontendDirectory, commandRunner = run } = {}) {
+export async function buildArtifacts({ out, base: requestedBase = "./", wasmPackage }, { frontendRoot = frontendDirectory, commandRunner = run, moduleDirectories } = {}) {
   if (!out) throw new Error("usage: node scripts/build-release-artifacts.mjs --out <new-directory> [--base ./] [--wasm-package <directory>]");
   const output = resolve(out);
   const base = publicBase(requestedBase);
@@ -80,6 +78,22 @@ export async function buildArtifacts({ out, base: requestedBase = "./", wasmPack
   // and node_modules. Both Vite bundles consume the same optimized WASM package.
   const wasmPackageProvenance = await prepareWasm({ packageDirectory: wasmPackage, frontendRoot, commandRunner });
   const { optimizedWasmSha256 } = wasmPackageProvenance;
+  const repository = resolve(frontendRoot, "../../..");
+  if (!wasmPackage) {
+    for (const packageName of ["geosolve-engine", "geosolve-collaboration"]) {
+      for (const script of ["build-wasm.mjs", "build.mjs"]) await commandRunner("node", [`packages/${packageName}/scripts/${script}`], { cwd: repository });
+    }
+  }
+  const directories = moduleDirectories ?? {
+    geosolve_sketch_engine_wasm: resolve(repository, "packages/geosolve-engine/dist/wasm"),
+    geosolve_collaboration_wasm: resolve(repository, "packages/geosolve-collaboration/dist/wasm"),
+  };
+  if (Object.keys(directories).sort().join(",") !== "geosolve_collaboration_wasm,geosolve_sketch_engine_wasm") throw Error("Expected exact engine and collaboration native packages");
+  const wasmModules = { geosolve_demo_web: wasmPackageProvenance };
+  for (const [module, directory] of Object.entries(directories)) {
+    const snapshot = await readWasmPackage(directory, module);
+    wasmModules[module] = { source: "prepared-runtime", directory, files: snapshot.inventory, filesSha256: snapshot.filesSha256, optimizedWasmSha256: snapshot.optimizedWasmSha256 };
+  }
   await commandRunner("npm", ["run", "check:types"], { cwd: frontendRoot });
   for (const artifact of artifacts) {
     await commandRunner(resolve(frontendRoot, "node_modules/.bin/vite"), ["build"], {
@@ -88,11 +102,20 @@ export async function buildArtifacts({ out, base: requestedBase = "./", wasmPack
         GEOSOLVE_BROWSER_COMPILER_HARNESS: artifact.kind === "harness" ? "1" : "0", VITE_GEOSOLVE_MOCK: "0" },
     });
     const manifest = await writeManifest(artifact.directory, artifact.kind, artifact.base, artifact.manifest);
-    const wasm = manifest.files.find((file) => file.path.endsWith(".wasm"));
-    if (wasm.sha256 !== optimizedWasmSha256) throw new Error(`${artifact.kind} did not preserve the prepared optimized WASM bytes`);
+    const wasm = manifest.files.filter(file => file.path.endsWith(".wasm"));
+    if (wasm.length !== Object.keys(wasmModules).length) throw new Error(`${artifact.kind} must contain exactly three prepared native WASM modules`);
+    for (const [module, provenance] of Object.entries(wasmModules)) {
+      const matches = wasm.filter(file => new RegExp(`(?:^|/)${module}_bg-[A-Za-z0-9_-]+\\.wasm$`, "u").test(file.path));
+      if (matches.length !== 1 || matches[0].sha256 !== provenance.optimizedWasmSha256) throw new Error(`${artifact.kind} did not preserve exact prepared ${module} WASM bytes`);
+    }
+    // Bindings are code inputs too; a concurrent writer must not alter any
+    // package while harness and production artifacts are consuming it.
+    for (const [module, directory] of Object.entries({ geosolve_demo_web: resolve(frontendRoot, "src/generated"), ...directories })) {
+      if ((await readWasmPackage(directory, module)).filesSha256 !== wasmModules[module].filesSha256) throw Error(`Prepared ${module} package changed during browser build`);
+    }
   }
   await writeFile(resolve(output, "build.json"), `${JSON.stringify({
-    format: "geosolve-release-browser-build-v1", optimizedWasmSha256, wasmPackageProvenance,
+    format: "geosolve-release-browser-build-v1", optimizedWasmSha256, wasmPackageProvenance, wasmModules,
     harnessManifest: artifacts[0].manifest, productionManifest: artifacts[1].manifest,
   }, null, 2)}\n`, { flag: "wx" });
   console.log(`prepared one harness and one production distribution in ${output}`);

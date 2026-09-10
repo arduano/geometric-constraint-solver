@@ -11,6 +11,8 @@ import { frontendDirectory, hash, publicBase, readManifest, validateManifest, wr
 import { serveArtifact } from "./serve-artifact.mjs";
 import { buildArtifacts, prepareWasm } from "./build-release-artifacts.mjs";
 import { verifyTransport } from "./verify-artifact.mjs";
+const modules = ["geosolve_demo_web", "geosolve_sketch_engine_wasm", "geosolve_collaboration_wasm"];
+const wasmBytes = module => Buffer.from([0, 97, 115, 109, 1, 0, 0, 0, 0, 2, 1, 97 + modules.indexOf(module)]);
 
 async function fixture(t, { kind = "production", base = "./" } = {}) {
   const root = await mkdtemp(resolve(tmpdir(), "geosolve-release-artifact-test-"));
@@ -21,9 +23,9 @@ async function fixture(t, { kind = "production", base = "./" } = {}) {
   for (const [source, target] of [["LICENSE", "LICENSE"], ["THIRD_PARTY_LICENSES.md", "THIRD_PARTY_LICENSES.md"], ["docs/API_COMPATIBILITY.md", "API_COMPATIBILITY.md"]]) {
     await copyFile(resolve(repository, source), resolve(directory, target));
   }
-  await writeFile(resolve(directory, "assets/index-12345678.js"), 'new URL("module-12345678.wasm", import.meta.url);\n');
+  await writeFile(resolve(directory, "assets/index-12345678.js"), modules.map(module => `new URL("${module}_bg-12345678.wasm", import.meta.url);`).join("\n"));
   await writeFile(resolve(directory, "assets/index-12345678.css"), "body{}\n");
-  await writeFile(resolve(directory, "assets/module-12345678.wasm"), Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]));
+  for (const module of modules) await writeFile(resolve(directory, `assets/${module}_bg-12345678.wasm`), wasmBytes(module));
   await writeFile(resolve(directory, "index.html"), `<link rel="stylesheet" href="${base}assets/index-12345678.css"><script type="module" src="${base}assets/index-12345678.js"></script>`);
   if (kind === "harness") await writeFile(resolve(directory, "compiler-parity.html"), `<script type="module" src="${base}assets/index-12345678.js"></script>`);
   const manifest = resolve(root, "artifact.json");
@@ -46,7 +48,7 @@ test("an authenticated production copy serves identical bytes at its declared ba
   t.after(() => new Promise((accept) => server.close(accept)));
   const rows = await verifyTransport(await readManifest(f.manifest, copy), baseUrl);
   assert.equal(rows.length, f.artifact.manifest.files.length + 1);
-  assert.equal(rows.filter((row) => row.contentType === "application/wasm").length, 1);
+  assert.equal(rows.filter((row) => row.contentType === "application/wasm").length, 3);
   assert.equal((await fetch(new URL("compiler-parity.html", baseUrl))).status, 404);
   assert.equal((await fetch(new URL("missing.js", baseUrl))).status, 404);
   assert.equal((await fetch(new URL("/", baseUrl))).status, 404);
@@ -178,14 +180,19 @@ async function wasmPackageFixture(t) {
   await mkdir(resolve(frontendRoot, "src/generated"), { recursive: true });
   await mkdir(packageDirectory);
   const files = {
-    "geosolve_demo_web_bg.wasm": Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]),
+    "geosolve_demo_web_bg.wasm": wasmBytes("geosolve_demo_web"),
     "geosolve_demo_web.js": "export class WorkbenchHandle {}\n",
     "geosolve_demo_web.d.ts": "export class WorkbenchHandle {}\n",
     "geosolve_demo_web_bg.wasm.d.ts": "export const memory: WebAssembly.Memory;\n",
   };
   for (const [name, bytes] of Object.entries(files)) await writeFile(resolve(packageDirectory, name), bytes);
+  const moduleDirectories = {};
+  for (const module of modules.slice(1)) {
+    const directory = resolve(root, module); await mkdir(directory); moduleDirectories[module] = directory;
+    for (const [name, bytes] of Object.entries(files)) await writeFile(resolve(directory, name.replace("geosolve_demo_web", module)), name.endsWith(".wasm") ? wasmBytes(module) : bytes);
+  }
   await writeFile(resolve(frontendRoot, "src/generated/stale.js"), "old binding");
-  return { root, frontendRoot, packageDirectory, files };
+  return { root, frontendRoot, packageDirectory, files, moduleDirectories };
 }
 
 test("prepared WASM supplies both browser bundles without invoking the Rust or WASM build", async (t) => {
@@ -195,7 +202,7 @@ test("prepared WASM supplies both browser bundles without invoking the Rust or W
   const commands = [];
   const output = resolve(f.root, "browser");
   await buildArtifacts({ out: output, wasmPackage: f.packageDirectory }, {
-    frontendRoot: f.frontendRoot,
+    frontendRoot: f.frontendRoot, moduleDirectories: f.moduleDirectories,
     commandRunner: async (command, args, options) => {
       commands.push([command, ...args]);
       for (const [name, bytes] of Object.entries(f.files)) assert.deepEqual(await readFile(resolve(f.frontendRoot, "src/generated", name)), Buffer.from(bytes));
@@ -211,7 +218,12 @@ test("prepared WASM supplies both browser bundles without invoking the Rust or W
   assert.equal(build.wasmPackageProvenance.files.length, 4);
   assert.equal(build.optimizedWasmSha256, hash(f.files["geosolve_demo_web_bg.wasm"]));
   for (const manifest of [build.harnessManifest, build.productionManifest]) {
-    assert.equal((await readManifest(manifest)).manifest.files.find((file) => file.path.endsWith(".wasm")).sha256, build.optimizedWasmSha256);
+    const files = (await readManifest(manifest)).manifest.files;
+    for (const module of modules) {
+      assert.equal(files.find(file => file.path.includes(`${module}_bg-`)).sha256, build.wasmModules[module].optimizedWasmSha256);
+      assert.equal(build.wasmModules[module].optimizedWasmSha256, hash(wasmBytes(module)));
+      assert.equal(build.wasmModules[module].filesSha256, hash(JSON.stringify(build.wasmModules[module].files)));
+    }
   }
   await assert.rejects(readFile(resolve(f.frontendRoot, "src/generated/stale.js")), /ENOENT/);
   for (const [name, bytes] of Object.entries(f.files)) assert.deepEqual(await readFile(resolve(f.packageDirectory, name)), Buffer.from(bytes));
@@ -254,4 +266,44 @@ test("invalid prepared WASM packages preserve prior generated output and never i
       assert.equal(await readFile(resolve(f.frontendRoot, "src/generated/stale.js"), "utf8"), "old binding");
     });
   }
+});
+
+test("three-module provenance refuses substituted engine/collaboration bytes and changed binding packages",async t=>{
+  for(const kind of ["engine-bytes","collaboration-bytes","binding-race","demo-binding-race"]){
+    await t.test(kind,async subtest=>{
+      const f=await wasmPackageFixture(subtest),harness=await fixture(subtest,{kind:"harness"});
+      if(kind.endsWith("-bytes")){
+        const module=kind==="engine-bytes"?"geosolve_sketch_engine_wasm":"geosolve_collaboration_wasm";
+        await writeFile(resolve(harness.directory,`assets/${module}_bg-12345678.wasm`),wasmBytes("geosolve_demo_web"));
+      }
+      await assert.rejects(buildArtifacts({out:resolve(f.root,"refused"),wasmPackage:f.packageDirectory},{
+        frontendRoot:f.frontendRoot,moduleDirectories:f.moduleDirectories,
+        commandRunner:async(command,_args,options)=>{
+          if(command.endsWith("/vite")){
+            await cp(harness.directory,options.env.GEOSOLVE_DIST,{recursive:true});
+            if(kind==="binding-race")await writeFile(resolve(f.moduleDirectories.geosolve_collaboration_wasm,"geosolve_collaboration_wasm.js"),"changed binding");
+            if(kind==="demo-binding-race")await writeFile(resolve(f.frontendRoot,"src/generated/geosolve_demo_web.js"),"changed binding");
+          }
+        },
+      }),/did not preserve exact prepared|package changed/u);
+      await assert.rejects(readFile(resolve(f.root,"refused/build.json")),/ENOENT/u);
+    });
+  }
+});
+
+test("standalone artifact preparation builds engine and collaboration packages before bundling",async t=>{
+  const f=await wasmPackageFixture(t),harness=await fixture(t,{kind:"harness"}),production=await fixture(t),commands=[];
+  await buildArtifacts({out:resolve(f.root,"standalone")},{frontendRoot:f.frontendRoot,moduleDirectories:f.moduleDirectories,
+    commandRunner:async(command,args,options)=>{
+      commands.push([command,...args]);
+      if(command==="npm"&&args.includes("wasm:release")){
+        await rm(resolve(f.frontendRoot,"src/generated"),{recursive:true});await cp(f.packageDirectory,resolve(f.frontendRoot,"src/generated"),{recursive:true});
+      }
+      if(command.endsWith("/vite"))await cp(options.env.GEOSOLVE_BROWSER_COMPILER_HARNESS==="1"?harness.directory:production.directory,options.env.GEOSOLVE_DIST,{recursive:true});
+    },
+  });
+  assert.deepEqual(commands.slice(0,6),[
+    ["npm","run","wasm:release"],["node","packages/geosolve-engine/scripts/build-wasm.mjs"],["node","packages/geosolve-engine/scripts/build.mjs"],
+    ["node","packages/geosolve-collaboration/scripts/build-wasm.mjs"],["node","packages/geosolve-collaboration/scripts/build.mjs"],["npm","run","check:types"],
+  ]);
 });

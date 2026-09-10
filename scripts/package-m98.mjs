@@ -70,20 +70,37 @@ function stageEngine(output, sdk) {
   return metadata;
 }
 
-function stageCli(output, sdk, engine, dist) {
+function stageCollaboration(output) {
+  const source = resolve(repository, "packages/geosolve-collaboration");
+  for (const path of ["dist", "README.md"]) copy(resolve(source, path), resolve(output, path));
+  copy(resolve(repository, "LICENSE"), resolve(output, "LICENSE"));
+  copy(resolve(repository, "THIRD_PARTY_LICENSES.md"), resolve(output, "THIRD_PARTY_LICENSES.md"));
+  const metadata = packageMetadata(source);
+  json(resolve(output, "package.json"), { ...metadata, engines: { node: ">=22" }, files: ["dist", "README.md", "LICENSE", "THIRD_PARTY_LICENSES.md"] });
+  return metadata;
+}
+
+function stageCli(output, sdk, engine, collaboration, dist) {
   const source = resolve(repository, "packages/geosolve-cli");
   for (const path of ["bin", "README.md"]) copy(resolve(source, path), resolve(output, path));
   chmodSync(resolve(output, "bin/geosolve.mjs"), 0o755);
   copy(resolve(repository, "LICENSE"), resolve(output, "LICENSE"));
   const metadata = readJson(resolve(source, "package.json"));
-  json(resolve(output, "package.json"), { ...metadata, cpu: [process.arch], dependencies: { "@geosolve/sketch-code": sdk.version, "@geosolve/engine": engine.version } });
+  json(resolve(output, "package.json"), { ...metadata, cpu: [process.arch], dependencies: { "@geosolve/sketch-code": sdk.version, "@geosolve/engine": engine.version, "@geosolve/collaboration": collaboration.version } });
   const runtime = resolve(output, "runtime");
   const scripts = ["geosolve-cli.mjs", "file-workspace.mjs", "workspace-loader.mjs", "workspace-loader-worker.mjs", "workspace-runtime-paths.mjs",
-    "workspace-evaluation.mjs", "workspace-evaluation-worker.mjs", "workspace-workbench.mjs", "workspace-workbench-worker.mjs", "workspace-storage.mjs", "workspace-session.mjs"];
+    "workspace-evaluation.mjs", "workspace-evaluation-worker.mjs", "workspace-workbench.mjs", "workspace-workbench-worker.mjs", "workspace-storage.mjs", "workspace-session.mjs",
+    "collaboration-cli.mjs", "collaboration-host.mjs", "collaboration-http.mjs", "collaboration-storage.mjs", "collaboration-runtime.mjs", "collaboration-serve.mjs", "collaboration-mirror.mjs",
+    "collaboration-mirror-worker.mjs", "collaboration-mirror-worker-bridge.mjs",
+    "collaboration-domain.mjs", "collaboration-domain-worker.mjs", "collaboration-domain-structure.mjs", "collaboration-domain-syntax.mjs", "collaboration-domain-properties.mjs"];
   for (const name of scripts) copy(resolve(repository, "scripts", name), resolve(runtime, "scripts", name));
   copy(resolve(repository, "target/m98/workspace-runtime.mjs"), resolve(runtime, "assets/workspace-runtime.mjs"));
   copy(resolve(repository, "crates/geosolve-demo-web/frontend/src/generated"), resolve(runtime, "assets/demo-wasm"));
   copy(dist, resolve(runtime, "assets/workbench"));
+  copy(resolve(repository, "crates/geosolve-demo-web/frontend/scripts/release-artifact-lib.mjs"), resolve(runtime, "assets/release-artifact-lib.mjs"));
+  const workbenchFiles = filesUnder(dist).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  json(resolve(runtime, "assets/workbench-artifact.json"), { format: "geosolve-release-artifact-v1", kind: "production", publicBase: "./", directory: resolve(dist),
+    files: workbenchFiles, totalBytes: workbenchFiles.reduce((sum, file) => sum + file.bytes, 0), filesSha256: hash(JSON.stringify(workbenchFiles)) });
   for (const name of ["geosolve.json", "sketch.ts"]) copy(resolve(repository, "examples/file-workspace", name), resolve(runtime, "assets/starter", name));
   const esbuild = resolve(repository, "crates/geosolve-demo-web/frontend/node_modules/esbuild");
   for (const path of ["lib/main.js", "lib/main.d.ts", "LICENSE.md"]) copy(resolve(esbuild, path), resolve(runtime, "vendor/esbuild", path));
@@ -107,6 +124,7 @@ function stageCli(output, sdk, engine, dist) {
   json(resolve(runtime, "runtime-layout.json"), { format: "geosolve-cli-runtime-v1", platform: process.platform, arch: process.arch });
   const notices = ["# Third-party runtime notices\n", "The CLI's GeoSolve code is GPL-3.0-or-later.\n",
     "## esbuild (MIT)\n", readFileSync(resolve(esbuild, "LICENSE.md"), "utf8"),
+    "## Native collaboration and current package notices\n", readFileSync(resolve(repository, "THIRD_PARTY_LICENSES.md"), "utf8"),
     "## Frozen workbench and compiler notices\n", readFileSync(resolve(dist, "THIRD_PARTY_LICENSES.md"), "utf8")];
   writeFileSync(resolve(output, "THIRD_PARTY_LICENSES.md"), notices.join("\n") + "\n", { flag: "wx" });
   return metadata;
@@ -121,10 +139,10 @@ export function packageM98({ out, dist = resolve(repository, "crates/geosolve-de
   for (const path of ["index.html", "LICENSE", "THIRD_PARTY_LICENSES.md"]) if (!existsSync(resolve(distribution, path))) throw Error(`Prepared workbench is missing ${path}`);
   mkdirSync(output, { recursive: true });
   const staging = resolve(output, "staging"); mkdirSync(staging);
-  const sdkRoot = resolve(staging, "sketch-code"), engineRoot = resolve(staging, "engine"), cliRoot = resolve(staging, "cli");
-  const sdk = stageSdk(sdkRoot), engine = stageEngine(engineRoot, sdk), cli = stageCli(cliRoot, sdk, engine, distribution);
+  const sdkRoot = resolve(staging, "sketch-code"), engineRoot = resolve(staging, "engine"), collaborationRoot = resolve(staging, "collaboration"), cliRoot = resolve(staging, "cli");
+  const sdk = stageSdk(sdkRoot), engine = stageEngine(engineRoot, sdk), collaboration = stageCollaboration(collaborationRoot), cli = stageCli(cliRoot, sdk, engine, collaboration, distribution);
   const archives = [];
-  for (const [folder, metadata] of [[sdkRoot, sdk], [engineRoot, engine], [cliRoot, cli]]) {
+  for (const [folder, metadata] of [[sdkRoot, sdk], [engineRoot, engine], [collaborationRoot, collaboration], [cliRoot, cli]]) {
     const stagedFiles = new Map(filesUnder(folder).map((file) => [file.path, file]));
     const result = spawnSync("npm", ["pack", "--offline", "--ignore-scripts", "--json", "--pack-destination", output], {
       cwd: folder, encoding: "utf8", env: { ...process.env, npm_config_update_notifier: "false", npm_config_audit: "false", npm_config_fund: "false" }, maxBuffer: 16 * 1024 * 1024,

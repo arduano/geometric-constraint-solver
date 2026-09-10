@@ -20,3 +20,9 @@ export const demoWasmPath = packaged ? resolve(runtimeRoot, "assets/demo-wasm/ge
 export const workbenchRuntimeUrl = pathToFileURL(packaged ? resolve(runtimeRoot, "assets/workspace-runtime.mjs") : resolve(runtimeRoot, "target/m98/workspace-runtime.mjs")).href;
 export const workbenchDist = packaged ? resolve(runtimeRoot, "assets/workbench") : resolve(runtimeRoot, "crates/geosolve-demo-web/dist");
 export const starterDirectory = packaged ? resolve(runtimeRoot, "assets/starter") : resolve(runtimeRoot, "examples/file-workspace");
+
+export const collaborationModuleUrl = packaged ? import.meta.resolve("@geosolve/collaboration") : pathToFileURL(resolve(runtimeRoot, "packages/geosolve-collaboration/dist/index.js")).href;
+export const collaborationHostModuleUrl = packaged ? import.meta.resolve("@geosolve/collaboration/host") : pathToFileURL(resolve(runtimeRoot, "packages/geosolve-collaboration/dist/host.js")).href;
+export const collaborationClientModuleUrl = packaged ? import.meta.resolve("@geosolve/collaboration/client") : pathToFileURL(resolve(runtimeRoot, "packages/geosolve-collaboration/dist/client.js")).href;
+export const releaseArtifactModuleUrl = pathToFileURL(packaged ? resolve(runtimeRoot, "assets/release-artifact-lib.mjs") : resolve(frontend, "scripts/release-artifact-lib.mjs")).href;
+export const packagedWorkbenchManifest = packaged ? resolve(runtimeRoot, "assets/workbench-artifact.json") : undefined;

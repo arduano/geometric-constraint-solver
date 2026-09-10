@@ -16,6 +16,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import release_gate as gate
 import release_equivalence as eq
+import release_gate_m98 as m98
 
 
 def stamp(value):
@@ -56,7 +57,11 @@ class FrontendPreflightTests(unittest.TestCase):
         for name in scripts:
             self.assertEqual(commands.count(gate.npm(gate.FRONTEND, 'run', name)), 1)
         self.assertEqual(commands.count(gate.npm(gate.FRONTEND, 'ci', '--ignore-scripts')), 1)
-        self.assertEqual(commands.count(gate.npm(gate.FRONTEND, 'test', '--', '--no-cache')), 1)
+        unit = next(command for command in commands if command[:4] == gate.npm(gate.FRONTEND, 'test'))
+        self.assertEqual(unit[4:6], ('--', '--no-cache'))
+        self.assertTrue(all(arg == '--exclude' for arg in unit[6::2]))
+        self.assertEqual(tuple(gate.FRONTEND + '/' + pattern for pattern in unit[7::2]), m98.GROUPS['collaboration.frontend'])
+        self.assertEqual(len(m98.FRONTEND_RUNTIME_TESTS), 3)
         self.assertEqual(len(commands), len(scripts) + 2)
         self.assertNotIn(gate.npm(gate.FRONTEND, 'run', 'test:build'), self.frontend.commands)
         self.assertIn(gate.npm(gate.FRONTEND, 'run', 'test:build'), self.catalog.commands)
@@ -177,7 +182,7 @@ class FrontendOverlapInputTests(unittest.TestCase):
         self.assertFalse(body.build_lock)
         self.assertEqual(browser.resource, 'memory')
         self.assertEqual(browser.kind, 'build')
-        self.assertEqual(browser.dependencies, ('preflight.clippy', 'prepare.wasm'))
+        self.assertEqual(browser.dependencies, ('preflight.clippy', 'prepare.wasm', 'prepare.m98'))
         self.assertEqual(browser.commands, (gate.cmd(sys.executable, 'scripts/release_gate.py',
             '--prepare-browser', '--wasm-package', prepared['wasm'], '--output', prepared['browser']),))
         self.assertEqual(browser.outputs, (prepared['browser'],))

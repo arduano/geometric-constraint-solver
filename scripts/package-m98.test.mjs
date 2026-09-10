@@ -20,7 +20,23 @@ function run(command, args, options) {
   return result.stdout;
 }
 
-test("three offline archives install into an empty cache and run the actual SDK, engine and folder CLI", { timeout: 180000 }, async (t) => {
+async function installedServer(t, bin, args, installed, environment) {
+  const server = spawn(bin, args, { cwd: installed, env: environment, stdio: ["ignore", "pipe", "pipe"] });
+  t.after(async () => { if (server.exitCode === null) { server.kill("SIGTERM"); await new Promise(done => server.once("exit", done)); } });
+  return new Promise((accept, reject) => {
+    let output = "", errors = "";
+    const timer = setTimeout(() => reject(Error(`Installed collaborative server did not start: ${errors}`)), 30000);
+    server.stderr.on("data", data => { errors += data; });
+    server.stdout.on("data", data => {
+      output += data;
+      try { const parsed = JSON.parse(output); clearTimeout(timer); accept(parsed); } catch { /* Wait for complete JSON. */ }
+    });
+    server.once("error", error => { clearTimeout(timer); reject(error); });
+    server.once("exit", code => { clearTimeout(timer); reject(Error(`Installed collaborative server exited ${code}: ${errors}`)); });
+  });
+}
+
+test("four offline archives install into an empty cache and run the actual SDK, engine and folder CLI", { timeout: 180000 }, async (t) => {
   const temporary = mkdtempSync(resolve(tmpdir(), "geosolve-package-"));
   t.after(() => rmSync(temporary, { recursive: true, force: true }));
   const archiveDirectory = process.env.GEOSOLVE_M98_PACKAGES
@@ -28,7 +44,8 @@ test("three offline archives install into an empty cache and run the actual SDK,
     : packageM98({ out: process.env.GEOSOLVE_M98_PACKAGE_OUT ?? resolve(temporary, "archives"), ...(process.env.GEOSOLVE_M98_DIST ? { dist: process.env.GEOSOLVE_M98_DIST } : {}) }).output;
   const manifest = JSON.parse(readFileSync(resolve(archiveDirectory, "packages.json"), "utf8"));
   assert.equal(manifest.format, "geosolve-offline-packages-v1");
-  assert.equal(manifest.archives.length, 3);
+  assert.equal(manifest.archives.length, 4);
+  assert.deepEqual(manifest.archives.map(archive => archive.name).sort(), ["@geosolve/cli", "@geosolve/collaboration", "@geosolve/engine", "@geosolve/sketch-code"]);
   const archives = manifest.archives.map((archive) => {
     const path = resolve(archiveDirectory, archive.file);
     assert.equal(digest(readFileSync(path)), archive.sha256);
@@ -46,9 +63,16 @@ test("three offline archives install into an empty cache and run the actual SDK,
   const sdkPackage = JSON.parse(readFileSync(resolve(installed, "node_modules/@geosolve/sketch-code/package.json"), "utf8"));
   assert.equal(sdkPackage.dependencies.typescript, "5.9.2");
   assert.equal(sdkPackage.dependencies["@geosolve/intent"], "0.2.0");
-  for (const packageName of ["sketch-code", "engine", "cli"]) {
+  for (const packageName of ["sketch-code", "engine", "collaboration", "cli"]) {
     const metadata = JSON.parse(readFileSync(resolve(installed, `node_modules/@geosolve/${packageName}/package.json`), "utf8"));
     assert.ok(Object.values(metadata.dependencies ?? {}).every((version) => !version.startsWith("file:")), "archive dependencies never reference sibling checkout paths");
+  }
+  for (const packageName of ["collaboration", "cli"]) {
+    const notices = readFileSync(resolve(installed, `node_modules/@geosolve/${packageName}/THIRD_PARTY_LICENSES.md`), "utf8");
+    assert.match(notices, /automerge 0\.11\.0/);
+    assert.match(notices, /Copyright \(c\) 2019-2021 the Automerge contributors/);
+    assert.match(notices, /\(C\) 2024 Trifecta Tech Foundation/);
+    assert.match(notices, /Permission is hereby granted, free of charge/);
   }
   const bin = resolve(installed, "node_modules/.bin/geosolve");
   const cli = (...args) => JSON.parse(run(bin, args, { cwd: installed, env: environment }));
@@ -82,6 +106,34 @@ try {
 } finally {engine.dispose();}
 `);
   assert.deepEqual(JSON.parse(run(process.execPath, [smoke], { cwd: installed, env: environment })), { ok: true, regions: 2 });
+  const collaborationSmoke = resolve(installed, "collaboration-smoke.mjs");
+  writeFileSync(collaborationSmoke, `import assert from "node:assert/strict";
+import {createSharedText} from "@geosolve/collaboration";
+import {createTrustedSourceHost} from "@geosolve/collaboration/host";
+import {CollaborationClient} from "@geosolve/collaboration/client";
+import {createMirrorWorker} from "./node_modules/@geosolve/cli/runtime/scripts/collaboration-mirror-worker-bridge.mjs";
+import {mkdir,writeFile} from "node:fs/promises";
+import {resolve} from "node:path";
+const actor=new TextEncoder().encode("installed-server");
+const host=await createTrustedSourceHost({configuration:{documentEpoch:"installed",serverEpoch:"run",initialInput:"initial",files:{"main.ts":"a0"}},actor});
+const replica=await createSharedText({actor:new TextEncoder().encode("installed-client"),checkpoint:host.textCheckpoint()});
+try{
+  assert.equal(typeof CollaborationClient,"function");assert.deepEqual(replica.resolveRange(replica.anchorRange("main.ts",1,2)),{path:"main.ts",start_utf16:1,end_utf16:2});
+  const stage=host.stageUserWorkingEdits([{kind:"splice",path:"main.ts",start_utf16:1,delete_utf16:1,insert:"😀("},{kind:"create_file",path:"invalid.ts",text:"const = ("}],{userId:"alice",clientId:"installed",requestId:"mixed"});
+  assert.equal(host.snapshot().working.files["main.ts"],"a0");host.commitStage(stage);assert.equal(host.snapshot().working.files["main.ts"],"a😀(");
+  const folder=resolve("installed-mirror");await mkdir(folder);
+  for(const [path,text] of Object.entries(host.snapshot().working.files))await writeFile(resolve(folder,path),text);
+  const mirror=await createMirrorWorker({folder,documentId:"installed",documentEpoch:"installed",userId:"external",clientId:"mirror",
+    readCommitted:async()=>({checkpoint:host.textCheckpoint(),snapshot:host.snapshot()}),
+    admitWorkingEdits:async({edits,operation,expectedRevision})=>{host.commitStage(host.stageUserWorkingEdits(edits,operation,expectedRevision));return{status:"committed"};}});
+  try{
+    assert.equal((await mirror.reconcile()).status,"synchronized");await writeFile(resolve(folder,"main.ts"),"a2");
+    assert.equal((await mirror.reconcile()).status,"synchronized");assert.equal(host.snapshot().working.files["main.ts"],"a2");
+  }finally{await mirror.close();}
+  console.log(JSON.stringify({ok:true,contributions:host.userHistory("alice").undoCount,mirror:true}));
+}finally{replica.dispose();host.dispose();}
+`);
+  assert.deepEqual(JSON.parse(run(process.execPath, [collaborationSmoke], { cwd: installed, env: environment })), { ok: true, contributions: 1, mirror: true });
 
   // A clean-installed server must use its own frozen assets and native workers.
   const server = spawn(bin, ["serve", project], { cwd: installed, env: environment, stdio: ["ignore", "pipe", "pipe"] });
@@ -109,6 +161,27 @@ try {
   assert.equal(live.state.inputs.radius, 5);
   assert.equal(live.state.status, "saved");
   assert.equal(live.state.currentHash, live.state.acceptedHash);
+
+  // Installed shared authority must resolve all native packages and scripts from
+  // archives, serve the exact bundled UI, and use the durable CLI text gateway.
+  const invitations = resolve(installed, "invitations.json");
+  writeFileSync(invitations, JSON.stringify([{ token: "installed-collaboration-invitation-token", userId: "alice", role: "editor" }]));
+  const sharedSession = await installedServer(t, bin, ["serve", starter, "--collaboration", "true", "--initialize", "true", "--invitations", invitations], installed, environment);
+  assert.equal(sharedSession.ok, true); assert.equal(sharedSession.collaboration, true);
+  const sharedResponse = await fetch(sharedSession.urls[0].url);
+  assert.equal(sharedResponse.status, 200); assert.equal(digest(Buffer.from(await sharedResponse.arrayBuffer())), packagedIndex.sha256);
+  const flags = ["--collaboration", "true", "--user", "alice", "--client", "installed-shared-cli"], expected = resolve(installed, "shared-expected.json");
+  const sharedBefore = cli("status", starter, ...flags, "--out", expected);
+  const acceptedInput = sharedBefore.state.authority.acceptedInput;
+  const edits = resolve(installed, "shared-edits.json");
+  writeFileSync(edits, JSON.stringify([{ kind: "splice", path: "sketch.ts", start_utf16: 0, delete_utf16: 0, insert: "// installed shared edit 😀\n" }, { kind: "create_file", path: "notes.ts", text: "// shared file\n" }]));
+  const draftArguments = ["draft", starter, ...flags, "--expected", expected, "--operation", "installed-draft", "--edits", edits];
+  const draft = cli(...draftArguments); assert.equal(draft.applied, false);
+  assert.deepEqual(cli(...draftArguments).ack, draft.ack, "installed gateway deduplicates exact retries");
+  const sharedAfter = cli("status", starter, ...flags, "--out", expected);
+  assert.equal(sharedAfter.state.authority.acceptedInput, acceptedInput);
+  assert.match(sharedAfter.state.document.working.files["sketch.ts"], /installed shared edit 😀/u);
+  assert.equal(cli("apply", starter, ...flags, "--expected", expected, "--operation", "installed-apply").ok, true);
 
   // Build the actual custom website against the clean-installed packages. The
   // repository contributes test/build tools only, never product SDK/engine bytes.

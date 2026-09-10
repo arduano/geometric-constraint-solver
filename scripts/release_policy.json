@@ -62,6 +62,8 @@
     "scripts/verify-geosolve-sketch-code-package.sh",
     "packages/geosolve-engine/**",
     "packages/geosolve-cli/**",
+    "packages/geosolve-collaboration/**",
+    "scripts/collaboration-*.mjs",
     "scripts/workspace-*.mjs",
     "scripts/file-workspace*.mjs",
     "scripts/geosolve-cli.mjs",

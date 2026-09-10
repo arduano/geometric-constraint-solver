@@ -341,7 +341,7 @@ print(p)
     def test_targeted_native_selection_does_not_prepare_other_profiles_or_browser(self):
         self.assertEqual(gate.preparation_modes(["workspace.geosolve-core::*"]), {"workspace"})
         self.assertEqual(gate.preparation_modes(["headless.*"]), {"headless"})
-        self.assertEqual(gate.preparation_modes(["browser"]), {"wasm", "browser"})
+        self.assertEqual(gate.preparation_modes(["browser"]), {"wasm", "browser", "m98"})
         self.assertEqual(gate.preparation_modes(["golden", "wasm.*", "rust.*", "package.*", "licenses", "performance"]), {"lifecycle", "wasm", "browser", "m98"})
         self.assertEqual(gate.preparation_modes(["wasm.lifecycle"]), {"lifecycle"})
         self.assertEqual(gate.preparation_modes(["wasm.m70_transition_parity"]), set())

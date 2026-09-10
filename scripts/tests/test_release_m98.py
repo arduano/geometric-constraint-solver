@@ -23,6 +23,8 @@ class M98ReleaseTests(unittest.TestCase):
         subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
         (self.root / '.gitignore').write_text('target/\n')
         self.policy = {'prose': [], 'global': [], 'owned': ['**']}
+        for package in ('geosolve-demo-web', 'geosolve-sketch-engine-wasm', 'geosolve-collaboration', 'geosolve-collaboration-wasm'):
+            self.write(f'crates/{package}/Cargo.toml', f'[package]\nname="{package}"\nversion="0.1.0"\n')
 
     def tearDown(self):
         self.temp.cleanup()
@@ -42,9 +44,15 @@ class M98ReleaseTests(unittest.TestCase):
             self.write(f'{base}/packages/geosolve-engine/test/{name}.test.mjs')
         for name in m98.REQUIRED['folder.node']:
             self.write(f'{base}/scripts/{name}.test.mjs')
+        for name in m98.REQUIRED['collaboration.node']:
+            self.write(f'{base}/scripts/{name}.test.mjs')
+        for name in m98.REQUIRED['collaboration.package']:
+            self.write(f'{base}/packages/geosolve-collaboration/test/{name}.test.mjs')
+        for name in m98.REQUIRED['collaboration.frontend']:
+            self.write(f'{base}/{m98.FRONTEND}/src/lib/{name}.test.ts')
         for name in ('scripts/file-workspace.test.mjs','scripts/workspace-browser.test.mjs','scripts/package-m98.test.mjs',
                      'examples/generator-website/scripts/generator.test.mjs',
-                     'examples/generator-website/scripts/browser.test.mjs'):
+                     'examples/generator-website/scripts/browser.test.mjs', 'scripts/collaboration-browser.test.mjs'):
             self.write(f'{base}/{name}')
         return self.root / base
 
@@ -65,20 +73,38 @@ class M98ReleaseTests(unittest.TestCase):
             self.write(name + '/installed.js', '// installed dependency\n')
         self.write('target/demo-wasm/bindings.js')
         self.write('target/m98/workspace-runtime.mjs')
+        fixture = self.write('target/custom-cargo-output/examples/text_fixture', '#!/bin/sh\n')
         captured = self.root / 'target/prepared'
         # Build commands are a separate Cargo/frontend preparation obligation;
         # exercise the real capture and Node consumer without compiling products.
         real_run = subprocess.run
         builds = []
         def only_build(command, **kwargs):
-            if command[0] == 'node':
+            if command[0] in ('node', 'cargo'):
                 builds.append(command)
+                if command[0] == 'cargo':
+                    output = json.dumps({'reason': 'compiler-artifact', 'target': {'name': 'text_fixture', 'kind': ['example']}, 'executable': str(fixture)})
+                    return subprocess.CompletedProcess(command, 0, stdout=output)
                 return subprocess.CompletedProcess(command, 0)
             return real_run(command, **kwargs)
         with patch.object(m98.subprocess, 'run', side_effect=only_build):
             m98.prepare(self.root, self.root / 'target/demo-wasm', captured)
-        self.assertEqual(len(builds), 3)
+        self.assertEqual(len(builds), 6)
+        self.assertIn(['cargo', 'build', '--locked', '-p', 'geosolve-collaboration', '--example', 'text_fixture', '--message-format=json'], builds)
+        self.assertEqual((captured / 'repository' / m98.NATIVE_FIXTURE).read_bytes(), fixture.read_bytes())
         return captured
+
+    def test_native_fixture_capture_requires_one_real_reported_artifact(self):
+        fixture = self.write('custom-target/examples/text_fixture')
+        row = {'reason': 'compiler-artifact', 'target': {'name': 'text_fixture', 'kind': ['example']}, 'executable': str(fixture)}
+        valid = json.dumps(row)
+        self.assertEqual(m98.fixture_executable(valid), fixture)
+        for invalid in ('', valid + '\n' + valid,
+                        json.dumps(row | {'target': {'name': 'other', 'kind': ['example']}}),
+                        json.dumps(row | {'executable': 'relative/fixture'}),
+                        json.dumps(row | {'executable': str(fixture.parent / 'missing')})):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                m98.fixture_executable(invalid)
 
     def test_modes_include_engine_workbench_and_browser_without_omitting_existing_wasm(self):
         self.assertEqual(gate.preparation_modes(['engine.node']), {'wasm','m98'})
@@ -87,6 +113,10 @@ class M98ReleaseTests(unittest.TestCase):
         self.assertEqual(gate.preparation_modes(['package.*']), {'wasm','browser','m98'})
         self.assertIn('m98', gate.preparation_modes([]))
         self.assertIn('lifecycle', gate.preparation_modes(['wasm.*']))
+        self.assertEqual(gate.preparation_modes(['collaboration.package']), {'wasm','m98'})
+        self.assertEqual(gate.preparation_modes(['collaboration.node']), {'wasm','m98'})
+        self.assertEqual(gate.preparation_modes(['collaboration.frontend']), {'wasm','m98'})
+        self.assertEqual(gate.preparation_modes(['collaboration.browser']), {'wasm','browser','m98'})
 
     def test_preparation_binds_compiler_actor_and_native_sources_and_installed_bytes(self):
         for name in ('crates/geosolve-sketch-engine-wasm/Cargo.toml',
@@ -136,6 +166,9 @@ class M98ReleaseTests(unittest.TestCase):
         browser = next(s for s in stages if s.id == 'folder.browser')
         self.assertIn('prepare.browser', browser.dependencies)
         self.assertIn('--browser-package', browser.commands[0])
+        collaboration_browser = next(s for s in stages if s.id == 'collaboration.browser')
+        self.assertIn('prepare.browser', collaboration_browser.dependencies)
+        self.assertNotIn('scripts/collaboration-browser.test.mjs', m98.inventory(repo, 'collaboration.node'))
         (repo/'packages/geosolve-engine/test/new.test.mjs').write_text('// added after prep')
         with self.assertRaisesRegex(ValueError,'inventory changed'):
             gate.m98_stages(self.root, {'m98':'target/capture','browser':'target/browser'})
@@ -220,6 +253,50 @@ class M98ReleaseTests(unittest.TestCase):
         for name in ('crates/geosolve-sketch-engine/tests/fixtures/manifold.json',
                      'crates/geosolve-sketch-engine/tests/fixtures/session-radius-2.json'):
             self.assertTrue(gate.matches(name,inputs),name)
+
+    def test_missing_collaboration_browser_and_frontend_owners_fail_closed(self):
+        repo = self.fixtures()
+        (repo / 'scripts/collaboration-browser.test.mjs').unlink()
+        with self.assertRaisesRegex(ValueError, 'missing'):
+            m98.inventory(repo, 'collaboration.browser')
+        (repo / m98.FRONTEND / 'src/lib/collaboration-storage.test.ts').unlink()
+        with self.assertRaisesRegex(ValueError, 'incomplete'):
+            m98.inventory(repo, 'collaboration.frontend')
+
+    def test_frontend_coverage_requires_exact_files_and_nonempty_passing_assertions(self):
+        files = ['frontend/a.test.ts']
+        result = {'name': str(self.root / files[0]), 'status': 'passed', 'assertionResults': [{'status':'passed'}]}
+        report = {'success':True, 'numTotalTests':1, 'numPassedTests':1, 'testResults':[result]}
+        self.assertEqual(m98.validate_frontend_report(report, files, self.root)['tests'],1)
+        for invalid in ({**report,'numPendingTests':1}, {**report,'testResults':[]},
+                        {**report,'testResults':[{**result,'assertionResults':[]}]},
+                        {**report,'testResults':[{**result,'assertionResults':[{'status':'skipped'}]}]}):
+            with self.assertRaises(ValueError):
+                m98.validate_frontend_report(invalid, files, self.root)
+
+    def test_browser_preparation_orders_and_authenticates_all_three_native_packages(self):
+        self.fixtures(base='.')
+        stages, prepared = gate.preparation_stages(self.runner(), {'wasm','browser'})
+        by_id = {stage.id: stage for stage in stages}
+        self.assertIn('prepare.m98', by_id['prepare.browser'].dependencies)
+        self.assertIn('packages/geosolve-collaboration/dist', by_id['prepare.browser'].artifacts)
+        self.assertIn(prepared['m98'], by_id['prepare.browser'].artifacts)
+        self.assertIn('prepare.wasm', by_id['prepare.m98'].dependencies)
+
+    def test_collaboration_rust_and_native_fixture_sources_change_preparation_identity(self):
+        real = Path(__file__).resolve().parents[2]
+        policy = gate.read_json(real / gate.POLICY_PATH)
+        snapshot = gate.source_snapshot(real)
+        def prepared(source):
+            runner = gate.Runner(real, gate.Store(self.root / 'target/real-store'), source, policy, {})
+            return gate.preparation_stages(runner, {'wasm','m98','browser'})[1]
+        original = prepared(snapshot)
+        for name in ('crates/geosolve-collaboration/src/text/history.rs',
+                     'crates/geosolve-collaboration/examples/text_fixture.rs',
+                     'crates/geosolve-collaboration-wasm/src/source.rs'):
+            changed = prepared(snapshot | {name:{'sha256':'changed','executable':False}})
+            self.assertNotEqual(original['m98'],changed['m98'])
+            self.assertNotEqual(original['browser'],changed['browser'])
 
 
 if __name__ == '__main__':
