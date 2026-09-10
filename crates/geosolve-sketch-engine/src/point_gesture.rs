@@ -254,6 +254,53 @@ impl EditableSession {
         gesture.finish(command.gesture_id)
     }
 
+    pub(super) fn replay_latest_point_gesture(
+        &self,
+        basis: &Self,
+        command: &PointGestureCommand,
+    ) -> Result<(PointGestureTerminal, crate::PointReplayWitness), EngineError> {
+        crate::replay::same_project(self, basis)?;
+        let original = basis.replay_point_gesture(command)?;
+        let original_target = PointGestureTarget::from_lens(&original.lens);
+        let candidates = self
+            .accepted()
+            .0
+            .materialized
+            .expansion
+            .writable_points
+            .iter()
+            .filter(|lens| {
+                same_semantic_target(&original_target, &PointGestureTarget::from_lens(lens))
+            })
+            .collect::<Vec<_>>();
+        let [lens] = candidates.as_slice() else {
+            return Err(error("latest point target is absent or ambiguous"));
+        };
+        if original.lens.source != lens.source {
+            return Err(error(
+                "latest point source codec or reference detachment changed",
+            ));
+        }
+        let required_stable_declarations =
+            crate::replay::point_source_guard(self, basis, &original_target)?;
+        let resolved_target = PointGestureTarget::from_lens(lens);
+        let mut gesture = self.begin_point_gesture(
+            resolved_target.clone(),
+            command.gesture_id,
+            command.viewport,
+        )?;
+        for sample in &command.samples {
+            gesture.advance(command.gesture_id, *sample)?;
+        }
+        Ok((
+            gesture.finish(command.gesture_id)?,
+            crate::PointReplayWitness {
+                required_stable_declarations,
+                resolved_target,
+            },
+        ))
+    }
+
     fn point_gesture_basis(&self) -> Result<String, EngineError> {
         self.source_design_digest()
     }
@@ -467,5 +514,32 @@ pub(super) fn expanded_port_point(
     {
         IntentNativeBinding::Point(point) => Some(point),
         _ => None,
+    }
+}
+
+fn same_semantic_address(a: &CodeWritableAddress, b: &CodeWritableAddress) -> bool {
+    a.project == b.project
+        && a.owner.address == b.owner.address
+        && a.output == b.output
+        && a.field == b.field
+}
+fn same_semantic_target(a: &PointGestureTarget, b: &PointGestureTarget) -> bool {
+    match (a, b) {
+        (PointGestureTarget::Point { address: a }, PointGestureTarget::Point { address: b }) => {
+            same_semantic_address(a, b)
+        }
+        (
+            PointGestureTarget::RectangleCorner {
+                lower_left: al,
+                upper_right: au,
+                corner: ac,
+            },
+            PointGestureTarget::RectangleCorner {
+                lower_left: bl,
+                upper_right: bu,
+                corner: bc,
+            },
+        ) => ac == bc && same_semantic_address(al, bl) && same_semantic_address(au, bu),
+        _ => false,
     }
 }

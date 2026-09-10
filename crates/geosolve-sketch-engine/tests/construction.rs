@@ -304,3 +304,87 @@ fn write_real_compiler_requests() {
         .join("../../target/m98/construction-requests.json");
     std::fs::write(root, serde_json::to_string_pretty(&requests).unwrap()).unwrap();
 }
+
+#[test]
+fn latest_construction_authenticates_original_and_allocates_after_concurrent_creation() {
+    let basis = EditableSession::open(&project(), None).unwrap();
+    let original = command(&basis, "polyline");
+    let mut latest = EditableSession::open(&project(), None).unwrap();
+    let first = command(&latest, "circle");
+    let prepared = latest.prepare_construction(&first).unwrap();
+    let candidate = latest
+        .resolve_construction(&prepared, receipt(&prepared, "circle"))
+        .unwrap();
+    latest.apply_construction_commit(candidate).unwrap();
+    assert!(latest.prepare_construction(&original).is_err());
+    let before = latest.state();
+    let (prepared, witness) = latest
+        .prepare_construction_replay(&basis, &original)
+        .unwrap();
+    assert!(witness.required_stable_declarations.is_empty());
+    assert_eq!(
+        witness.allocation_mapping.len(),
+        original.expected_declarations.len()
+    );
+    assert!(
+        witness
+            .allocation_mapping
+            .iter()
+            .all(|mapping| mapping.provisional != mapping.persistent)
+    );
+    assert_eq!(
+        prepared.declarations().count(),
+        original.expected_declarations.len()
+    );
+    assert_eq!(latest.state(), before);
+    let mut forged = original;
+    forged.expected_declarations[0].comments = Some(vec!["forged meaning".into()]);
+    assert!(latest.prepare_construction_replay(&basis, &forged).is_err());
+    assert_eq!(latest.state(), before);
+}
+
+#[test]
+fn latest_construction_preserves_external_inference_and_refuses_changed_snap_meaning() {
+    let basis = EditableSession::open(&project(), None).unwrap();
+    let original = command(&basis, "inferred");
+    let mut latest = EditableSession::open(&project(), None).unwrap();
+    let first = command(&latest, "circle");
+    let prepared = latest.prepare_construction(&first).unwrap();
+    let staged = latest
+        .resolve_construction(&prepared, receipt(&prepared, "circle"))
+        .unwrap();
+    latest.apply_construction_commit(staged).unwrap();
+    let (_, witness) = latest
+        .prepare_construction_replay(&basis, &original)
+        .unwrap();
+    assert_eq!(
+        witness.required_stable_declarations,
+        vec![geosolve_sketch_code::SemanticSymbol("bore".into())]
+    );
+    let target = latest
+        .point_gesture_targets()
+        .unwrap()
+        .into_iter()
+        .find(|handle| handle.position == [0.0, 0.0])
+        .unwrap()
+        .target;
+    let mut gesture = latest.begin_point_gesture(target, 904, viewport()).unwrap();
+    gesture
+        .advance(
+            904,
+            geosolve_sketch_engine::PointGestureSample {
+                sequence: 1,
+                position: [30.0, 30.0],
+            },
+        )
+        .unwrap();
+    let terminal = gesture.finish(904).unwrap();
+    latest.commit_point_gesture(terminal.command()).unwrap();
+    let before = latest.state();
+    assert!(
+        latest
+            .prepare_construction_replay(&basis, &original)
+            .is_err()
+    );
+    assert_eq!(latest.state(), before);
+}

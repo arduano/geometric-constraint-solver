@@ -211,6 +211,28 @@ impl EditableSession {
         command: &crate::PointGestureCommand,
     ) -> Result<PreparedPointGestureCommit, EngineError> {
         let terminal = self.replay_point_gesture(command)?;
+        self.prepare_point_gesture_terminal(&terminal)
+    }
+
+    /// Trusted historical replay followed by uniquely addressed latest-model replay.
+    /// The host separately proves returned declaration lifetime continuity.
+    ///
+    /// # Errors
+    /// Rejects unauthenticated original gestures, changed source codecs/branches and
+    /// infeasible latest terminals without changing either accepted session.
+    pub fn prepare_point_gesture_replay(
+        &self,
+        basis: &Self,
+        command: &crate::PointGestureCommand,
+    ) -> Result<(PreparedPointGestureCommit, crate::PointReplayWitness), EngineError> {
+        let (terminal, witness) = self.replay_latest_point_gesture(basis, command)?;
+        Ok((self.prepare_point_gesture_terminal(&terminal)?, witness))
+    }
+
+    fn prepare_point_gesture_terminal(
+        &self,
+        terminal: &crate::PointGestureTerminal,
+    ) -> Result<PreparedPointGestureCommit, EngineError> {
         let expected = self.token().clone();
         let snapshot = self.history.snapshot();
         let project = snapshot

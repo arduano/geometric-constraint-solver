@@ -62,6 +62,15 @@ struct Prepare {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ReplayPrepare {
+    session: u64,
+    expected: CodeSessionIdentity,
+    basis_session: u64,
+    basis_expected: CodeSessionIdentity,
+    command: ConstructionCommand,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Resolve {
     session: u64,
     ticket: String,
@@ -208,6 +217,46 @@ impl EngineAdapter {
         let ticket = self.construction_ticket(input.session)?;
         let encoded = encode(
             &json!({"ticket":ticket,"request":prepared.request(),"declarations":prepared.declarations().collect::<Vec<_>>()}),
+        )?;
+        self.reserve_construction(encoded.len(), None)?;
+        self.constructions.insert(
+            ticket,
+            HeldConstruction {
+                session: input.session,
+                expected: input.expected,
+                held: Held::Preparation(Box::new(prepared)),
+                bytes: encoded.len(),
+            },
+        );
+        Ok(encoded)
+    }
+    /// Trusted host replay using an immutable admitted historical basis session.
+    ///
+    /// # Errors
+    /// Rejects foreign/stale sessions, changed semantic meaning and native failures.
+    pub fn prepare_editable_construction_replay(&mut self, json: &str) -> Result<String, String> {
+        self.reserve_construction(json.len(), None)?;
+        let input: ReplayPrepare = decode_session_request(json)?;
+        let session = self
+            .sessions
+            .get(&input.session)
+            .ok_or("unknown editable session")?;
+        if session.token() != &input.expected {
+            return Err("construction input is stale or foreign".into());
+        }
+        let basis = self
+            .sessions
+            .get(&input.basis_session)
+            .ok_or("unknown replay basis session")?;
+        if basis.token() != &input.basis_expected {
+            return Err("replay basis input is stale or foreign".into());
+        }
+        let (prepared, replay) = session
+            .prepare_construction_replay(basis, &input.command)
+            .map_err(|e| e.to_string())?;
+        let ticket = self.construction_ticket(input.session)?;
+        let encoded = encode(
+            &json!({"ticket":ticket,"replay":replay,"request":prepared.request(),"declarations":prepared.declarations().collect::<Vec<_>>()}),
         )?;
         self.reserve_construction(encoded.len(), None)?;
         self.constructions.insert(

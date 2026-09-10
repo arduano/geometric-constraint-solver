@@ -230,12 +230,33 @@ impl EditableSession {
         &self,
         command: &ConstructionCommand,
     ) -> Result<PreparedConstruction, EngineError> {
+        let terminal = self.replay_construction(command)?;
+        self.prepare_construction_terminal(terminal)
+    }
+
+    fn replay_construction(
+        &self,
+        command: &ConstructionCommand,
+    ) -> Result<ConstructionTerminal, EngineError> {
         if command.basis != self.source_design_digest()? {
             return Err(error("construction source/design basis is stale"));
         }
         if command.samples.is_empty() || command.samples.len() > MAX_CONSTRUCTION_SAMPLES {
             return Err(error("construction sample count is outside bounds"));
         }
+        let terminal = self.trace_construction(command)?;
+        if terminal.command.expected_declarations != command.expected_declarations {
+            return Err(error(
+                "construction replay resolved different semantic operands or branch intent",
+            ));
+        }
+        Ok(terminal)
+    }
+
+    fn trace_construction(
+        &self,
+        command: &ConstructionCommand,
+    ) -> Result<ConstructionTerminal, EngineError> {
         let mut prediction = self.begin_construction(
             command.tool,
             command.gesture_id,
@@ -245,12 +266,35 @@ impl EditableSession {
         for sample in &command.samples {
             prediction.advance(command.gesture_id, *sample)?;
         }
-        let terminal = prediction.finish(command.gesture_id)?;
-        if terminal.command.expected_declarations != command.expected_declarations {
-            return Err(error(
-                "construction replay resolved different semantic operands or branch intent",
-            ));
-        }
+        prediction.finish(command.gesture_id)
+    }
+
+    /// Replays against a trusted historical basis, then independently against this session.
+    /// Only freshly allocated declaration names and their typed references may differ.
+    /// The host must also authenticate every returned external declaration's lifetime.
+    ///
+    /// # Errors
+    /// Rejects forged original intent, changed inference/branches, or foreign projects.
+    pub fn prepare_construction_replay(
+        &self,
+        basis: &Self,
+        command: &ConstructionCommand,
+    ) -> Result<(PreparedConstruction, crate::ConstructionReplayWitness), EngineError> {
+        crate::replay::same_project(self, basis)?;
+        let original = basis.replay_construction(command)?;
+        let mut latest = self.trace_construction(command)?;
+        retain_original_default_labels(&original, &mut latest);
+        let witness = crate::replay::construction_witness(
+            &original.command.expected_declarations,
+            &latest.command.expected_declarations,
+        )?;
+        Ok((self.prepare_construction_terminal(latest)?, witness))
+    }
+
+    fn prepare_construction_terminal(
+        &self,
+        terminal: ConstructionTerminal,
+    ) -> Result<PreparedConstruction, EngineError> {
         let mutation = self.prepare_managed_mutation(
             ManagedSketchMutation::InsertDeclarations {
                 declarations: terminal.command.expected_declarations,
@@ -615,4 +659,85 @@ fn project_preview(preview: ConstructionPreview) -> Result<ConstructionGuide, En
         },
         _ => return Err(error("unsupported ordinary construction guide")),
     })
+}
+
+/// Draft labels default to private native allocation symbols. Preserve the exact
+/// original authenticated display label while allocating latest persistent names.
+/// This is restricted to unrenamed newly created nodes; arbitrary metadata never
+/// participates in alpha normalization.
+fn retain_original_default_labels(
+    original: &ConstructionTerminal,
+    latest: &mut ConstructionTerminal,
+) {
+    if original.command.expected_declarations.len() != latest.command.expected_declarations.len() {
+        return;
+    }
+    let default_symbol =
+        |terminal: &ConstructionTerminal, draft: &ManagedDeclarationDraft| -> Option<String> {
+            let declaration = terminal
+                .declarations
+                .iter()
+                .find(|value| value.symbol.0 == draft.symbol)?;
+            let intent = terminal.editor.coordinator().intent();
+            let node = intent.graph().node(declaration.node)?;
+            if intent
+                .organization()
+                .node_names()
+                .get(&declaration.node)
+                .is_some_and(|name| name != &node.symbol)
+            {
+                return None;
+            }
+            Some(
+                intent
+                    .graph()
+                    .node(declaration.node)?
+                    .symbol
+                    .as_str()
+                    .to_owned(),
+            )
+        };
+    let old_defaults = original
+        .command
+        .expected_declarations
+        .iter()
+        .map(|draft| default_symbol(original, draft))
+        .collect::<Vec<_>>();
+    let new_defaults = latest
+        .command
+        .expected_declarations
+        .iter()
+        .map(|draft| default_symbol(latest, draft))
+        .collect::<Vec<_>>();
+    for (((old, new), old_default), new_default) in original
+        .command
+        .expected_declarations
+        .iter()
+        .zip(&mut latest.command.expected_declarations)
+        .zip(old_defaults)
+        .zip(new_defaults)
+    {
+        let (Some(old_default), Some(new_default)) = (old_default, new_default) else {
+            continue;
+        };
+        let (
+            geosolve_sketch_code::ManagedValue::Object(old_fields),
+            geosolve_sketch_code::ManagedValue::Object(new_fields),
+        ) = (&old.arguments, &mut new.arguments)
+        else {
+            continue;
+        };
+        if old_fields.get("label")
+            == Some(&geosolve_sketch_code::ManagedValue::String(
+                old_default.clone(),
+            ))
+            && new_fields.get("label")
+                == Some(&geosolve_sketch_code::ManagedValue::String(new_default))
+        {
+            new_fields.insert(
+                "label".into(),
+                geosolve_sketch_code::ManagedValue::String(old_default),
+            );
+        }
+    }
 }

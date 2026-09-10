@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { AcceptedResult, EvaluationFailure } from "./index.js";
 import type { CompiledManagedSource, ManagedValue, SemanticPathSegment } from "@geosolve/sketch-code/ir";
-import { RetainedPointGesture, decodePointValue, type PointGestureNativeHandle, type PointGestureHandle, type PointGestureTarget, type PointGestureViewport, type PointGestureCommand, type PreparedPointGestureCommit } from "./point-gesture.js";
-import { ConstructionPrediction, type ConstructionNativeHandle, type ConstructionTool, type ConstructionCommand, type PreparedConstruction, type PreparedConstructionCommit } from "./construction.js";
+import { RetainedPointGesture, decodePointValue, type PointGestureNativeHandle, type PointGestureHandle, type PointGestureTarget, type PointGestureViewport, type PointGestureCommand, type PreparedPointGestureCommit, type PreparedPointGestureReplay } from "./point-gesture.js";
+import { ConstructionPrediction, type ConstructionNativeHandle, type ConstructionTool, type ConstructionCommand, type PreparedConstruction, type PreparedConstructionCommit, type PreparedConstructionReplay } from "./construction.js";
 
 export interface AuthoringValueWrite {
   readonly declaration: string;
@@ -108,6 +108,18 @@ export class EditableSession {
     const prepared = decodePointValue<PreparedConstruction>(this.constructionNative().prepareEditableConstruction(JSON.stringify({ session: this.token.session, expected: options.expected, command })));
     this.constructionPreparations.add(prepared); return prepared;
   }
+  /** Trusted host: basis must be an independently authenticated accepted historical session.
+   * Host checks returned external declaration lifetimes before publishing the latest candidate.
+   */
+  prepareConstructionReplay(basis: EditableSession, command: ConstructionCommand, options: { expected: EditableSessionToken }): PreparedConstructionReplay {
+    this.assertReplayBasis(basis);
+    const native = this.constructionNative();
+    if (!native.prepareEditableConstructionReplay) throw Error("This engine build does not support latest construction replay");
+    const prepared = decodePointValue<PreparedConstructionReplay>(native.prepareEditableConstructionReplay(JSON.stringify({
+      session: this.token.session, expected: options.expected, basis_session: basis.token.session, basis_expected: basis.token, command,
+    })));
+    this.constructionPreparations.add(prepared); return prepared;
+  }
   /** Returns an unpublished candidate after receipt authentication and whole native parity. */
   resolveConstruction(prepared: PreparedConstruction, receipt: AuthoringReceipt): PreparedConstructionCommit {
     this.assertLive();
@@ -146,6 +158,16 @@ export class EditableSession {
   preparePointGestureCommit(command: PointGestureCommand, options: { expected: EditableSessionToken }): PreparedPointGestureCommit {
     const prepared = decodePointValue<PreparedPointGestureCommit>(this.pointNative().prepareEditablePointCommit(JSON.stringify({
       session: this.token.session, expected: options.expected, command,
+    })));
+    this.pointPreparations.add(prepared); return prepared;
+  }
+  /** Trusted historical authentication and latest semantic lens replay; lifetimes remain host-owned. */
+  preparePointGestureReplay(basis: EditableSession, command: PointGestureCommand, options: { expected: EditableSessionToken }): PreparedPointGestureReplay {
+    this.assertReplayBasis(basis);
+    const native = this.pointNative();
+    if (!native.prepareEditablePointReplay) throw Error("This engine build does not support latest point replay");
+    const prepared = decodePointValue<PreparedPointGestureReplay>(native.prepareEditablePointReplay(JSON.stringify({
+      session: this.token.session, expected: options.expected, basis_session: basis.token.session, basis_expected: basis.token, command,
     })));
     this.pointPreparations.add(prepared); return prepared;
   }
@@ -246,6 +268,10 @@ export class EditableSession {
   private assertLive(): void {
     if (this.disposed) throw Error("Editable session has been disposed");
     if (!this.host.isLive()) throw Error("Engine has been disposed");
+  }
+  private assertReplayBasis(basis: EditableSession): void {
+    this.assertLive(); basis.assertLive();
+    if (this.native !== basis.native) throw Error("Replay basis belongs to a different engine");
   }
   private pointNative(): PointGestureNativeHandle {
     this.assertLive();

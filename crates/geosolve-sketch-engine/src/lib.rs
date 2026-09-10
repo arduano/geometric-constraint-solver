@@ -11,6 +11,8 @@ mod construction;
 mod construction_names;
 mod point_gesture;
 mod profiles;
+mod replay;
+pub use replay::{ConstructionAllocation, ConstructionReplayWitness, PointReplayWitness};
 mod session;
 mod terminal;
 pub use authoring::{

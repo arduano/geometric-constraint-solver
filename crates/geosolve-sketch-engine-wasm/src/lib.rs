@@ -348,6 +348,16 @@ mod wasm {
                 .map_err(|error| JsValue::from_str(&error))
         }
 
+        #[wasm_bindgen(js_name = prepareEditableConstructionReplay)]
+        pub fn prepare_editable_construction_replay(
+            &mut self,
+            json: &str,
+        ) -> Result<String, JsValue> {
+            self.0
+                .prepare_editable_construction_replay(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
         #[wasm_bindgen(js_name = resolveEditableConstruction)]
         pub fn resolve_editable_construction(&mut self, json: &str) -> Result<String, JsValue> {
             self.0
@@ -425,6 +435,13 @@ mod wasm {
         pub fn prepare_editable_point_commit(&mut self, json: &str) -> Result<String, JsValue> {
             self.0
                 .prepare_editable_point_commit(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = prepareEditablePointReplay)]
+        pub fn prepare_editable_point_replay(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .prepare_editable_point_replay(json)
                 .map_err(|error| JsValue::from_str(&error))
         }
 

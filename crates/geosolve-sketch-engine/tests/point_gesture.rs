@@ -17,6 +17,7 @@ fn project(name: &str) -> String {
         "rectangle" => include_str!("fixtures/point-gesture-rectangle.json"),
         "constrained" => include_str!("fixtures/point-gesture-constrained.json"),
         "computed" => include_str!("fixtures/point-gesture-computed.json"),
+        "parameter" => include_str!("fixtures/point-gesture-parameter.json"),
         _ => panic!("unknown fixture"),
     };
     CodeProject::managed(
@@ -402,4 +403,136 @@ fn native_valid_but_infeasible_computed_terminal_cannot_publish_a_partial_scene(
     assert_eq!(session.state(), before);
     assert_eq!(session.design(), design);
     assert!(!session.state().result.geometry.computed_edges.is_empty());
+}
+
+#[test]
+fn trusted_latest_point_replay_preserves_scalar_edits_and_orders_same_point_writes() {
+    let basis = EditableSession::open(&project("circle"), None).unwrap();
+    let target = basis.point_gesture_targets().unwrap().remove(0).target;
+    let mut gesture = basis
+        .begin_point_gesture(target.clone(), 901, viewport())
+        .unwrap();
+    gesture.advance(901, sample(1, [12.0, 7.0])).unwrap();
+    let terminal = gesture.finish(901).unwrap();
+    let original_command = terminal.command().clone();
+    let mut latest = EditableSession::open(&project("larger"), None).unwrap();
+    assert!(
+        latest
+            .prepare_point_gesture_commit(&original_command)
+            .is_err()
+    );
+    let mut first = latest
+        .begin_point_gesture(
+            latest.point_gesture_targets().unwrap().remove(0).target,
+            902,
+            viewport(),
+        )
+        .unwrap();
+    first.advance(902, sample(1, [3.0, 4.0])).unwrap();
+    let first = first.finish(902).unwrap();
+    latest.commit_point_gesture(first.command()).unwrap();
+    let before = latest.state();
+    let (prepared, witness) = latest
+        .prepare_point_gesture_replay(&basis, &original_command)
+        .unwrap();
+    assert_eq!(
+        witness.required_stable_declarations,
+        vec![geosolve_sketch_code::SemanticSymbol("bore".into())]
+    );
+    assert_eq!(latest.state(), before);
+    assert!(prepared.result().validation.hard_residuals_validated);
+    latest.apply_point_gesture_commit(prepared).unwrap();
+    assert_near(
+        latest.point_gesture_targets().unwrap().remove(0).position,
+        [12.0, 7.0],
+    );
+    assert!(
+        latest
+            .accepted()
+            .result()
+            .geometry
+            .scalars
+            .iter()
+            .any(|scalar| (scalar.value - 5.0).abs() < 1e-8)
+    );
+    assert_eq!(terminal.command(), &original_command);
+    let accepted = latest.state();
+    let mut forged = original_command.clone();
+    let PointGestureTarget::Point { address } = &mut forged.target else {
+        panic!()
+    };
+    address.owner.generation += 1;
+    assert!(
+        latest
+            .prepare_point_gesture_replay(&basis, &forged)
+            .is_err()
+    );
+    forged = original_command;
+    forged.basis = "forged".into();
+    assert!(
+        latest
+            .prepare_point_gesture_replay(&basis, &forged)
+            .is_err()
+    );
+    assert_eq!(latest.state(), accepted);
+}
+
+#[test]
+fn trusted_latest_point_replay_rejects_removed_source_owner_without_publication() {
+    let basis = EditableSession::open(&project("circle"), None).unwrap();
+    let mut gesture = basis
+        .begin_point_gesture(
+            basis.point_gesture_targets().unwrap().remove(0).target,
+            903,
+            viewport(),
+        )
+        .unwrap();
+    gesture.advance(903, sample(1, [8.0, 4.0])).unwrap();
+    let terminal = gesture.finish(903).unwrap();
+    let latest = EditableSession::open(&project("rectangle"), None).unwrap();
+    let before = latest.state();
+    assert!(
+        latest
+            .prepare_point_gesture_replay(&basis, terminal.command())
+            .is_err()
+    );
+    assert_eq!(latest.state(), before);
+}
+
+#[test]
+fn latest_point_replay_retains_named_parameter_dependencies_with_distinct_lexical_names() {
+    let basis = EditableSession::open(&project("parameter"), None).unwrap();
+    let mut latest = EditableSession::open(&project("parameter"), None).unwrap();
+    let mut gesture = basis
+        .begin_point_gesture(
+            basis.point_gesture_targets().unwrap().remove(0).target,
+            905,
+            viewport(),
+        )
+        .unwrap();
+    gesture.advance(905, sample(1, [8.0, 4.0])).unwrap();
+    let terminal = gesture.finish(905).unwrap();
+    let before = latest.state();
+    let (prepared, witness) = latest
+        .prepare_point_gesture_replay(&basis, terminal.command())
+        .unwrap();
+    assert_eq!(
+        witness
+            .required_stable_declarations
+            .iter()
+            .map(|symbol| symbol.0.as_str())
+            .collect::<Vec<_>>(),
+        ["bore", "boreRadius"]
+    );
+    assert_eq!(latest.state(), before);
+    assert!(prepared.result().validation.hard_residuals_validated);
+    latest.apply_point_gesture_commit(prepared).unwrap();
+    assert_near(
+        latest.point_gesture_targets().unwrap().remove(0).position,
+        [8.0, 4.0],
+    );
+    assert_eq!(
+        latest.export_project_json().unwrap(),
+        basis.export_project_json().unwrap()
+    );
 }

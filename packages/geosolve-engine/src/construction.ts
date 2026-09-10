@@ -39,6 +39,16 @@ export interface PreparedConstruction {
   readonly request: PreparedAuthoring["request"];
   readonly declarations: readonly string[];
 }
+export interface ConstructionReplayWitness {
+  readonly requiredStableDeclarations: readonly string[];
+  readonly allocationMapping: readonly {
+    readonly provisional: string; readonly persistent: string;
+    readonly provisionalVariable: string; readonly persistentVariable: string;
+  }[];
+}
+export interface PreparedConstructionReplay extends PreparedConstruction {
+  readonly replay: ConstructionReplayWitness;
+}
 /** Native-validated complete candidate; persist before installing through its preparing session. */
 export interface PreparedConstructionCommit {
   readonly ticket: string;
@@ -55,6 +65,7 @@ export interface ConstructionNativeHandle {
   editableConstructionPresentation(json: string): string;
   finishEditableConstruction(json: string): string;
   cancelEditableConstruction(json: string): void;
+  prepareEditableConstructionReplay?(json: string): string;
   prepareEditableConstruction(json: string): string;
   resolveEditableConstruction(json: string): string;
   applyEditableConstructionCommit(json: string): string;

@@ -61,6 +61,13 @@ export interface PreparedPointGestureCommit {
   readonly source_design_digest: string;
   readonly result: AcceptedResult;
 }
+export interface PointReplayWitness {
+  readonly requiredStableDeclarations: readonly string[];
+  readonly resolvedTarget: PointGestureTarget;
+}
+export interface PreparedPointGestureReplay extends PreparedPointGestureCommit {
+  readonly replay: PointReplayWitness;
+}
 export interface PointGestureNativeHandle {
   editablePointGestureTargets(id: string): string;
   beginEditablePointGesture(json: string): string;
@@ -69,6 +76,7 @@ export interface PointGestureNativeHandle {
   editablePointGesturePresentation(json: string): string;
   finishEditablePointGesture(json: string): string;
   cancelEditablePointGesture(json: string): void;
+  prepareEditablePointReplay?(json: string): string;
   prepareEditablePointCommit(json: string): string;
   applyEditablePointCommit(json: string): string;
   releaseEditablePointCommit(json: string): void;

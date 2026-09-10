@@ -49,6 +49,15 @@ struct PrepareRequest {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ReplayPrepare {
+    session: u64,
+    expected: CodeSessionIdentity,
+    basis_session: u64,
+    basis_expected: CodeSessionIdentity,
+    command: PointGestureCommand,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct CommitRequest {
     session: u64,
     ticket: String,
@@ -225,6 +234,52 @@ impl EngineAdapter {
         let ticket = self.next_point_ticket(input.session, "point-commit")?;
         let encoded = encode(
             &json!({"ticket":ticket,"project":project,"design":prepared.design(),
+            "source_design_digest":prepared.source_design_digest(),"result":prepared.result()}),
+        )?;
+        self.reserve_point_bytes(encoded.len())?;
+        self.point_commits.insert(
+            ticket,
+            HeldPointCommit {
+                session: input.session,
+                expected: input.expected,
+                prepared,
+                bytes: encoded.len(),
+            },
+        );
+        Ok(encoded)
+    }
+
+    /// Trusted host replay using an immutable admitted historical basis session.
+    ///
+    /// # Errors
+    /// Rejects foreign/stale sessions, changed semantic meaning and native failures.
+    pub fn prepare_editable_point_replay(&mut self, json: &str) -> Result<String, String> {
+        if self.point_commits.len() >= MAX_COMMITS {
+            return Err("release a point commit before preparing more than eight".into());
+        }
+        let input: ReplayPrepare = decode_point_request(json)?;
+        let session = self
+            .sessions
+            .get(&input.session)
+            .ok_or("unknown editable session")?;
+        if session.token() != &input.expected {
+            return Err("point commit expected input is stale or foreign".into());
+        }
+        let project = session.export_project_json().map_err(|e| e.to_string())?;
+        self.reserve_point_bytes(project.len().saturating_add(json.len()))?;
+        let basis = self
+            .sessions
+            .get(&input.basis_session)
+            .ok_or("unknown replay basis session")?;
+        if basis.token() != &input.basis_expected {
+            return Err("replay basis input is stale or foreign".into());
+        }
+        let (prepared, replay) = session
+            .prepare_point_gesture_replay(basis, &input.command)
+            .map_err(|e| e.to_string())?;
+        let ticket = self.next_point_ticket(input.session, "point-commit")?;
+        let encoded = encode(
+            &json!({"ticket":ticket,"replay":replay,"project":project,"design":prepared.design(),
             "source_design_digest":prepared.source_design_digest(),"result":prepared.result()}),
         )?;
         self.reserve_point_bytes(encoded.len())?;
