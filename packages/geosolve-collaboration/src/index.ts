@@ -2,6 +2,11 @@
 /** Causal heads identify raw draft text, never an accepted geometric result. */
 export interface TextRevision { readonly heads: readonly string[] }
 export interface TextSnapshot { readonly revision: TextRevision; readonly files: Readonly<Record<string, string>> }
+export interface HistoricalTextEdit {
+  readonly snapshot: TextSnapshot;
+  /** Local displayed branch after this edit, before unseen remote merging. */
+  readonly localRevision: TextRevision;
+}
 export interface TextLimits {
   readonly max_files?: number;
   readonly max_file_bytes?: number;
@@ -27,6 +32,7 @@ export interface CollaborationNativeHandle {
   capture(): string;
   fork(actor: Uint8Array): CollaborationNativeHandle;
   edit(revisionJson: string, editsJson: string): string;
+  editFromRevision(revisionJson: string, editsJson: string): string;
   generateSyncMessage(peer: string): Uint8Array | undefined;
   receiveSyncMessage(peer: string, bytes: Uint8Array): string;
   receiveSyncMessageFrom(peer: string, bytes: Uint8Array, actor: Uint8Array): string;
@@ -73,6 +79,11 @@ export class SharedText {
   /** Always pass the editor's basis revision when applying asynchronously prepared offsets. */
   edit(edits: readonly TextEdit[], expected: TextRevision = this.capture().revision): TextSnapshot {
     this.live(); return decode(this.native.edit(encode(expected), encode(edits)));
+  }
+  /** Existing-file typing against actual displayed heads, merged by native CRDT.
+   * Unseen local-actor edits reject. Use server personal history for Undo. */
+  editFromRevision(edits: readonly TextEdit[], displayed: TextRevision): HistoricalTextEdit {
+    this.live(); return decode(this.native.editFromRevision(encode(displayed), encode(edits)));
   }
   generateSyncMessage(peer: string): Uint8Array | undefined {
     this.live(); unicode(peer); return this.native.generateSyncMessage(peer);

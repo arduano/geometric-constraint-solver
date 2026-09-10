@@ -50,6 +50,12 @@ export interface SemanticCheckpoint {
   readonly targetsJson: string;
   readonly historyJson: string;
 }
+export interface UserSemanticHistory {
+  readonly undoCount: number; readonly redoCount: number;
+  readonly canUndo: boolean; readonly canRedo: boolean;
+  readonly undoUnavailable: string | null; readonly redoUnavailable: string | null;
+  readonly revision: number; readonly hasPendingStage: boolean; readonly needsRecovery: boolean;
+}
 export interface SemanticSnapshot {
   readonly revision: number;
   readonly historyRevision: number;
@@ -107,6 +113,7 @@ export interface SemanticNativeHandle {
   planDelete(rootsJson: string): string;
   authenticateDelete(planJson: string): void;
   propertyOwner(addressJson: string): string;
+  userHistory(userId: string): string;
   prepareUndo(userId: string): string;
   prepareRedo(userId: string): string;
   release(ticket: string): void;
@@ -146,6 +153,9 @@ export class TrustedSemanticHost {
   planDelete(roots: readonly SemanticTarget[]): DeletionPlan { this.live(); return decode(this.native.planDelete(encode(roots))); }
   authenticateDelete(plan: DeletionPlan): void { this.live(); this.native.authenticateDelete(encode(plan)); }
   propertyOwner(address: PropertyAddress): OperationId | null { this.live(); return decode(this.native.propertyOwner(encode(address))); }
+  userHistory(userId: string): UserSemanticHistory {
+    this.live(); unicode(userId); return decode(this.native.userHistory(userId));
+  }
   prepareUndo(userId: string): PreparedSemanticInverse {
     this.live(); unicode(userId); return this.retain(this.native.prepareUndo(userId));
   }

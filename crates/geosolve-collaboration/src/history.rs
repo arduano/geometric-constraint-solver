@@ -78,6 +78,18 @@ pub enum HistoryDirection {
     Redo,
 }
 
+/// Read-only personal history availability, without retained inverse tickets.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSemanticHistory {
+    pub undo_count: usize,
+    pub redo_count: usize,
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub undo_unavailable: Option<String>,
+    pub redo_unavailable: Option<String>,
+}
+
 /// Opaque prepared inverse. Host validates the proposed changes independently
 /// before committing this plan against the same live contribution history.
 #[derive(Clone, Debug)]
@@ -234,6 +246,30 @@ impl ContributionHistory {
             return Err(HistoryError::Invalid);
         }
         self.commit_inverse_transaction(plan, operation, revision, &mut targets.clone())
+    }
+
+    /// Observes current committed ownership without consuming history or handles.
+    pub fn user_history(&self, user: &str, targets: &TargetLedger) -> UserSemanticHistory {
+        let undo_unavailable = self
+            .prepare_undo(user, targets)
+            .err()
+            .map(|error| error.to_string());
+        let redo_unavailable = self
+            .prepare_redo(user, targets)
+            .err()
+            .map(|error| error.to_string());
+        UserSemanticHistory {
+            undo_count: self
+                .contributions
+                .iter()
+                .filter(|entry| entry.active && entry.operation.user_id == user)
+                .count(),
+            redo_count: self.redo.get(user).map_or(0, Vec::len),
+            can_undo: undo_unavailable.is_none(),
+            can_redo: redo_unavailable.is_none(),
+            undo_unavailable,
+            redo_unavailable,
+        }
     }
 
     /// Authoritative observation useful for UI availability and checked host edits.

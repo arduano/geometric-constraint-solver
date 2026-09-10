@@ -173,3 +173,70 @@ test("committed incremental text preserves local pending edits and excludes unpe
     assert.equal(bob.capture().files["helper.ts"],files["helper.ts"]);
   }finally{host.dispose();alice.dispose();bob.dispose();}
 });
+
+const userOperation=(userId,requestId)=>({userId,clientId:`tab-${userId}`,requestId});
+async function userType(host,user,id,path,start,deleted,insert){
+  const client=await createSharedText({actor:actor(user),checkpoint:host.textCheckpoint()});
+  try{const basis=client.capture().revision;client.editFromRevision([{kind:"splice",path,start_utf16:start,delete_utf16:deleted,insert}],basis);host.commitStage(host.stageUserTextChanges(client.changesSince(basis),actor(user),userOperation(user,id)));}finally{client.dispose();}
+}
+test("actual WASM durable personal text ownership survives independent actor restart and preserves other users",async()=>{
+  let host=await open();
+  try{
+    await userType(host,"alice","first","main.ts",14,2,"14");await userType(host,"alice","second","main.ts",14,2,"16");
+    await userType(host,"bob","helper","helper.ts",22,1,"9");
+    const accepted=host.snapshot().accepted,before=host.checkpoint();const first=host.stageUserUndo(userOperation("alice","undo-second"));
+    assert.equal(host.checkpoint(),before);assert.equal(host.userHistory("alice").undoCount,2);host.discardUnpersistedStage(first);
+    const retry=host.stageUserUndo(userOperation("alice","undo-second"));assert.notEqual(first.stageId,retry.stageId);host.commitStage(retry);
+    let checkpointJson=host.checkpoint();host.dispose();host=await createTrustedSourceHost({configuration:configuration("new"),actor:actor("new-server"),checkpointJson});
+    host.commitStage(host.stageUserUndo(userOperation("alice","undo-first")));assert.equal(host.snapshot().working.files["main.ts"],files["main.ts"]);
+    checkpointJson=host.checkpoint();host.dispose();host=await createTrustedSourceHost({configuration:configuration("third"),actor:actor("third-server"),checkpointJson});
+    host.commitStage(host.stageUserRedo(userOperation("alice","redo-first")));host.commitStage(host.stageUserRedo(userOperation("alice","redo-second")));
+    assert.equal(host.snapshot().working.files["main.ts"],"const width = 16;\n");assert.equal(host.snapshot().working.files["helper.ts"],"export const height = 9;\n");assert.deepEqual(host.snapshot().accepted,accepted);
+  }finally{host.dispose();}
+});
+test("actual WASM durable same-value ownership and file lifetime restoration guard text Undo",async()=>{
+  let host=await open();
+  try{
+    await userType(host,"alice","first","main.ts",14,2,"14");await userType(host,"bob","same","main.ts",14,2,"14");
+    const before=host.checkpoint();assert.throws(()=>host.stageUserUndo(userOperation("alice","blocked")),/ownership/);assert.equal(host.checkpoint(),before);
+    host.commitStage(host.stageUserUndo(userOperation("bob","undo")));const original=host.snapshot().fileIds["main.ts"];
+    host.commitStage(host.stageUserFileEdits([{kind:"remove_file",path:"main.ts"}],userOperation("alice","delete")));
+    const checkpointJson=host.checkpoint();host.dispose();host=await createTrustedSourceHost({configuration:configuration("new"),actor:actor("new-server"),checkpointJson});
+    host.commitStage(host.stageUserUndo(userOperation("alice","restore")));assert.notEqual(host.snapshot().fileIds["main.ts"],original);
+    host.commitStage(host.stageUserUndo(userOperation("alice","undo-first")));assert.equal(host.snapshot().working.files["main.ts"],files["main.ts"]);
+  }finally{host.dispose();}
+});
+
+test("actual WASM same-path contribution blocks file removal until repeated personal Undo restores ownership",async()=>{
+  let host=await open();
+  try{
+    host.commitStage(host.stageUserFileEdits([{kind:"create_file",path:"new.ts",text:"x"}],userOperation("alice","create")));
+    host.commitStage(host.stageUserFileEdits([{kind:"rename_file",path:"new.ts",new_path:"new.ts"}],userOperation("bob","same-path")));
+    assert.throws(()=>host.stageUserUndo(userOperation("alice","blocked")),/ownership/);
+    host.commitStage(host.stageUserUndo(userOperation("bob","undo")));
+    const checkpointJson=host.checkpoint();host.dispose();host=await createTrustedSourceHost({configuration:configuration("restart"),actor:actor("new-server"),checkpointJson});
+    host.commitStage(host.stageUserRedo(userOperation("bob","redo")));assert.throws(()=>host.stageUserUndo(userOperation("alice","blocked-again")),/ownership/);
+    host.commitStage(host.stageUserUndo(userOperation("bob","undo-again")));host.commitStage(host.stageUserUndo(userOperation("alice","undo-create")));
+    assert.equal(host.snapshot().working.files["new.ts"],undefined);
+  }finally{host.dispose();}
+});
+
+test("actual WASM raw typing continues past retained Undo capacity with a durable visible horizon",async context=>{
+  let host=await createTrustedSourceHost({configuration:{...configuration("horizon"),files:{"main.ts":"a0"}},actor:actor("server")});
+  const client=await createSharedText({actor:actor("alice"),checkpoint:host.textCheckpoint()});
+  try{
+    let maximumStageMs=0,pruneMs=0;
+    for(let index=0;index<520;index++){
+      const started=performance.now();
+      const before=client.capture().revision;
+      client.editFromRevision([{kind:"splice",path:"main.ts",start_utf16:1,delete_utf16:1,insert:index%2?"0":"1"}],before);
+      host.commitStage(host.stageUserTextChanges(client.changesSince(before),actor("alice"),userOperation("alice",`key-${index}`)));
+      const elapsed=performance.now()-started;maximumStageMs=Math.max(maximumStageMs,elapsed);if(index===512)pruneMs=elapsed;
+    }
+    context.diagnostic(`520 native edits: maximum stage ${maximumStageMs.toFixed(1)}ms, pruning stage ${pruneMs.toFixed(1)}ms`);
+    const availability=host.userHistory("alice");assert(availability.horizon.generation>0);assert(availability.horizon.discardedEvents>=256);assert(availability.undoCount>200&&availability.undoCount<=512);
+    const checkpointJson=host.checkpoint();host.dispose();host=await createTrustedSourceHost({configuration:{...configuration("restart"),files:{"main.ts":"a0"}},actor:actor("new-server"),checkpointJson});
+    assert.deepEqual(host.userHistory("alice").horizon,availability.horizon);
+    host.commitStage(host.stageUserUndo(userOperation("alice","undo-last")));assert.equal(host.snapshot().working.files["main.ts"],"a1");
+  }finally{host.dispose();client.dispose();}
+});

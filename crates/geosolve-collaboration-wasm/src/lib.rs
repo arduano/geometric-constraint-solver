@@ -108,6 +108,27 @@ impl SharedTextReplica {
         self.capture()
     }
 
+    /// Applies existing-file offsets against historical displayed heads, merging
+    /// current remote state in native Rust. Durable personal Undo belongs to host.
+    ///
+    /// # Errors
+    /// Rejects unseen same-actor edits, missing/replaced files and invalid typing.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = editFromRevision))]
+    pub fn edit_from_revision(
+        &mut self,
+        revision_json: &str,
+        edits_json: &str,
+    ) -> Result<String, String> {
+        let snapshot = self
+            .document
+            .edit_from_revision(&parse(revision_json)?, &parse::<Vec<TextEdit>>(edits_json)?)
+            .map_err(error)?;
+        // Old local-only inverse stacks do not cover this server-history path.
+        self.undo.clear();
+        self.redo.clear();
+        json(&snapshot)
+    }
+
     /// Generates one binary message. Reconnect/drop recovery resets both peers.
     ///
     /// # Errors

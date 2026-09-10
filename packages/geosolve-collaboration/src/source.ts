@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { TextEdit, TextLimits, TextRevision, TextSnapshot } from "./index.js";
+import type { OperationId } from "./host.js";
 import { decode, encode, unicode } from "./host-codec.js";
 
+export interface TextHistoryHorizon {
+  readonly generation:number;readonly discardedEvents:number;readonly oldestRevision:TextRevision|null;
+}
+export interface UserTextHistory {
+  readonly undoCount:number;readonly redoCount:number;readonly canUndo:boolean;readonly canRedo:boolean;
+  readonly undoUnavailable:string|null;readonly redoUnavailable:string|null;
+  readonly horizon:TextHistoryHorizon;
+}
 export interface SourceHostConfiguration {
   readonly documentEpoch: string;
   readonly serverEpoch: string;
@@ -61,6 +70,11 @@ export interface SourceNativeHandle {
   stageTextSync(peer:string,message:Uint8Array,actor:Uint8Array):string;
   stageTextChanges(changesJson:string,actor:Uint8Array):string;
   stageHostEdits(expectedJson:string,editsJson:string):string;
+  stageUserTextChanges(changesJson:string,actor:Uint8Array,operationJson:string):string;
+  stageUserFileEdits(expectedJson:string,editsJson:string,operationJson:string):string;
+  stageUserUndo(operationJson:string):string;
+  stageUserRedo(operationJson:string):string;
+  userHistory(userId:string):string;
   captureApply():string;
   restoreApplyCapture(captureJson:string,basisJson:string):string;
   applyNeedsRebase(capture:string):boolean;
@@ -110,6 +124,17 @@ export class TrustedSourceHost {
   stageTextChanges(changes:readonly Uint8Array[],actor:Uint8Array):SourceStage {
     this.live();checkActor(actor);return this.retainStage(this.native.stageTextChanges(encode(changes.map(bytes=>Array.from(bytes))),actor));
   }
+  /** Principal/operation comes from authenticated host admission. Native derives
+   * character ownership from change bytes; no client inverse token is accepted. */
+  stageUserTextChanges(changes:readonly Uint8Array[],actor:Uint8Array,operation:OperationId):SourceStage {
+    this.live();checkActor(actor);return this.retainStage(this.native.stageUserTextChanges(encode(changes.map(bytes=>Array.from(bytes))),actor,encode(operation)));
+  }
+  stageUserFileEdits(edits:readonly TextEdit[],operation:OperationId,expected:TextRevision=this.snapshot().working.revision):SourceStage {
+    this.live();return this.retainStage(this.native.stageUserFileEdits(encode(expected),encode(edits),encode(operation)));
+  }
+  stageUserUndo(operation:OperationId):SourceStage {this.live();return this.retainStage(this.native.stageUserUndo(encode(operation)));}
+  stageUserRedo(operation:OperationId):SourceStage {this.live();return this.retainStage(this.native.stageUserRedo(encode(operation)));}
+  userHistory(userId:string):UserTextHistory {this.live();unicode(userId);return decode(this.native.userHistory(userId));}
   /** External mirror/lifecycle edits already ordered by the host gateway. */
   stageHostEdits(edits:readonly TextEdit[],expected:TextRevision=this.snapshot().working.revision):SourceStage {
     this.live();return this.retainStage(this.native.stageHostEdits(encode(expected),encode(edits)));

@@ -131,6 +131,10 @@ struct SourceDocumentSnapshot {
     accepted: AcceptedSource,
     working_checkpoint: Vec<u8>,
     pending: Vec<SourceReconciliationNotice>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    text_history: Vec<crate::TextHistoryEvent>,
+    #[serde(default, skip_serializing_if = "crate::TextHistoryHorizon::is_empty")]
+    text_history_horizon: crate::TextHistoryHorizon,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -150,6 +154,7 @@ pub struct SourceDocument {
     accepted: AcceptedSource,
     working: SharedTextDocument,
     pending: BTreeMap<String, SourceReconciliationNotice>,
+    text_history: crate::TextContributionHistory,
 }
 impl SourceDocument {
     pub fn document_epoch(&self) -> &str {
@@ -191,6 +196,7 @@ impl SourceDocument {
             },
             working,
             pending: BTreeMap::new(),
+            text_history: crate::TextContributionHistory::default(),
         })
     }
     pub fn accepted(&self) -> &AcceptedSource {
@@ -203,6 +209,88 @@ impl SourceDocument {
     pub fn working_mut(&mut self) -> &mut SharedTextDocument {
         &mut self.working
     }
+    /// Applies authenticated raw typing and records its native character effect
+    /// under the trusted server principal/operation. Stage before durable ACK.
+    ///
+    /// # Errors
+    /// Rejects forged writers, overlap/lifetimes, invalid history and resource bounds.
+    pub fn apply_user_text_changes(
+        &mut self,
+        changes: &[Vec<u8>],
+        actor: &[u8],
+        operation: crate::protocol::OperationId,
+    ) -> Result<(), SourceDocumentError> {
+        let mut staged = self.clone();
+        staged
+            .working
+            .apply_changes_from(changes, actor)
+            .map_err(text_error)?;
+        staged
+            .text_history
+            .record(
+                operation,
+                &self.working,
+                &staged.working,
+                actor.to_vec(),
+                false,
+            )
+            .map_err(text_error)?;
+        *self = staged;
+        Ok(())
+    }
+
+    /// Server-ordered file lifecycle shares the personal text history timeline.
+    ///
+    /// # Errors
+    /// Rejects stale namespace basis, non-lifecycle edits and native limits.
+    pub fn apply_user_file_edits(
+        &mut self,
+        expected: &TextRevision,
+        edits: &[TextEdit],
+        operation: crate::protocol::OperationId,
+    ) -> Result<(), SourceDocumentError> {
+        if edits.is_empty()
+            || edits
+                .iter()
+                .any(|edit| matches!(edit, TextEdit::Splice { .. }))
+        {
+            return Err(SourceDocumentError::Invalid);
+        }
+        let mut staged = self.clone();
+        staged
+            .working
+            .apply_edits(expected, edits)
+            .map_err(text_error)?;
+        staged
+            .text_history
+            .record_file_edits(operation, &self.working, &staged.working, edits)
+            .map_err(text_error)?;
+        *self = staged;
+        Ok(())
+    }
+
+    /// Personal Undo/Redo only changes working source. Explicit Apply is required
+    /// to change the accepted model; no accepted source or solver state is reused.
+    ///
+    /// # Errors
+    /// Rejects unavailable/overwritten contributions and bounded history.
+    pub fn apply_user_text_inverse(
+        &mut self,
+        operation: crate::protocol::OperationId,
+        redo: bool,
+    ) -> Result<(), SourceDocumentError> {
+        let mut staged = self.clone();
+        staged
+            .text_history
+            .inverse(operation, &mut staged.working, redo)
+            .map_err(text_error)?;
+        *self = staged;
+        Ok(())
+    }
+    pub fn user_text_history(&self, user: &str) -> crate::UserTextHistory {
+        self.text_history.user_history(user, &self.working)
+    }
+
     pub fn reconciliation_pending(&self) -> Vec<SourceReconciliationNotice> {
         self.pending.values().cloned().collect()
     }
@@ -511,6 +599,8 @@ impl SourceDocument {
             accepted: self.accepted.clone(),
             working_checkpoint: self.working.save(),
             pending: self.pending.values().cloned().collect(),
+            text_history: self.text_history.events().to_vec(),
+            text_history_horizon: self.text_history.checkpoint_horizon().clone(),
         };
         let json = serde_json::to_string(&snapshot).map_err(|_| SourceDocumentError::Invalid)?;
         if json.len() > MAX_SNAPSHOT_BYTES {
@@ -544,6 +634,12 @@ impl SourceDocument {
         validate_files(&snapshot.accepted.files)?;
         let working = SharedTextDocument::load(&snapshot.working_checkpoint, actor, limits)
             .map_err(text_error)?;
+        let text_history = crate::TextContributionHistory::restore_with_horizon(
+            snapshot.text_history,
+            snapshot.text_history_horizon,
+            &working,
+        )
+        .map_err(text_error)?;
         let mut pending = BTreeMap::new();
         for notice in snapshot.pending {
             if notice.accepted_revision > snapshot.accepted.model_revision
@@ -566,6 +662,7 @@ impl SourceDocument {
             accepted: snapshot.accepted,
             working,
             pending,
+            text_history,
         })
     }
 }

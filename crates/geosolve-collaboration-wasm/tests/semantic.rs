@@ -457,3 +457,58 @@ fn incomplete_structural_observations_and_same_value_dependency_interference_rej
     inverse(&mut state, &inverse_plan, "bob", "undo");
     assert!(state.prepare_undo("alice").is_ok());
 }
+
+#[test]
+fn read_only_semantic_history_remains_truthful_during_pending_persistence_without_tickets() {
+    let mut state = host();
+    record(&mut state, "alice", "first", "width", 12, 14);
+    for _ in 0..40 {
+        let availability = decode(&state.user_history("alice").unwrap());
+        assert_eq!(availability["canUndo"], true);
+        assert_eq!(availability["undoCount"], 1);
+    }
+    let request = json!({"basisRevision":1,"revision":2,"operation":operation("bob","same"),"changes":[change(&state,"width",14,14)]});
+    let write = decode(&state.stage_validated_record(&request.to_string()).unwrap());
+    let available = decode(&state.user_history("alice").unwrap());
+    assert_eq!(available["revision"], 1);
+    assert_eq!(available["hasPendingStage"], true);
+    assert_eq!(available["canUndo"], false);
+    assert!(
+        available["undoUnavailable"]
+            .as_str()
+            .unwrap()
+            .contains("pending")
+    );
+    state
+        .discard_unpersisted_stage(write["stageId"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(
+        decode(&state.user_history("alice").unwrap())["canUndo"],
+        true
+    );
+    record(&mut state, "bob", "same", "width", 14, 14);
+    let unavailable = decode(&state.user_history("alice").unwrap());
+    assert_eq!(unavailable["canUndo"], false);
+    assert!(
+        unavailable["undoUnavailable"]
+            .as_str()
+            .unwrap()
+            .contains("owns")
+    );
+    let prepared = decode(&state.prepare_undo("bob").unwrap());
+    let write = decode(
+        &state
+            .stage_validated_inverse(
+                prepared["ticket"].as_str().unwrap(),
+                &operation("bob", "undo").to_string(),
+                "3",
+            )
+            .unwrap(),
+    );
+    state
+        .fail_stage(write["stageId"].as_str().unwrap())
+        .unwrap();
+    let availability = decode(&state.user_history("bob").unwrap());
+    assert_eq!(availability["needsRecovery"], true);
+    assert_eq!(availability["canUndo"], false);
+}

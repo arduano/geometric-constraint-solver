@@ -127,7 +127,30 @@ on reconnect. This adapter does not establish roles or lifecycle admission order
 For accepted publication, the transaction coordinator persists the source stage's exact
 checkpoint with model/design and the authority stage's terminal record before synchronously
 committing both. `failStage` poisons uncertain source writes until reconstruction from disk.
-Per-user draft Undo stacks are not durable here. Historical Apply capture restoration is
+Durable personal draft Undo uses `stageUserTextChanges(changes,actor,operation)` and
+`stageUserFileEdits(edits,operation,expectedRevision)`. Principal and operation identity must
+come from authenticated host admission. `stageUserUndo(operation)` / `stageUserRedo(operation)`
+stage raw source only; persist the exact source stage before commit and require explicit
+Apply for geometry. `userHistory(userId)` reports counts and current checked availability.
+Native event replay reconstructs inverse ownership across restart, preserving disjoint text,
+Unicode, same-value foreign ownership and stable rename identity. File restoration creates
+a fresh object ID; stale typing into its old identity remains rejected. Same-path renames
+are recorded as contributions, and path swaps/deletion replacements stage atomically.
+
+History retains at most 512 contributions, 4096 events and 8 MiB accounted history, with
+65,536 scalars per contiguous changed span. Capacity shortens personal Undo to a recent
+replayable suffix. `userHistory(userId).horizon` reports `{generation,discardedEvents,oldestRevision}`
+and the source checkpoint persists the boundary. Valid raw typing continues; one contribution
+too large for Undo clears crossing personal history behind an explicit new horizon. Retained
+same-value ownership and file lineage remain checked through native restart replay. This does
+not compact the underlying Automerge document; its separate admission limits still apply.
+The outer host journal must deduplicate requests older than retained history.
+Direct replica local Undo remains
+instance-local. `editFromRevision(edits,displayedRevision)` returns `{snapshot,localRevision}`;
+use localRevision for subsequent queued local offsets until installing the merged snapshot.
+It clears the direct local-only Undo stack; collaborative UI must call server personal Undo.
+
+Historical Apply capture restoration is
 supported; pending model preparation tickets are re-created after restart.
 
 ## Semantic target and contribution authority
@@ -153,6 +176,11 @@ plans. Independently validate their effect on the model, then call `stageValidat
 with the exact retained object. Intervening committed edits invalidate preparation tickets.
 Use `release` for unused plans. The adapter caps retained plans at 32 and their serialized
 changes at 64 MiB; target limits can be lowered below core defaults, never increased.
+
+`userHistory(userId)` returns counts, `canUndo`/`canRedo`, unavailable reasons, committed
+`revision`, `hasPendingStage` and `needsRecovery`. This read-only observation retains no
+preparation handle. Pending persistence or uncertain storage disables the commands with a
+specific reason while counts continue to describe committed history.
 
 Persist a stage's exact `targetsJson` and `historyJson` with model/source and the authority
 terminal record in one recoverable envelope, then call `commitStage`. The async `record`,

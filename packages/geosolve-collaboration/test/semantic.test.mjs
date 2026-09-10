@@ -189,3 +189,17 @@ test("actual WASM structural validation rejects missing observations and tracks 
     await inverse(host,undo,"bob","undo");host.release(host.prepareUndo("alice"));
   }finally{host.dispose();}
 });
+
+test("actual WASM semantic availability is read-only and distinguishes pending, overwritten and recovery",async()=>{
+  const host=await open();
+  try{
+    await record(host,"alice","first","width",12,14);
+    for(let index=0;index<40;index++)assert.equal(host.userHistory("alice").canUndo,true);
+    const stage=host.stageValidatedRecord({basisRevision:1,revision:2,operation:operation("bob","same"),changes:[change(host,"width",14,14)]});
+    assert.equal(host.userHistory("alice").undoCount,1);assert.equal(host.userHistory("alice").canUndo,false);assert.match(host.userHistory("alice").undoUnavailable,/pending/);
+    host.discardUnpersistedStage(stage);assert.equal(host.userHistory("alice").canUndo,true);
+    await record(host,"bob","same","width",14,14);assert.equal(host.userHistory("alice").canUndo,false);assert.match(host.userHistory("alice").undoUnavailable,/owns/);
+    const inverseStage=host.stageValidatedInverse(host.prepareUndo("bob"),operation("bob","undo"),3);host.failStage(inverseStage);
+    assert.equal(host.userHistory("bob").needsRecovery,true);assert.equal(host.userHistory("bob").canUndo,false);
+  }finally{host.dispose();}
+});

@@ -141,3 +141,30 @@ test("large paste remains valid raw text when bounded local Undo cannot retain i
     assert.equal(alice.history.undo, 0);
   } finally { alice.dispose(); bob.dispose(); }
 });
+
+test("actual WASM displayed-head typing preserves overlap and renamed identity through native merging",async()=>{
+  const [alice,bob]=await seeded("a😀bc");let reference;
+  try{
+    const displayed=alice.capture().revision;reference=await createSharedText({actor:actor("alice"),checkpoint:alice.save()});
+    splice(reference,1,2,"🐟");splice(bob,1,2,"B");bob.edit([{kind:"rename_file",path:"main.ts",new_path:"renamed.ts"}]);
+    const remote=bob.changesSince(displayed);alice.applyServerChanges(remote);
+    alice.editFromRevision([{kind:"splice",path:"main.ts",start_utf16:1,delete_utf16:2,insert:"🐟"}],displayed);
+    reference.applyServerChanges(remote);assert.deepEqual(alice.capture().files,reference.capture().files);
+    assert(alice.capture().files["renamed.ts"].includes("🐟"));assert(alice.capture().files["renamed.ts"].includes("B"));
+    assert.throws(()=>alice.editFromRevision([{kind:"splice",path:"main.ts",start_utf16:1,delete_utf16:2,insert:"X"}],displayed),/another revision/);
+    bob.applyServerChanges(alice.changesSince(bob.capture().revision));assert.deepEqual(bob.capture(),alice.capture());
+  }finally{alice.dispose();bob.dispose();reference?.dispose();}
+});
+
+test("actual WASM queued local edits use returned local branch before remote text is displayed",async()=>{
+  const [alice,bob]=await seeded("abcd");
+  try{
+    const displayed=alice.capture().revision;splice(bob,0,0,"REMOTE-");alice.applyServerChanges(bob.changesSince(displayed));
+    const first=alice.editFromRevision([{kind:"splice",path:"main.ts",start_utf16:1,delete_utf16:0,insert:"1"}],displayed);
+    assert.equal(first.snapshot.files["main.ts"],"REMOTE-a1bcd");assert.notDeepEqual(first.localRevision,first.snapshot.revision);
+    const second=alice.editFromRevision([{kind:"splice",path:"main.ts",start_utf16:2,delete_utf16:0,insert:"2"}],first.localRevision);
+    assert.equal(second.snapshot.files["main.ts"],"REMOTE-a12bcd");
+    assert.throws(()=>alice.editFromRevision([{kind:"splice",path:"main.ts",start_utf16:2,delete_utf16:0,insert:"bad"}],first.localRevision),/another revision/);
+    bob.applyServerChanges(alice.changesSince(bob.capture().revision));assert.deepEqual(alice.capture(),bob.capture());
+  }finally{alice.dispose();bob.dispose();}
+});

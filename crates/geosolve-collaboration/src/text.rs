@@ -18,6 +18,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+mod history;
+pub use history::{TextContributionHistory, TextHistoryEvent, TextHistoryHorizon, UserTextHistory};
+
 const FORMAT: &str = "geosolve-shared-text-v1";
 const MAX_ACTOR_BYTES: usize = 64;
 const MAX_PATH_BYTES: usize = 512;
@@ -98,6 +101,16 @@ impl SharedTextSnapshot {
     pub fn text(&self, path: &str) -> Option<&str> {
         self.files.get(path).map(String::as_str)
     }
+}
+
+/// Result of typing from a displayed frontier. The local branch is the text the
+/// editor has actually displayed after its own edit, before unseen remote merges.
+/// Queue the next local offsets against this revision until remote text is installed.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoricalTextEdit {
+    pub snapshot: SharedTextSnapshot,
+    pub local_revision: TextRevision,
 }
 
 /// A raw edit; splice coordinates count UTF-16 code units.
@@ -361,6 +374,55 @@ impl SharedTextDocument {
         self.edit(edits)?;
         Ok(self.capture())
     }
+    /// Applies existing-file typing to the actual displayed causal frontier and
+    /// merges its native character operations into the latest remote state.
+    /// Unseen changes by this same actor reject to prevent actor-sequence forks.
+    ///
+    /// # Errors
+    /// Rejects unknown heads, unseen own edits, lifecycle edits, replaced files,
+    /// invalid UTF-16 positions and normal admission bounds atomically.
+    pub fn edit_from_revision(
+        &mut self,
+        expected: &TextRevision,
+        edits: &[TextEdit],
+    ) -> Result<HistoricalTextEdit, SharedTextError> {
+        let mut historical = self.typing_basis(expected, edits)?;
+        historical.apply_edits(expected, edits)?;
+        let local_revision = historical.revision();
+        let novel = historical.changes_since(expected)?;
+        let actor = self.document.get_actor().to_bytes().to_vec();
+        self.apply_changes_from(&novel, &actor)?;
+        Ok(HistoricalTextEdit {
+            snapshot: self.capture(),
+            local_revision,
+        })
+    }
+
+    fn typing_basis(
+        &self,
+        expected: &TextRevision,
+        edits: &[TextEdit],
+    ) -> Result<Self, SharedTextError> {
+        if edits
+            .iter()
+            .any(|edit| !matches!(edit, TextEdit::Splice { .. }))
+        {
+            return Err(SharedTextError::FileLifecycleRequiresOrder);
+        }
+        let heads = self.validate_revision(expected)?;
+        if self
+            .document
+            .get_changes(&heads)
+            .iter()
+            .any(|change| change.actor_id() == self.document.get_actor())
+        {
+            return Err(SharedTextError::StaleRevision);
+        }
+        let mut document = self.document.fork_at(&heads)?;
+        document.set_actor(self.document.get_actor().clone());
+        Self::admit(document, self.limits)
+    }
+
     /// Updates a file through the smallest contiguous scalar-aligned splice.
     ///
     /// # Errors
@@ -569,6 +631,10 @@ impl SharedTextDocument {
             new_path: new_path.into(),
         }])
     }
+    pub(crate) fn actor(&self) -> &[u8] {
+        self.document.get_actor().to_bytes()
+    }
+
     /// Returns the persistent text object identity, independent of its path.
     ///
     /// # Errors

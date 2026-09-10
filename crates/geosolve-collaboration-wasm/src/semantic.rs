@@ -324,6 +324,34 @@ impl TrustedSemanticHost {
                 .property_owner(&parse::<PropertyAddress>(address_json)?),
         )
     }
+    /// Read-only committed personal history availability. Pending durability and
+    /// recovery disable commands without allocating native preparation tickets.
+    ///
+    /// # Errors
+    /// Reports encoding failure.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = userHistory))]
+    pub fn user_history(&self, user_id: &str) -> Result<String, String> {
+        let mut history = self.history.user_history(user_id, &self.targets);
+        let unavailable = if self.poisoned {
+            Some("semantic host requires durable recovery")
+        } else if self.pending.is_some() {
+            Some("semantic persistence is pending")
+        } else {
+            None
+        };
+        if let Some(reason) = unavailable {
+            history.can_undo = false;
+            history.can_redo = false;
+            history.undo_unavailable = Some(reason.into());
+            history.redo_unavailable = Some(reason.into());
+        }
+        let mut value = serde_json::to_value(history).map_err(error)?;
+        value["revision"] = self.revision.into();
+        value["hasPendingStage"] = self.pending.is_some().into();
+        value["needsRecovery"] = self.poisoned.into();
+        json(&value)
+    }
+
     /// Retains a native checked inverse while independent domain validation runs.
     ///
     /// # Errors

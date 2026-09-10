@@ -496,3 +496,120 @@ fn historical_captures_authenticate_exact_heads_source_and_file_identity() {
         SharedTextDocument::load(&alice.save(), b"restored", SharedTextLimits::default()).unwrap();
     assert_eq!(restored.snapshot_at(original.revision()).unwrap(), original);
 }
+
+#[test]
+fn historical_displayed_typing_merges_character_intent_after_remote_overlap_and_rename() {
+    let (mut alice, mut bob) = seeded("a😀bc");
+    let displayed = alice.revision();
+    let mut historical_alice = alice.clone();
+    edit(&mut historical_alice, 1, 2, "🐟");
+    edit(&mut bob, 1, 2, "B");
+    bob.rename_file("main.ts", "renamed.ts").unwrap();
+    alice.merge(&bob).unwrap();
+    alice
+        .edit_from_revision(
+            &displayed,
+            &[TextEdit::Splice {
+                path: "main.ts".into(),
+                start_utf16: 1,
+                delete_utf16: 2,
+                insert: "🐟".into(),
+            }],
+        )
+        .unwrap();
+    historical_alice.merge(&bob).unwrap();
+    assert_eq!(alice.capture().files(), historical_alice.capture().files());
+    assert!(alice.capture().text("renamed.ts").unwrap().contains('🐟'));
+    assert!(alice.capture().text("renamed.ts").unwrap().contains('B'));
+    bob.merge(&alice).unwrap();
+    assert_eq!(bob.capture(), alice.capture());
+}
+
+#[test]
+fn historical_typing_refuses_unseen_own_sequence_and_replaced_file_without_mutation() {
+    let (mut alice, mut bob) = seeded("abc");
+    let displayed = alice.revision();
+    edit(&mut alice, 1, 1, "A");
+    let before = alice.save();
+    let edits = [TextEdit::Splice {
+        path: "main.ts".into(),
+        start_utf16: 1,
+        delete_utf16: 1,
+        insert: "B".into(),
+    }];
+    assert_eq!(
+        alice.edit_from_revision(&displayed, &edits),
+        Err(SharedTextError::StaleRevision)
+    );
+    assert_eq!(alice.save(), before);
+    let displayed = bob.revision();
+    alice.remove_file("main.ts").unwrap();
+    alice.create_file("main.ts", "abc").unwrap();
+    bob.merge(&alice).unwrap();
+    let before = bob.save();
+    assert!(matches!(
+        bob.edit_from_revision(&displayed, &edits),
+        Err(SharedTextError::InvalidTextTarget)
+    ));
+    assert_eq!(bob.save(), before);
+}
+
+#[test]
+fn queued_typing_uses_returned_local_branch_until_unseen_remote_text_is_displayed() {
+    let (mut alice, mut bob) = seeded("abcd");
+    let displayed = alice.revision();
+    edit(&mut bob, 0, 0, "REMOTE-");
+    alice.merge(&bob).unwrap();
+    let first = alice
+        .edit_from_revision(
+            &displayed,
+            &[TextEdit::Splice {
+                path: "main.ts".into(),
+                start_utf16: 1,
+                delete_utf16: 0,
+                insert: "1".into(),
+            }],
+        )
+        .unwrap();
+    assert_eq!(first.snapshot.text("main.ts"), Some("REMOTE-a1bcd"));
+    assert_eq!(
+        alice
+            .snapshot_at(&first.local_revision)
+            .unwrap()
+            .text("main.ts"),
+        Some("a1bcd")
+    );
+    let second = alice
+        .edit_from_revision(
+            &first.local_revision,
+            &[TextEdit::Splice {
+                path: "main.ts".into(),
+                start_utf16: 2,
+                delete_utf16: 0,
+                insert: "2".into(),
+            }],
+        )
+        .unwrap();
+    assert_eq!(second.snapshot.text("main.ts"), Some("REMOTE-a12bcd"));
+    assert_eq!(
+        alice
+            .snapshot_at(&second.local_revision)
+            .unwrap()
+            .text("main.ts"),
+        Some("a12bcd")
+    );
+    assert_eq!(
+        alice.edit_from_revision(
+            &first.local_revision,
+            &[TextEdit::Splice {
+                path: "main.ts".into(),
+                start_utf16: 2,
+                delete_utf16: 0,
+                insert: "bad".into()
+            }]
+        ),
+        Err(SharedTextError::StaleRevision)
+    );
+    bob.merge(&alice).unwrap();
+    assert_eq!(alice.capture(), bob.capture());
+}

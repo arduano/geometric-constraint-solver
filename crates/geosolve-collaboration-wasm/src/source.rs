@@ -247,6 +247,74 @@ impl TrustedSourceHost {
             .map_err(error)?;
         self.stage(candidate, None)
     }
+    /// Durable per-user typing. Operation principal comes from trusted admission,
+    /// never a browser Undo token; actor must be bound to its authenticated session.
+    ///
+    /// # Errors
+    /// Rejects forged writer/targets, duplicate history and bounded source state.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = stageUserTextChanges))]
+    pub fn stage_user_text_changes(
+        &mut self,
+        changes_json: &str,
+        actor: &[u8],
+        operation_json: &str,
+    ) -> Result<String, String> {
+        self.mutable()?;
+        let mut candidate = self.document.clone();
+        candidate
+            .apply_user_text_changes(
+                &parse::<Vec<Vec<u8>>>(changes_json)?,
+                actor,
+                parse(operation_json)?,
+            )
+            .map_err(error)?;
+        self.stage(candidate, None)
+    }
+    /// Server-ordered file lifecycle in the same durable personal text timeline.
+    ///
+    /// # Errors
+    /// Rejects stale namespace bases, invalid file edits and resource bounds.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = stageUserFileEdits))]
+    pub fn stage_user_file_edits(
+        &mut self,
+        expected_json: &str,
+        edits_json: &str,
+        operation_json: &str,
+    ) -> Result<String, String> {
+        self.mutable()?;
+        let mut candidate = self.document.clone();
+        candidate
+            .apply_user_file_edits(
+                &parse(expected_json)?,
+                &parse::<Vec<TextEdit>>(edits_json)?,
+                parse(operation_json)?,
+            )
+            .map_err(error)?;
+        self.stage(candidate, None)
+    }
+    /// Personal Undo changes only shared working source, requiring explicit Apply.
+    ///
+    /// # Errors
+    /// Rejects missing/overwritten contributions and bounded source history.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = stageUserUndo))]
+    pub fn stage_user_undo(&mut self, operation_json: &str) -> Result<String, String> {
+        self.stage_user_inverse(operation_json, false)
+    }
+    /// # Errors
+    /// Rejects missing/overwritten contributions and bounded source history.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = stageUserRedo))]
+    pub fn stage_user_redo(&mut self, operation_json: &str) -> Result<String, String> {
+        self.stage_user_inverse(operation_json, true)
+    }
+    /// Advisory availability is derived by rechecking native ownership/lifetimes.
+    ///
+    /// # Errors
+    /// Reports encoding failure.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = userHistory))]
+    pub fn user_history(&self, user_id: &str) -> Result<String, String> {
+        json(&self.document.user_text_history(user_id))
+    }
+
     /// Host-owned external mirror/reconciliation edits, checked against exact text heads.
     /// File lifecycle must already have server admission order; this does not assign it.
     ///
@@ -455,6 +523,14 @@ impl TrustedSourceHost {
     }
 }
 impl TrustedSourceHost {
+    fn stage_user_inverse(&mut self, operation_json: &str, redo: bool) -> Result<String, String> {
+        self.mutable()?;
+        let mut candidate = self.document.clone();
+        candidate
+            .apply_user_text_inverse(parse(operation_json)?, redo)
+            .map_err(error)?;
+        self.stage(candidate, None)
+    }
     fn from_document(
         document: SourceDocument,
         config: Configuration,

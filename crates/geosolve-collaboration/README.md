@@ -43,10 +43,30 @@ ACK must be independent of compiler/solver workers.
 
 Draft Undo uses contribution-local checked inverses, never document snapshots.
 `edit_undoable` supports splice batches; `apply_inverse` returns a checked Redo token.
-It preserves unrelated remote text and refuses overlapping lost ownership. Lifecycle
-Undo and durable per-user stacks remain host responsibilities. Native tokens are
-runtime-local; text Undo does not publish accepted geometry. Anchored/undo spans are
-limited to 64 KiB; ordinary bounded raw edits can be larger.
+It preserves unrelated remote text and refuses overlapping lost ownership. Those direct
+local tokens remain runtime-local. `SourceDocument::apply_user_text_changes` and
+`apply_user_file_edits` add durable, host-principal personal text/file history instead.
+`apply_user_text_inverse` stages Undo/Redo against current character and file ownership;
+accepted geometry still requires explicit Apply. History stores authenticated historical
+heads and operation provenance, deriving its inverse spans/file descriptions again during
+restore. Fresh character/file identities are linked only by native checked restoration.
+Same-value foreign replacements and explicit same-path renames retain ownership.
+
+`edit_from_revision` handles existing-file typing prepared against a historical displayed
+frontier: fork native heads, reject unseen same-actor writes, apply scalar-aligned UTF-16
+operations, then merge remote state. It returns both the merged `snapshot` and local-only
+`local_revision` for queued keystrokes before the UI installs incoming remote text.
+
+Durable personal history retains at most 512 contributions, 4096 events and 8 MiB accounted
+history, with 65,536 scalars per contiguous contribution span. Capacity advances an explicit
+Undo horizon instead of rejecting valid raw typing. `user_text_history` reports the horizon's
+generation, discarded event count and oldest retained revision; source checkpoints persist
+its frontier. Pruning keeps a replayable recent suffix. An inverse whose original contribution
+falls before the horizon moves that horizon past the inverse. One contribution too large to
+retain clears older personal Undo behind a new boundary, preserving the raw edit. Native
+character/file history remains intact; this does not compact Automerge or remove its admission
+limits. The host journal owns operation deduplication beyond the retained history. The older
+direct local token span limit remains 64 KiB.
 
 Focused verification (inside the pinned development shell):
 

@@ -294,3 +294,120 @@ fn known_unpersisted_source_stage_discards_without_poison_and_old_stage_cannot_r
     assert_eq!(snapshot(&state)["needsRecovery"], true);
     assert_eq!(state.checkpoint().unwrap(), before);
 }
+
+fn user_operation(user: &str, id: &str) -> String {
+    json!({"userId":user,"clientId":format!("tab-{user}"),"requestId":id}).to_string()
+}
+fn commit_user_stage(state: &mut TrustedSourceHost, write: &str) {
+    let write = decode(write);
+    state
+        .commit_stage(write["stageId"].as_str().unwrap())
+        .unwrap();
+}
+fn user_type(state: &mut TrustedSourceHost, user: &str, id: &str, insert: &str) {
+    let mut client = SharedTextDocument::load(
+        &state.text_checkpoint(),
+        user.as_bytes(),
+        SharedTextLimits::default(),
+    )
+    .unwrap();
+    let basis = client.revision();
+    client.splice("main.ts", 14, 2, insert).unwrap();
+    let write = state
+        .stage_user_text_changes(
+            &json!(client.changes_since(&basis).unwrap()).to_string(),
+            user.as_bytes(),
+            &user_operation(user, id),
+        )
+        .unwrap();
+    commit_user_stage(state, &write);
+}
+#[test]
+fn personal_text_staging_is_durable_and_checked_after_restart_with_a_new_server_actor() {
+    let mut state = host();
+    user_type(&mut state, "alice", "first", "14");
+    user_type(&mut state, "alice", "second", "16");
+    let before = state.checkpoint().unwrap();
+    let undo = state
+        .stage_user_undo(&user_operation("alice", "undo-second"))
+        .unwrap();
+    assert_eq!(state.checkpoint().unwrap(), before);
+    assert_eq!(
+        decode(&state.user_history("alice").unwrap())["undoCount"],
+        2
+    );
+    let first = decode(&undo);
+    state
+        .discard_unpersisted_stage(first["stageId"].as_str().unwrap())
+        .unwrap();
+    let retry = state
+        .stage_user_undo(&user_operation("alice", "undo-second"))
+        .unwrap();
+    assert_ne!(decode(&retry)["stageId"], first["stageId"]);
+    commit_user_stage(&mut state, &retry);
+    let saved = state.checkpoint().unwrap();
+    let mut state = TrustedSourceHost::restore(&config("new"), b"new-server", &saved).unwrap();
+    assert_eq!(
+        snapshot(&state)["working"]["files"]["main.ts"],
+        "const width = 14;\n"
+    );
+    let undo = state
+        .stage_user_undo(&user_operation("alice", "undo-first"))
+        .unwrap();
+    commit_user_stage(&mut state, &undo);
+    assert_eq!(
+        snapshot(&state)["working"]["files"]["main.ts"],
+        "const width = 12;\n"
+    );
+    let saved = state.checkpoint().unwrap();
+    let mut state = TrustedSourceHost::restore(&config("third"), b"third-server", &saved).unwrap();
+    let redo = state
+        .stage_user_redo(&user_operation("alice", "redo-first"))
+        .unwrap();
+    commit_user_stage(&mut state, &redo);
+    assert_eq!(
+        snapshot(&state)["working"]["files"]["main.ts"],
+        "const width = 14;\n"
+    );
+    assert_eq!(snapshot(&state)["accepted"]["modelRevision"], 0);
+}
+#[test]
+fn personal_file_lifecycle_and_foreign_same_value_ownership_share_one_source_timeline() {
+    let mut state = host();
+    user_type(&mut state, "alice", "type", "14");
+    user_type(&mut state, "bob", "same", "14");
+    assert!(
+        state
+            .stage_user_undo(&user_operation("alice", "blocked"))
+            .is_err()
+    );
+    let undo = state
+        .stage_user_undo(&user_operation("bob", "undo"))
+        .unwrap();
+    commit_user_stage(&mut state, &undo);
+    let original = snapshot(&state)["fileIds"]["main.ts"].clone();
+    let basis = snapshot(&state)["working"]["revision"].to_string();
+    let write = state
+        .stage_user_file_edits(
+            &basis,
+            &json!([{"kind":"remove_file","path":"main.ts"}]).to_string(),
+            &user_operation("alice", "delete"),
+        )
+        .unwrap();
+    commit_user_stage(&mut state, &write);
+    let saved = state.checkpoint().unwrap();
+    let mut state = TrustedSourceHost::restore(&config("new"), b"new-server", &saved).unwrap();
+    let write = state
+        .stage_user_undo(&user_operation("alice", "restore"))
+        .unwrap();
+    commit_user_stage(&mut state, &write);
+    assert_ne!(snapshot(&state)["fileIds"]["main.ts"], original);
+    let write = state
+        .stage_user_undo(&user_operation("alice", "undo-type"))
+        .unwrap();
+    commit_user_stage(&mut state, &write);
+    assert_eq!(
+        snapshot(&state)["working"]["files"]["main.ts"],
+        "const width = 12;\n"
+    );
+}
