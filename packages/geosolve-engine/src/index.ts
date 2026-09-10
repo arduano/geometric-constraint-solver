@@ -3,6 +3,8 @@ import { recordedSketch, type Sketch, type GeneratedSketchArtifact } from "@geos
 
 import { EditableSession, type EditableNativeHandle, type EditableDesign } from "./session.js";
 export { EditableSession, type EditableSessionToken, type EditableSessionState, type EditableDesign, type EditableUpdate } from "./session.js";
+export type { AuthoringAction, AuthoringReceipt, AuthoringUpdate, AuthoringValueChange, AuthoringValueWrite, PreparedAuthoring } from "./session.js";
+export { RetainedPointGesture, type PointGestureCommand, type PointGestureFrame, type PointGestureHandle, type PointGestureSample, type PointGestureTarget, type PointGestureTerminal, type PointGestureViewport, type PointOwnerAddress, type PointWritableAddress, type PreparedPointGestureCommit } from "./point-gesture.js";
 
 export interface EngineNativeHandle extends Partial<EditableNativeHandle> {
   compileProjectJson(json: string): string;

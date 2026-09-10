@@ -6,6 +6,9 @@ use geosolve_sketch_engine::{AcceptedEvaluation, EditableSession, SketchEngine a
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
+mod authoring;
+mod point_gesture;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OpenEditableRequest {
@@ -31,6 +34,10 @@ pub struct EngineAdapter {
     engine: NativeEngine,
     retained: BTreeMap<String, AcceptedEvaluation>,
     sessions: BTreeMap<u64, EditableSession>,
+    authoring: BTreeMap<String, authoring::HeldAuthoring>,
+    point_gestures: BTreeMap<String, point_gesture::HeldGesture>,
+    point_commits: BTreeMap<String, point_gesture::HeldPointCommit>,
+    point_sequence: u64,
     accepted: Option<AcceptedEvaluation>,
 }
 
@@ -134,10 +141,12 @@ impl EngineAdapter {
     }
 
     pub fn close_editable_session(&mut self, session_id: &str) -> bool {
-        session_id
-            .parse::<u64>()
-            .ok()
-            .is_some_and(|id| self.sessions.remove(&id).is_some())
+        session_id.parse::<u64>().ok().is_some_and(|id| {
+            self.authoring.retain(|_, prepared| prepared.session != id);
+            self.point_gestures.retain(|_, held| held.session != id);
+            self.point_commits.retain(|_, held| held.session != id);
+            self.sessions.remove(&id).is_some()
+        })
     }
 
     fn step_editable(&mut self, json: &str, undo: bool) -> Result<String, String> {
@@ -285,6 +294,102 @@ mod wasm {
         pub fn new() -> Self {
             console_error_panic_hook::set_once();
             Self(EngineAdapter::new())
+        }
+
+        #[wasm_bindgen(js_name = editablePointGestureTargets)]
+        pub fn editable_point_gesture_targets(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_point_gesture_targets(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = beginEditablePointGesture)]
+        pub fn begin_editable_point_gesture(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .begin_editable_point_gesture(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = advanceEditablePointGesture)]
+        pub fn advance_editable_point_gesture(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .advance_editable_point_gesture(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editablePointGestureScene)]
+        pub fn editable_point_gesture_scene(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_point_gesture_scene(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = finishEditablePointGesture)]
+        pub fn finish_editable_point_gesture(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .finish_editable_point_gesture(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = cancelEditablePointGesture)]
+        pub fn cancel_editable_point_gesture(&mut self, json: &str) -> Result<(), JsValue> {
+            self.0
+                .cancel_editable_point_gesture(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = prepareEditablePointCommit)]
+        pub fn prepare_editable_point_commit(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .prepare_editable_point_commit(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = applyEditablePointCommit)]
+        pub fn apply_editable_point_commit(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .apply_editable_point_commit(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = releaseEditablePointCommit)]
+        pub fn release_editable_point_commit(&mut self, json: &str) -> Result<(), JsValue> {
+            self.0
+                .release_editable_point_commit(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = prepareEditableAuthoring)]
+        pub fn prepare_editable_authoring(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .prepare_editable_authoring(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = applyEditableAuthoring)]
+        pub fn apply_editable_authoring(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .apply_editable_authoring(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = releaseEditableAuthoring)]
+        pub fn release_editable_authoring(&mut self, ticket: &str) -> bool {
+            self.0.release_editable_authoring(ticket)
+        }
+
+        #[wasm_bindgen(js_name = exportEditableProject)]
+        pub fn export_editable_project(&self, id: &str) -> Result<String, JsValue> {
+            self.0
+                .export_editable_project(id)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableSourceDesignDigest)]
+        pub fn editable_source_design_digest(&self, id: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_source_design_digest(id)
+                .map_err(|error| JsValue::from_str(&error))
         }
 
         #[wasm_bindgen(js_name = openEditableSession)]

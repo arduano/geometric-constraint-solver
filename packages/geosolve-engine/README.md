@@ -60,5 +60,23 @@ Previously retained accepted export handles remain valid until engine release/di
 Generator results have no reverse source-editing authority. See the shipped TypeScript
 interfaces for exact method/result types.
 
+Managed point prediction uses `pointGestureTargets()` and `beginPointGesture(target,
+{ expected, gestureId, viewport })`. Keep one retained gesture in a dedicated
+authoring worker, pass ordered model-space samples to `advance`, and render its
+detached `sceneJSON()` as provisional output. `finish()` returns the semantic command;
+`cancel()` discards the fork. Neither publishes source, design or session history.
+
+The trusted server independently calls `preparePointGestureCommit(command,
+{ expected })` on its own session. Persist that candidate's complete `project`,
+`design` and `source_design_digest`, then call synchronous
+`applyPointGestureCommit(prepared)`. The candidate result has no accepted export
+authority until installation. Dropping/releasing a candidate preserves the live
+session. Foreign, consumed and stale preparations cannot publish. Exact source/design
+bases must match; latest-state gesture rebase is not yet supported.
+
+`exportProject()`, `exportDesign()` and `sourceDesignDigest()` provide complete durable
+accepted inputs. Reopening those inputs independently revalidates geometry and preserves
+the digest. Individual evaluation IDs include session state and are not recovery IDs.
+
 M98 has focused Node/browser, session and offline archive checks. Final integrated
 qualification and supervising-user acceptance remain outstanding.
