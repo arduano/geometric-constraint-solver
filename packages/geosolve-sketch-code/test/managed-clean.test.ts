@@ -994,6 +994,28 @@ export default sketch(($) => {
   assert.deepEqual(reset.artifact.output, current.artifact.output);
 });
 
+test("parameter extraction has identical compiler receipts for every metadata key order", () => {
+  const current = compileManagedSource(`"use geosolve sketch";
+import { sketch, mm } from "@geosolve/sketch-code";
+export default sketch(($) => {
+  const bore = $.geometry.centerRadiusCircle("bore", { center: [0, 0], radius: mm(2) });
+  return { bore };
+});`);
+  const mutation = { mutation: "extract_parameter" as const, declaration: "bore", path: ["radius"], symbol: "sharedRadius", variable: "width" };
+  const options = { label: "Bore radius", description: "Shared intent", isKeyParameter: true };
+  const expected = applyManagedSketchMutation(current, { ...mutation, presentation: options });
+  for (const keys of [
+    ["description", "isKeyParameter", "label"],
+    ["description", "label", "isKeyParameter"],
+    ["label", "isKeyParameter", "description"],
+    ["isKeyParameter", "description", "label"],
+    ["isKeyParameter", "label", "description"],
+  ] as const) {
+    const presentation = Object.fromEntries(keys.map(key => [key, options[key]]));
+    assert.deepEqual(applyManagedSketchMutation(current, { ...mutation, presentation }), expected);
+  }
+});
+
 test("metadata rejects ambiguous names, invalid label bytes, duplicate parameter identity and forged current", () => {
   const make = (body: string) => `"use geosolve sketch"; import { sketch, mm } from "@geosolve/sketch-code"; export default sketch(($) => { ${body} return {}; });`;
   assert.throws(() => compileManagedSource(make('const value = $.parameter("width", mm(12), { key: true });')), /unknown presentation field/u);

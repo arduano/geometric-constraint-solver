@@ -5403,7 +5403,9 @@ function extractManagedParameter(statements: ManagedStatement[], mutation: Extra
   const root = owner.statement === "binding" ? owner.value : owner.arguments;
   const value = expressionAtMutationPath(root, mutation.path);
   if (!isScalarParameterExpression(value)) return mutationFail("invalid_draft", "parameter extraction requires a literal number or unit");
-  const presentation = mutation.presentation === undefined ? undefined : mutateMetadataObject(undefined, mutation.presentation as Readonly<Record<string, unknown>>);
+  // A JSON transport may reorder object keys. The newly authored options must
+  // match the deterministic field order in Rust's exact extraction ticket.
+  const presentation = mutation.presentation === undefined ? undefined : mutateMetadataObject(undefined, orderedPresentation(mutation.presentation) as Readonly<Record<string, unknown>>);
   const parameter: ManagedParameterAnnotation = { symbol: mutation.symbol, ...(presentation === undefined ? {} : { presentation }), site: mutationPlaceholderSite("parameter") };
   if (owner.statement === "binding") {
     if (owner.parameter !== undefined || mutation.path.length !== 0 || mutation.variable !== owner.variable) mutationFail("invalid_draft", "binding extraction wraps its existing variable and whole literal");
