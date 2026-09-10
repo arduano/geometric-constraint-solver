@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Local presentation over a detached accepted scene. There is no solver or document editor here.
+//! Detached canvas navigation and independently retained accepted-model browsing.
+//! Navigation owns no solver. Browsing can describe source edits but cannot publish them.
 
 use super::*;
 use geosolve_constraint_editor::{
@@ -8,6 +9,8 @@ use geosolve_constraint_editor::{
     SelectionPresentationState, Viewport,
 };
 use std::collections::BTreeMap;
+
+mod presence;
 
 const FORMAT: &str = "geosolve-local-interaction-v1";
 
@@ -38,9 +41,11 @@ struct InteractionSeed {
     bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     point_targets: BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    presence_bindings: BTreeMap<String, Vec<geosolve_constraint_editor::IntentNativeBinding>>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct InteractionState {
     format: String,
@@ -137,7 +142,11 @@ impl WorkbenchBridge {
                 .code_project
                 .as_ref()
                 .map(|code| code.local_point_targets(self.editor()))
-                .transpose()?
+                .unwrap_or_default(),
+            presence_bindings: self
+                .code_project
+                .as_ref()
+                .map(|code| code.local_presence_bindings(self.editor()))
                 .unwrap_or_default(),
         };
         serde_json::to_string(&serde_json::json!({"snapshot":snapshot,"seed":seed}))
@@ -146,6 +155,11 @@ impl WorkbenchBridge {
 
     pub(crate) fn interaction_apply_json(&mut self, request: &str) -> Result<String, String> {
         let state: InteractionState = decode_request(request)?;
+        self.apply_interaction_state(state)?;
+        self.snapshot_json()
+    }
+
+    fn apply_interaction_state(&mut self, state: InteractionState) -> Result<(), String> {
         if state.format != FORMAT || state.scene_key != self.local_scene_key() {
             return Err("Local interaction belongs to a stale accepted scene".into());
         }
@@ -190,7 +204,266 @@ impl WorkbenchBridge {
             &state.dimension_pins,
             state.dimension_focus.as_deref(),
         );
-        self.snapshot_json()
+        Ok(())
+    }
+}
+
+/// Per-tab retained chrome; construction validates one complete accepted model.
+/// No editing, compiler or gesture method is exposed by this adapter.
+pub(crate) struct BrowsingPresentation {
+    bridge: WorkbenchBridge,
+    source_key: String,
+    native_key: String,
+    source_scene: EditorScene,
+    mapping: PresentationMapping,
+    reverse: PresentationMapping,
+    dimension_ids: BTreeMap<String, String>,
+    source_dimension_ids: BTreeMap<String, String>,
+}
+impl BrowsingPresentation {
+    pub(crate) fn new(encoded: &str) -> Result<Self, String> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Request {
+            project: String,
+            design: super::super::code_projects::WorkspaceDesign,
+            seed: InteractionSeed,
+        }
+        let request: Request = decode_request(encoded)?;
+        if request.seed.format != FORMAT {
+            return Err("Unsupported browsing scene format".into());
+        }
+        let project = geosolve_sketch_code::CodeProject::from_json(&request.project)
+            .map_err(|e| e.to_string())?;
+        let expected_design = serde_json::to_value(&request.design).map_err(|e| e.to_string())?;
+        let (code, editor) = CodeProjectWorkbench::open_workspace_design(project, request.design)?;
+        let title = code.title().to_owned();
+        let mut bridge = WorkbenchBridge::from_parts(
+            WorkbenchDocumentAuthority::from_projectional_editor(*editor)?,
+            Some(code),
+            super::super::samples::SampleCatalogState::default(),
+            title,
+            String::new(),
+        )?;
+        let exported: serde_json::Value =
+            serde_json::from_str(&bridge.export_project_json()?).map_err(|e| e.to_string())?;
+        let actual_project: serde_json::Value = serde_json::from_str(
+            exported["contents"]
+                .as_str()
+                .ok_or("Browsing project export missing contents")?,
+        )
+        .map_err(|e| e.to_string())?;
+        let expected_project: serde_json::Value =
+            serde_json::from_str(&request.project).map_err(|e| e.to_string())?;
+        let actual_design: serde_json::Value =
+            serde_json::from_str(&bridge.workspace_design_json()?).map_err(|e| e.to_string())?;
+        if actual_project != expected_project || actual_design != expected_design {
+            return Err("Browsing reconstruction disagrees with accepted source/design".into());
+        }
+        bridge.snapshot()?;
+        let source_scene =
+            EditorScene::from_detached_json(&request.seed.scene).map_err(|e| e.to_string())?;
+        let native_scene = bridge
+            .retained_scene
+            .as_ref()
+            .ok_or("Browsing native scene unavailable")?;
+        let mapping = PresentationMapping::new(
+            request.seed.bindings.as_ref(),
+            bridge.editor().presentation_bindings().as_ref(),
+            source_scene.presentation_document().id(),
+            native_scene.presentation_document().id(),
+        )?;
+        let native_key = bridge.local_scene_key();
+        let reverse = mapping.reverse()?;
+        let native_dimensions = bridge.local_dimension_seed();
+        let mut dimension_ids = BTreeMap::new();
+        for (id, key) in &request.seed.dimensions.ids {
+            let native_key = mapping.layout_key(*key)?;
+            let native_id = native_dimensions
+                .ids
+                .iter()
+                .find(|(_, key)| **key == native_key)
+                .map(|(id, _)| id)
+                .ok_or("Browsing dimension correspondence is unavailable")?;
+            dimension_ids.insert(id.clone(), native_id.clone());
+        }
+        let source_dimension_ids = dimension_ids
+            .iter()
+            .map(|(source, native)| (native.clone(), source.clone()))
+            .collect();
+        Ok(Self {
+            bridge,
+            source_key: request.seed.scene_key,
+            native_key,
+            source_scene,
+            mapping,
+            reverse,
+            dimension_ids,
+            source_dimension_ids,
+        })
+    }
+    pub(crate) fn update_json(&mut self, encoded: &str) -> Result<String, String> {
+        self.apply_state(decode_request(encoded)?)?;
+        serde_json::to_string(&self.chrome()?).map_err(|e| e.to_string())
+    }
+    fn apply_state(&mut self, mut state: InteractionState) -> Result<(), String> {
+        if state.format != FORMAT
+            || state.scene_key != self.source_key
+            || self.bridge.local_scene_key() != self.native_key
+        {
+            return Err("Browsing view belongs to an obsolete accepted model".into());
+        }
+        SelectionPresentationState {
+            items: state.selection.clone(),
+            curve_picks: state.curve_picks.clone(),
+        }
+        .validate(&self.source_scene)
+        .map_err(|e| e.to_string())?;
+        let native_scene = self
+            .bridge
+            .retained_scene
+            .as_ref()
+            .ok_or("Browsing native scene unavailable")?;
+        state.selection = state
+            .selection
+            .into_iter()
+            .map(|item| self.mapping.selection(item))
+            .collect::<Result<_, _>>()?;
+        state.curve_picks = state
+            .curve_picks
+            .into_iter()
+            .map(|pick| self.mapping.curve_pick(pick, native_scene))
+            .collect::<Result<_, _>>()?;
+        state.scene_key.clone_from(&self.native_key);
+        state.dimension_pins = state
+            .dimension_pins
+            .iter()
+            .map(|id| self.native_dimension_id(id))
+            .collect::<Result<_, _>>()?;
+        state.dimension_focus = state
+            .dimension_focus
+            .as_deref()
+            .map(|id| self.native_dimension_id(id))
+            .transpose()?;
+        self.bridge.apply_interaction_state(state)
+    }
+    fn native_dimension_id(&self, source: &str) -> Result<String, String> {
+        self.dimension_ids
+            .get(source)
+            .cloned()
+            .ok_or_else(|| "Browsing dimension belongs to another scene".into())
+    }
+    fn chrome(&mut self) -> Result<serde_json::Value, String> {
+        let mut snapshot = self.bridge.snapshot()?;
+        snapshot
+            .dimensions
+            .translate_ids(&self.source_dimension_ids)?;
+        // Native source spans describe the accepted canonical source. They must
+        // not be applied to a divergent working text without exact basis mapping.
+        Ok(serde_json::json!({
+            "explorer":snapshot.explorer,"navigation":snapshot.navigation,"dimensions":snapshot.dimensions,
+            "authoringDocument":snapshot.authoring_document,"selection":snapshot.selection,
+            "parameters":snapshot.parameters,"problems":snapshot.problems,
+            "selectedGeometryRole":snapshot.presentation.selected_geometry_role,
+        }))
+    }
+    pub(crate) fn navigate_json(&mut self, encoded: &str) -> Result<String, String> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Request {
+            state: InteractionState,
+            command: String,
+            payload: serde_json::Value,
+        }
+        let request: Request = decode_request(encoded)?;
+        if !matches!(
+            request.command.as_str(),
+            "navigation.rows.select" | "navigation.source.select"
+        ) {
+            return Err("Unsupported native browsing navigation".into());
+        }
+        let mut state = request.state.clone();
+        self.apply_state(request.state)?;
+        match request.command.as_str() {
+            "navigation.rows.select" => self.bridge.select_navigation_rows_json(request.payload)?,
+            "navigation.source.select" => {
+                self.bridge.select_navigation_source_json(request.payload)?;
+            }
+            _ => unreachable!("whitelisted navigation"),
+        }
+        let selection = self.bridge.editor().editor().selection_presentation_state();
+        state.selection = selection
+            .items
+            .into_iter()
+            .map(|item| self.reverse.selection(item))
+            .collect::<Result<_, _>>()?;
+        state.curve_picks = selection
+            .curve_picks
+            .into_iter()
+            .map(|pick| self.reverse.curve_pick(pick, &self.source_scene))
+            .collect::<Result<_, _>>()?;
+        SelectionPresentationState {
+            items: state.selection.clone(),
+            curve_picks: state.curve_picks.clone(),
+        }
+        .validate(&self.source_scene)
+        .map_err(|e| e.to_string())?;
+        serde_json::to_string(&serde_json::json!({"state":state,"chrome":self.chrome()?}))
+            .map_err(|e| e.to_string())
+    }
+    /// Describe a native source edit without preparing a compiler job or
+    /// publishing anything. The server must independently authorize and apply it.
+    pub(crate) fn describe_json(&mut self, encoded: &str) -> Result<String, String> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Request {
+            state: InteractionState,
+            authority: String,
+            command: String,
+            payload: serde_json::Value,
+        }
+        let request: Request = decode_request(encoded)?;
+        self.apply_state(request.state)?;
+        self.bridge
+            .validate_metadata_authority(&request.authority)?;
+        let mutation = match request.command.as_str() {
+            "parameter.edit" => {
+                let payload: ParameterPayload = decode_payload(request.payload)?;
+                self.bridge
+                    .parameter_source_mutation(&payload.id, payload.value)?
+            }
+            "dimensions.edit" => {
+                let mut payload: ParameterPayload = decode_payload(request.payload)?;
+                payload.id = self.native_dimension_id(&payload.id)?;
+                self.bridge.dimension_source_mutation(
+                    serde_json::json!({"id":payload.id,"value":payload.value}),
+                )?
+            }
+            "authoring.metadata.set" => {
+                Some(self.bridge.metadata_source_mutation(request.payload)?)
+            }
+            "declaration.move" => self
+                .bridge
+                .declaration_move_mutation(&decode_payload(request.payload)?)?,
+            "declaration.delete" => {
+                let payload: SelectionPayload = decode_payload(request.payload)?;
+                if let Some(DeclarationRowTarget::Managed {
+                    closure_role: ManagedDeclarationClosureRole::Helper { root },
+                    ..
+                }) = self.bridge.declaration_row_target(&payload.id)
+                {
+                    return Err(format!(
+                        "Profile Offset helper declarations cannot be deleted independently of `{}`",
+                        root.0
+                    ));
+                }
+                Some(ManagedSketchMutation::Delete {
+                    target: self.bridge.managed_row_target(&payload.id)?,
+                })
+            }
+            _ => return Err("Unsupported native source edit description".into()),
+        };
+        serde_json::to_string(&mutation).map_err(|e| e.to_string())
     }
 }
 
@@ -242,6 +515,22 @@ struct PresentationMapping {
     >,
 }
 impl PresentationMapping {
+    fn reverse(&self) -> Result<Self, String> {
+        let mut bindings = BTreeMap::new();
+        for (source, destination) in &self.bindings {
+            if bindings
+                .insert(*destination, *source)
+                .is_some_and(|previous| previous != *source)
+            {
+                return Err("Presentation namespace correspondence is not reversible".into());
+            }
+        }
+        Ok(Self {
+            source: self.destination,
+            destination: self.source,
+            bindings,
+        })
+    }
     fn new(
         source: Option<&geosolve_constraint_editor::ProjectionalPresentationBindings>,
         destination: Option<&geosolve_constraint_editor::ProjectionalPresentationBindings>,
@@ -339,6 +628,65 @@ impl PresentationMapping {
                 _ => return Err("Prediction corner binding changed kind".into()),
             },
             SelectionItem::Datum(datum) => SelectionItem::Datum(datum),
+        })
+    }
+    fn curve_pick(
+        &self,
+        pick: CurvePickContext,
+        scene: &EditorScene,
+    ) -> Result<CurvePickContext, String> {
+        use geosolve_constraint_editor::SceneCurveOrigin;
+        let SelectionItem::Curve(span) = self.selection(SelectionItem::Curve(pick.span))? else {
+            return Err("Browsing picked curve changed kind".into());
+        };
+        let origin = match pick.origin {
+            SceneCurveOrigin::Native => SceneCurveOrigin::Native,
+            SceneCurveOrigin::FilletDiscarded {
+                source,
+                interval,
+                provenance,
+                ..
+            } => {
+                let SelectionItem::Curve(source_span) =
+                    self.selection(SelectionItem::Curve(source.span))?
+                else {
+                    return Err("Browsing implicit curve source changed kind".into());
+                };
+                let SelectionItem::FeatureCorner(owner) =
+                    self.selection(SelectionItem::FeatureCorner(provenance.owner))?
+                else {
+                    return Err("Browsing implicit curve owner changed kind".into());
+                };
+                let mut origins = scene.curves.iter().filter_map(|curve| match curve.origin {
+                    SceneCurveOrigin::FilletDiscarded {
+                        source,
+                        interval: native_interval,
+                        provenance: native_provenance,
+                        ..
+                    } if curve.span == span
+                        && source.span == source_span
+                        && native_interval == interval
+                        && native_provenance.owner == owner
+                        && native_provenance.endpoint == provenance.endpoint
+                        && native_provenance.base_interval == provenance.base_interval =>
+                    {
+                        Some(curve.origin)
+                    }
+                    _ => None,
+                });
+                let origin = origins
+                    .next()
+                    .ok_or("Browsing picked implicit curve is unavailable")?;
+                if origins.next().is_some() {
+                    return Err("Browsing picked implicit curve is ambiguous".into());
+                }
+                origin
+            }
+        };
+        Ok(CurvePickContext {
+            span,
+            parameter: pick.parameter,
+            origin,
         })
     }
     fn layout_key(
@@ -528,6 +876,8 @@ pub(crate) struct LocalInteraction {
     dimension_hover: Option<(SelectionItem, ScreenPoint)>,
     host_size_received: bool,
     point_targets: BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>,
+    presence_bindings: BTreeMap<String, Vec<geosolve_constraint_editor::IntentNativeBinding>>,
+    presence: presence::PresenceState,
 }
 impl LocalInteraction {
     pub(crate) fn new(encoded: &str) -> Result<Self, String> {
@@ -536,6 +886,13 @@ impl LocalInteraction {
             return Err("Unsupported local interaction format".into());
         }
         let scene = EditorScene::from_detached_json(&seed.scene).map_err(|e| e.to_string())?;
+        if seed
+            .bindings
+            .as_ref()
+            .is_some_and(|bindings| bindings.document != scene.presentation_document().id())
+        {
+            return Err("Local presentation bindings belong to another scene".into());
+        }
         let mut editor = ConstraintEditor::default();
         editor.set_geometry_interaction_policy(seed.policy);
         editor
@@ -560,6 +917,8 @@ impl LocalInteraction {
             dimension_hover: None,
             host_size_received: seed.host_size_received,
             point_targets: seed.point_targets,
+            presence_bindings: seed.presence_bindings,
+            presence: presence::PresenceState::default(),
         })
     }
     fn state(&self) -> InteractionState {
@@ -611,6 +970,41 @@ impl LocalInteraction {
     pub(crate) fn state_json(&self) -> Result<String, String> {
         serde_json::to_string(&self.state()).map_err(|e| e.to_string())
     }
+    pub(crate) fn restore_selection_json(&mut self, encoded: &str) -> Result<String, String> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Request {
+            expected: InteractionState,
+            state: InteractionState,
+        }
+        let request: Request = decode_request(encoded)?;
+        if request.expected != self.state() {
+            return Err("Browsing navigation belongs to an obsolete local view".into());
+        }
+        let mut permitted = request.expected;
+        permitted.selection.clone_from(&request.state.selection);
+        permitted.curve_picks.clone_from(&request.state.curve_picks);
+        if permitted != request.state {
+            return Err("Browsing navigation may only replace selection".into());
+        }
+        let selection = SelectionPresentationState {
+            items: permitted.selection,
+            curve_picks: permitted.curve_picks,
+        };
+        self.editor
+            .restore_selection_presentation(&self.scene, selection)
+            .map_err(|e| e.to_string())?;
+        self.compose(true)
+    }
+    pub(crate) fn presence_json(&mut self, encoded: &str) -> Result<String, String> {
+        let next = presence::PresenceState::decode(encoded, &self.scene_key)?;
+        let previous = std::mem::replace(&mut self.presence, next);
+        let result = self.compose(false);
+        if result.is_err() {
+            self.presence = previous;
+        }
+        result
+    }
     fn compose(&mut self, selection_changed: bool) -> Result<String, String> {
         self.compose_for_replacement(selection_changed, false)
     }
@@ -643,7 +1037,7 @@ impl LocalInteraction {
             &self.dimensions.layout,
             &self.dimensions.context,
         );
-        let scene = geosolve_sketch_render::compose_draw_frame(
+        let mut scene = geosolve_sketch_render::compose_draw_frame(
             Some(&self.scene),
             None,
             &[],
@@ -665,6 +1059,12 @@ impl LocalInteraction {
             self.camera.viewport(),
         )
         .map_err(|e| e.to_string())?;
+        self.presence.append(
+            &mut scene,
+            &self.scene,
+            self.editor.geometry_interaction_policy(),
+            &self.presence_bindings,
+        )?;
         Ok(FrameSnapshot {
             scene,
             aria_label: format!("{} accepted sketch viewport", self.title),
@@ -1050,6 +1450,489 @@ mod tests {
         let local = LocalInteraction::new(&result["seed"].to_string()).unwrap();
         (bridge, local)
     }
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one cross-namespace browsing trace checks exact chrome and unchanged native authority together"
+    )]
+    fn browsing_namespace_updates_preserve_accepted_materialization_and_local_chrome() {
+        let compiled =
+            geosolve_sketch_code::CompiledManagedSource::from_json(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../geosolve-sketch-engine/tests/fixtures/point-gesture-constrained.json"
+            )))
+            .unwrap();
+        let project = geosolve_sketch_code::CodeProject::managed(
+            geosolve_sketch_code::ProjectKey("native-browsing".into()),
+            compiled,
+        )
+        .unwrap()
+        .to_canonical_json()
+        .unwrap();
+        let mut source = WorkbenchBridge::restore(&project).unwrap();
+        let pair: serde_json::Value =
+            serde_json::from_str(&source.interaction_snapshot_json().unwrap()).unwrap();
+        let design: serde_json::Value =
+            serde_json::from_str(&source.workspace_design_json().unwrap()).unwrap();
+        let mut browsing = BrowsingPresentation::new(
+            &serde_json::json!({"project":project,"design":design,"seed":pair["seed"]}).to_string(),
+        )
+        .unwrap();
+        let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
+        assert_ne!(
+            local.scene.presentation_document().id(),
+            browsing
+                .bridge
+                .retained_scene
+                .as_ref()
+                .unwrap()
+                .presentation_document()
+                .id()
+        );
+        let accepted = std::ptr::from_ref(
+            browsing
+                .bridge
+                .editor()
+                .coordinator()
+                .accepted_materialization()
+                .unwrap(),
+        );
+        let identity = browsing.bridge.editor().coordinator().intent().identity();
+        let code_identity = browsing
+            .bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .code_session_identity()
+            .clone();
+        let before_project = browsing.bridge.export_project_json().unwrap();
+        let before_design = browsing.bridge.workspace_design_json().unwrap();
+        let point = local.scene.points[0].screen_position;
+        local.pointer_json(&serde_json::json!({"version":2,"phase":"down","pointerId":1,"x":point.x,"y":point.y,"buttons":1,"modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}}).to_string()).unwrap();
+        for index in 0..4 {
+            if index == 1 {
+                let dimension = local.dimensions.ids.keys().next().unwrap().clone();
+                local.dispatch_json(&serde_json::json!({"version":2,"command":"dimensions.pin","payload":{"id":dimension,"pinned":true}}).to_string()).unwrap();
+                local.dispatch_json(&serde_json::json!({"version":2,"command":"dimensions.focus","payload":{"id":dimension}}).to_string()).unwrap();
+            }
+            if index == 2 {
+                let midpoint = local.camera.viewport().model_to_screen([5.0, 0.0]);
+                local.pointer_json(&serde_json::json!({"version":2,"phase":"down","pointerId":1,"x":midpoint.x,"y":midpoint.y,"buttons":1,"modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}}).to_string()).unwrap();
+                assert_eq!(
+                    local.state().curve_picks.len(),
+                    1,
+                    "{:?}",
+                    local.state().selection
+                );
+            }
+            local
+                .wheel_json(r#"{"version":2,"x":300,"y":250,"deltaX":0,"deltaY":-30,"ctrl":false}"#)
+                .unwrap();
+            let state = local.state_json().unwrap();
+            let expected: serde_json::Value =
+                serde_json::from_str(&source.interaction_apply_json(&state).unwrap()).unwrap();
+            let actual: serde_json::Value =
+                serde_json::from_str(&browsing.update_json(&state).unwrap()).unwrap();
+            assert_eq!(
+                actual["selection"]["source"],
+                expected["selection"]["source"]
+            );
+            assert_eq!(actual["selection"]["label"], expected["selection"]["label"]);
+            assert_eq!(
+                actual["navigation"]["sources"],
+                expected["navigation"]["sources"]
+            );
+            assert_eq!(actual["navigation"]["rows"], expected["navigation"]["rows"]);
+            assert_eq!(actual["explorer"], expected["explorer"]);
+            let dimensions = |value: &serde_json::Value| {
+                value["dimensions"]["allMeasurements"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|row| {
+                        (
+                            row["id"].clone(),
+                            row["pinned"].clone(),
+                            row["focused"].clone(),
+                            row["value"].clone(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(dimensions(&actual), dimensions(&expected));
+            if index >= 2 {
+                let expected_pick = local.state().curve_picks[0];
+                let native_picks = browsing
+                    .bridge
+                    .editor()
+                    .editor()
+                    .selection_presentation_state()
+                    .curve_picks;
+                assert_eq!(native_picks.len(), 1);
+                assert_eq!(
+                    native_picks[0].parameter.to_bits(),
+                    expected_pick.parameter.to_bits()
+                );
+                assert_ne!(native_picks[0].span, expected_pick.span);
+            }
+            assert_eq!(
+                std::ptr::from_ref(
+                    browsing
+                        .bridge
+                        .editor()
+                        .coordinator()
+                        .accepted_materialization()
+                        .unwrap()
+                ),
+                accepted
+            );
+            assert_eq!(
+                browsing.bridge.editor().coordinator().intent().identity(),
+                identity
+            );
+            assert_eq!(
+                browsing
+                    .bridge
+                    .code_project
+                    .as_ref()
+                    .unwrap()
+                    .code_session_identity(),
+                &code_identity
+            );
+            assert_eq!(
+                browsing.bridge.export_project_json().unwrap(),
+                before_project
+            );
+            assert_eq!(
+                browsing.bridge.workspace_design_json().unwrap(),
+                before_design
+            );
+        }
+        let before = browsing.bridge.editor().editor().selection().to_vec();
+        let mut stale: serde_json::Value =
+            serde_json::from_str(&local.state_json().unwrap()).unwrap();
+        stale["sceneKey"] = "obsolete".into();
+        assert!(browsing.update_json(&stale.to_string()).is_err());
+        assert_eq!(browsing.bridge.editor().editor().selection(), before);
+    }
+
+    #[test]
+    fn local_view_refresh_retains_explicit_empty_explorer_selection() {
+        let compiled =
+            geosolve_sketch_code::CompiledManagedSource::from_json(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../geosolve-sketch-engine/tests/fixtures/point-gesture-constrained.json"
+            )))
+            .unwrap();
+        let project = geosolve_sketch_code::CodeProject::managed(
+            geosolve_sketch_code::ProjectKey("empty-navigation".into()),
+            compiled,
+        )
+        .unwrap()
+        .to_canonical_json()
+        .unwrap();
+        let mut source = WorkbenchBridge::restore(&project).unwrap();
+        source
+            .set_explorer_row_visible("managed:bar", false)
+            .unwrap();
+        let hidden = serde_json::to_value(source.navigation_snapshot()).unwrap();
+        source.select_navigation_rows_json(serde_json::json!({"authority":hidden["authority"],"ids":["managed:bar"],"mode":"replace"})).unwrap();
+        assert!(source.editor().editor().selection().is_empty());
+        let owner = source.editor().selected_declaration();
+        assert!(owner.is_some());
+        let pair: serde_json::Value =
+            serde_json::from_str(&source.interaction_snapshot_json().unwrap()).unwrap();
+        let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
+        let before = source.export_project_json().unwrap();
+        local
+            .wheel_json(r#"{"version":2,"x":300,"y":250,"deltaX":0,"deltaY":-30,"ctrl":false}"#)
+            .unwrap();
+        let after: serde_json::Value = serde_json::from_str(
+            &source
+                .interaction_apply_json(&local.state_json().unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(source.editor().selected_declaration(), owner);
+        assert_eq!(
+            after["navigation"]["rows"],
+            pair["snapshot"]["navigation"]["rows"]
+        );
+        assert_eq!(source.export_project_json().unwrap(), before);
+    }
+
+    #[test]
+    fn browsing_maps_exact_implicit_fillet_occurrence_and_rejects_forged_pick() {
+        let compiled =
+            geosolve_sketch_code::CompiledManagedSource::from_json(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../geosolve-sketch-engine/tests/fixtures/point-gesture-computed.json"
+            )))
+            .unwrap();
+        let project = geosolve_sketch_code::CodeProject::managed(
+            geosolve_sketch_code::ProjectKey("browsing-fillet".into()),
+            compiled,
+        )
+        .unwrap()
+        .to_canonical_json()
+        .unwrap();
+        let mut source = WorkbenchBridge::restore(&project).unwrap();
+        let pair: serde_json::Value =
+            serde_json::from_str(&source.interaction_snapshot_json().unwrap()).unwrap();
+        let design: serde_json::Value =
+            serde_json::from_str(&source.workspace_design_json().unwrap()).unwrap();
+        let mut browsing = BrowsingPresentation::new(
+            &serde_json::json!({"project":project,"design":design,"seed":pair["seed"]}).to_string(),
+        )
+        .unwrap();
+        let local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
+        let discarded = local
+            .scene
+            .curves
+            .iter()
+            .find(|curve| curve.origin.is_implicit_construction())
+            .unwrap();
+        let mut state = local.state();
+        let pick = CurvePickContext {
+            span: discarded.span,
+            parameter: (discarded.screen_parameters.first().unwrap()
+                + discarded.screen_parameters.last().unwrap())
+                * 0.5,
+            origin: discarded.origin,
+        };
+        state.selection = vec![SelectionItem::Curve(pick.span)];
+        state.curve_picks = vec![pick];
+        let original = browsing.bridge.export_project_json().unwrap();
+        let actual: serde_json::Value = serde_json::from_str(
+            &browsing
+                .update_json(&serde_json::to_string(&state).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        let expected: serde_json::Value = serde_json::from_str(
+            &source
+                .interaction_apply_json(&serde_json::to_string(&state).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(actual["navigation"]["rows"], expected["navigation"]["rows"]);
+        assert_eq!(
+            actual["navigation"]["sources"],
+            expected["navigation"]["sources"]
+        );
+        let native = browsing
+            .bridge
+            .editor()
+            .editor()
+            .selection_presentation_state();
+        assert_eq!(native.curve_picks.len(), 1);
+        assert_eq!(
+            native.curve_picks[0].parameter.to_bits(),
+            pick.parameter.to_bits()
+        );
+        assert_ne!(native.curve_picks[0].span, pick.span);
+        assert_ne!(native.curve_picks[0].origin, pick.origin);
+        assert!(native.curve_picks[0].origin.is_implicit_construction());
+        native
+            .validate(browsing.bridge.retained_scene.as_ref().unwrap())
+            .unwrap();
+        state.curve_picks[0].parameter = -1.0;
+        assert!(
+            browsing
+                .update_json(&serde_json::to_string(&state).unwrap())
+                .is_err()
+        );
+        assert_eq!(
+            browsing
+                .bridge
+                .editor()
+                .editor()
+                .selection_presentation_state(),
+            native
+        );
+        assert_eq!(browsing.bridge.export_project_json().unwrap(), original);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one source fixture checks readonly native edits and reverse selection without accepted mutation"
+    )]
+    fn browsing_describes_source_edits_and_round_trips_navigation_without_publication() {
+        let compiled =
+            geosolve_sketch_code::CompiledManagedSource::from_json(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../geosolve-sketch-engine/tests/fixtures/point-gesture-constrained.json"
+            )))
+            .unwrap();
+        let project = geosolve_sketch_code::CodeProject::managed(
+            geosolve_sketch_code::ProjectKey("browsing-edits".into()),
+            compiled,
+        )
+        .unwrap()
+        .to_canonical_json()
+        .unwrap();
+        let mut source = WorkbenchBridge::restore(&project).unwrap();
+        let pair: serde_json::Value =
+            serde_json::from_str(&source.interaction_snapshot_json().unwrap()).unwrap();
+        let design: serde_json::Value =
+            serde_json::from_str(&source.workspace_design_json().unwrap()).unwrap();
+        let mut browsing = BrowsingPresentation::new(
+            &serde_json::json!({"project":project,"design":design,"seed":pair["seed"]}).to_string(),
+        )
+        .unwrap();
+        let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
+        let before = (
+            browsing.bridge.export_project_json().unwrap(),
+            browsing.bridge.workspace_design_json().unwrap(),
+        );
+        let accepted = std::ptr::from_ref(
+            browsing
+                .bridge
+                .editor()
+                .coordinator()
+                .accepted_materialization()
+                .unwrap(),
+        );
+        let state = local.state();
+        let chrome: serde_json::Value = serde_json::from_str(
+            &browsing
+                .update_json(&serde_json::to_string(&state).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        let authority = chrome["authoringDocument"]["authority"].as_str().unwrap();
+        let describe = |command: &str, payload: serde_json::Value| {
+            serde_json::json!({"state":state,"authority":authority,"command":command,"payload":payload}).to_string()
+        };
+        let control = chrome["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["editable"] == true)
+            .unwrap();
+        let edit = describe(
+            "parameter.edit",
+            serde_json::json!({"id":control["id"],"value":"24"}),
+        );
+        let mutation: ManagedSketchMutation =
+            serde_json::from_str(&browsing.describe_json(&edit).unwrap()).unwrap();
+        let ManagedSketchMutation::SetValues { values } = &mutation else {
+            panic!("exact source value edit")
+        };
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].declaration, "length");
+        assert_eq!(
+            values[0].path,
+            vec![geosolve_sketch_code::ManagedPathSegment::Field(
+                "value".into()
+            )]
+        );
+        let ManagedValue::Unit(value) = &values[0].value else {
+            panic!("retained unit")
+        };
+        assert_eq!(value.value.to_bits(), 24.0_f64.to_bits());
+        let ManagedValue::Unit(value) = &values[0].expected else {
+            panic!("expected source unit")
+        };
+        assert_eq!(value.value.to_bits(), 20.0_f64.to_bits());
+        let dimension = chrome["dimensions"]["allMeasurements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["editable"] == true)
+            .unwrap();
+        let dimension_edit = describe(
+            "dimensions.edit",
+            serde_json::json!({"id":dimension["id"],"value":"24"}),
+        );
+        assert_eq!(
+            serde_json::from_str::<ManagedSketchMutation>(
+                &browsing.describe_json(&dimension_edit).unwrap()
+            )
+            .unwrap(),
+            mutation
+        );
+        let metadata_edit = describe(
+            "authoring.metadata.set",
+            serde_json::json!({"authority":authority,"target":{"kind":"dimension","id":"length"},"changes":{"isKeyConstraint":true}}),
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(
+                &browsing.describe_json(&metadata_edit).unwrap()
+            )
+            .unwrap(),
+            serde_json::json!({"mutation":"set_metadata","target":{"target":"declaration","declaration":"length"},"property":"isKeyConstraint","value":{"kind":"bool","value":true}})
+        );
+        let move_edit = describe(
+            "declaration.move",
+            serde_json::json!({"id":"managed:horizontal","direction":"up"}),
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&browsing.describe_json(&move_edit).unwrap())
+                .unwrap(),
+            serde_json::json!({"mutation":"reorder_declaration","declaration":"horizontal","before":"bar"})
+        );
+        let delete_edit = describe(
+            "declaration.delete",
+            serde_json::json!({"id":"managed:horizontal"}),
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(
+                &browsing.describe_json(&delete_edit).unwrap()
+            )
+            .unwrap(),
+            serde_json::json!({"mutation":"delete","target":{"target":"declaration","declaration":"horizontal"}})
+        );
+        let mut obsolete: serde_json::Value = serde_json::from_str(&edit).unwrap();
+        obsolete["authority"] = pair["snapshot"]["authoringDocument"]["authority"].clone();
+        assert!(browsing.describe_json(&obsolete.to_string()).is_err());
+        assert!(
+            browsing
+                .describe_json(&describe("workspace.project.apply", serde_json::json!({})))
+                .is_err()
+        );
+        assert_eq!(
+            (
+                browsing.bridge.export_project_json().unwrap(),
+                browsing.bridge.workspace_design_json().unwrap()
+            ),
+            before
+        );
+        assert_eq!(
+            std::ptr::from_ref(
+                browsing
+                    .bridge
+                    .editor()
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap()
+            ),
+            accepted
+        );
+        let request = serde_json::json!({"state":state,"command":"navigation.rows.select","payload":{"authority":chrome["navigation"]["authority"],"ids":["managed:bar"],"mode":"replace"}});
+        let navigated: serde_json::Value =
+            serde_json::from_str(&browsing.navigate_json(&request.to_string()).unwrap()).unwrap();
+        assert!(navigated["state"]["selection"].as_array().unwrap().len() >= 3);
+        let restore = serde_json::json!({"expected":state,"state":navigated["state"]});
+        local.restore_selection_json(&restore.to_string()).unwrap();
+        source.select_navigation_rows_json(serde_json::json!({"authority":pair["snapshot"]["navigation"]["authority"],"ids":["managed:bar"],"mode":"replace"})).unwrap();
+        assert_eq!(
+            local.state().selection,
+            source.editor().editor().selection()
+        );
+        let selected = local.state();
+        let mut forged = serde_json::json!({"expected":selected,"state":selected});
+        forged["state"]["gridVisible"] = (!selected.grid_visible).into();
+        assert!(local.restore_selection_json(&forged.to_string()).is_err());
+        local
+            .wheel_json(r#"{"version":2,"x":300,"y":250,"deltaX":0,"deltaY":-30,"ctrl":false}"#)
+            .unwrap();
+        let current = local.state_json().unwrap();
+        assert!(local.restore_selection_json(&restore.to_string()).is_err());
+        assert_eq!(local.state_json().unwrap(), current);
+    }
+
     #[test]
     fn authoring_prediction_paint_uses_current_view_and_never_picking_authority() {
         let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();

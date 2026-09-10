@@ -63,6 +63,17 @@ pub(super) struct DimensionsSnapshot {
     pin_count: usize,
     all_measurements: Vec<DimensionEntry>,
 }
+impl DimensionsSnapshot {
+    pub(super) fn translate_ids(&mut self, ids: &BTreeMap<String, String>) -> Result<(), String> {
+        for entry in self.entries.iter_mut().chain(&mut self.all_measurements) {
+            entry.id = ids
+                .get(&entry.id)
+                .ok_or("Browsing dimension has no exact source identity")?
+                .clone();
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -120,6 +131,13 @@ enum DimensionEdit {
         unit: IntentUnit,
     },
     ReadOnly(String),
+}
+
+struct PreparedDimensionEdit {
+    key: AnnotationLayoutKey,
+    edit: DimensionEdit,
+    storage_value: f64,
+    display_storage: f64,
 }
 
 struct DimensionMetadata {
@@ -510,42 +528,18 @@ impl WorkbenchBridge {
             "dimensions.edit" => {
                 let payload: EditPayload =
                     serde_json::from_value(payload).map_err(|error| error.to_string())?;
-                let (entry, row) = self.dimension_command_entry(&payload.id)?;
-                if !row.editable {
-                    return Err(row
-                        .reason
-                        .clone()
-                        .unwrap_or_else(|| "This dimension is read only".into()));
-                }
-                let key = entry.key;
-                let edit = self
-                    .dimensions
-                    .cache
-                    .dimensions
-                    .get(&key.item)
-                    .map(|metadata| metadata.edit.clone())
-                    .ok_or_else(|| "dimension edit authority is unavailable".to_owned())?;
-                let value = finite_edit_value(&payload.value)?;
-                let metadata = self
-                    .retained_scene
-                    .as_ref()
-                    .and_then(|scene| entry.target_metadata(scene))
-                    .ok_or_else(|| "The accepted dimension target is unavailable".to_owned())?;
-                let storage_value = metadata
-                    .storage_value_for_display(value)
-                    .map_err(|error| error.to_string())?;
+                let PreparedDimensionEdit {
+                    key,
+                    edit,
+                    storage_value,
+                    display_storage,
+                } = self.prepare_dimension_edit(&payload.id, &payload.value)?;
                 self.dimensions.native.focus = Some(key);
                 match edit {
                     DimensionEdit::Source {
                         control,
                         from_display,
                     } => {
-                        let display_storage = if metadata.unit == geosolve_sketch::ScalarUnit::Angle
-                        {
-                            storage_value.to_degrees()
-                        } else {
-                            storage_value
-                        };
                         self.edit_parameter(
                             &control,
                             serde_json::json!(display_storage * from_display),
@@ -579,6 +573,69 @@ impl WorkbenchBridge {
             _ => return Err(format!("unknown dimension command `{command}`")),
         }
         Ok(())
+    }
+
+    fn prepare_dimension_edit(
+        &self,
+        id: &str,
+        value: &serde_json::Value,
+    ) -> Result<PreparedDimensionEdit, String> {
+        let (entry, row) = self.dimension_command_entry(id)?;
+        if !row.editable {
+            return Err(row
+                .reason
+                .clone()
+                .unwrap_or_else(|| "This dimension is read only".into()));
+        }
+        let key = entry.key;
+        let edit = self
+            .dimensions
+            .cache
+            .dimensions
+            .get(&key.item)
+            .map(|metadata| metadata.edit.clone())
+            .ok_or_else(|| "dimension edit authority is unavailable".to_owned())?;
+        let value = finite_edit_value(value)?;
+        let metadata = self
+            .retained_scene
+            .as_ref()
+            .and_then(|scene| entry.target_metadata(scene))
+            .ok_or_else(|| "The accepted dimension target is unavailable".to_owned())?;
+        let storage_value = metadata
+            .storage_value_for_display(value)
+            .map_err(|error| error.to_string())?;
+        let display_storage = if metadata.unit == geosolve_sketch::ScalarUnit::Angle {
+            storage_value.to_degrees()
+        } else {
+            storage_value
+        };
+        Ok(PreparedDimensionEdit {
+            key,
+            edit,
+            storage_value,
+            display_storage,
+        })
+    }
+
+    pub(super) fn dimension_source_mutation(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<Option<ManagedSketchMutation>, String> {
+        let payload: EditPayload = decode_payload(payload)?;
+        let prepared = self.prepare_dimension_edit(&payload.id, &payload.value)?;
+        match prepared.edit {
+            DimensionEdit::Source {
+                control,
+                from_display,
+            } => self.parameter_source_mutation(
+                &control,
+                serde_json::json!(prepared.display_storage * from_display),
+            ),
+            DimensionEdit::ReadOnly(reason) => Err(reason),
+            DimensionEdit::Native { .. } => {
+                Err("This dimension has no source-owned collaborative edit".into())
+            }
+        }
     }
 
     fn dimension_command_entry(

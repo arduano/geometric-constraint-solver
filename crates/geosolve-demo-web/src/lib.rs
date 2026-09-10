@@ -70,6 +70,44 @@ mod wasm {
             .map_err(|error| JsValue::from_str(&error))
     }
 
+    /// Independent per-tab accepted-model Inspector/Explorer presentation.
+    /// The adapter exposes no authoring or accepted publication command.
+    #[wasm_bindgen]
+    pub struct BrowsingHandle {
+        local: crate::workbench::bridge::local_interaction::BrowsingPresentation,
+    }
+    impl std::fmt::Debug for BrowsingHandle {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter
+                .debug_struct("BrowsingHandle")
+                .finish_non_exhaustive()
+        }
+    }
+    #[wasm_bindgen]
+    impl BrowsingHandle {
+        #[wasm_bindgen(constructor)]
+        pub fn new(request: &str) -> Result<BrowsingHandle, JsValue> {
+            crate::workbench::bridge::local_interaction::BrowsingPresentation::new(request)
+                .map(|local| Self { local })
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn update(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .update_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn navigate(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .navigate_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn describe(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .describe_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+    }
+
     /// Browser-local accepted presentation. It has no solver, source or persistence owner.
     #[wasm_bindgen]
     pub struct InteractionHandle {
@@ -98,6 +136,17 @@ mod wasm {
         }
         pub fn state(&self) -> Result<String, JsValue> {
             self.local.state_json().map_err(|e| JsValue::from_str(&e))
+        }
+        #[wasm_bindgen(js_name = restoreSelection)]
+        pub fn restore_selection(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .restore_selection_json(request)
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn presence(&mut self, request: &str) -> Result<String, JsValue> {
+            self.local
+                .presence_json(request)
+                .map_err(|e| JsValue::from_str(&e))
         }
         pub fn replace(&mut self, request: &str) -> Result<String, JsValue> {
             self.local

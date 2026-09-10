@@ -2338,9 +2338,9 @@ impl CodeProjectWorkbench {
     pub(crate) fn local_point_targets(
         &self,
         editor: &ProjectionalEditorSession,
-    ) -> Result<BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>, String> {
+    ) -> BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value> {
         let Some(expansion) = self.session.snapshot().accepted_expansion.as_ref() else {
-            return Ok(BTreeMap::new());
+            return BTreeMap::new();
         };
         let mut groups = BTreeMap::<_, Vec<_>>::new();
         for lens in &expansion.writable_points {
@@ -2370,7 +2370,34 @@ impl CodeProjectWorkbench {
             };
             targets.insert(point, target);
         }
-        Ok(targets)
+        targets
+    }
+
+    /// Accepted compiler symbols to exact owned native bindings for disposable
+    /// peer highlights. Intent aliases remain private and are never parsed.
+    pub(crate) fn local_presence_bindings(
+        &self,
+        editor: &ProjectionalEditorSession,
+    ) -> BTreeMap<String, Vec<IntentNativeBinding>> {
+        let Some(expansion) = self.session.snapshot().accepted_expansion.as_ref() else {
+            return BTreeMap::new();
+        };
+        let Some(bindings) = editor.presentation_bindings() else {
+            return BTreeMap::new();
+        };
+        let mut by_declaration = BTreeMap::<String, BTreeSet<IntentNativeBinding>>::new();
+        for (alias, owned) in bindings.nodes {
+            if let Some(declaration) = expansion.declaration_for_alias(&alias) {
+                by_declaration
+                    .entry(declaration.0.clone())
+                    .or_default()
+                    .extend(owned);
+            }
+        }
+        by_declaration
+            .into_iter()
+            .map(|(symbol, owned)| (symbol, owned.into_iter().collect()))
+            .collect()
     }
 
     /// Authenticates a code-owned point against the accepted semantic draft

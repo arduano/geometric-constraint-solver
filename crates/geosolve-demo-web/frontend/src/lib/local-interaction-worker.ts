@@ -12,7 +12,7 @@ export interface LocalInteractionUpdate {
   /** Rust verified the authoritative preview matches this exact camera and selection. */
   serverFrameCompatible: boolean;
 }
-export type LocalInteractionMethod = "authoringPointer" | "construct" | "replace" | "dispatch" | "pointer" | "wheel" | "resize" | "cancel" | "state";
+export type LocalInteractionMethod = "authoringPointer" | "restoreSelection" | "presence" | "construct" | "replace" | "dispatch" | "pointer" | "wheel" | "resize" | "cancel" | "state";
 export interface LocalInteractionRequest { id: number; method: LocalInteractionMethod; input?: unknown; }
 export type LocalInteractionResponse = { id: number; result: LocalInteractionUpdate | InteractionState | null } | { id: number; error: string };
 export interface InteractionHandle {
@@ -23,6 +23,8 @@ export interface InteractionHandle {
   resize(input: string): string;
   cancel(input: string): string;
   authoringPointer(input: string): string;
+  restoreSelection(input: string): string;
+  presence(input: string): string;
   state(): string;
   free(): void;
 }
@@ -48,7 +50,7 @@ export function createLocalInteractionHandler(
         } else {
           if (!handle) throw Error("Local interaction has not been initialized");
           if (data.method === "state") result = handle.state();
-          else if (["replace", "dispatch", "pointer", "wheel", "resize", "cancel", "authoringPointer"].includes(data.method)) {
+          else if (["replace", "dispatch", "pointer", "wheel", "resize", "cancel", "authoringPointer", "restoreSelection", "presence"].includes(data.method)) {
             result = handle[data.method](JSON.stringify(data.input));
           } else throw Error("Unsupported local interaction operation");
         }

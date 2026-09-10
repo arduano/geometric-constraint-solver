@@ -22,6 +22,8 @@ describe("detached interaction worker transport", () => {
       pointer(value: string) { calls.push(`pointer:${value}`); return '{"frame":{},"state":{},"selectionChanged":true}'; }
       dispatch = this.pointer; wheel = this.pointer; resize = this.pointer; cancel = this.pointer;
       authoringPointer() { return '{}'; }
+      restoreSelection = this.pointer;
+      presence = this.pointer;
       state() { return '{"opaque":"state"}'; }
       free() { calls.push("free"); }
     }

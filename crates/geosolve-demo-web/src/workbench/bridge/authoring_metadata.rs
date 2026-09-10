@@ -155,7 +155,7 @@ impl WorkbenchBridge {
         code.metadata_edit_blocked_reason()
     }
 
-    fn validate_metadata_authority(&self, authority: &str) -> Result<(), String> {
+    pub(super) fn validate_metadata_authority(&self, authority: &str) -> Result<(), String> {
         if self
             .code_project
             .as_ref()
@@ -294,6 +294,14 @@ impl WorkbenchBridge {
         if command == "authoring.parameter.extract" {
             return self.extract_authoring_parameter(decode_payload(payload)?);
         }
+        let mutation = self.metadata_source_mutation(payload)?;
+        self.begin_selected_structured_managed_mutation("Edit source properties", mutation)
+    }
+
+    pub(super) fn metadata_source_mutation(
+        &self,
+        payload: serde_json::Value,
+    ) -> Result<ManagedSketchMutation, String> {
         let request: MetadataRequest = decode_payload(payload)?;
         self.validate_metadata_authority(&request.authority)?;
         if request.changes.len() != 1 {
@@ -333,14 +341,11 @@ impl WorkbenchBridge {
             serde_json::Value::String(value) => Some(ManagedValue::String(value)),
             _ => return Err("Source properties accept text, booleans, or reset".into()),
         };
-        self.begin_selected_structured_managed_mutation(
-            "Edit source properties",
-            ManagedSketchMutation::SetMetadata {
-                target,
-                property,
-                value,
-            },
-        )
+        Ok(ManagedSketchMutation::SetMetadata {
+            target,
+            property,
+            value,
+        })
     }
 
     fn extract_authoring_parameter(&mut self, request: ExtractRequest) -> Result<(), String> {

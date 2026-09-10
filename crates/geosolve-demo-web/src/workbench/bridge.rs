@@ -1824,6 +1824,16 @@ impl WorkbenchBridge {
     }
 
     fn move_declaration(&mut self, payload: &DeclarationMovePayload) -> Result<(), String> {
+        if let Some(mutation) = self.declaration_move_mutation(payload)? {
+            self.begin_structured_managed_mutation("Reorder declaration", mutation)?;
+        }
+        Ok(())
+    }
+
+    fn declaration_move_mutation(
+        &self,
+        payload: &DeclarationMovePayload,
+    ) -> Result<Option<ManagedSketchMutation>, String> {
         let direction_route = payload.direction.is_some()
             && payload.target_id.is_none()
             && payload.position.is_none();
@@ -1890,7 +1900,7 @@ impl WorkbenchBridge {
                 .expect("validated drop route has a target");
             let target = self.declaration_drop_target(target_id)?;
             if target == source {
-                return Ok(());
+                return Ok(None);
             }
             let mut remaining = order
                 .into_iter()
@@ -1908,13 +1918,10 @@ impl WorkbenchBridge {
             remaining.insert(insertion, source.clone());
             remaining.get(insertion + 1).cloned()
         };
-        self.begin_structured_managed_mutation(
-            "Reorder declaration",
-            ManagedSketchMutation::ReorderDeclaration {
-                declaration: source,
-                before,
-            },
-        )
+        Ok(Some(ManagedSketchMutation::ReorderDeclaration {
+            declaration: source,
+            before,
+        }))
     }
 
     fn declaration_drop_target(&self, id: &str) -> Result<String, String> {
@@ -1995,6 +2002,19 @@ impl WorkbenchBridge {
 
     fn edit_parameter(&mut self, id: &str, value: serde_json::Value) -> Result<(), String> {
         self.cancel_active_interaction(None)?;
+        if let Some(mutation) = self.parameter_source_mutation(id, value)? {
+            return self
+                .begin_selected_structured_managed_mutation("Edit managed parameter", mutation);
+        }
+        self.notice = "Managed parameter is unchanged".into();
+        Ok(())
+    }
+
+    fn parameter_source_mutation(
+        &self,
+        id: &str,
+        value: serde_json::Value,
+    ) -> Result<Option<ManagedSketchMutation>, String> {
         let submission = {
             let code = self
                 .code_project
@@ -2042,17 +2062,10 @@ impl WorkbenchBridge {
                 _ => return Err("managed parameter value has the wrong type".into()),
             }
         };
-        let mutation = self
-            .code_project
+        self.code_project
             .as_ref()
             .expect("managed parameter authority was checked")
-            .managed_control_source_mutation(id, submission)?;
-        if let Some(mutation) = mutation {
-            return self
-                .begin_selected_structured_managed_mutation("Edit managed parameter", mutation);
-        }
-        self.notice = "Managed parameter is unchanged".into();
-        Ok(())
+            .managed_control_source_mutation(id, submission)
     }
 
     fn select_tool(&mut self, id: &str) -> Result<(), String> {
