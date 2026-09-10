@@ -4,39 +4,106 @@ import { Worker } from "node:worker_threads";
 export class CollaborationDomainError extends Error {
   constructor(code, message, location = {}) { super(message); this.name = "CollaborationDomainError"; this.code = code; Object.assign(this, location); }
 }
-
-/** Trusted host jobs only. Compilation and native evaluation never run on this
- * caller thread. Worker termination bounds CPU work, not untrusted-code access.
- */
-export function runCollaborationDomainJob(input, { timeoutMs = 60_000, signal } = {}) {
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300_000) throw new TypeError("Domain timeout must be 1..300000 ms");
-  if (signal?.aborted) return Promise.reject(new CollaborationDomainError("cancelled", "Domain job cancelled"));
-  let encoded;
-  try {
-    encoded = JSON.stringify(input, (_key, value) => {
-      if (typeof value === "number" && !Number.isFinite(value) || ["function", "symbol", "bigint"].includes(typeof value)) throw Error("Domain input must be finite JSON data");
-      return value;
-    });
-    if (!encoded || Buffer.byteLength(encoded) > 128 * 1024 * 1024) throw Error("Domain job input exceeds 128 MiB");
-  } catch (error) { return Promise.reject(new CollaborationDomainError("invalid_input", error.message)); }
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL("./collaboration-domain-worker.mjs", import.meta.url), { workerData: { encoded, timeoutMs }, execArgv: [], stdout: true, stderr: true, resourceLimits: { maxOldGenerationSizeMb: 512 } });
-    let settled = false, outputBytes = 0;
-    const finish = (error, result) => {
-      if (settled) return; settled = true; clearTimeout(timer); signal?.removeEventListener("abort", abort);
-      // Wait for termination so an aborted job cannot retain nested compiler CPU.
-      void worker.terminate().then(() => error ? reject(error) : resolve(result), reject);
-    };
-    const abort = () => finish(new CollaborationDomainError("cancelled", "Domain job cancelled"));
-    const timer = setTimeout(() => finish(new CollaborationDomainError("timeout", `Domain job exceeded ${timeoutMs} ms`)), timeoutMs);
-    for (const pipe of [worker.stdout, worker.stderr]) pipe.on("data", (chunk) => {
-      outputBytes += chunk.length;
-      if (outputBytes > 1024 * 1024) finish(new CollaborationDomainError("resource_limit", "Domain diagnostic output exceeds 1 MiB"));
-    });
-    signal?.addEventListener("abort", abort, { once: true });
-    if (signal?.aborted) abort();
-    worker.once("message", (message) => message.ok ? finish(null, message.result) : finish(new CollaborationDomainError(message.error.code, message.error.message, message.error.location)));
-    worker.once("error", (error) => finish(new CollaborationDomainError("worker_failed", error.message)));
-    worker.once("exit", (code) => { if (!settled) finish(new CollaborationDomainError("worker_failed", `Domain worker exited before completion (${code})`)); });
+const error = (code, message) => new CollaborationDomainError(code, message);
+function encode(input) {
+  const encoded = JSON.stringify(input, (_key, value) => {
+    if (typeof value === "number" && !Number.isFinite(value) || ["function", "symbol", "bigint"].includes(typeof value)) throw Error("Domain input must be finite JSON data");
+    return value;
   });
+  if (!encoded || Buffer.byteLength(encoded) > 128 * 1024 * 1024) throw Error("Domain job input exceeds 128 MiB");
+  return encoded;
+}
+function checkedTimeout(timeoutMs) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300_000) throw new TypeError("Domain timeout must be 1..300000 ms");
+  return timeoutMs;
+}
+
+/** One document's trusted compiler/native jobs. The worker is serial and bounded;
+ * authority remains entirely with the caller's durable publication transaction.
+ * Terminating an active job also discards every retained candidate in its worker.
+ */
+export function createCollaborationDomainService({ timeoutMs = 60_000 } = {}) {
+  checkedTimeout(timeoutMs);
+  let worker, active, disposed = false, sequence = 0, stopping, queuedBytes = 0;
+  const queue = [];
+  function finish(request, failure, result) {
+    clearTimeout(request.timer); request.signal?.removeEventListener("abort", request.abort);
+    failure ? request.reject(failure) : request.resolve(result);
+  }
+  async function terminate(owner, failure) {
+    if (worker !== owner) return;
+    worker = undefined;
+    const request = active; active = undefined;
+    const stopped = owner.terminate(); stopping = stopped;
+    try { await stopped; } finally {
+      if (request) finish(request, failure);
+      if (stopping === stopped) stopping = undefined;
+      pump();
+    }
+  }
+  function start() {
+    worker = new Worker(new URL("./collaboration-domain-worker.mjs", import.meta.url), {
+      workerData: { retained: true, timeoutMs }, execArgv: [], stdout: true, stderr: true,
+      resourceLimits: { maxOldGenerationSizeMb: 512 },
+    });
+    const owner = worker;
+    for (const pipe of [owner.stdout, owner.stderr]) pipe.on("data", (chunk) => {
+      if (worker !== owner || !active) return;
+      active.outputBytes += chunk.length;
+      if (active.outputBytes > 1024 * 1024) void terminate(owner, error("resource_limit", "Domain diagnostic output exceeds 1 MiB"));
+    });
+    owner.on("message", (message) => {
+      if (worker !== owner || !active || message.id !== active.id) return;
+      const request = active; active = undefined;
+      finish(request, message.ok ? null : new CollaborationDomainError(message.error.code, message.error.message, message.error.location), message.result);
+      pump();
+    });
+    owner.once("error", (failure) => { void terminate(owner, error("worker_failed", failure.message)); });
+    owner.once("exit", (code) => { void terminate(owner, error("worker_failed", `Domain worker exited before completion (${code})`)); });
+  }
+  function pump() {
+    if (disposed || active || stopping || !queue.length) return;
+    if (!worker) start();
+    const request = queue.shift(); queuedBytes -= request.bytes; active = request;
+    const owner = worker;
+    request.timer = setTimeout(() => { void terminate(owner, error("timeout", `Domain job exceeded ${request.timeoutMs} ms`)); }, request.timeoutMs);
+    try { owner.postMessage({ id: request.id, encoded: request.encoded, timeoutMs: request.timeoutMs }); }
+    catch (failure) { void terminate(owner, error("worker_failed", failure.message)); }
+  }
+  return {
+    run(input, { signal, timeoutMs: deadline = timeoutMs } = {}) {
+      checkedTimeout(deadline);
+      if (disposed || signal?.aborted) return Promise.reject(error("cancelled", disposed ? "Domain service disposed" : "Domain job cancelled"));
+      let encoded;
+      try { encoded = encode(input); } catch (failure) { return Promise.reject(error("invalid_input", failure.message)); }
+      const bytes = Buffer.byteLength(encoded);
+      if (queue.length >= 16 || queuedBytes + bytes > 128 * 1024 * 1024) return Promise.reject(error("resource_limit", "Domain job queue exceeds 16 waiting requests / 128 MiB"));
+      return new Promise((resolve, reject) => {
+        const request = { id: ++sequence, encoded, bytes, signal, timeoutMs: deadline, resolve, reject, outputBytes: 0 };
+        request.abort = () => {
+          if (active === request) { void terminate(worker, error("cancelled", "Domain job cancelled")); return; }
+          const index = queue.indexOf(request);
+          if (index >= 0) { queue.splice(index, 1); queuedBytes -= request.bytes; finish(request, error("cancelled", "Domain job cancelled")); }
+        };
+        queue.push(request); queuedBytes += bytes; signal?.addEventListener("abort", request.abort, { once: true });
+        if (signal?.aborted) request.abort();
+        pump();
+      });
+    },
+    async dispose() {
+      if (disposed) { await stopping; return; }
+      disposed = true;
+      for (const request of queue.splice(0)) finish(request, error("cancelled", "Domain service disposed"));
+      queuedBytes = 0;
+      if (worker) await terminate(worker, error("cancelled", "Domain service disposed"));
+      await stopping;
+    },
+  };
+}
+
+/** Ephemeral cold execution remains available for independent rebuild/parity. */
+export async function runCollaborationDomainJob(input, options = {}) {
+  const service = createCollaborationDomainService(options);
+  try { return await service.run(input, options); }
+  finally { await service.dispose(); }
 }

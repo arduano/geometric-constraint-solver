@@ -93,7 +93,7 @@ function stageCli(output, sdk, engine, collaboration, dist) {
     "collaboration-cli.mjs", "collaboration-host.mjs", "collaboration-http.mjs", "collaboration-storage.mjs", "collaboration-runtime.mjs", "collaboration-serve.mjs", "collaboration-mirror.mjs",
     "collaboration-mirror-worker.mjs", "collaboration-mirror-worker-bridge.mjs",
     "collaboration-preview.mjs", "collaboration-preview-worker.mjs", "collaboration-preview-route.mjs",
-    "collaboration-domain.mjs", "collaboration-domain-worker.mjs", "collaboration-domain-structure.mjs", "collaboration-domain-syntax.mjs", "collaboration-domain-properties.mjs"];
+    "collaboration-domain.mjs", "collaboration-domain-worker.mjs", "collaboration-domain-sessions.mjs", "collaboration-domain-structure.mjs", "collaboration-domain-syntax.mjs", "collaboration-domain-properties.mjs"];
   for (const name of scripts) copy(resolve(repository, "scripts", name), resolve(runtime, "scripts", name));
   copy(resolve(repository, "target/m98/workspace-runtime.mjs"), resolve(runtime, "assets/workspace-runtime.mjs"));
   copy(resolve(repository, "crates/geosolve-demo-web/frontend/src/generated"), resolve(runtime, "assets/demo-wasm"));

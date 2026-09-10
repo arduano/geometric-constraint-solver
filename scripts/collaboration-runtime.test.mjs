@@ -528,3 +528,43 @@ test("same-value source suppression owns activation and rejects stale targets tr
   assert.equal((await app.send(alice, "stale-suppression", stale)).outcome.status, "rejected");
   assert.equal((await app.state(alice)).authority.acceptedInput, before); assert.equal(app.runtime.host.snapshot().needsRecovery, false);
 });
+
+test("retained candidate scene cannot publish across failed terminal durability and restart replays exact authority", async (t) => {
+  for (const failurePoint of ["before-append", "journal-synced"]) await t.test(failurePoint, async (t) => {
+    let arm = false, candidatePrepared = false, injected = false;
+    const f = await fixture(t, { workbenchScenes: true,
+      domainOptions: { beforeJob(input) { if (arm && input.kind === "scene") candidatePrepared = true; } },
+      storageOptions: { fault: async point => {
+        if (!injected && candidatePrepared && point === failurePoint) { injected = true; throw Error("Injected retained candidate durability failure"); }
+      } },
+    });
+    const app = f.first, alice = await app.connect("alice"), initial = await app.state(alice);
+    const command = await predictedCommand(t, initial.document, "point", [[8, 4]]);
+    arm = true;
+    await app.request("commands", alice.token, { requestId: "retained-fsync", command });
+    const deadline = Date.now() + 10_000;
+    while (!app.runtime.host.snapshot().needsRecovery && Date.now() < deadline) await delay(10);
+    assert.equal(injected, true); assert.equal(app.runtime.host.snapshot().needsRecovery, true);
+    // Candidate native sessions and scene have already completed, but neither
+    // may replace the in-memory accepted document before the durable install.
+    assert.equal(app.runtime.source().snapshot().accepted.acceptedInput, initial.authority.acceptedInput);
+    assert.equal(app.runtime.source().snapshot().accepted.modelRevision, initial.authority.acceptedRevision);
+    const refused = await fetch(app.base + "state", { headers: { Authorization: `Bearer ${alice.token}` } });
+    assert.equal(refused.status, 503); assert.equal((await refused.json()).error.code, "recovery_required");
+    await app.runtime.close(); arm = false; candidatePrepared = false;
+    const restarted = await f.open(false), rejoined = await restarted.connect("alice");
+    const receipt = await restarted.send(rejoined, "retained-fsync", command);
+    assert.equal(receipt.outcome.status, "accepted", JSON.stringify(receipt));
+    const restored = await restarted.state(rejoined);
+    assert.equal(restored.authority.acceptedRevision, 1);
+    assert.deepEqual(restored.document.pointTargets.find(item => item.target.address?.owner.address.declaration === "bore").position, [8, 4]);
+    assert.deepEqual(restored.document.pointTargets.find(item => item.target.address?.owner.address.declaration === "other").position, [20, 0]);
+    const duplicate = await restarted.send(rejoined, "retained-fsync", command);
+    assert.deepEqual(duplicate, receipt); assert.equal((await restarted.state(rejoined)).authority.acceptedRevision, 1);
+    const scene = await restarted.request("scene", rejoined.token);
+    assert.equal(scene.snapshot.project.status, "accepted");
+    const points = JSON.parse(scene.seed.scene).points.map(point => point.model_position);
+    assert.ok(points.some(point => point[0] === 8 && point[1] === 4));
+    assert.ok(points.some(point => point[0] === 20 && point[1] === 0));
+  });
+});

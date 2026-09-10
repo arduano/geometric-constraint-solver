@@ -7,7 +7,7 @@ import { openDurableCollaborationHost } from "./collaboration-host.mjs";
 import { createCollaborationHttpServer } from "./collaboration-http.mjs";
 import { collaborationHostModuleUrl } from "./workspace-runtime-paths.mjs";
 const { createTrustedSourceHost, createTrustedSemanticHost } = await import(collaborationHostModuleUrl);
-import { runCollaborationDomainJob } from "./collaboration-domain.mjs";
+import { createCollaborationDomainService } from "./collaboration-domain.mjs";
 import { createCollaborationPreviewService } from "./collaboration-preview.mjs";
 import { createCollaborationPreviewRoute } from "./collaboration-preview-route.mjs";
 
@@ -65,13 +65,14 @@ export async function openCollaborationRuntime(folder, {
   if (!["client", "server"].includes(previewMode) || previewMode === "server" && authoringPreview.enabled !== true) throw Error("Server preview preference requires an enabled server preview service");
   if (!(invitations instanceof Map) || !invitations.size || [...invitations.values()].some((principal) => typeof principal?.userId !== "string" || principal.userId.startsWith("geosolve.server."))) throw Error("Provide invited principals outside the reserved server identity namespace");
   folder = await realpath(folder);
+  const domainService = createCollaborationDomainService(domainOptions);
   const lock = acquireWorkspaceLock(folder), serverEpoch = randomUUID();
   let source, semantic, host, transport, accepted, initial, mirror, mirrorConnection, mirrorStatus, mirrorTimer, mirrorUnsubscribe, mirrorWork, previews;
   let stoppingMirror = false;
   const jobs = new Set();
   const domain = async (input) => {
     const controller = new AbortController(); jobs.add(controller);
-    try { await domainOptions?.beforeJob?.(input); return await runCollaborationDomainJob(input, { ...domainOptions, signal: controller.signal }); }
+    try { await domainOptions?.beforeJob?.(input); return await domainService.run(input, { ...domainOptions, signal: controller.signal }); }
     finally { jobs.delete(controller); }
   };
   const sourceOptions = (documentEpoch, input, files) => ({ configuration: { documentEpoch, serverEpoch, initialInput: input, files }, actor: sourceActor(documentEpoch, "server", serverEpoch) });
@@ -389,7 +390,7 @@ export async function openCollaborationRuntime(folder, {
         if (closing) return closing;
         transport.stop(); stoppingMirror = true; clearTimeout(mirrorTimer); mirrorUnsubscribe?.();
         closing = (async () => {
-          for (const controller of jobs) controller.abort();
+          for (const controller of jobs) controller.abort(); await domainService.dispose();
           while (transport.stats().workerBusy) await new Promise((resolve) => setTimeout(resolve, 5));
           await mirror?.close(); await mirrorWork;
           try { await transport.close(); if (mirrorConnection && !host.snapshot().needsRecovery) await host.disconnect(mirrorConnection); }
@@ -398,5 +399,5 @@ export async function openCollaborationRuntime(folder, {
         return closing;
       },
     };
-  } catch (error) { stoppingMirror = true; clearTimeout(mirrorTimer); mirrorUnsubscribe?.(); await mirror?.close(); await mirrorWork; for (const controller of jobs) controller.abort(); if (transport) await transport.close(); await previews?.close(); await host?.close(); source?.dispose(); semantic?.dispose(); lock.release(); throw error; }
+  } catch (error) { stoppingMirror = true; clearTimeout(mirrorTimer); mirrorUnsubscribe?.(); await mirror?.close(); await mirrorWork; for (const controller of jobs) controller.abort(); await domainService.dispose(); if (transport) await transport.close(); await previews?.close(); await host?.close(); source?.dispose(); semantic?.dispose(); lock.release(); throw error; }
 }
