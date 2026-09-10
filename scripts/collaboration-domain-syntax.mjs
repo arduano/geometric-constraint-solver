@@ -83,3 +83,18 @@ export function capturedManagedMetadataTouches(basisSource, capturedSource, meta
   }
   return result;
 }
+
+/** Whole compiler-owned declaration correspondence. Ranges explicitly convert UTF-16 AST offsets to the workbench UTF-8
+ * byte contract, never inferred from normalized/raw byte equality. A finer source
+ * lens can be added by the compiler later without guessing offsets in the UI. */
+export function declarationSourceProjection(canonicalSource, rawSource, path) {
+  const canonical = sourceView(canonicalSource), raw = sourceView(rawSource);
+  const spans = [...canonical.owners].map(([declaration, owner]) => {
+    const other = raw.owners.get(declaration);
+    if (!other) fail("Accepted canonical declaration has no authored source counterpart");
+    return { declaration, canonical: { from: Buffer.byteLength(canonicalSource.slice(0, owner.statement.getStart(canonical.file))), to: Buffer.byteLength(canonicalSource.slice(0, owner.statement.end)) },
+      raw: { from: Buffer.byteLength(rawSource.slice(0, other.statement.getStart(raw.file))), to: Buffer.byteLength(rawSource.slice(0, other.statement.end)) } };
+  });
+  if (spans.length !== raw.owners.size) fail("Accepted authored source has unmatched declaration owners");
+  return { path, canonicalPath: "sketch.ts", spans };
+}

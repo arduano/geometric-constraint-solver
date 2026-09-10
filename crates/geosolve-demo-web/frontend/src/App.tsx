@@ -26,6 +26,7 @@ import { DeclarationPanel, DetailsPanel, Explorer, ParametersView, ProblemsView,
 import { CodeEditor, type EditorNavigation } from "./components/code-editor";
 import { OpenSurface, type SampleEntry } from "./components/open-surface";
 import type { ToolCatalog } from "./lib/tool-catalog";
+import type { CollaborativeWorkbenchAdapter } from "./lib/collaboration-adapter";
 import { AuthoringEditContext } from "./lib/authoring-edit";
 import { readOnlyFolderPresentation, type FolderWorkbenchAdapter } from "./lib/folder-adapter";
 import { toolLabel, toolSection } from "./lib/tool-catalog";
@@ -53,9 +54,10 @@ function readPresentation() {
   } catch { return { ...fallback, storageIssue: null }; }
 }
 
-export interface AppProps { adapter?: WorkbenchAdapter; projectStore?: ProjectStore; folder?: FolderWorkbenchAdapter; }
+export interface AppProps { adapter?: WorkbenchAdapter; projectStore?: ProjectStore; folder?: FolderWorkbenchAdapter; collaboration?: CollaborativeWorkbenchAdapter; }
 
-export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT_STORE, folder }: AppProps) {
+export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT_STORE, folder, collaboration }: AppProps) {
+  const remote = Boolean(folder || collaboration);
   const [, updateFolderStatus] = useState(0);
   const [initialPresentation] = useState(readPresentation);
   const [initialRecents] = useState(readRecentSamples);
@@ -123,6 +125,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   }, [adapter, folder]);
 
   const queueProjectSave = useCallback((intent: ProjectSaveIntent, clearError: boolean) => {
+    if (collaboration) return collaboration.refresh().then(() => undefined).catch(reportError);
     if (folder) return folder.refresh().then(() => undefined).catch(reportError);
     const epoch = projectSaveEpoch.current;
     const save = projectSaveTail.current.then(async () => {
@@ -150,7 +153,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     });
     projectSaveTail.current = save.catch(() => undefined);
     return save;
-  }, [adapter, folder, projectStore, reportError]);
+  }, [adapter, folder, collaboration, projectStore, reportError]);
 
   const start = useCallback(() => {
     const request = startupRequest.current + 1;
@@ -170,13 +173,13 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       setSnapshot(checked);
       setToolCatalog(catalog);
       const file = checked.source.files.find((candidate) => candidate.path === checked.source.selectedPath);
-      const restored = folder ? { contents: file?.contents, issue: null } : restoredBrowserDraft(checked, file);
+      const restored = remote ? { contents: file?.contents, issue: null } : restoredBrowserDraft(checked, file);
       if (restored.issue) reportError(restored.issue);
       setDraft(restored.contents ?? file?.contents ?? "");
       setDraftStorageSafe(projectAutosaveSafe.current);
       return true;
     };
-    if (folder) {
+    if (remote) {
       void adapter.construct({ version: 2 }).then(install).catch((error) => setStartupError(errorText(error)));
       return;
     }
@@ -217,7 +220,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     }).catch((error: unknown) => {
       if (startupRequest.current === request) setStartupError(errorText(error));
     });
-  }, [adapter, folder, projectStore, queueProjectSave, reportError, resolveAdapterSnapshot]);
+  }, [adapter, folder, collaboration, remote, projectStore, queueProjectSave, reportError, resolveAdapterSnapshot]);
   useEffect(() => {
     start();
     return () => { startupRequest.current += 1; };
@@ -234,11 +237,11 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     const beforeFile = before?.source.files.find((file) => file.path === before.source.selectedPath);
     const localDirty = Boolean(beforeFile && draftRef.current !== beforeFile.contents);
     const nextFile = checked.source.files.find((file) => file.path === checked.source.selectedPath) ?? checked.source.files[0];
-    if (!localDirty || before?.source.selectedPath !== checked.source.selectedPath) setDraft(nextFile?.contents ?? "");
+    if ((!localDirty || collaboration && collaboration.pendingSourceEdits.length === 0) || before?.source.selectedPath !== checked.source.selectedPath) setDraft(nextFile?.contents ?? "");
     snapshotRef.current = checked;
     setSnapshot(checked);
     return checked;
-  }, [folder, resolveAdapterSnapshot]);
+  }, [folder, collaboration, resolveAdapterSnapshot]);
   const acceptCanvasSnapshot = useCallback((next: WorkbenchSnapshot) => {
     void acceptSnapshot(next).catch(reportError);
   }, [acceptSnapshot, reportError]);
@@ -246,6 +249,10 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     updateFolderStatus((value) => value + 1);
     if (next && snapshotRef.current) void acceptSnapshot(next).catch(reportError);
   }), [acceptSnapshot, folder, reportError]);
+  useEffect(() => collaboration?.subscribe((next) => {
+    updateFolderStatus((value) => value + 1);
+    if (next && snapshotRef.current) void acceptSnapshot(next).catch(reportError);
+  }), [acceptSnapshot, collaboration, reportError]);
   const command = useCallback(async (name: string, payload?: unknown) => {
     try {
       const previousDimensionMode = snapshotRef.current?.dimensions?.mode ?? "focused";
@@ -306,18 +313,18 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const chooseTool = useCallback((id: string, origin?: HTMLElement) => { if (folder?.editingBlockedReason && id !== "select") return; transient.close(false); void command("tool.select", { id }); if (origin?.getAttribute("role") === "menuitem") queueMicrotask(() => document.querySelector<HTMLElement>('[role="application"]')?.focus()); }, [command, folder, transient]);
 
   useEffect(() => {
-    if (!snapshot || folder) return;
+    if (!snapshot || remote) return;
     if (suppressInstalledSnapshotAutosave.current === snapshot) {
       suppressInstalledSnapshotAutosave.current = null;
       return;
     }
     void queueProjectSave("auto", false);
-  }, [folder, queueProjectSave, snapshot?.project.sampleKey, snapshot?.project.title, snapshot?.revision]);
+  }, [remote, folder, queueProjectSave, snapshot?.project.sampleKey, snapshot?.project.title, snapshot?.revision]);
 
   useEffect(() => {
     // A failed/uncertain project restore also protects its separately saved
     // unapplied source. Only a successful explicit save releases that protection.
-    if (!snapshot || !draftStorageSafe || folder) return;
+    if (!snapshot || !draftStorageSafe || remote) return;
     const file = snapshot.source.files.find((candidate) => candidate.path === snapshot.source.selectedPath);
     if (!file || file.readOnly || draft === file.contents) {
       const removed = removeBrowserStorage(DRAFT_KEY, "the unapplied source draft");
@@ -326,7 +333,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     }
     const stored = writeBrowserStorage(DRAFT_KEY, JSON.stringify({ version: 1, title: snapshot.project.title, sampleKey: snapshot.project.sampleKey ?? null, path: file.path, base: file.contents, contents: draft }), "the unapplied source draft");
     if (stored.issue) reportError(stored.issue);
-  }, [draft, draftStorageSafe, folder, reportError, snapshot]);
+  }, [draft, draftStorageSafe, remote, folder, reportError, snapshot]);
 
   useEffect(() => {
     const onWorkspaceKey = (event: KeyboardEvent) => {
@@ -334,7 +341,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       const modifier = (event.ctrlKey || event.metaKey) && !event.altKey;
       if (modifier && event.key.toLowerCase() === "o") {
         event.preventDefault();
-        if (!folder && fileButtonRef.current) transient.toggle("open", fileButtonRef.current);
+        if (!remote && fileButtonRef.current) transient.toggle("open", fileButtonRef.current);
         return;
       }
       if (modifier && event.key.toLowerCase() === "s") {
@@ -356,7 +363,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     };
     document.addEventListener("keydown", onWorkspaceKey);
     return () => document.removeEventListener("keydown", onWorkspaceKey);
-  }, [acceptSnapshot, activeTool, adapter, capturedGesture, chooseTool, command, folder, reportError, reproOpen, saveBrowserProject, transient]);
+  }, [acceptSnapshot, activeTool, adapter, capturedGesture, chooseTool, command, folder, remote, reportError, reproOpen, saveBrowserProject, transient]);
 
   useEffect(() => {
     const navigation = snapshot?.navigation;
@@ -383,15 +390,15 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   if (!snapshot || !toolCatalog) return <main className="grid h-dvh place-items-center bg-canvas text-sm text-muted">{startupError ? <section role="alert" className="max-w-md rounded-lg border border-danger/50 bg-raised p-5 text-center"><p className="font-medium text-foreground">Workbench unavailable</p><p className="mt-2 text-xs leading-relaxed">{startupError}</p><Button className="mt-4" onClick={start}>Try again</Button></section> : <span role="status">Starting GeoSolve…</span>}</main>;
   const selectedFile = snapshot.source.files.find((file) => file.path === snapshot.source.selectedPath) ?? snapshot.source.files[0];
   const localDraftDirty = Boolean(selectedFile && draft !== selectedFile.contents);
-  const editingBlockedReason = folder?.editingBlockedReason;
+  const editingBlockedReason = folder?.editingBlockedReason ?? collaboration?.editingBlockedReason;
   const generator = folder?.isGenerator ?? false;
   const inspectionSnapshot = editingBlockedReason ? readOnlyFolderPresentation(snapshot, editingBlockedReason) : snapshot;
   const displayedToolCatalog = editingBlockedReason ? { ...toolCatalog, sections: [] } : toolCatalog;
-  const historyBlocked = Boolean(editingBlockedReason) || localDraftDirty || snapshot.source.dirty;
+  const historyBlocked = Boolean(editingBlockedReason) || (!collaboration && (localDraftDirty || snapshot.source.dirty));
   const generatorInputs = generator && folder ? <GeneratorInputs definitions={folder.installedState?.inputDefinitions ?? {}} values={folder.installedState?.inputs ?? {}}
     disabledReason={folder.state?.editor?.canEdit === false ? "Take over editing to change generator inputs." : folder.installedState?.capabilities?.generatorInputs === false ? "This generator does not expose editable inputs." : undefined}
     onApply={async (values) => { const next = await folder.setGeneratorInputs(values); await acceptSnapshot(next); setActionError(null); }} /> : null;
-  const metadataBlockedReason = editingBlockedReason ?? (metadataPending ? "Applying document properties…" : localDraftDirty || snapshot.source.dirty
+  const metadataBlockedReason = editingBlockedReason ?? (metadataPending ? "Applying document properties…" : !collaboration && (localDraftDirty || snapshot.source.dirty)
     ? "Apply or Revert the source draft before editing document properties."
     : capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)
       ? "Finish the current tool or gesture before editing document properties."
@@ -412,7 +419,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   };
   const replacementBlocked = localDraftDirty || snapshot.source.dirty;
   const reportReplacementBlocked = () => reportError(folder ? "This window follows the open local folder. Open the regular demo to create or import another project." : "Apply or Revert the current source draft before replacing this project.");
-  const openSample = (sample: SampleEntry) => { if (folder || replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); void command("sample.open", { key: sample.key, title: sample.title }).then((next) => {
+  const openSample = (sample: SampleEntry) => { if (remote || replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); void command("sample.open", { key: sample.key, title: sample.title }).then((next) => {
     setDraft(next.source.files.find((file) => file.path === next.source.selectedPath)?.contents ?? "");
     if (next.revision !== snapshot.revision && next.project.sampleKey === sample.key) {
       const remembered = rememberRecentSample(recentSamples, sample);
@@ -420,8 +427,8 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       if (remembered.issue) reportError(remembered.issue);
     }
   }); setMode("split"); };
-  const replaceProject = (name: "project.new" | "project.new-code", nextMode: WorkspaceMode) => { if (folder || replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); void command(name).then((next) => setDraft(next.source.files.find((file) => file.path === next.source.selectedPath)?.contents ?? "")); setMode(nextMode); };
-  const importProject = () => { if (folder || replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); importInputRef.current?.click(); };
+  const replaceProject = (name: "project.new" | "project.new-code", nextMode: WorkspaceMode) => { if (remote || replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); void command(name).then((next) => setDraft(next.source.files.find((file) => file.path === next.source.selectedPath)?.contents ?? "")); setMode(nextMode); };
+  const importProject = () => { if (remote || replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); importInputRef.current?.click(); };
   const importSelectedFile = (file?: File) => {
     if (!file) return;
     void file.text().then((contents) => command("project.import", { path: file.name, contents })).then((next) => {
@@ -520,11 +527,20 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
         {folder.pendingOperationId && <Button className="shrink-0" onClick={() => { void folder.checkPendingOperation().catch(reportError); }}>Check save status</Button>}
         {folder.pending && <Button className="shrink-0" onClick={() => downloadText("geosolve-pending-intent.json", folder.pending, "application/json")}>Download pending intent</Button>}
       </div>}
+      {collaboration && <div className="flex h-11 min-w-0 shrink-0 items-center gap-3 border-b border-border bg-raised px-3 text-xs" role="region" aria-label="Shared document">
+        <strong>Shared document</strong>
+        {collaboration.state?.document.mirror&&collaboration.state.document.mirror.status!=="synchronized"&&<span className="text-amber-300" title={collaboration.state.document.mirror.notices.map(item=>`${item.path}: ${item.reason}`).join("\n")}>External files need reconciliation</span>}
+        <span className="min-w-0 flex-1 truncate" title={collaboration.notice} role="status">{collaboration.notice}</span>
+        <span title={collaboration.participants.map((person) => `${person.userId} (${person.role})`).join(", ")}>{collaboration.participants.length} connected</span>
+        {collaboration.recoveryActions.length>0&&<details className="relative"><summary className="cursor-pointer text-accent">Recover saved work</summary><div className="absolute right-0 z-50 grid min-w-64 gap-2 rounded border border-border bg-raised p-3">{collaboration.recoveryActions.map(action=><Button key={action.label} onClick={action.run}>{action.label}</Button>)}</div></details>}
+        <Button onClick={() => { void collaboration.client.retry().catch(reportError); }}>Reconnect</Button>
+        {(collaboration.pending.length > 0 || collaboration.pendingSourceEdits.length > 0) && <Button onClick={() => downloadText("pending-shared-work.json", JSON.stringify({requests:collaboration.client.checkpoint(),sourceEdits:collaboration.pendingSourceEdits},null,2), "application/json")}>Download pending work</Button>}
+      </div>}
       <input ref={importInputRef} type="file" accept=".json,.txt,application/json,text/plain" hidden onChange={(event) => importSelectedFile(event.currentTarget.files?.[0])} />
       <header className="relative z-50 flex h-11 shrink-0 items-center border-b border-border bg-surface px-2">
         <div className="relative flex items-center gap-1">
           <Button ref={fileButtonRef} aria-label="File menu" aria-haspopup="menu" aria-expanded={transient.active === "file"} size="compact" variant="ghost" onClick={(event) => transient.toggle("file", event.currentTarget)}><Menu className="size-4" />File<ChevronDown className="size-3" /></Button>
-          {transient.active === "file" && <TransientPopover surfaceRef={transient.contentRef} label="File menu" className="left-0 top-9 w-56"><MenuButton icon={<FolderOpen />} label="Open…" shortcut="Ctrl O" disabled={Boolean(folder)} onClick={() => { if (fileButtonRef.current) transient.toggle("open", fileButtonRef.current); }} /><MenuButton icon={<Save />} label={folder ? "Refresh saved file" : "Save in browser"} shortcut="Ctrl S" onClick={() => { transient.close(); void saveBrowserProject(); }} /><MenuButton icon={<Download />} label="Export canonical project…" onClick={() => { transient.close(); if (localDraftDirty) { reportError("Apply or Revert the current source draft before exporting a canonical project."); return; } void exportProject(adapter).catch(reportError); }} />{selectedFile.path === "sketch.ts" && <MenuButton icon={<Code2 />} label={localDraftDirty || snapshot.source.dirty ? "Download raw draft…" : "Download sketch.ts…"} onClick={() => { transient.close(); downloadText(localDraftDirty || snapshot.source.dirty ? "sketch-draft.ts" : "sketch.ts", draft, "text/typescript"); }} />}<div className="my-1 border-t border-border" /><MenuButton icon={<FileJson />} label="Import project or repro…" disabled={Boolean(folder)} onClick={importProject} /></TransientPopover>}
+          {transient.active === "file" && <TransientPopover surfaceRef={transient.contentRef} label="File menu" className="left-0 top-9 w-56"><MenuButton icon={<FolderOpen />} label="Open…" shortcut="Ctrl O" disabled={remote} onClick={() => { if (fileButtonRef.current) transient.toggle("open", fileButtonRef.current); }} /><MenuButton icon={<Save />} label={remote ? "Refresh saved file" : "Save in browser"} shortcut="Ctrl S" onClick={() => { transient.close(); void saveBrowserProject(); }} /><MenuButton icon={<Download />} label="Export canonical project…" onClick={() => { transient.close(); if (localDraftDirty) { reportError("Apply or Revert the current source draft before exporting a canonical project."); return; } void exportProject(adapter).catch(reportError); }} />{selectedFile.path === "sketch.ts" && <MenuButton icon={<Code2 />} label={localDraftDirty || snapshot.source.dirty ? "Download raw draft…" : "Download sketch.ts…"} onClick={() => { transient.close(); downloadText(localDraftDirty || snapshot.source.dirty ? "sketch-draft.ts" : "sketch.ts", draft, "text/typescript"); }} />}<div className="my-1 border-t border-border" /><MenuButton icon={<FileJson />} label="Import project or repro…" disabled={remote} onClick={importProject} /></TransientPopover>}
           <div className="mx-1 h-5 w-px bg-border" />
           <Button aria-label="Undo" aria-description={historyBlocked ? "Apply or Revert the source draft before moving history." : undefined} disabled={historyBlocked || !snapshot.presentation.canUndo} size="icon" variant="ghost" className="size-8" title={historyBlocked ? "Apply or Revert the source draft before moving history" : snapshot.presentation.canUndo ? "Undo last change" : "Nothing to undo"} onClick={() => void command("history.undo")}><Undo2 className="size-4" /></Button>
           <Button aria-label="Redo" aria-description={historyBlocked ? "Apply or Revert the source draft before moving history." : undefined} disabled={historyBlocked || !snapshot.presentation.canRedo} size="icon" variant="ghost" className="size-8" title={historyBlocked ? "Apply or Revert the source draft before moving history" : snapshot.presentation.canRedo ? "Redo last change" : "Nothing to redo"} onClick={() => void command("history.redo")}><Redo2 className="size-4" /></Button>
@@ -546,11 +562,11 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
           {explorerOpen && mode !== "code" && <><Panel id="explorer" defaultSize={16} minSize={12} maxSize={26}><Explorer snapshot={inspectionSnapshot} actions={declarationActions} blockedReason={editingBlockedReason ?? (localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined)} /></Panel><ResizeHandle /></>}
           <Panel id="workspace" defaultSize={63} minSize={45}>
             <main className="relative flex h-full min-h-0 flex-col">
-              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={displayedToolCatalog} editingBlockedReason={editingBlockedReason} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} onDimensionMode={(dimensionMode) => void command("dimensions.mode", { mode: dimensionMode })} captured={setCapturedGesture} />} code={<CodeWorkspace readOnlyReason={editingBlockedReason} metadataActions={metadataActions} metadataBlockedReason={metadataBlockedReason} mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={(value) => { folder?.draftChanged(value !== selectedFile.contents); setDraft(value); }} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={editingBlockedReason ?? (localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined)} onParameterEdit={(id, value) => { if (editingBlockedReason || localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
+              <StableWorkspace mode={mode} splitCodeWidth={splitCodeWidth} onSplitCodeWidth={setSplitCodeWidth} canvas={<DesignWorkspace adapter={adapter} snapshot={snapshot} catalog={displayedToolCatalog} editingBlockedReason={editingBlockedReason} onSnapshot={acceptCanvasSnapshot} onError={reportError} activeTool={activeTool} onFinish={() => void command("tool.finish")} onCancel={() => chooseTool("select")} onGeometryRole={(selected) => void command(selected ? "geometry.role.toggle" : "geometry.authoring-role.toggle")} onViewCommand={(viewCommand) => void command(viewCommand)} onDimensionMode={(dimensionMode) => void command("dimensions.mode", { mode: dimensionMode })} captured={setCapturedGesture} />} code={<CodeWorkspace collaboration={collaboration} onSharedError={reportError} readOnlyReason={editingBlockedReason} metadataActions={metadataActions} metadataBlockedReason={metadataBlockedReason} mode={mode} surface={codeSurface} setSurface={setCodeSurface} snapshot={snapshot} selectedFile={selectedFile} draft={draft} setDraft={(value) => { folder?.draftChanged(value !== selectedFile.contents); setDraft(value); }} command={command} navigation={editorNavigation} onShowInCanvas={showSourceInCanvas} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined} declarationActions={declarationActions} declarationBlockedReason={editingBlockedReason ?? (!collaboration && localDraftDirty ? "Apply or Revert the source draft before structured declaration actions." : undefined)} onParameterEdit={(id, value) => { if (editingBlockedReason || !collaboration && localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} />} />
               {transient.active === "open" && <div ref={transient.contentRef as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="false" aria-label="Open project" className="absolute inset-5 z-40 overflow-hidden rounded-xl border border-border bg-raised shadow-panel"><OpenSurface recents={recentSamples} onOpen={openSample} onNewSketch={() => replaceProject("project.new", "design")} onNewCode={() => replaceProject("project.new-code", "code")} onImport={importProject} onDismiss={() => transient.close(true)} /></div>}
             </main>
           </Panel>
-          {detailsOpen && (mode !== "code" || generator) && <><ResizeHandle /><Panel id="details" defaultSize={21} minSize={18} maxSize={34}><div className="flex h-full min-h-0 flex-col">{generatorInputs && <div className="max-h-[55%] shrink-0 overflow-y-auto border-b border-border p-3">{generatorInputs}</div>}<div className="min-h-0 flex-1"><DetailsPanel metadataActions={metadataActions} metadataBlockedReason={metadataBlockedReason} snapshot={inspectionSnapshot} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : (localDraftDirty || snapshot.source.dirty) ? "Apply or Revert the source draft before navigating between views." : snapshot.navigation && !snapshot.navigation.canNavigateSource ? snapshot.navigation.unavailableReason ?? "Source navigation is unavailable." : undefined} onOpenCode={openSelectionInCode} onParameterEdit={(id, value) => { if (editingBlockedReason || localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} parametersBlocked={localDraftDirty || snapshot.source.dirty} dimensionInspectionBlocked={metadataPending ? "Applying document properties…" : (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before inspecting dimensions." : undefined} dimensionActions={{ onFocus: (id) => { void command("dimensions.focus", { id }); }, onPin: (id, pinned) => { void command("dimensions.pin", { id, pinned }); }, onClearPins: () => { void command("dimensions.clearPins"); }, onEdit: (id, value) => { if (editingBlockedReason || localDraftDirty || snapshot.source.dirty) return; void command("dimensions.edit", { id, value }); } }} /></div></div></Panel></>}
+          {detailsOpen && (mode !== "code" || generator) && <><ResizeHandle /><Panel id="details" defaultSize={21} minSize={18} maxSize={34}><div className="flex h-full min-h-0 flex-col">{generatorInputs && <div className="max-h-[55%] shrink-0 overflow-y-auto border-b border-border p-3">{generatorInputs}</div>}<div className="min-h-0 flex-1"><DetailsPanel metadataActions={metadataActions} metadataBlockedReason={metadataBlockedReason} snapshot={inspectionSnapshot} navigationBlockedReason={(capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : (localDraftDirty || snapshot.source.dirty) ? "Apply or Revert the source draft before navigating between views." : snapshot.navigation && !snapshot.navigation.canNavigateSource ? snapshot.navigation.unavailableReason ?? "Source navigation is unavailable." : undefined} onOpenCode={openSelectionInCode} onParameterEdit={(id, value) => { if (editingBlockedReason || !collaboration && localDraftDirty) return; void command("parameter.edit", { id, value }); }} onProblemOpen={openProblem} parametersBlocked={!collaboration && (localDraftDirty || snapshot.source.dirty)} dimensionInspectionBlocked={metadataPending ? "Applying document properties…" : (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before inspecting dimensions." : undefined} dimensionActions={{ onFocus: (id) => { void command("dimensions.focus", { id }); }, onPin: (id, pinned) => { void command("dimensions.pin", { id, pinned }); }, onClearPins: () => { void command("dimensions.clearPins"); }, onEdit: (id, value) => { if (editingBlockedReason || !collaboration && (localDraftDirty || snapshot.source.dirty)) return; void command("dimensions.edit", { id, value }); } }} /></div></div></Panel></>}
         </PanelGroup>
       </div>
 
@@ -633,7 +649,7 @@ const CODE_SURFACES: Array<{ id: CodeSurface; label: string }> = [
   { id: "artifacts", label: "Artifacts" },
 ];
 
-function CodeWorkspace({ readOnlyReason, metadataActions, metadataBlockedReason, mode, surface, setSurface, snapshot, selectedFile, draft, setDraft, command, navigation, onShowInCanvas, navigationBlockedReason, declarationActions, declarationBlockedReason, onParameterEdit, onProblemOpen }: { readOnlyReason?: string; metadataActions: AuthoringMetadataActions; metadataBlockedReason?: string; mode: WorkspaceMode; surface: CodeSurface; setSurface: (surface: CodeSurface) => void; snapshot: WorkbenchSnapshot; selectedFile: WorkbenchSnapshot["source"]["files"][number]; draft: string; setDraft: (value: string) => void; command: (name: string, payload?: unknown) => Promise<WorkbenchSnapshot>; navigation: EditorNavigation | null; onShowInCanvas: (range: Utf16SourceRange) => void; navigationBlockedReason?: string; declarationActions: DeclarationPanelActions; declarationBlockedReason?: string; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void }) {
+function CodeWorkspace({ collaboration, onSharedError, readOnlyReason, metadataActions, metadataBlockedReason, mode, surface, setSurface, snapshot, selectedFile, draft, setDraft, command, navigation, onShowInCanvas, navigationBlockedReason, declarationActions, declarationBlockedReason, onParameterEdit, onProblemOpen }: { collaboration?: CollaborativeWorkbenchAdapter; onSharedError?: (error:unknown)=>void; readOnlyReason?: string; metadataActions: AuthoringMetadataActions; metadataBlockedReason?: string; mode: WorkspaceMode; surface: CodeSurface; setSurface: (surface: CodeSurface) => void; snapshot: WorkbenchSnapshot; selectedFile: WorkbenchSnapshot["source"]["files"][number]; draft: string; setDraft: (value: string) => void; command: (name: string, payload?: unknown) => Promise<WorkbenchSnapshot>; navigation: EditorNavigation | null; onShowInCanvas: (range: Utf16SourceRange) => void; navigationBlockedReason?: string; declarationActions: DeclarationPanelActions; declarationBlockedReason?: string; onParameterEdit: (id: string, value: string) => void; onProblemOpen: (problem: WorkbenchSnapshot["problems"][number]) => void }) {
   const dirty = snapshot.source.dirty || draft !== selectedFile.contents;
   const sourceReadOnly = selectedFile.readOnly || Boolean(readOnlyReason);
   const [showInCanvasRequest, setShowInCanvasRequest] = useState(0);
@@ -658,16 +674,16 @@ function CodeWorkspace({ readOnlyReason, metadataActions, metadataBlockedReason,
       })),
   } : null, [draft, selectedFile.language, selectedFile.path, snapshot.project.sampleKey, snapshot.project.title, snapshot.source.files]);
   const revert = () => { setDraft(selectedFile.contents); if (snapshot.source.dirty) void command("source.revert"); };
-  const selectFile = (path: string) => { if (dirty || path === selectedFile.path) return; void command("source.select", { path }).then((next) => setDraft(next.source.files.find((file) => file.path === path)?.contents ?? "")); };
+  const selectFile = (path: string) => { if ((!collaboration && dirty) || path === selectedFile.path) return; void command("source.select", { path }).then((next) => setDraft(next.source.files.find((file) => file.path === path)?.contents ?? "")); };
   return <section aria-label="Code workspace" className="flex h-full min-h-[500px] min-w-[520px] flex-col bg-canvas">
     <div role="tablist" aria-label="Code surfaces" className={`${mode === "code" ? "flex" : "hidden"} h-9 shrink-0 items-end gap-1 border-b border-border bg-raised px-2`}>{CODE_SURFACES.map((item) => <button key={item.id} type="button" role="tab" aria-selected={surface === item.id} onClick={() => setSurface(item.id)} className="h-8 rounded-t border-b-2 border-transparent px-3 text-xs text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent aria-selected:border-accent aria-selected:bg-surface aria-selected:text-foreground">{item.label}{item.id === "problems" && snapshot.problems.length > 0 ? ` (${snapshot.problems.length})` : ""}</button>)}</div>
-    <header className="flex h-10 shrink-0 items-center border-b border-border bg-surface px-2"><div role="tablist" aria-label="Source files" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">{snapshot.source.files.map((file) => <button type="button" role="tab" aria-selected={file.path === selectedFile.path} aria-controls="source-editor" disabled={dirty && file.path !== selectedFile.path} onClick={() => { setSurface("source"); selectFile(file.path); }} key={file.path} className="h-8 max-w-48 shrink-0 truncate rounded-t border-b-2 border-transparent px-3 text-xs text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40 aria-selected:border-accent aria-selected:bg-raised aria-selected:text-foreground"><Code2 className="mr-1.5 inline size-3" />{file.path}</button>)}</div><span className={`mx-2 shrink-0 text-[10px] uppercase tracking-wider ${dirty ? "text-accent" : "text-emerald-300"}`}>{dirty ? "Unapplied changes" : "Accepted source"}</span><Button size="compact" variant="ghost" aria-label="Show in canvas" disabled={Boolean(sourceNavigationBlocked)} title={sourceNavigationBlocked ?? "Show the source selection in the canvas (Ctrl/Cmd+Shift+Enter)"} onClick={() => setShowInCanvasRequest((request) => request + 1)}><Focus className="size-3" /><span className="hidden xl:inline">Show in canvas</span></Button><Button size="compact" variant="ghost" disabled={!dirty} onClick={revert}><RotateCcw className="size-3" />Revert</Button><Button size="compact" variant="default" disabled={!dirty || sourceReadOnly} onClick={() => void command("source.prepare", { path: selectedFile.path, contents: draft })}><Play className="size-3" />Apply</Button></header>
+    <header className="flex h-10 shrink-0 items-center border-b border-border bg-surface px-2"><div role="tablist" aria-label="Source files" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">{snapshot.source.files.map((file) => <button type="button" role="tab" aria-selected={file.path === selectedFile.path} aria-controls="source-editor" disabled={!collaboration && dirty && file.path !== selectedFile.path} onClick={() => { setSurface("source"); selectFile(file.path); }} key={file.path} className="h-8 max-w-48 shrink-0 truncate rounded-t border-b-2 border-transparent px-3 text-xs text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40 aria-selected:border-accent aria-selected:bg-raised aria-selected:text-foreground"><Code2 className="mr-1.5 inline size-3" />{file.path}</button>)}</div><span className={`mx-2 shrink-0 text-[10px] uppercase tracking-wider ${dirty ? "text-accent" : "text-emerald-300"}`}>{dirty ? "Unapplied changes" : "Accepted source"}</span><Button size="compact" variant="ghost" aria-label="Show in canvas" disabled={Boolean(sourceNavigationBlocked)} title={sourceNavigationBlocked ?? "Show the source selection in the canvas (Ctrl/Cmd+Shift+Enter)"} onClick={() => setShowInCanvasRequest((request) => request + 1)}><Focus className="size-3" /><span className="hidden xl:inline">Show in canvas</span></Button><Button size="compact" variant="ghost" disabled={sourceReadOnly || (collaboration ? !collaboration.textHistory?.canUndo : !dirty)} title={collaboration?.textHistory?.undoUnavailable ?? undefined} onClick={collaboration ? () => { void collaboration.undoText().catch(onSharedError); } : revert}><RotateCcw className="size-3" />{collaboration ? "Undo my typing" : "Revert"}</Button><Button size="compact" variant="default" disabled={!dirty || sourceReadOnly} onClick={() => void command("source.prepare", { path: selectedFile.path, contents: draft })}><Play className="size-3" />Apply</Button></header>
     {readOnlyReason && <p className="shrink-0 border-b border-border px-3 py-2 text-xs text-muted">{readOnlyReason}</p>}
     {snapshot.navigation?.notice && <p role="status" className="shrink-0 border-b border-border px-3 py-1 text-xs text-muted">{snapshot.navigation.notice}</p>}
     <div aria-hidden={surface !== "source" && mode === "code"} inert={surface !== "source" && mode === "code" ? true : undefined} className={`${surface !== "source" && mode === "code" ? "hidden" : "flex"} min-h-0 flex-1 flex-col`}>
-      <div id="source-editor" role="tabpanel" className="flex min-h-0 flex-1"><CodeEditor value={draft} readOnly={sourceReadOnly} onChange={setDraft} navigation={dirty ? null : navigation} highlights={highlights} onShowInCanvas={sourceNavigationBlocked ? undefined : onShowInCanvas} showInCanvasRequest={showInCanvasRequest} languageProject={mode === "design" ? null : languageProject} /></div>
+      <div id="source-editor" role="tabpanel" className="flex min-h-0 flex-1"><CodeEditor value={draft} readOnly={sourceReadOnly} onChange={setDraft} collaboration={collaboration ? {displayId:selectedFile.sharedRevision,onEdit:(edit)=>{void collaboration.editSource(selectedFile.path,edit).catch(onSharedError);},undo:()=>{void collaboration.undoText().catch(onSharedError);},redo:()=>{void collaboration.undoText(true).catch(onSharedError);}} : undefined} navigation={dirty ? null : navigation} highlights={highlights} onShowInCanvas={sourceNavigationBlocked ? undefined : onShowInCanvas} showInCanvasRequest={showInCanvasRequest} languageProject={mode === "design" ? null : languageProject} /></div>
     </div>
-    {mode === "code" && surface !== "source" && <div role="tabpanel" className="min-h-0 flex-1 overflow-auto p-5">{surface === "parameters" && <><ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={dirty || Boolean(readOnlyReason)} metadataActions={metadataActions} blockedReason={metadataBlockedReason} /><AuthoringDocumentProperties document={snapshot.authoringDocument} actions={metadataActions} blockedReason={metadataBlockedReason} /></>}{surface === "problems" && <ProblemsView snapshot={snapshot} onOpen={onProblemOpen} />}{surface === "generated" && <DeclarationPanel rows={snapshot.explorer} navigation={snapshot.navigation} actions={declarationActions} blockedReason={declarationBlockedReason} className="mx-auto w-full max-w-3xl" />}{surface === "artifacts" && (snapshot.source.files.filter((file) => file.path !== "sketch.ts").length ? <ul className="grid gap-2">{snapshot.source.files.filter((file) => file.path !== "sketch.ts").map((file) => <li key={file.path}><button className="flex w-full items-center gap-2 rounded border border-border bg-surface p-3 text-left text-sm outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent" onClick={() => { setSurface("source"); selectFile(file.path); }}><PackageOpen className="size-4 text-accent" /><span className="truncate">{file.path}</span><span className="ml-auto text-[10px] uppercase text-muted">read-only</span></button></li>)}</ul> : <CodeEmpty icon={<PackageOpen />} title="No custom artifacts" detail="Pinned data-only project artifacts appear here." />)}</div>}
+    {mode === "code" && surface !== "source" && <div role="tabpanel" className="min-h-0 flex-1 overflow-auto p-5">{surface === "parameters" && <><ParametersView snapshot={snapshot} onEdit={onParameterEdit} blocked={(!collaboration && dirty) || Boolean(readOnlyReason)} metadataActions={metadataActions} blockedReason={metadataBlockedReason} /><AuthoringDocumentProperties document={snapshot.authoringDocument} actions={metadataActions} blockedReason={metadataBlockedReason} /></>}{surface === "problems" && <ProblemsView snapshot={snapshot} onOpen={onProblemOpen} />}{surface === "generated" && <DeclarationPanel rows={snapshot.explorer} navigation={snapshot.navigation} actions={declarationActions} blockedReason={declarationBlockedReason} className="mx-auto w-full max-w-3xl" />}{surface === "artifacts" && (snapshot.source.files.filter((file) => file.path !== "sketch.ts").length ? <ul className="grid gap-2">{snapshot.source.files.filter((file) => file.path !== "sketch.ts").map((file) => <li key={file.path}><button className="flex w-full items-center gap-2 rounded border border-border bg-surface p-3 text-left text-sm outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent" onClick={() => { setSurface("source"); selectFile(file.path); }}><PackageOpen className="size-4 text-accent" /><span className="truncate">{file.path}</span><span className="ml-auto text-[10px] uppercase text-muted">read-only</span></button></li>)}</ul> : <CodeEmpty icon={<PackageOpen />} title="No custom artifacts" detail="Pinned data-only project artifacts appear here." />)}</div>}
   </section>;
 }
 
