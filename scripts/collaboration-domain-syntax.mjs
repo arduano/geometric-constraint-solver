@@ -51,7 +51,7 @@ export function capturedManagedPropertyTouches(basisSource, capturedSource, prop
     // Unchanged siblings are never claimed.
     let a = before.owners.get(declaration)?.value, b = after.owners.get(declaration)?.value;
     for (const segment of path) { a = a && child(a, segment); b = b && child(b, segment); }
-    if (a && b && tokens(a, before) !== tokens(b, after)) touched.push({ declaration, path });
+    if (a && b ? tokens(a, before) !== tokens(b, after) : Boolean(a) !== Boolean(b)) touched.push({ declaration, path });
   }
   return touched;
 }
@@ -63,4 +63,23 @@ export function replaceOwnedStatements(source, replacements) {
   }
   for (const edit of edits.sort((a, b) => b.start - a.start)) source = source.slice(0, edit.start) + edit.replacement + source.slice(edit.end);
   return source;
+}
+
+export function capturedManagedMetadataTouches(basisSource, capturedSource, metadata) {
+  const a = sourceView(basisSource), b = sourceView(capturedSource), result = [];
+  const expression = (view, item) => {
+    if (item.target.target === "document") {
+      const options = view.call.arguments.length === 2 ? view.call.arguments[0] : undefined;
+      return options && (item.property === "areKeyConstraintsByDefault" ? child(options, "dimensions") : options);
+    }
+    const owner = view.owners.get(item.target.declaration); if (!owner) return undefined;
+    const initializer = owner.statement.declarationList.declarations[0].initializer;
+    if (item.target.target === "parameter") return initializer.arguments[2];
+    return ts.isCallExpression(initializer) && initializer.expression.getText(view.file) === "$.use" ? initializer.arguments[3] : owner.value;
+  };
+  for (const item of metadata) {
+    const before = expression(a, item), after = expression(b, item), first = before && child(before, item.property), second = after && child(after, item.property);
+    if (first && second ? tokens(first, a) !== tokens(second, b) : Boolean(first) !== Boolean(second)) result.push({ mutation: "set_metadata", target: item.target, property: item.property });
+  }
+  return result;
 }

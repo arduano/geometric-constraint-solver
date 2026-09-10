@@ -5,8 +5,9 @@ import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
 import { readWorkspaceSnapshot, evaluateWorkspaceSnapshot } from "./workspace-loader.mjs";
 import { engineModuleUrl, sdkDirectory } from "./workspace-runtime-paths.mjs";
-import { capturedManagedPropertyTouches } from "./collaboration-domain-syntax.mjs";
-import { enrichInventory, prepareStructuralSource, metadataChanges } from "./collaboration-domain-structure.mjs";
+import { capturedManagedPropertyTouches, capturedManagedMetadataTouches } from "./collaboration-domain-syntax.mjs";
+import { enrichInventory, prepareStructuralSource, metadataChanges, compilerMetadata } from "./collaboration-domain-structure.mjs";
+import { canonicalPropertyChanges, canonicalSourceWrites, deepestTouches, semanticPointLens, pointPropertyKey, pointCodec } from "./collaboration-domain-properties.mjs";
 
 const managed = await import(pathToFileURL(resolve(sdkDirectory, "managed.js")).href);
 const { capturedManagedDeclarationChanges } = await import(pathToFileURL(resolve(sdkDirectory, "apply-rebase.js")).href);
@@ -116,6 +117,14 @@ function output(session, compiled, files, extra = {}) {
 const pointOwnerDeclaration = (address) => address.owner.address.owner === "direct_declaration" ? address.owner.address.declaration : address.owner.address.address.invocation;
 const addressKey = (address) => JSON.stringify(sorted(address));
 const pointTargetAddresses = (target) => target.target === "point" ? [target.address] : [target.lower_left, target.upper_right];
+function currentPointAddress(session, compiled, lens) {
+  if (lens?.owner?.address) return lens; // Legacy exact-generation address.
+  const observed = inventory(compiled, session.exportProject()), candidates = session.pointGestureTargets().flatMap(({ target }) => pointTargetAddresses(target));
+  const matching = candidates.filter((address) => equal(semanticPointLens(address, pointCodec(observed, address)), lens));
+  const distinct = new Map(matching.map((address) => [addressKey(address), address]));
+  if (distinct.size !== 1) fail("stale_property", "Semantic point lens is absent, replaced or ambiguous");
+  return [...distinct.values()][0];
+}
 function pointChanges(entry, before, after, ownedAddresses) {
   if (!equal({ ...before, overrides: { ...before.overrides, drafts: [] } }, { ...after, overrides: { ...after.overrides, drafts: [] } })) fail("unsupported_point_change", "Point operation changed non-property design state");
   const previous = new Map(before.overrides.drafts.map(([address, draft]) => [addressKey(address), { address, draft }]));
@@ -236,9 +245,10 @@ async function run(input) {
         ownedAddresses = pointTargetAddresses(input.command.target);
       } else {
         if (!Array.isArray(input.writes) || input.writes.length < 1 || input.writes.length > 4096) fail("invalid_input", "Expected bounded point property writes");
+        const writes = input.writes.map((write) => ({ ...write, address: currentPointAddress(session, reopened.compiled, write.address) }));
         const drafts = new Map(before.overrides.drafts.map(([address, draft]) => [addressKey(address), [address, draft]])), seen = new Set();
         let currentPointKeys;
-        for (const write of input.writes) {
+        for (const write of writes) {
           if (!write || Object.keys(write).sort().join(",") !== "address,expected,value" || write.address?.field !== "point") fail("invalid_input", "Expected exact native point address, expected draft and next draft");
           const key = addressKey(write.address);
           if (seen.has(key)) fail("invalid_input", "Point property occurs twice in one contribution"); seen.add(key);
@@ -252,20 +262,36 @@ async function run(input) {
           if (write.value === null) drafts.delete(key); else drafts.set(key, [write.address, write.value]);
         }
         checkedUpdate(await session.applyOverlay({ ...before.overrides, drafts: [...drafts.values()] }, { expected: session.token }));
-        ownedAddresses = input.writes.map(({ address }) => address);
+        ownedAddresses = writes.map(({ address }) => address);
       }
       if (session.exportProject() !== project) fail("invalid_result", "Point publication changed its source project");
       const entry = reopened.compiled.entry;
       // SourceDocument advances its accepted model identity through an exact
       // identity patch. There is no authored source edit or draft recompilation.
-      return output(session, reopened.compiled, input.files, { patches: [{ path: entry, patch: exactPatch(input.files[entry], input.files[entry]) }],
+      const result = output(session, reopened.compiled, input.files, { patches: [{ path: entry, patch: exactPatch(input.files[entry], input.files[entry]) }],
         preparedContribution: { kind: "point", entry }, pointChanges: pointChanges(entry, before, session.exportDesign(), ownedAddresses) });
+      result.propertyChanges = result.pointChanges.map(({ object, address, before, after }) => ({ object, property: pointPropertyKey(address, pointCodec(result.inventory, address)), before, after }));
+      return result;
     }
     if (input.kind === "structural_inverse") {
-      const next = prepareStructuralSource(reopened.compiled, input.files[reopened.compiled.entry], input.inverse);
-      const prepared = session.prepareAuthoring({ kind: "source", source: next.compiled.normalizedSource }, { expected: session.token });
-      const receipt = managed.compileManagedSource(prepared.request.candidateSource, { patches: reopened.compiled.patches });
-      checkedUpdate(session.applyAuthoring(prepared, { ticketDigest: prepared.request.ticket.ticketDigest, baseSourceDigest: prepared.request.current.ir.source_digest, candidateSourceDigest: receipt.ir.source_digest, compiled: receipt }));
+      const observed = inventory(reopened.compiled, input.model.project, input.files[reopened.compiled.entry]);
+      const removed = new Set(input.inverse.structural.delete?.closure.map((target) => target.object) ?? []);
+      const activeChanges = input.inverse.changes.filter((change) => !removed.has(change.address.target.object));
+      const canonicalWrites = canonicalSourceWrites(reopened.compiled, observed, activeChanges);
+      const inverse = { ...input.inverse, changes: activeChanges.filter((change) => JSON.parse(change.address.property)[0] !== "source") };
+      for (const write of canonicalWrites) {
+        const prior = observed.properties.find((item) => item.declaration === write.declaration && item.path.length === 0);
+        const target = activeChanges.find((change) => change.address.target.object === `${reopened.compiled.entry}#${write.declaration}`).address.target;
+        inverse.changes.push({ address: { target, property: "[]" }, before: prior.value, after: write.value });
+      }
+      const pointInverse = inverse.changes.filter((change) => JSON.parse(change.address.property)[0] === "point" && typeof JSON.parse(change.address.property)[1] === "object");
+      inverse.changes = inverse.changes.filter((change) => !pointInverse.includes(change));
+      const next = prepareStructuralSource(reopened.compiled, input.files[reopened.compiled.entry], inverse);
+      if (next.compiled.normalizedSource !== reopened.compiled.compiled.normalizedSource) {
+        const prepared = session.prepareAuthoring({ kind: "source", source: next.compiled.normalizedSource }, { expected: session.token });
+        const receipt = managed.compileManagedSource(prepared.request.candidateSource, { patches: reopened.compiled.patches });
+        checkedUpdate(session.applyAuthoring(prepared, { ticketDigest: prepared.request.ticket.ticketDigest, baseSourceDigest: prepared.request.current.ir.source_digest, candidateSourceDigest: receipt.ir.source_digest, compiled: receipt }));
+      }
       const restored = input.inverse.structural.create ?? [];
       if (restored.some((item) => item.payload.overrides?.drafts.length || item.payload.overrides?.suppressed_children.length)) {
         const design = session.exportDesign(), overlays = structuredClone(design.overrides);
@@ -289,6 +315,18 @@ async function run(input) {
           overlays[kind].push([fresh, value]);
         }
         checkedUpdate(await session.applyOverlay(overlays, { expected: session.token }));
+      }
+      if (pointInverse.length) {
+        const overlay = structuredClone(session.exportDesign().overrides);
+        for (const change of pointInverse) {
+          const lens = JSON.parse(change.address.property)[1], address = currentPointAddress(session, { ...reopened.compiled, compiled: next.compiled }, lens);
+          if (`${reopened.compiled.entry}#${pointOwnerDeclaration(address)}` !== change.address.target.object) fail("stale_property", "Point inverse semantic target differs from native owner");
+          const index = overlay.drafts.findIndex(([current]) => equal(current, address));
+          if (!equal(index < 0 ? null : overlay.drafts[index][1], change.before)) fail("stale_property", "Point inverse draft no longer matches expected value");
+          if (index >= 0) overlay.drafts.splice(index, 1);
+          if (change.after !== null) overlay.drafts.push([address, change.after]);
+        }
+        checkedUpdate(await session.applyOverlay(overlay, { expected: session.token }));
       }
       const entry = reopened.compiled.entry, files = { ...input.files, [entry]: next.source }, compiled = { ...reopened.compiled, compiled: next.compiled };
       const result = output(session, compiled, files, { valueChanges: [], patches: [{ path: entry, patch: exactPatch(input.files[entry], next.source) }],
@@ -321,6 +359,8 @@ async function run(input) {
       const prior = inventory(reopened.compiled, input.model.project, input.files[entry]);
       result.structuralChanges = observeStructuralChanges(prior, result.inventory, mutation);
       result.metadataChanges = metadataChanges(reopened.compiled, compiled, mutation);
+      result.propertyChanges = canonicalPropertyChanges(reopened.compiled, prior, compiled, result.inventory,
+        mutation.mutation === "set_values" ? mutation.values : mutation.mutation === "set_value" ? [mutation] : [], mutation);
       if (input.kind === "mutation") result.valueChanges = observedValueChanges(prior, result.inventory,
         mutation.mutation === "set_values" ? mutation.values : mutation.mutation === "set_value" ? [mutation] : []);
       return result;
@@ -339,6 +379,8 @@ async function run(input) {
       const basisInventory = inventory(basis, compileProject(engine, basis), basisFiles[basis.entry]);
       const capturedTouches = capturedManagedPropertyTouches(basisFiles[basis.entry], capturedFiles[captured.entry], basisInventory.properties);
       requiredStableDeclarations.push(...capturedTouches.map(({ declaration }) => declaration));
+      const metadataTouches = capturedManagedMetadataTouches(basisFiles[basis.entry], capturedFiles[captured.entry], [...compilerMetadata(basis), ...compilerMetadata(captured)]);
+      requiredStableDeclarations.push(...metadataTouches.map(({ target }) => target.declaration ?? "@document"));
       // A dependency change can alter every invocation without changing entry
       // text. Require the captured declaration lifetimes as a conservative guard.
       if (!equal(basis.patches, captured.patches)) requiredStableDeclarations.push(...basisInventory.objects.map(({ declaration }) => declaration));
@@ -372,6 +414,8 @@ async function run(input) {
       const result = output(session, compiled, files, { requiredStableDeclarations: [...new Set(requiredStableDeclarations)].sort(), patches: changedPaths.filter((path) => typeof input.files[path] === "string" && typeof files[path] === "string").map((path) => ({ path, patch: exactPatch(input.files[path], files[path]) })), preparedContribution: { kind: "apply", changedPaths, candidateFiles: files, capturedFiles } });
       result.structuralChanges = observeStructuralChanges(inventory(latest, input.model.project, input.files[latest.entry]), result.inventory);
       result.metadataChanges = metadataChanges(latest, compiled);
+      const canonicalTouches = capturedManagedPropertyTouches(basisFiles[basis.entry], capturedFiles[captured.entry], [...basisInventory.properties, ...result.inventory.properties]);
+      result.propertyChanges = canonicalPropertyChanges(latest, inventory(latest, input.model.project, input.files[latest.entry]), compiled, result.inventory, deepestTouches(canonicalTouches), metadataTouches);
       const propertyKey = ({ object, path }) => JSON.stringify([object, path]);
       const previous = new Map(inventory(latest, input.model.project).properties.map((property) => [propertyKey(property), property]));
       const touched = new Set(capturedManagedPropertyTouches(basisFiles[basis.entry], capturedFiles[captured.entry], result.inventory.properties)

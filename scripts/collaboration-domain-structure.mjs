@@ -126,13 +126,6 @@ export function prepareStructuralSource(compiled, source, inverse) {
   if (placements.length) ir.statements = placeAll(ir.statements, placements, entry);
   let candidate = managed.compileManagedSource(managed.printManagedSource(ir), { patches: compiled.patches });
   if (inverse.changes.length) {
-    for (const change of inverse.changes) {
-      const path = JSON.parse(change.address.property); if (path[0] !== "metadata") continue;
-      const target = path[1] === "document" ? { target: "document" } : { target: path[1], declaration: declarationFromTarget(entry, change.address.target) };
-      const prior = compilerMetadata({ ...compiled, compiled: candidate }).find((item) => same(item.target, target) && item.property === path[2]);
-      if (!prior || !same(prior.value, change.before)) fail("Metadata inverse no longer matches native compiler value");
-      candidate = managed.applyManagedSketchMutation(candidate, { mutation: "set_metadata", target, property: path[2], value: change.after }, { patches: compiled.patches }).compiled;
-    }
     const values = inverse.changes.flatMap((change) => {
       const declaration = declarationFromTarget(entry, change.address.target); if (removed.has(declaration)) return [];
       const path = JSON.parse(change.address.property);
@@ -141,6 +134,13 @@ export function prepareStructuralSource(compiled, source, inverse) {
       return [{ declaration, path, expected: change.before, value: change.after }];
     });
     if (values.length) candidate = managed.applyManagedSketchMutation(candidate, { mutation: "set_values", values }, { patches: compiled.patches }).compiled;
+    for (const change of inverse.changes) {
+      const path = JSON.parse(change.address.property); if (path[0] !== "metadata") continue;
+      const target = path[1] === "document" ? { target: "document" } : { target: path[1], declaration: declarationFromTarget(entry, change.address.target) };
+      const prior = compilerMetadata({ ...compiled, compiled: candidate }).find((item) => same(item.target, target) && item.property === path[2]);
+      if (!prior || !same(prior.value, change.before)) fail("Metadata inverse no longer matches native compiler value");
+      candidate = managed.applyManagedSketchMutation(candidate, { mutation: "set_metadata", target, property: path[2], value: change.after }, { patches: compiled.patches }).compiled;
+    }
   }
   const edits = localizedManagedSourceEdits(source, candidate.normalizedSource);
   let raw = source; for (const edit of [...edits].sort((a, b) => b.start - a.start)) raw = raw.slice(0, edit.start) + edit.replacement + raw.slice(edit.end);
