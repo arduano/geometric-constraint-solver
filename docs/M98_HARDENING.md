@@ -751,3 +751,15 @@ and source/model retention checks. Failed and passing receipts are retained. Bot
 24-route Tailscale verifications pass and all seven original authored files, original
 authority and existing preview services remain unchanged. No new product defect,
 equation, tolerance, branch or golden change was introduced by this delivery.
+
+
+### Lightweight shared-playground review findings — open
+
+The [playground delivery](M98_PLAYGROUND.md) records two newly observed limitations
+of the qualified collaboration product: 3.7-second accepted peer publication even on
+two circles, and rejected generated-polyline point Undo with a missing `invocation`
+property. Exact live journals, source and browser evidence are preserved. Detached
+domain profiling separates millisecond native solving from repeated cold compiler,
+session and scene reconstruction. No production repair or new qualification is
+claimed. The circle playground avoids the generated-polyline inverse path, passes
+two-tab dragging/Undo and preserves the existing manifold preview.

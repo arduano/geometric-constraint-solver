@@ -20,6 +20,13 @@ Polyline, Center-radius Circle and Two-point aligned Rectangle, plus native poin
 other canvas authoring tools disclose their unavailable routes. M98 supervising-user
 acceptance and milestone closure remain open.
 
+A separate [lightweight shared playground](docs/M98_PLAYGROUND.md) is available on
+Tailscale port 18112, with two movable circles and four degrees of freedom. Private
+Tab A/Tab B links are in `target/m98/playground-preview-location.json`. Its two-tab
+drag/Undo checks pass, but accepted peer updates still take about 3.7 seconds because
+of repeated server reconstruction. The initial polyline arm also exposed rejected
+Undo; both findings and exact evidence remain recorded for follow-up.
+
 [M97 closure and fresh-session handoff](docs/M97_CLOSURE.md) records the supervising
 user's acceptance and unchanged qualified product. Accepted source
 `e26270cb89e5849092145b329d0cf95821a81b27` passes all 244 obligations in
