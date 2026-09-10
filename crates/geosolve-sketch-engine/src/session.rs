@@ -47,6 +47,10 @@ fn error(value: impl std::fmt::Display) -> EngineError {
 }
 
 impl EditableSession {
+    pub(super) fn code_snapshot(&self) -> &geosolve_sketch_code::CodeSessionSnapshot {
+        self.history.snapshot()
+    }
+
     /// Opens authentic source and optional semantic overrides, with no persisted native checkpoint.
     ///
     /// # Errors

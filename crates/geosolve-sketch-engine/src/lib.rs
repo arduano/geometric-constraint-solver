@@ -6,8 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use geosolve_constraint_editor::{IntentNativeBinding, IntentValidationEvidence};
+mod authoring;
 mod profiles;
 mod session;
+pub use authoring::{
+    AuthoringPrediction, AuthoringValueInverse, AuthoringValueWrite, PreparedAuthoringMutation,
+    PreparedAuthoringSource, PreparedAuthoringValues,
+};
 pub use session::{EditableDesign, EditableSession, EditableSessionState};
 
 use geosolve_sketch::{
