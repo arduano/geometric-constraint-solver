@@ -12,6 +12,12 @@ import ts from "typescript";
 import { validatePresentation, validateSketchOptions } from "./presentation.js";
 import type { ParameterOptions, PresentationOptions, SketchOptions } from "./presentation.js";
 import { localizedManagedSourceEdits } from "./source-patch.js";
+import { reconcileDraftSourceEdits } from "./draft-source.js";
+import { capturedManagedDeclarationChanges, rebaseCapturedSourceEdits, CapturedSourceRebaseConflict } from "./apply-rebase.js";
+import type { CapturedManagedSourceRebase, CapturedManagedSourceRebaseInput } from "./apply-rebase.js";
+export type { CapturedManagedSourceRebase, CapturedManagedSourceRebaseInput } from "./apply-rebase.js";
+import type { ManagedDraftReconciliation, ManagedDraftReconciliationInput } from "./draft-source.js";
+export type { ManagedDraftReconciliation, ManagedDraftReconciliationInput, ManagedDraftPendingReason } from "./draft-source.js";
 import type { ManagedSourceEdit, ManagedSourcePatch } from "./source-patch.js";
 export type { ManagedSourceEdit, ManagedSourcePatch } from "./source-patch.js";
 
@@ -418,6 +424,7 @@ export type ManagedSketchMutation =
   };
 
 export type ManagedMutationErrorCode =
+  | "reconciliation_conflict"
   | "invalid_current"
   | "resource_limit"
   | "invalid_draft"
@@ -687,6 +694,91 @@ export function applyManagedSketchSourceMutation(
     source: candidate,
     patch,
   });
+}
+
+/**
+ * Project one server-accepted semantic contribution into the captured working
+ * draft. Recovery syntax is only a lexical map: this never executes the working
+ * source, grants model authority, or marks newer typing as applied.
+ */
+export function reconcileManagedSketchSourceMutation(
+  current: CompiledManagedSource,
+  mutation: ManagedSketchMutation,
+  input: ManagedDraftReconciliationInput,
+  options: ManagedCompileOptions = {},
+): ManagedDraftReconciliation {
+  const accepted = applyManagedSketchSourceMutation(current, mutation, { ...options, source: input.acceptedSource });
+  const acceptedCandidate = applyManagedSourcePatch(input.acceptedSource, input.acceptedPatch);
+  if (acceptedCandidate !== accepted.source || input.acceptedPatch.edits.length !== accepted.patch.edits.length
+    || input.acceptedPatch.edits.some((edit, index) => {
+      const expected = accepted.patch.edits[index]!;
+      return edit.start !== expected.start || edit.end !== expected.end
+        || edit.expected !== expected.expected || edit.replacement !== expected.replacement;
+    })) return mutationFail("invalid_current", "working draft reconciliation requires the exact accepted semantic source patch");
+  const working = input.workingSource;
+  if (typeof working !== "string") return mutationFail("invalid_current", "working draft reconciliation requires raw text");
+  const pending = (reason: import("./draft-source.js").ManagedDraftPendingReason): ManagedDraftReconciliation =>
+    deepFreeze({ status: "pending", source: working, reason });
+  if (working.length > MANAGED_SKETCH_SOURCE_LIMIT || new TextEncoder().encode(working).length > MANAGED_SKETCH_SOURCE_LIMIT) return pending("resource_limit");
+  if (!wellFormedUtf16(working)) return pending("unsupported_structure");
+  if (working === input.acceptedSource) return deepFreeze({ status: "reconciled", source: accepted.source, patch: accepted.patch });
+  const projection = reconcileDraftSourceEdits(input.acceptedSource, accepted.source, working, accepted.patch, mutation);
+  if ("reason" in projection) return pending(projection.reason);
+  const source = spliceManagedSource(working, projection.edits);
+  if (source.length > MANAGED_SKETCH_SOURCE_LIMIT || new TextEncoder().encode(source).length > MANAGED_SKETCH_SOURCE_LIMIT) return pending("resource_limit");
+  const patch = { baseSourceDigest: sha256(working), candidateSourceDigest: sha256(source), edits: projection.edits };
+  applyManagedSourcePatch(working, patch);
+  return deepFreeze({ status: "reconciled", source, patch });
+}
+
+/** Rebase only the immutable Apply capture; this never reads live working text. */
+export function rebaseCapturedManagedSource(
+  input: CapturedManagedSourceRebaseInput,
+  options: ManagedCompileOptions = {},
+): CapturedManagedSourceRebase {
+  const authenticate = (owner: CapturedManagedSourceRebaseInput["basis"]): void => {
+    const current = authenticateMutationCurrent(owner.compiled, options);
+    const raw = compileManagedSourceVersion(owner.source, options, current.ir.format === "geosolve-managed-sketch-ir-v3" ? 3 : 4);
+    if (raw.canonicalIrJson !== current.canonicalIrJson || raw.canonicalArtifactJson !== current.canonicalArtifactJson) {
+      mutationFail("invalid_current", "captured Apply source does not match its compiled authority");
+    }
+  };
+  authenticate(input.basis);
+  authenticate(input.latest);
+  // Invalid captured text must fail even if a later accepted edit could conceal
+  // or remove its error. Compilation records code; Rust still validates model.
+  compileManagedSource(input.capturedSource, options);
+  if (![input.basis.source, input.capturedSource, input.latest.source].every(wellFormedUtf16)) {
+    return mutationFail("invalid_draft", "captured Apply source contains unpaired UTF-16 text");
+  }
+  const invalidated = new Set(input.invalidatedDeclarations ?? []);
+  let edits: readonly ManagedSourceEdit[];
+  let requiredStableDeclarations: readonly string[];
+  try {
+    if (input.capturedSource === input.basis.source) {
+      edits = [];
+      requiredStableDeclarations = [];
+    } else if (input.latest.source === input.basis.source) {
+      requiredStableDeclarations = capturedManagedDeclarationChanges(input.basis.source, input.capturedSource);
+      edits = [{ start: 0, end: input.latest.source.length, expected: input.latest.source, replacement: input.capturedSource }];
+    } else {
+      const rebased = rebaseCapturedSourceEdits(input.basis.source, input.capturedSource, input.latest.source, invalidated);
+      edits = rebased.edits;
+      requiredStableDeclarations = rebased.requiredStableDeclarations;
+    }
+    if (requiredStableDeclarations.some((identity) => invalidated.has(identity))) {
+      throw new CapturedSourceRebaseConflict("captured declaration lifetime changed");
+    }
+  } catch (error) {
+    if (error instanceof CapturedSourceRebaseConflict) return mutationFail("reconciliation_conflict", error.message);
+    throw error;
+  }
+  const source = spliceManagedSource(input.latest.source, edits);
+  const patch = { baseSourceDigest: sha256(input.latest.source), candidateSourceDigest: sha256(source), edits };
+  applyManagedSourcePatch(input.latest.source, patch);
+  const compiled = compileManagedSource(source, options);
+  return deepFreeze({ source, compiled, patch, requiredStableDeclarations,
+    basisSourceDigest: sha256(input.basis.source), capturedSourceDigest: sha256(input.capturedSource), latestSourceDigest: patch.baseSourceDigest });
 }
 
 /** Apply text changes atomically after exact full-source and slice checks. */

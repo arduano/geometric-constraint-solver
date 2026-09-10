@@ -12,6 +12,8 @@ import { recordPatchArtifact } from "../src/compiler.js";
 import {
   applyManagedSketchMutation,
   applyManagedSketchSourceMutation,
+  reconcileManagedSketchSourceMutation,
+  rebaseCapturedManagedSource,
   applyManagedSourcePatch,
   compileManagedSource,
   executeManagedSketch,
@@ -214,6 +216,328 @@ test("legacy managed receipt retains its exact Rust wire shape while localized t
   assert.equal(localized.compiled.canonicalIrJson, legacy.compiled.canonicalIrJson);
   assert.equal("applyManagedSketchSourceMutation" in publicManagedIr, false);
   assert.equal(typeof publicManagedIr.applyManagedSourcePatch, "function");
+});
+
+function reconcileDraft(source: string, working: string, mutation: import("../src/managed.js").ManagedSketchMutation) {
+  const current = compileManagedSource(source);
+  const accepted = applyManagedSketchSourceMutation(current, mutation, { source });
+  return reconcileManagedSketchSourceMutation(current, mutation, {
+    acceptedSource: source, workingSource: working, acceptedPatch: accepted.patch,
+  });
+}
+
+test("working draft reconciliation preserves disjoint invalid code and overwrites the identified property", () => {
+  const mutation = { mutation: "set_value", declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 } } as const;
+  const working = localizedSource.replace("12, 0", "27, 0").replace("return { a, b };", 'const unfinished = { label: "🧭";\n  return { a, b };');
+  assert.throws(() => compileManagedSource(working));
+  const result = reconcileDraft(localizedSource, working, mutation);
+  assert.equal(result.status, "reconciled");
+  if (result.status !== "reconciled") return;
+  assert.equal(result.source, working.replace("27, 0", "14, 0"));
+  assert.deepEqual(result.patch.edits, [{ start: working.indexOf("27, 0"), end: working.indexOf("27, 0") + 2, expected: "27", replacement: "14" }]);
+  assert.equal(applyManagedSourcePatch(working, result.patch), result.source);
+  assert.throws(() => compileManagedSource(result.source));
+  assert.ok(!("compiled" in result));
+});
+
+test("working draft reconciliation preserves unapplied sibling typing and follows stable symbols through variable rename", () => {
+  const working = localizedSource.replace("const a=", "const renamed=").replace("12, 0", "42, 0").replace("end:[4,1]", "end:[9,2]").replace("return { a, b }", "return { renamed, b }");
+  const result = reconcileDraft(localizedSource, working, {
+    mutation: "set_value", declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 },
+  });
+  assert.equal(result.status, "reconciled");
+  assert.equal(result.source, working.replace("42, 0", "14, 0"));
+  assert.ok(result.source.includes("end:[9,2]"));
+});
+
+test("working draft value batches reconcile atomically or preserve the complete original draft", () => {
+  const mutation = { mutation: "set_values", values: [
+    { declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 } },
+    { declaration: "b", path: ["end", 0], expected: { kind: "number", value: 4 }, value: { kind: "number", value: 6 } },
+  ] } as const;
+  const valid = localizedSource.replace("12, 0", "20, 0").replace("end:[4,1]", "end:[8,1]") + "\nconst invalid =";
+  const result = reconcileDraft(localizedSource, valid, mutation);
+  assert.equal(result.status, "reconciled");
+  assert.equal(result.source, valid.replace("20, 0", "14, 0").replace("end:[8,1]", "end:[6,1]"));
+  for (const damaged of [
+    valid.replace('"b", {start:', '"b", {broken:'),
+    valid.replace('end:[8,1]', 'end:'),
+    valid.replace('"b", {start:', '"renamed-id", {start:'),
+    valid.replace('const b = $.geometry.segment', 'const b = $.geometry.polyline'),
+  ]) {
+    const pending = reconcileDraft(localizedSource, damaged, mutation);
+    // A changed unrelated property remains safe if the exact target survives.
+    if (damaged.includes("broken:")) { assert.equal(pending.status, "reconciled"); continue; }
+    assert.equal(pending.status, "pending");
+    assert.equal(pending.source, damaged);
+    assert.ok(!("patch" in pending));
+  }
+});
+
+test("working draft recovery refuses duplicate property, stable ID and variable owners", () => {
+  const mutation = { mutation: "set_value", declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 } } as const;
+  for (const working of [
+    localizedSource.replace("end:[12, 0]", "end:[12, 0], end:[99, 0]"),
+    localizedSource.replace('segment("b",', 'segment("a",'),
+    localizedSource.replace("const b =", "const a ="),
+    localizedSource.replace("end:[12, 0]", "...other, end:[12, 0]"),
+    localizedSource.replace("end:[12, 0]", 'end:[12, 0], ["end"]:[99,0]'),
+  ]) {
+    const result = reconcileDraft(localizedSource, working, mutation);
+    assert.equal(result.status, "pending");
+    assert.equal(result.source, working);
+    if (result.status === "pending") assert.equal(result.reason, "ownership_ambiguous");
+  }
+});
+
+test("working draft named and implicit parameters overwrite literals without touching unit comments", () => {
+  const make = (named: boolean) => localizedSource.replace("  // 🧭", `  const width=${named ? '$.parameter("channelWidth", mm(/* keep */ 12))' : 'mm(/* keep */ 12)'};\n  // 🧭`);
+  for (const named of [false, true]) {
+    const source = make(named);
+    const working = source.replace("/* keep */ 12", "/* keep */ 2.1e1") + "\nimport {";
+    const result = reconcileDraft(source, working, {
+      mutation: "set_value", declaration: named ? "channelWidth" : "width", path: [],
+      expected: { kind: "unit", value: { unit: "mm", value: 12 } }, value: { kind: "unit", value: { unit: "mm", value: 14 } },
+    });
+    assert.equal(result.status, "reconciled");
+    assert.equal(result.source, working.replace("2.1e1", "14"));
+  }
+});
+
+test("working draft metadata overwrites document, declaration and parameter intent under invalid suffixes", () => {
+  const source = localizedSource.replace("sketch(($)", 'sketch({title:"Original", dimensions:{areKeyConstraintsByDefault:false}}, ($)')
+    .replace("start : [0, 0]", 'label:"Passage", start : [0, 0]')
+    .replace("  // 🧭", '  const width=$.parameter("channelWidth",mm(12),{isKeyParameter:false});\n  // 🧭');
+  const cases = [
+    { target: { target: "document" }, property: "title", value: { kind: "string", value: "Server 🧭" }, before: 'title:"Original"', typed: 'title:"Draft 🧭"', after: 'title:"Server 🧭"' },
+    { target: { target: "document" }, property: "areKeyConstraintsByDefault", value: { kind: "bool", value: true }, before: "areKeyConstraintsByDefault:false", typed: "areKeyConstraintsByDefault:false", after: "areKeyConstraintsByDefault:true" },
+    { target: { target: "declaration", declaration: "a" }, property: "label", value: { kind: "string", value: "Water" }, before: 'label:"Passage"', typed: 'label:"Draft"', after: 'label:"Water"' },
+    { target: { target: "parameter", declaration: "channelWidth" }, property: "isKeyParameter", value: { kind: "bool", value: true }, before: "isKeyParameter:false", typed: "isKeyParameter:false", after: "isKeyParameter:true" },
+  ] as const;
+  for (const entry of cases) {
+    const working = source.replace(entry.before, entry.typed) + "\nconst invalid =";
+    const result = reconcileDraft(source, working, { mutation: "set_metadata", target: entry.target, property: entry.property, value: entry.value });
+    assert.equal(result.status, "reconciled", entry.property);
+    assert.equal(result.source, working.replace(entry.typed, entry.after));
+  }
+});
+
+test("working draft keyed polyline values follow stable member keys through unapplied insertion", () => {
+  const source = `"use geosolve sketch"; import {sketch} from "@geosolve/sketch-code"; export default sketch(($)=>{
+const line=$.geometry.polyline("line",{vertices:[{key:"a",position:[0,0]},{key:"b",position:[12,0]}]});return {line};});`;
+  const working = source.replace('{key:"b",position:[12,0]}', '{key:"new",position:[5,4]},{key:"b",position:[27,0]}') + "\nconst invalid =";
+  const result = reconcileDraft(source, working, {
+    mutation: "set_value", declaration: "line", path: ["vertices", 1, "position", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 },
+  });
+  assert.equal(result.status, "reconciled");
+  assert.equal(result.source, working.replace('position:[27,0]', 'position:[14,0]'));
+});
+
+test("working draft reconciliation authenticates accepted contribution and declines unsafe structural placement", () => {
+  const current = compileManagedSource(localizedSource);
+  const mutation = { mutation: "set_value", declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 } } as const;
+  const accepted = applyManagedSketchSourceMutation(current, mutation, { source: localizedSource });
+  const forged = localizedSource.replace("12, 0", "15, 0");
+  assert.throws(() => reconcileManagedSketchSourceMutation(current, mutation, {
+    acceptedSource: localizedSource, workingSource: localizedSource + "\nconst invalid =", acceptedPatch: {
+      baseSourceDigest: managedContentDigest(localizedSource), candidateSourceDigest: managedContentDigest(forged),
+      edits: [{ start: 0, end: localizedSource.length, expected: localizedSource, replacement: forged }],
+    },
+  }), /exact accepted semantic source patch/u);
+  const unchangedBody = localizedSource + "\nconst invalid =";
+  const insertion = { mutation: "insert_declarations", declarations: [circleDraft("circle", "circle")] } as const;
+  const safe = reconcileDraft(localizedSource, unchangedBody, insertion);
+  assert.equal(safe.status, "reconciled");
+  assert.ok(safe.source.endsWith("\nconst invalid ="));
+  const source = unchangedBody.replace("return { a, b }", "return { a }");
+  const pending = reconcileDraft(localizedSource, source, {
+    mutation: "insert_declarations", declarations: [circleDraft("circle", "circle")],
+  });
+  assert.equal(pending.status, "pending");
+  assert.equal(pending.source, source);
+  const exact = reconcileManagedSketchSourceMutation(current, mutation, {
+    acceptedSource: localizedSource, workingSource: localizedSource, acceptedPatch: accepted.patch,
+  });
+  assert.equal(exact.status, "reconciled");
+  assert.equal(exact.source, accepted.source);
+});
+
+test("working draft server same-value writes still replace earlier text and do not execute working code", () => {
+  const source = localizedSource;
+  const working = source.replace("12, 0", "27, 0") + '\nglobalThis["__geosolveDraftMustNeverExecute"] = true;\nthrow new Error("draft executed");';
+  const result = reconcileDraft(source, working, {
+    mutation: "set_value", declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 12 },
+  });
+  assert.equal(result.status, "reconciled");
+  assert.equal(result.source, working.replace("27, 0", "12, 0"));
+  assert.equal("__geosolveDraftMustNeverExecute" in globalThis, false);
+  assert.throws(() => compileManagedSource(result.source));
+});
+
+test("working draft incomplete target text and changed array shape remain explicit pending", () => {
+  const mutation = { mutation: "set_value", declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 } } as const;
+  for (const working of [
+    localizedSource.replace("end:[12, 0]", "end:[, 0]"),
+    localizedSource.replace("end:[12, 0]", "end:[12, 0, 2]"),
+    localizedSource.replace("end:[12, 0]", "end:[]"),
+    localizedSource.replace("end:[12, 0]", "end:[12 + , 0]"),
+    localizedSource.replace("segment('a'", "segment('unclosed"),
+    localizedSource.replace("export default sketch", "export default other"),
+  ]) {
+    const result = reconcileDraft(localizedSource, working, mutation);
+    assert.equal(result.status, "pending", working);
+    assert.equal(result.source, working);
+  }
+});
+
+test("working draft metadata insertion and reset use exact lexical owner while siblings continue typing", () => {
+  const working = localizedSource.replace("end:[4,1]", "end:[9,2]") + "\nconst invalid =";
+  const add = { mutation: "set_metadata", target: { target: "declaration", declaration: "a" }, property: "label", value: { kind: "string", value: "Passage 🧭" } } as const;
+  const result = reconcileDraft(localizedSource, working, add);
+  assert.equal(result.status, "reconciled");
+  assert.ok(result.source.includes("end:[9,2]"));
+  assert.ok(result.source.includes('label: "Passage 🧭"'));
+  const accepted = applyManagedSketchSourceMutation(compileManagedSource(localizedSource), add, { source: localizedSource });
+  const reset = reconcileDraft(accepted.source, result.source, { mutation: "set_metadata", target: add.target, property: "label", value: null });
+  assert.equal(reset.status, "reconciled");
+  assert.ok(!reset.source.includes("label:"));
+  assert.ok(reset.source.includes("end:[9,2]"));
+  const conflict = reconcileDraft(localizedSource, working.replace("end:[12, 0]", "end:[27,0]"), add);
+  assert.equal(conflict.status, "pending");
+});
+
+test("working draft resource and malformed UTF-16 refusal preserve exact raw draft", () => {
+  const mutation = { mutation: "set_value", declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 } } as const;
+  for (const [working, reason] of [
+    [localizedSource + "\ud800", "unsupported_structure"],
+    [localizedSource + "x".repeat(4 * 1024 * 1024), "resource_limit"],
+  ] as const) {
+    const result = reconcileDraft(localizedSource, working, mutation);
+    assert.equal(result.status, "pending");
+    assert.equal(result.source, working);
+    if (result.status === "pending") assert.equal(result.reason, reason);
+  }
+});
+
+function rebaseCapture(source: string, captured: string, latest: string, invalidatedDeclarations: readonly string[] = []) {
+  return rebaseCapturedManagedSource({
+    basis: { source, compiled: compileManagedSource(source) }, capturedSource: captured,
+    latest: { source: latest, compiled: compileManagedSource(latest) }, invalidatedDeclarations,
+  });
+}
+
+test("captured Apply preserves disjoint latest properties and exact capture comments and Unicode", () => {
+  const captured = localizedSource.replace("12, 0", "14, 0").replace("/* endpoint */", "/* captured 🧭 日本語 */");
+  const latest = localizedSource.replace("start : [0, 0]", "start : [3, 4]").replace("end:[4,1]", "end:[9,2]");
+  const result = rebaseCapture(localizedSource, captured, latest);
+  assert.equal(result.source, captured.replace("start : [0, 0]", "start : [3, 4]").replace("end:[4,1]", "end:[9,2]"));
+  assert.equal(applyManagedSourcePatch(latest, result.patch), result.source);
+  assert.deepEqual(result.requiredStableDeclarations, ["a"]);
+  assert.equal(result.patch.edits.length, 1);
+  assert.ok(result.patch.edits[0]!.start > 0);
+  assert.ok(result.patch.edits[0]!.end < latest.length);
+  assert.equal(result.compiled.canonicalArtifactJson, compileManagedSource(result.source).canonicalArtifactJson);
+});
+
+test("captured Apply uses the immutable capture and wins same-property races", () => {
+  let working = localizedSource.replace("12, 0", "14, 0");
+  const captured = working;
+  working = working.replace("14, 0", "99, 0");
+  const latest = localizedSource.replace("12, 0", "27, 0");
+  const result = rebaseCapture(localizedSource, captured, latest);
+  assert.equal(result.source, captured);
+  assert.ok(!result.source.includes("99, 0"));
+  assert.ok(working.includes("99, 0"));
+  assert.equal(result.capturedSourceDigest, managedContentDigest(captured));
+  const reverse = rebaseCapture(localizedSource, latest, captured);
+  assert.equal(reverse.source, latest);
+});
+
+test("captured Apply preserves latest unrelated construction, removal and statement order", () => {
+  const captured = localizedSource.replace("12, 0", "14, 0");
+  const current = compileManagedSource(localizedSource);
+  const inserted = applyManagedSketchSourceMutation(current, { mutation: "insert_declarations", declarations: [circleDraft("circle", "circle")] }, { source: localizedSource });
+  const added = rebaseCapture(localizedSource, captured, inserted.source);
+  assert.equal(added.source, inserted.source.replace("12, 0", "14, 0"));
+  assert.equal(added.compiled.artifact.declarations.length, 3);
+  const deleted = applyManagedSketchSourceMutation(current, { mutation: "delete", target: { target: "declaration", declaration: "b" } }, { source: localizedSource });
+  const removed = rebaseCapture(localizedSource, captured, deleted.source);
+  assert.equal(removed.source, deleted.source.replace("12, 0", "14, 0"));
+  const reordered = applyManagedSketchSourceMutation(current, { mutation: "reorder_declaration", declaration: "b", before: "a" }, { source: localizedSource });
+  const moved = rebaseCapture(localizedSource, captured, reordered.source);
+  assert.equal(moved.source, reordered.source.replace("12, 0", "14, 0"));
+});
+
+test("captured Apply merges parameter and document metadata properties independently", () => {
+  const source = localizedSource.replace("sketch(($)", 'sketch({title:"Original",description:"Original help"}, ($)')
+    .replace("  // 🧭", '  const width=$.parameter("channelWidth",mm(12),{label:"Width",isKeyParameter:false});\n  // 🧭');
+  const captured = source.replace("mm(12)", "mm(14)").replace('title:"Original"', 'title:"Captured 🧭"').replace('label:"Width"', 'label:"Captured width"');
+  const latest = source.replace("mm(12)", "mm(27)").replace("isKeyParameter:false", "isKeyParameter:true").replace('description:"Original help"', 'description:"Latest help"');
+  const result = rebaseCapture(source, captured, latest);
+  assert.equal(result.source, captured.replace("isKeyParameter:false", "isKeyParameter:true").replace('description:"Original help"', 'description:"Latest help"'));
+  assert.deepEqual(result.requiredStableDeclarations, ["channelWidth"]);
+  assert.equal(result.compiled.artifact.document?.title, "Captured 🧭");
+  assert.equal(result.compiled.artifact.document?.description, "Latest help");
+});
+
+test("captured Apply metadata additions and removals retain latest sibling values", () => {
+  const source = localizedSource.replace("start : [0, 0]", 'label:"Old", start : [0, 0]');
+  const captured = source.replace('label:"Old", ', "").replace("12, 0", "14, 0");
+  const latest = source.replace("start : [0, 0]", 'description:"Latest", start : [3, 4]');
+  const result = rebaseCapture(source, captured, latest);
+  assert.ok(!result.source.includes('label:"Old"'));
+  assert.ok(result.source.includes('description:"Latest"'));
+  assert.ok(result.source.includes("end:[14, 0]"));
+  assert.ok(result.source.includes("start : [3, 4]"));
+});
+
+test("captured Apply rejects changed target lifecycle and unsafe captured structure without partial output", () => {
+  const captured = localizedSource.replace("12, 0", "14, 0");
+  const current = compileManagedSource(localizedSource);
+  const deleted = applyManagedSketchSourceMutation(current, { mutation: "delete", target: { target: "declaration", declaration: "a" } }, { source: localizedSource });
+  assert.throws(() => rebaseCapture(localizedSource, captured, deleted.source), /deleted or renamed/u);
+  assert.throws(() => rebaseCapture(localizedSource, captured, localizedSource.replace("segment('a'", "segment('new-id'")), /deleted or renamed/u);
+  const newFamily = localizedSource.replace("$.geometry.segment('a',{ start : [0, 0], end:[12, 0] /* endpoint */ })", "$.geometry.quadraticBezier('a',{start:[0,0],control:[6,2],end:[12,0]})");
+  assert.throws(() => rebaseCapture(localizedSource, captured, newFamily), /changed its family/u);
+  assert.throws(() => rebaseCapture(localizedSource, captured, localizedSource.replace("12, 0", "27, 0"), ["a"]), /changed lifetime/u);
+  // Even equal bytes after delete/recreate need the host's generation finding.
+  assert.throws(() => rebaseCapture(localizedSource, captured, localizedSource, ["a"]), /lifetime changed/u);
+  const changedStructure = applyManagedSketchSourceMutation(current, { mutation: "insert_declarations", declarations: [circleDraft("circle", "circle")] }, { source: localizedSource });
+  assert.throws(() => rebaseCapture(localizedSource, changedStructure.source, localizedSource.replace("12, 0", "27, 0")), /lifecycle changed concurrently/u);
+  assert.equal(current.canonicalArtifactJson, compileManagedSource(localizedSource).canonicalArtifactJson);
+});
+
+test("captured Apply identity cases preserve exact text and invalid capture never falls back", () => {
+  const captured = localizedSource.replace("12, 0", "14, 0") + "// captured footer 🧭\n";
+  assert.equal(rebaseCapture(localizedSource, captured, localizedSource).source, captured);
+  const latest = localizedSource.replace("end:[4,1]", "end:[9,2]");
+  const unchanged = rebaseCapture(localizedSource, localizedSource, latest);
+  assert.equal(unchanged.source, latest);
+  assert.deepEqual(unchanged.patch.edits, []);
+  assert.throws(() => rebaseCapture(localizedSource, localizedSource + "\nconst invalid =", latest));
+  assert.throws(() => rebaseCapturedManagedSource({
+    basis: { source: latest, compiled: compileManagedSource(localizedSource) }, capturedSource: captured,
+    latest: { source: latest, compiled: compileManagedSource(latest) },
+  }), /does not match its compiled authority/u);
+});
+
+test("captured Apply rejects moved keyed array ownership instead of editing a different point", () => {
+  const source = `"use geosolve sketch"; import {sketch} from "@geosolve/sketch-code"; export default sketch(($)=>{
+const line=$.geometry.polyline("line",{vertices:[{key:"a",position:[0,0]},{key:"b",position:[12,0]}]});return {line};});`;
+  const captured = source.replace("position:[12,0]", "position:[14,0]");
+  const latest = source.replace('{key:"a",position:[0,0]},{key:"b",position:[12,0]}', '{key:"b",position:[12,0]},{key:"a",position:[0,0]}');
+  assert.throws(() => rebaseCapture(source, captured, latest), /keyed array ownership changed/u);
+});
+
+test("captured Apply retains comment-only contributions without reverting latest numeric values", () => {
+  const captured = localizedSource.replace("keep import trivia", "captured import 🧭")
+    .replace("export default", "// captured sketch envelope\nexport default")
+    .replace("// b annotation", "// captured b annotation")
+    .replace("keep output shorthand", "captured output note") + "// captured footer 日本語\n";
+  const latest = localizedSource.replace("12, 0", "27, 0").replace("end:[4,1]", "end:[9,2]");
+  const result = rebaseCapture(localizedSource, captured, latest);
+  assert.equal(result.source, captured.replace("12, 0", "27, 0").replace("end:[4,1]", "end:[9,2]"));
+  assert.deepEqual(result.requiredStableDeclarations, []);
 });
 
 function circleDraft(
