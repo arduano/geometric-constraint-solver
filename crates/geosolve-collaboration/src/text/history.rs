@@ -6,7 +6,7 @@ use super::{
     file_layout, files_object, find_file, text_object,
 };
 use crate::protocol::OperationId;
-use automerge::{CursorPosition, MoveCursor, ReadDoc};
+use automerge::{Cursor, CursorPosition, MoveCursor, ObjId, ReadDoc, ScalarValueRef, ValueRef};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -621,7 +621,36 @@ fn delta_bytes(delta: &Delta) -> usize {
 }
 fn atoms(document: &SharedTextDocument, path: &str) -> Result<Vec<Atom>, SharedTextError> {
     let object = text_object(&document.document, &files_object(&document.document)?, path)?;
-    let text = document.document.text(&object)?;
+    let mut atoms = Vec::new();
+    // Public sequence iteration exposes each visible scalar's originating op.
+    // Cursor's public op-ID parser preserves the existing MoveCursor::After
+    // witness bytes without a tree search for every character in the file.
+    for item in document.document.list_range(&object, ..) {
+        if atoms.len() >= document.limits.max_file_bytes {
+            return Err(SharedTextError::ResourceLimit("text scalar count"));
+        }
+        let ValueRef::Scalar(ScalarValueRef::Str(value)) = &item.value else {
+            return atoms_by_cursor(document, &object);
+        };
+        let mut scalars = value.chars();
+        let Some(scalar) = scalars.next() else {
+            return atoms_by_cursor(document, &object);
+        };
+        if scalars.next().is_some() {
+            return atoms_by_cursor(document, &object);
+        }
+        let id = Cursor::try_from(item.id().to_string())?.to_bytes();
+        atoms.push(Atom { id, scalar });
+    }
+    Ok(atoms)
+}
+// Imported documents can contain non-scalar text operations. Preserve the
+// existing cursor semantics for those uncommon representations as well.
+fn atoms_by_cursor(
+    document: &SharedTextDocument,
+    object: &ObjId,
+) -> Result<Vec<Atom>, SharedTextError> {
+    let text = document.document.text(object)?;
     if text.chars().count() > document.limits.max_file_bytes {
         return Err(SharedTextError::ResourceLimit("text scalar count"));
     }
@@ -631,7 +660,7 @@ fn atoms(document: &SharedTextDocument, path: &str) -> Result<Vec<Atom>, SharedT
         let id = document
             .document
             .get_cursor_moving(
-                &object,
+                object,
                 CursorPosition::Index(offset),
                 None,
                 MoveCursor::After,
@@ -1076,4 +1105,95 @@ fn apply_spans(
                 .map_err(|_| SharedTextError::InvalidPosition)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod atom_iteration_tests {
+    use super::*;
+    use crate::SharedTextLimits;
+    use automerge::transaction::Transactable;
+    use std::time::Instant;
+
+    fn assert_cursor_identity(document: &SharedTextDocument) {
+        let object = text_object(
+            &document.document,
+            &files_object(&document.document).unwrap(),
+            "main.ts",
+        )
+        .unwrap();
+        let started = Instant::now();
+        let expected = atoms_by_cursor(document, &object).unwrap();
+        let indexed = started.elapsed();
+        let started = Instant::now();
+        let actual = atoms(document, "main.ts").unwrap();
+        let bulk = started.elapsed();
+        assert_eq!(actual, expected);
+        assert_eq!(
+            actual.iter().map(|atom| atom.scalar).collect::<String>(),
+            document.capture().text("main.ts").unwrap()
+        );
+        eprintln!(
+            "text atoms: {} scalars, indexed {:?}, bulk {:?}",
+            actual.len(),
+            indexed,
+            bulk
+        );
+    }
+
+    #[test]
+    fn bulk_atoms_preserve_exact_utf16_cursor_witnesses_across_concurrent_unicode_changes() {
+        let mut alice = SharedTextDocument::new(b"alice", SharedTextLimits::default()).unwrap();
+        alice
+            .create_file("main.ts", &"a😀e\u{301}\n".repeat(5000))
+            .unwrap();
+        assert_cursor_identity(&alice);
+        let mut bob = alice.fork(b"bob").unwrap();
+        alice.splice("main.ts", 1, 2, "🐟").unwrap();
+        bob.splice("main.ts", 4, 0, "β").unwrap();
+        alice.merge(&bob).unwrap();
+        assert_cursor_identity(&alice);
+        alice.splice("main.ts", 0, 3, "").unwrap();
+        assert_cursor_identity(&alice);
+        let restored =
+            SharedTextDocument::load(&alice.save(), b"restored", SharedTextLimits::default())
+                .unwrap();
+        assert_cursor_identity(&restored);
+    }
+
+    #[test]
+    fn imported_multiscalar_text_operations_retain_the_cursor_path() {
+        let mut document = SharedTextDocument::new(b"alice", SharedTextLimits::default()).unwrap();
+        document.create_file("main.ts", "abc").unwrap();
+        let object = text_object(
+            &document.document,
+            &files_object(&document.document).unwrap(),
+            "main.ts",
+        )
+        .unwrap();
+        let mut transaction = document.document.transaction();
+        transaction.insert(&object, 1, "multi😀").unwrap();
+        transaction.commit();
+        assert_cursor_identity(&document);
+    }
+
+    #[test]
+    fn imported_sequence_overwrites_and_conflicts_keep_cursor_identity() {
+        let mut alice = SharedTextDocument::new(b"alice", SharedTextLimits::default()).unwrap();
+        alice.create_file("main.ts", "a😀bc").unwrap();
+        let mut bob = alice.fork(b"bob").unwrap();
+        for (document, value) in [(&mut alice, "A"), (&mut bob, "B")] {
+            let object = text_object(
+                &document.document,
+                &files_object(&document.document).unwrap(),
+                "main.ts",
+            )
+            .unwrap();
+            let mut transaction = document.document.transaction();
+            transaction.put(&object, 0, value).unwrap();
+            transaction.commit();
+            assert_cursor_identity(document);
+        }
+        alice.merge(&bob).unwrap();
+        assert_cursor_identity(&alice);
+    }
 }

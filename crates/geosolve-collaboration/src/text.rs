@@ -386,6 +386,22 @@ impl SharedTextDocument {
         expected: &TextRevision,
         edits: &[TextEdit],
     ) -> Result<HistoricalTextEdit, SharedTextError> {
+        if edits
+            .iter()
+            .any(|edit| !matches!(edit, TextEdit::Splice { .. }))
+        {
+            return Err(SharedTextError::FileLifecycleRequiresOrder);
+        }
+        if expected == &self.revision() {
+            // The displayed frontier already is the current causal branch.
+            // Ordinary edit admission supplies the same atomicity and bounds
+            // without forking and re-importing the whole text document.
+            let local_revision = self.edit(edits)?;
+            return Ok(HistoricalTextEdit {
+                snapshot: self.capture(),
+                local_revision,
+            });
+        }
         let mut historical = self.typing_basis(expected, edits)?;
         historical.apply_edits(expected, edits)?;
         let local_revision = historical.revision();

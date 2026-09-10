@@ -613,3 +613,62 @@ fn queued_typing_uses_returned_local_branch_until_unseen_remote_text_is_displaye
     bob.merge(&alice).unwrap();
     assert_eq!(alice.capture(), bob.capture());
 }
+
+#[test]
+fn current_displayed_typing_keeps_atomic_unicode_and_file_lifecycle_guards() {
+    let (mut alice, _) = seeded("a😀bc");
+    let before = alice.capture();
+    let insert = TextEdit::Splice {
+        path: "main.ts".into(),
+        start_utf16: 0,
+        delete_utf16: 0,
+        insert: "x".into(),
+    };
+    assert!(
+        alice
+            .edit_from_revision(
+                before.revision(),
+                &[
+                    insert.clone(),
+                    TextEdit::Splice {
+                        path: "main.ts".into(),
+                        start_utf16: 3,
+                        delete_utf16: 0,
+                        insert: "split surrogate".into(),
+                    }
+                ]
+            )
+            .is_err()
+    );
+    assert_eq!(alice.capture(), before);
+    assert_eq!(
+        alice.edit_from_revision(
+            before.revision(),
+            &[
+                insert,
+                TextEdit::RemoveFile {
+                    path: "main.ts".into()
+                }
+            ]
+        ),
+        Err(SharedTextError::FileLifecycleRequiresOrder)
+    );
+    assert_eq!(alice.capture(), before);
+    let result = alice
+        .edit_from_revision(
+            before.revision(),
+            &[TextEdit::Splice {
+                path: "main.ts".into(),
+                start_utf16: 1,
+                delete_utf16: 2,
+                insert: "🐟".into(),
+            }],
+        )
+        .unwrap();
+    assert_eq!(result.snapshot.text("main.ts"), Some("a🐟bc"));
+    assert_eq!(result.local_revision, alice.revision());
+    assert_eq!(
+        alice.snapshot_at(&result.local_revision).unwrap(),
+        result.snapshot
+    );
+}
