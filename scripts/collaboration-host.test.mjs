@@ -70,6 +70,29 @@ test("held domain solve leaves text persistence, new admissions and committed re
   assert.equal(host.snapshot().acceptedRevision, 2);
 });
 
+test("native model preparation waits for an in-flight text fsync without holding domain compute on the ingress queue", async (t) => {
+  const hold=deferred(),reached=deferred();let enabled=false;
+  const {host}=await fixture(t,{storageOptions:{fault:async(point)=>{if(enabled&&point==="before-append"){reached.resolve();await hold.promise;}}}});
+  t.after(()=>hold.resolve());
+  const connection=await host.connect({userId:"alice",role:"editor"},"tab");
+  await host.admit(submit(connection,"edit"));
+  let sourcePending=false,sourceCommitted=false;
+  enabled=true;
+  const text=host.writeText(connection,()=>{
+    sourcePending=true;
+    return {checkpoint:checkpoints(configuration.initialInput,"later typing").source,commit(){sourcePending=false;sourceCommitted=true;},fail(){sourcePending=false;}};
+  });
+  await reached.promise;
+  let prepared=false;
+  const read=host.withCommittedState(()=>{
+    assert.equal(sourcePending,false,"native source preparation cannot run during persistence");
+    assert.equal(sourceCommitted,true);prepared=true;return "native-prepared";
+  });
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(prepared,false);
+  enabled=false;hold.resolve();await text;assert.equal(await read,"native-prepared");
+  assert.equal(host.snapshot().needsRecovery,false);
+});
+
 test("lost terminal ACK poisons authoring and recovery reconstructs the durably committed model", async (t) => {
   let enabled = false;
   const { host, open } = await fixture(t, { storageOptions: { fault: async (point) => { if (enabled && point === "journal-synced") throw Error("ACK lost after sync"); } } });

@@ -122,6 +122,17 @@ export async function openDurableCollaborationHost(folder, {
       receipt(connection, requestId) { live(); return authority.receipt(connection, requestId); },
       resume(connection, after) { live(); return authority.resume(connection, after); },
       subscribe(listener) { live(); if (listeners.size >= 256 || typeof listener !== "function") throw failure("backpressure", "Collaboration subscription limit"); listeners.add(listener); return () => listeners.delete(listener); },
+      /** Trusted short native preparation between fsynced source stages. Do
+       * compiler/solver work outside this callback; never expose it on the wire.
+       */
+      withCommittedState(action) {
+        if (typeof action !== "function") throw Error("Trusted synchronous preparation is required");
+        return enqueue(() => {
+          const result = action();
+          if (result && typeof result.then === "function") throw Error("Preparation callback must be synchronous");
+          return result;
+        }, true);
+      },
       /** Trusted host capture factory runs in the short transaction queue, fixing
        * Apply's immutable capture at admission. Clients cannot submit attachments.
        */
