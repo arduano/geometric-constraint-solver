@@ -118,6 +118,10 @@ export class CollaborationClient<Document=unknown> {
   async textDelta(revision:TextRevision):Promise<{sourceSequence:number;workingRevision:TextRevision;changes:readonly (readonly number[])[];history:UserTextHistory}>{
     return this.rpc("text-state",{revision});
   }
+  /** Disposable compute: never persisted, queued with edits, or automatically retried. */
+  async authoringPreview<T=unknown>(request:unknown,signal?:AbortSignal):Promise<T>{
+    return await(await this.response("authoring-preview",request,true,signal)).json() as T;
+  }
   async scene<T>():Promise<{revision:number;value:T}>{
     const response=await this.response("scene");
     const revision=Number(response.headers.get("X-Geosolve-Revision"));
@@ -266,18 +270,19 @@ export class CollaborationClient<Document=unknown> {
   private async rpc<T>(route:string,body?:unknown,authenticated=true):Promise<T>{
     return await(await this.response(route,body,authenticated)).json() as T;
   }
-  private async response(route:string,body?:unknown,authenticated=true):Promise<Response>{
+  private async response(route:string,body?:unknown,authenticated=true,signal?:AbortSignal):Promise<Response>{
     if(this.closed)throw Error("Collaboration client is closed");
     await this.options.assertOwned?.();
     if(this.closed)throw Error("Collaboration client is closed");
     if(authenticated&&!this.token)throw Error("Document connection is unavailable; pending work is retained");
     const controller=new AbortController();this.requests.add(controller);
+    const abort=()=>controller.abort();signal?.addEventListener("abort",abort,{once:true});if(signal?.aborted)abort();
     const timeout=setTimeout(()=>controller.abort(),this.options.requestTimeoutMs??30_000);
     try{
       const response=await this.fetch(new URL(route,this.base),{method:body===undefined?"GET":"POST",headers:{...(body===undefined?{}:{"Content-Type":"application/json"}),...(authenticated?{Authorization:`Bearer ${this.token}`}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:controller.signal});
       // Keep timeout/cancellation active through the body, not only headers.
       // Snapshots can be large, but a response cannot grow memory without bound.
-      const maximum=route==="scene"?64*1024*1024:128*1024*1024;
+      const maximum=route==="scene"||route==="authoring-preview"?64*1024*1024:128*1024*1024;
       const reader=response.body?.getReader(),chunks:Uint8Array[]=[];let length=0;
       if(reader)try{
         while(true){const part=await reader.read();if(part.done)break;length+=part.value.byteLength;
@@ -286,7 +291,7 @@ export class CollaborationClient<Document=unknown> {
       const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
       const complete=new Response(bytes,{status:response.status,headers:response.headers});
       await this.checkResponse(complete);return complete;
-    }finally{clearTimeout(timeout);this.requests.delete(controller);}
+    }finally{clearTimeout(timeout);signal?.removeEventListener("abort",abort);this.requests.delete(controller);}
   }
   private async checkResponse(response:Response):Promise<void>{
     if(response.ok)return;

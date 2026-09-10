@@ -90,3 +90,28 @@ test("pending work cannot be sent into another document and persistence failure 
   const blocked=new CollaborationClient({baseUrl:"http://test/api/collaboration/",inviteToken:"invite",clientId:"tab",fetch:f.fetch,savePending:()=>{throw Error("storage full");}});
   try{await blocked.connect();const count=f.calls.length;await assert.rejects(blocked.writeText([Uint8Array.of(1)],"unsaved"),/storage full/);assert.equal(f.calls.length,count);assert.equal(blocked.pendingRequests.length,1);}finally{blocked.dispose();}
 });
+
+test("authoring previews are abortable ephemeral RPCs and never enter the durable retry outbox",async()=>{
+  let previewSignal;
+  const started=deferred();
+  const f=fixture({"authoring-preview":async(_body,options)=>{
+    assert.equal(options.headers.Authorization,`Bearer ${"a".repeat(64)}`);
+    previewSignal=options.signal;started.resolve();
+    return await new Promise((_resolve,reject)=>options.signal.addEventListener("abort",()=>reject(Error("preview aborted")),{once:true}));
+  }});
+  try{
+    await f.client.connect();
+    const savedBefore=f.saved.length,abort=new AbortController();
+    const pending=f.client.authoringPreview({action:"begin",basis:{revision:0}},abort.signal);
+    const rejection=assert.rejects(pending,/preview aborted/);
+    await started.promise;
+    await f.client.writeText([Uint8Array.of(7)],"typing-during-preview");
+    assert.deepEqual(f.client.pendingRequests,[]);
+    abort.abort();await rejection;
+    assert.equal(previewSignal.aborted,true);
+    await f.client.retry();
+    assert.equal(f.calls.filter(call=>call.route==="authoring-preview").length,1);
+    assert.ok(f.saved.slice(savedBefore).every(checkpoint=>checkpoint.requests.every(request=>request.kind!=="authoring-preview")));
+    assert.equal(f.client.connected,true);
+  }finally{f.client.dispose();}
+});
