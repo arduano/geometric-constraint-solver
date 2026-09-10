@@ -21,6 +21,8 @@ async function mount() {
     if(!token)throw Error("Open the shared document invitation provided by its host.");
     sessionStorage.setItem(`${key}.invite`,token);
     const params=new URLSearchParams(location.search),resume=params.get("recoverClient");
+    const authoringPreview=params.get("authoringPreview")??undefined;
+    if(authoringPreview!==undefined&&authoringPreview!=="client"&&authoringPreview!=="server")throw Error("Authoring preview mode must be client or server");
     if(resume){sessionStorage.setItem(`${key}.client`,resume);params.delete("recoverClient");}
     history.replaceState(null,"",location.pathname+"?"+params);
     const identity=await acquireCollaborationTabIdentity({scope:key,...(resume?{mode:"resume" as const}:{})});
@@ -34,7 +36,7 @@ async function mount() {
     const previousActive=activeRaw.read();
     const recovery=[...recovered,...previousActive];if(recovery.length)raw.write(recovery);
     activeRaw.write([]);
-    collaboration=new CollaborativeWorkbenchAdapter({baseUrl,inviteToken:token,clientId:identity.clientId,pending,
+    collaboration=new CollaborativeWorkbenchAdapter({baseUrl,inviteToken:token,clientId:identity.clientId,pending,authoringPreview,
       assertOwned:()=>identity.assertOwned(),savePending:checkpoint=>identity.storage.write(checkpoint),saveSourceIntents:intents=>{if(sessionStorage.getItem(rawOwnerKey)!==rawOwner)throw Error("This page no longer owns its source recovery buffer");activeRaw.write(intents);}});
     const shared=collaboration;
     const download=(name:string,value:unknown)=>{

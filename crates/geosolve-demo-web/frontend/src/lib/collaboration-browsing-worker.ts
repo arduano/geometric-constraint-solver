@@ -6,9 +6,9 @@ import type { InteractionSeed, InteractionState } from "./local-interaction-work
 import type { ManagedSketchMutation } from "./managed-compiler";
 
 export type BrowsingNavigationCommand = "navigation.rows.select" | "navigation.source.select";
-export type BrowsingEditCommand = "parameter.edit" | "dimensions.edit" | "authoring.metadata.set" | "declaration.move" | "declaration.delete";
+export type BrowsingEditCommand = "parameter.edit" | "dimensions.edit" | "authoring.metadata.set" | "authoring.parameter.extract" | "declaration.move" | "declaration.delete" | "declaration.suppression.set";
 
-export type BrowsingChrome = Pick<WorkbenchSnapshot, "explorer" | "navigation" | "dimensions" | "parameters" | "problems"> & {
+export type BrowsingChrome = Partial<Pick<WorkbenchSnapshot["presentation"], "constructionVisible" | "visibilityRestoreAvailable">> & Pick<WorkbenchSnapshot, "explorer" | "navigation" | "dimensions" | "parameters" | "problems"> & {
   readonly authoringDocument: WorkbenchSnapshot["authoringDocument"] | null;
   readonly selection: WorkbenchSnapshot["selection"] | null;
   readonly selectedGeometryRole: WorkbenchSnapshot["presentation"]["selectedGeometryRole"] | null;

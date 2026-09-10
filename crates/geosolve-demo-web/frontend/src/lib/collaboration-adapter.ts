@@ -12,13 +12,15 @@ import { WorkbenchActivity } from "./workbench-activity";
 import { assertToolCatalog, type ToolCatalog } from "./tool-catalog";
 import type { SourceEditorEdit } from "../components/code-editor";
 import { LocalAuthoringWorker, type LocalAuthoringClient, type AuthoringModel, type AuthoringPreview, type AuthoringView } from "./collaboration-authoring-adapter";
-import { CollaborationAuthoringController } from "./collaboration-authoring-controller";
+import { CollaborationAuthoringController, supportsCollaborativeConstruction } from "./collaboration-authoring-controller";
 import { projectAuthoredSource, projectCanonicalSource, projectSourceNavigation, type SourceProjection } from "./collaboration-source-projection";
 import type { BrowsingNavigationCommand, BrowsingEditCommand, BrowsingChrome } from "./collaboration-browsing-worker";
 import type { ManagedSketchMutation } from "./managed-compiler";
 import { LocalBrowsingWorker, type LocalBrowsingClient } from "./collaboration-browsing-adapter";
+import { createRemoteAuthoringClient } from "./collaboration-remote-authoring";
 
 export interface CollaborativeDocument extends SourceSnapshot {
+  readonly authoringPreview?:{readonly server:boolean;readonly preferred:"client"|"server"};
   readonly textHistory:UserTextHistory;
   readonly semanticHistory:UserSemanticHistory;
   readonly targets:Readonly<Record<string,SemanticTarget>>;
@@ -35,7 +37,7 @@ export interface CollaborativeDocument extends SourceSnapshot {
 export interface CollaborativeScene {snapshot:WorkbenchSnapshot;seed:InteractionSeed;toolCatalog:ToolCatalog}
 export type CollaborativeTextClient=Pick<CollaborationTextWorker,"open"|"edit"|"receive"|"undo"|"redo"|"snapshot"|"dispose">;
 interface PeerPresence {userId:string;clientId:string;sequence:number;cursor:readonly[number,number]|null;selection:readonly string[]}
-const localCommands=new Set(["view.fit","view.origin","view.grid.toggle","dimensions.hover","dimensions.hover.clear","dimensions.navigation.begin","dimensions.navigation.end","dimensions.mode","dimensions.pin","dimensions.clearPins","dimensions.focus","selection.clear"]);
+const localCommands=new Set(["explorer.visibility.set","explorer.visibility.isolate","explorer.visibility.restore","view.construction.toggle","view.fit","view.origin","view.grid.toggle","dimensions.hover","dimensions.hover.clear","dimensions.navigation.begin","dimensions.navigation.end","dimensions.mode","dimensions.pin","dimensions.clearPins","dimensions.focus","selection.clear"]);
 
 /** Each tab owns presentation, shared-text replica and authoring context.
  * The client package owns retry/order; native workers own text and interaction.
@@ -48,7 +50,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
   state?:CollaborationState<CollaborativeDocument>;
   private readonly local:LocalInteractionClient;
   private readonly text:CollaborativeTextClient;
-  private readonly authoring?:CollaborationAuthoringController;
+  private authoring?:CollaborationAuthoringController;
   private readonly browsing?:LocalBrowsingClient;
   private browsingReady:Promise<unknown>=Promise.resolve();
   private browsingGeneration=0;
@@ -98,19 +100,14 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
   private readonly saveSourceIntents?:(intents:readonly {path:string;edit:SourceEditorEdit}[])=>void;
   recoveryActions:readonly {label:string;run:()=>void}[]=[];
   get responsiveCanvas(){return this.installed!==undefined;}
+  readonly selectedGeometryRoleBlockedReason="Changing existing curve roles is not available in shared editing yet";
   get editingBlockedReason(){return this.client.connection?.role==="viewer"?"You have view access to this document.":undefined;}
   get pending(){return this.client.pendingRequests;}
   get pendingSourceEdits(){return [...this.sourceIntents.values()];}
   get textHistory(){return this.state?.document.textHistory;}
-  constructor(options:{baseUrl:string;inviteToken:string;clientId:string;pending?:PendingCheckpoint;fetch?:typeof fetch;assertOwned?:()=>void|Promise<void>;saveSourceIntents?:(intents:readonly {path:string;edit:SourceEditorEdit}[])=>void;savePending?:(checkpoint:PendingCheckpoint)=>void|Promise<void>},local:LocalInteractionClient=new LocalInteractionWorker(),text:CollaborativeTextClient=new CollaborationTextWorker(),authoring:LocalAuthoringClient|null=new LocalAuthoringWorker(),browsing:LocalBrowsingClient|null=new LocalBrowsingWorker()){
+  constructor(private readonly options:{baseUrl:string;inviteToken:string;clientId:string;authoringPreview?:"client"|"server";pending?:PendingCheckpoint;fetch?:typeof fetch;assertOwned?:()=>void|Promise<void>;saveSourceIntents?:(intents:readonly {path:string;edit:SourceEditorEdit}[])=>void;savePending?:(checkpoint:PendingCheckpoint)=>void|Promise<void>},local:LocalInteractionClient=new LocalInteractionWorker(),text:CollaborativeTextClient=new CollaborationTextWorker(),private readonly suppliedAuthoring:LocalAuthoringClient|null|undefined=undefined,browsing:LocalBrowsingClient|null=new LocalBrowsingWorker()){
     this.local=local;this.text=text;this.saveSourceIntents=options.saveSourceIntents;
     this.browsing=browsing??undefined;
-    if(authoring)this.authoring=new CollaborationAuthoringController(authoring,{
-      paint:preview=>this.presentPrediction(preview),
-      changed:()=>{if(this.installed)this.notify(this.projectText());},
-      error:error=>{this.notice=String(error);this.notify();},
-      commit:(model,command,kind)=>this.commitGesture(model,command,kind),
-    });
     this.client=new CollaborationClient({...options,
       onState:state=>{
         if(this.state&&state.authority.acceptedRevision<this.state.authority.acceptedRevision)return;
@@ -145,10 +142,23 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
       },
     });
   }
+  private initializeAuthoring(server:{server:boolean;preferred:"client"|"server"}|undefined){
+    if(this.authoring||this.suppliedAuthoring===null)return;
+    const mode=this.options.authoringPreview??server?.preferred??"client";
+    if(!this.suppliedAuthoring&&mode==="server"&&!server?.server)throw Error("Server authoring preview is unavailable for this document");
+    const authoring=this.suppliedAuthoring??(mode==="server"?createRemoteAuthoringClient((request,signal)=>this.client.authoringPreview(request,signal)):new LocalAuthoringWorker());
+    this.authoring=new CollaborationAuthoringController(authoring,{
+      paint:preview=>this.presentPrediction(preview),
+      changed:()=>{if(this.installed)this.notify(this.projectText());},
+      error:error=>{this.notice=String(error);this.notify();},
+      commit:(model,command,kind)=>this.commitGesture(model,command,kind),
+    });
+  }
   construct(){
     if(this.opening)return this.opening;
     this.opening=(async()=>{
       const state=await this.client.connect();
+      this.initializeAuthoring(state.document.authoringPreview);
       this.latestText=await this.text.open(state.document.textActor,state.document.textCheckpoint);
       this.displayedText=this.latestText.snapshot;
       this.displayedBranches.set(this.displayId,this.displayedText);
@@ -159,14 +169,17 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
   async snapshot(){if(!this.installed)throw Error("Shared workbench has not opened");return this.installed;}
   async toolCatalog():Promise<ToolCatalog>{
     if(!this.catalog)throw Error("Shared tool catalog has not loaded");
-    return this.catalog;
+    const unavailableReason=this.editingBlockedReason??(!this.authoring?"Authoring is unavailable in this session":undefined);
+    return {...this.catalog,geometryRole:{...this.catalog.geometryRole,unavailableReason},sections:this.catalog.sections.map(section=>({...section,commands:section.commands.map(command=>({...command,
+      unavailableReason:unavailableReason??(supportsCollaborativeConstruction(command.toolId)?undefined:"This tool is not available in shared editing yet"),
+    }))}))};
   }
   subscribe(listener:(snapshot?:WorkbenchSnapshot)=>void){this.listeners.add(listener);return()=>{this.listeners.delete(listener);};}
   async refresh(){await this.client.refresh();await this.receiveText();return this.refreshScene();}
   async dispatch(input:{version:2;command:string;payload?:unknown}):Promise<WorkbenchSnapshot>{
     if(localCommands.has(input.command))return await this.localUpdate("dispatch",input)??this.snapshot();
     if(input.command==="navigation.rows.select"||input.command==="navigation.source.select")return this.navigate(input.command,input.payload);
-    if(["parameter.edit","dimensions.edit","authoring.metadata.set","declaration.move","declaration.delete"].includes(input.command))return this.editStructured(input.command as BrowsingEditCommand,input.payload);
+    if(["parameter.edit","dimensions.edit","authoring.metadata.set","authoring.parameter.extract","declaration.move","declaration.delete","declaration.suppression.set"].includes(input.command))return this.editStructured(input.command as BrowsingEditCommand,input.payload);
     if(input.command==="tool.select"){
       if(!this.authoring)throw Error("Local authoring is unavailable");
       if(this.editingBlockedReason&&(input.payload as {id:string}).id!=="select")throw Error(this.editingBlockedReason);
@@ -192,11 +205,20 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
   }
   private async navigate(command:BrowsingNavigationCommand,payload:unknown):Promise<WorkbenchSnapshot>{
     if(!this.browsing||!this.view)throw Error("Local browsing is unavailable");
+    const requested=payload as {authority?:unknown}|null;
+    if(!requested||typeof requested.authority!=="string"||requested.authority!==this.installed?.navigation?.authority)throw Error("This navigation belongs to an older source revision");
     if(command==="navigation.source.select"){
       if(this.installed?.source.dirty||this.sourceIntents.size)throw Error("Apply the shared draft before navigating from its source");
       const span=payload as {path:string;from:number;to:number};payload={...span,...projectCanonicalSource(span,this.state?.document.sourceProjection)};
     }
     const view=this.view,generation=this.browsingGeneration;await this.browsingReady;
+    // The server supplies the first Explorer while the local worker opens. Its
+    // native authority must be translated after validating the displayed input.
+    const current=await this.browsing.present(view);
+    if(generation!==this.browsingGeneration||current.model.revision!==this.modelRevision||JSON.stringify(view.state)!==JSON.stringify(this.view?.state))throw Error("Your selection changed; select the item again");
+    const authority=current.chrome.navigation?.authority;
+    if(!authority)throw Error("Accepted navigation details are still loading");
+    payload={...(payload as Record<string,unknown>),authority};
     const result=await this.browsing.navigate(view,command,payload);
     return this.queueLocal(async()=>{
       if(generation!==this.browsingGeneration||JSON.stringify(view.state)!==JSON.stringify(this.view?.state))throw Error("Your selection changed; select the item again");
@@ -231,8 +253,8 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
       const values=mutation.mutation==="set_value"?[mutation]:mutation.values;
       intent={action:"values",writes:values.map(write=>({target:target(write.declaration),declaration:write.declaration,path:write.path,value:write.value}))};
     }else{
-      const names=mutation.mutation==="reorder_declaration"?[mutation.declaration,...(mutation.before?[mutation.before]:[])]:
-        (mutation.mutation==="set_metadata"||mutation.mutation==="delete")&&(mutation.target.target==="declaration"||mutation.target.target==="parameter")?[mutation.target.declaration]:[];
+      const names=mutation.mutation==="extract_parameter"?[mutation.declaration]:mutation.mutation==="reorder_declaration"?[mutation.declaration,...(mutation.before?[mutation.before]:[])]:
+        (mutation.mutation==="set_metadata"||mutation.mutation==="delete"||mutation.mutation==="set_suppressed")&&(mutation.target.target==="declaration"||mutation.target.target==="parameter")?[mutation.target.declaration]:mutation.mutation==="set_suppressed"&&mutation.target.target==="generated"?[mutation.target.address.invocation]:[];
       const targets=mutation.mutation==="set_metadata"&&mutation.target.target==="document"?[document.documentTarget]:[...new Set(names)].map(target);
       if(!targets.length)throw Error("This shared source mutation has no supported explicit declaration target");
       const value:{action:string;mutation:ManagedSketchMutation;targets:SemanticTarget[];deletion?:{roots:SemanticTarget[];closure:SemanticTarget[]}}={action:"mutation",mutation,targets};
@@ -397,14 +419,14 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     })().catch(error=>{if(!this.disposed){this.notice=String(error);this.notify();}}).finally(()=>{this.browsingScheduled=false;if(this.browsingAgain&&!this.disposed)this.scheduleBrowsing();});
   }
   private installChrome(value:BrowsingChrome){
-    const {authoringDocument,selection,selectedGeometryRole,...chrome}=value;
+    const {authoringDocument,selection,selectedGeometryRole,constructionVisible,visibilityRestoreAvailable,...chrome}=value;
     const selected=new Set(value.navigation?.rows.filter(row=>row.state==="selected").map(row=>row.id));
     const declarations:string[]=[];
     const collect=(rows:typeof value.explorer)=>{for(const row of rows){if(selected.has(row.id)&&row.source){const projection=this.state?.document.sourceProjection;for(const span of projection?.spans??[])if(row.source.from<span.canonical.to&&row.source.to>span.canonical.from){const object=this.state?.document.inventory.objects.find(item=>item.declaration===span.declaration)?.object;if(object)declarations.push(object);}}collect(row.children);}};
     collect(value.explorer);this.ownSelection=[...new Set(declarations)];this.schedulePresence();
     const projected=projectSourceNavigation(chrome.navigation,chrome.explorer,this.state?.document.sourceProjection);
     this.installed=stampCanvasSnapshot({...this.installed!,...chrome,...projected,authoringDocument:authoringDocument??undefined,selection:selection?{...selection,source:selection.source&&projectAuthoredSource(selection.source,this.state?.document.sourceProjection)}:undefined,
-      presentation:{...this.installed!.presentation,selectedGeometryRole:selectedGeometryRole??undefined}},++this.sequence);
+      presentation:{...this.installed!.presentation,selectedGeometryRole:selectedGeometryRole??undefined,constructionVisible:constructionVisible??this.installed!.presentation.constructionVisible,visibilityRestoreAvailable:visibilityRestoreAvailable??this.installed!.presentation.visibilityRestoreAvailable}},++this.sequence);
   }
   private restoreAcceptedFrame(){if(this.installed&&this.acceptedFrame)this.installed=stampCanvasSnapshot(markCanvasOnlySnapshot({...this.installed,frame:this.acceptedFrame}),++this.sequence);}
   private presentPrediction(preview:AuthoringPreview){

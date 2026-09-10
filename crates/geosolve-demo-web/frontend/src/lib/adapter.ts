@@ -286,6 +286,7 @@ export interface WorkbenchAdapter {
   readonly activity?: WorkbenchActivity;
   /** Accepted-scene interaction can continue while remote edits are pending. */
   readonly responsiveCanvas?: boolean;
+  readonly selectedGeometryRoleBlockedReason?: string;
   construct(input: { version: 2; persistedProject?: string }): Promise<WorkbenchSnapshot>;
   toolCatalog(): Promise<ToolCatalog>;
   snapshot(): Promise<WorkbenchSnapshot>;

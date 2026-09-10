@@ -4,7 +4,8 @@ import type { AuthoringPointer } from "./local-interaction-adapter";
 import type { AuthoringModel, AuthoringPreview, AuthoringView, LocalAuthoringClient } from "./collaboration-authoring-adapter";
 import type { ConstructionTool, PointGestureCommand, ConstructionCommand } from "../../../../../packages/geosolve-engine/src/index";
 
-const tools:Readonly<Record<string,ConstructionTool>>={segment:"segment",polyline:"polyline",circle:"center_radius_circle",rectangle:"two_point_aligned_rectangle"};
+const tools:Readonly<Record<string,ConstructionTool>>={segment:"segment",polyline:"polyline","center-radius-circle":"center_radius_circle","two-point-aligned-rectangle":"two_point_aligned_rectangle"};
+export function supportsCollaborativeConstruction(tool:string){return Object.hasOwn(tools,tool);}
 type Gesture={id:number;generation:number;kind:"point"|"construction";pointerId?:number;sequence:number;started:boolean;projection:AuthoringPointer;origin:readonly[number,number];model:AuthoringModel;view:AuthoringView};
 /** Event routing only. Rust owns picking/projection, inference, geometry and
  * command replay. This queue is never awaited by canvas input/navigation. */
@@ -31,7 +32,7 @@ export class CollaborationAuthoringController {
     this.ready=this.worker.replace(model);void this.ready.catch(this.callbacks.error);this.callbacks.changed();
   }
   select(tool:string){
-    if(tool!=="select"&&!tools[tool])throw Error("This tool is not connected to collaborative authoring yet");
+    if(tool!=="select"&&!supportsCollaborativeConstruction(tool))throw Error("This tool is not connected to collaborative authoring yet");
     this.cancel();this.tool=tool;this.callbacks.changed();
   }
   toggleRole(){this.cancel();this.role=this.role==="profile"?"construction":"profile";this.callbacks.changed();}

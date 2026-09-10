@@ -10,9 +10,10 @@ import type { LocalBrowsingClient } from "./collaboration-browsing-adapter";
 const handles:CollaborativeWorkbenchAdapter[]=[];
 afterEach(()=>{for(const handle of handles.splice(0))handle.dispose();});
 function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(yes=>{resolve=yes;});return{promise,resolve};}
-async function fixture(fixtureOptions:{textResponse?:()=>Promise<Response>;browsing?:LocalBrowsingClient}={}){
+async function fixture(fixtureOptions:{textResponse?:()=>Promise<Response>;browsing?:LocalBrowsingClient;navigation?:WorkbenchSnapshot["navigation"]}={}){
   const mock=new MockWorkbenchAdapter(),snapshot=await mock.snapshot(),toolCatalog=await mock.toolCatalog();
   snapshot.authoringDocument={authority:"server-inspector",title:"Sketch",description:"",areKeyConstraintsByDefault:false,editable:true};
+  if(fixtureOptions.navigation)snapshot.navigation=fixtureOptions.navigation;
   const textSnapshot:TextWorkerUpdate={snapshot:{revision:{heads:[]},files:{"sketch.ts":"const a = 1;"}},changes:[],checkpoint:[],history:{undo:0,redo:0}};
   const text:CollaborativeTextClient={open:async()=>textSnapshot,edit:async()=>textSnapshot,receive:async()=>textSnapshot,undo:async()=>textSnapshot,redo:async()=>textSnapshot,snapshot:async()=>textSnapshot,dispose:()=>{}};
   let localCount=0;
@@ -80,6 +81,26 @@ it("keeps each tab's local frame independent and validates the genuine catalog b
   expect((await a.adapter.toolCatalog()).version).toBe(1);
 });
 
+it("maps an initial Explorer action to the ready local navigation authority",async()=>{
+  const mock=await new MockWorkbenchAdapter().snapshot(),ready=deferred<void>();
+  const identity={documentEpoch:"epoch",revision:0,sourceDesignDigest:"digest"};
+  const chrome={explorer:mock.explorer,navigation:{authority:"local-navigation",selectionKey:"empty",rows:[],sources:[],itemCount:0,canNavigateSource:true},dimensions:mock.dimensions,parameters:mock.parameters,problems:mock.problems,selection:null,selectedGeometryRole:null,authoringDocument:null};
+  const browsing:LocalBrowsingClient={
+    replace:async()=>{await ready.promise;return {kind:"ready",model:identity};},
+    present:async(view)=>({kind:"chrome",model:identity,view,chrome}),
+    navigate:vi.fn(async(view,command,payload)=>{
+      expect(command).toBe("navigation.rows.select");
+      expect(payload).toEqual({authority:"local-navigation",ids:["managed:planDepth"],mode:"replace"});
+      return {kind:"navigation" as const,model:identity,view,chrome,state:view.state};
+    }),describe:vi.fn(),dispose:()=>ready.resolve(),
+  };
+  const f=await fixture({browsing,navigation:{...chrome.navigation,authority:"server-navigation"}});
+  await expect(f.adapter.dispatch({version:2,command:"navigation.rows.select",payload:{authority:"obsolete-navigation",ids:["managed:planDepth"],mode:"replace"}})).rejects.toThrow(/older source revision/);
+  const navigating=f.adapter.dispatch({version:2,command:"navigation.rows.select",payload:{authority:"server-navigation",ids:["managed:planDepth"],mode:"replace"}});
+  ready.resolve();await navigating;
+  expect(browsing.navigate).toHaveBeenCalledOnce();expect(f.requests).not.toContain("commands");
+});
+
 it("keeps queued edits on their actually displayed branch even after a remote refresh was emitted",async()=>{
   const f=await fixture(),original=(await f.adapter.snapshot()).source.files.find(file=>file.path==="sketch.ts")!;
   const before="const a = 1;",remote="// Bob\n",first=before+"a",second=first+"b";
@@ -119,4 +140,44 @@ it("continues native typing and navigation while the first text acknowledgement 
   expect((await f.adapter.wheel({version:2,x:100,y:100,deltaX:0,deltaY:-90,ctrl:false}))?.frame.ariaLabel).toBe("local 1");
   held.resolve(f.json({sourceSequence:2}));
   await vi.waitFor(()=>expect(f.adapter.pendingSourceEdits).toEqual([]));
+});
+
+
+it("routes visibility, isolation and construction visibility locally while a server edit is held",async()=>{
+  const f=await fixture();
+  const editing=f.adapter.submit({kind:"semantic",basisRevision:0,payload:{action:"values",writes:[]}});
+  await vi.waitFor(()=>expect(f.requests).toContain("commands"));
+  const requests=f.requests.length;
+  for(const [command,payload] of [["explorer.visibility.set",{id:"row",visible:false}],["explorer.visibility.isolate",{id:"group"}],["explorer.visibility.restore",{}],["view.construction.toggle",{}]] as const){
+    await f.adapter.dispatch({version:2,command,payload});
+  }
+  expect(f.localCount()).toBe(4);expect(f.requests.length).toBe(requests);
+  const requestId=f.adapter.pending[0]!.requestId;
+  f.held.resolve(f.json({receipt:{operation:{userId:"alice",clientId:"tab",requestId},admission:1,outcome:{status:"rejected",code:"fixture",message:"done"}}}));
+  await editing;
+});
+
+it("sends suppression through the guarded semantic source mutation gateway",async()=>{
+  const mock=await new MockWorkbenchAdapter().snapshot(),identity={documentEpoch:"epoch",revision:0,sourceDesignDigest:"digest"};
+  const browsing:LocalBrowsingClient={
+    replace:async()=>({kind:"ready",model:identity}),
+    present:async view=>({kind:"chrome",model:identity,view,chrome:{explorer:mock.explorer,navigation:mock.navigation,dimensions:mock.dimensions,parameters:mock.parameters,problems:mock.problems,
+      selection:null,selectedGeometryRole:null,authoringDocument:{authority:"local-inspector",title:"Sketch",description:"",areKeyConstraintsByDefault:false,editable:true}}}),
+    navigate:vi.fn(),describe:vi.fn(async(view,authority,command,payload)=>{
+      expect(authority).toBe("local-inspector");expect(command).toBe("declaration.suppression.set");expect(payload).toEqual({id:"managed:segment1",suppressed:true});
+      return {kind:"mutation",model:identity,view,mutation:{mutation:"set_suppressed",target:{target:"declaration",declaration:"segment1"},suppressed:true}} as const;
+    }),dispose:()=>{},
+  };
+  const f=await fixture({browsing}),target={object:"object1",generation:0};
+  Object.assign(f.adapter.state!.document,{targets:{object1:target},inventory:{objects:[{object:"object1",declaration:"segment1",dependencies:[]}],properties:[]}});
+  const submit=vi.spyOn(f.adapter,"submit").mockResolvedValue({operation:{userId:"alice",clientId:"tab",requestId:"suppression"},admission:1,outcome:{status:"rejected",code:"fixture",message:"stop before refresh"}});
+  await expect(f.adapter.dispatch({version:2,command:"declaration.suppression.set",payload:{id:"managed:segment1",suppressed:true}})).rejects.toThrow("stop before refresh");
+  expect(submit).toHaveBeenCalledWith({kind:"semantic",basisRevision:0,payload:{action:"mutation",targets:[target],mutation:{mutation:"set_suppressed",target:{target:"declaration",declaration:"segment1"},suppressed:true}}});
+});
+
+it("preserves the full catalog and labels unavailable authoring capabilities",async()=>{
+  const f=await fixture(),catalog=await f.adapter.toolCatalog(),native=await new MockWorkbenchAdapter().toolCatalog();
+  expect(catalog.sections.flatMap(section=>section.commands).map(command=>command.toolId)).toEqual(native.sections.flatMap(section=>section.commands).map(command=>command.toolId));
+  expect(catalog.select.unavailableReason).toBeUndefined();
+  expect(catalog.sections.flatMap(section=>section.commands).every(command=>Boolean(command.unavailableReason))).toBe(true);
 });

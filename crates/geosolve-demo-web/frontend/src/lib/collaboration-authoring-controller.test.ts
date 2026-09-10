@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { expect, it, vi } from "vitest";
-import { CollaborationAuthoringController } from "./collaboration-authoring-controller";
+import { CollaborationAuthoringController, supportsCollaborativeConstruction } from "./collaboration-authoring-controller";
 import type { AuthoringModel, AuthoringPreview, AuthoringView, LocalAuthoringClient } from "./collaboration-authoring-adapter";
 import type { AuthoringPointer } from "./local-interaction-adapter";
 import type { PointerSample } from "./adapter";
@@ -52,4 +52,11 @@ it("does not publish prediction or a terminal after the accepted model changes",
   f.controller.replace({...model,revision:2});hold.resolve(f.preview);
   await vi.waitFor(()=>expect(f.worker.replace).toHaveBeenCalledTimes(2));
   await Promise.resolve();expect(f.callbacks.paint).not.toHaveBeenCalled();expect(f.callbacks.commit).not.toHaveBeenCalled();f.controller.dispose();
+});
+
+it("advertises exactly the native collaborative construction tools and refuses unsupported selection",async()=>{
+  const f=await fixture(),catalog=await new MockWorkbenchAdapter().toolCatalog();
+  expect(catalog.sections.flatMap(section=>section.commands).filter(command=>supportsCollaborativeConstruction(command.toolId)).map(command=>command.toolId).sort()).toEqual(["center-radius-circle","polyline","segment","two-point-aligned-rectangle"]);
+  expect(()=>f.controller.select("fillet")).toThrow(/not connected/);
+  expect(f.controller.tool).toBe("select");f.controller.dispose();
 });

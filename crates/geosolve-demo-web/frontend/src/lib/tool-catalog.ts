@@ -13,6 +13,8 @@ export interface ToolCommandDefinition {
   label: string;
   group: string;
   icon: ToolIconDefinition;
+  /** Omitted when available; hosts may narrow native capabilities with a reason. */
+  unavailableReason?: string;
 }
 
 export interface ToolSectionDefinition {
@@ -52,6 +54,7 @@ export function assertToolCatalog(value: ToolCatalog): ToolCatalog {
     if (stableIds.has(command.stableId) || toolIds.has(command.toolId)) throw new Error(`Tool catalog contains duplicate command identity: ${command.toolId}`);
     stableIds.add(command.stableId);
     toolIds.add(command.toolId);
+    if (command.unavailableReason !== undefined && (typeof command.unavailableReason !== "string" || !command.unavailableReason.trim())) throw new Error("Unavailable tools require a clear reason");
     assertStaticIcon(command.icon);
   }
   return value;

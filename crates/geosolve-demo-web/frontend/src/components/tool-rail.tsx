@@ -120,13 +120,15 @@ function ToolMenu({ activeTool, section, selectTool, surfaceRef }: { activeTool:
                   <button
                     key={command.stableId}
                     aria-current={activeTool === command.toolId ? "true" : undefined}
-                    className="group flex min-h-9 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs leading-tight text-foreground outline-none hover:bg-neutral-700 focus-visible:bg-neutral-700 focus-visible:ring-1 focus-visible:ring-accent aria-current:bg-amber-400/10 aria-current:text-accent"
+                    className="group flex min-h-9 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs leading-tight text-foreground outline-none hover:bg-neutral-700 focus-visible:bg-neutral-700 focus-visible:ring-1 focus-visible:ring-accent aria-current:bg-amber-400/10 aria-current:text-accent aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                     data-tool-id={command.toolId}
-                    onClick={(event) => selectTool(command.toolId, event.currentTarget)}
+                    aria-disabled={Boolean(command.unavailableReason)}
+                    title={command.unavailableReason}
+                    onClick={(event) => { if (!command.unavailableReason) selectTool(command.toolId, event.currentTarget); }}
                     role="menuitem"
                   >
                     <ToolIcon className="size-[18px] text-accent/90 group-hover:text-accent" icon={command.icon} />
-                    <span>{command.label}</span>
+                    <span>{command.label}{command.unavailableReason && <span className="mt-0.5 block text-[10px] text-muted">{command.unavailableReason}</span>}</span>
                   </button>
                 ))}
               </div>

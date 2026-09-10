@@ -36,7 +36,9 @@ button { cursor: default; }
 .geosolve-canvas { display: block; width: 100%; height: 100%; pointer-events: none; }
 .geosolve-render-status { position: absolute; inset: 0; display: grid; place-content: center; padding: 2rem; pointer-events: none; background: hsl(var(--canvas) / .94); color: hsl(var(--muted)); font-size: .85rem; text-align: center; }
 
-.geosolve-solving-overlay { position: absolute; inset: 0; z-index: 30; display: grid; place-content: center; padding: 1.5rem; pointer-events: none; background: hsl(var(--raised) / .58); backdrop-filter: grayscale(1); }
+/* The translucent gray layer conveys pending work without filtering/recompositing
+   the entire WebGL surface on every spinner frame in each connected editor. */
+.geosolve-solving-overlay { position: absolute; inset: 0; z-index: 30; display: grid; place-content: center; padding: 1.5rem; pointer-events: none; background: hsl(var(--raised) / .58); }
 .geosolve-solving-message { display: flex; align-items: center; gap: .8rem; max-width: 24rem; padding: 1rem 1.25rem; border: 1px solid hsl(var(--border)); border-radius: .65rem; background: hsl(var(--surface) / .97); box-shadow: 0 8px 32px #0004; font-size: .875rem; }
 .geosolve-solving-spinner { width: 1.3rem; height: 1.3rem; flex: none; color: hsl(var(--accent)); animation: geosolve-solving-spin 1.2s linear infinite; }
 @keyframes geosolve-solving-spin { to { transform: rotate(360deg); } }
