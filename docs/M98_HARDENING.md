@@ -791,7 +791,8 @@ peers promptly` samples actual presented geometry/provenance throughout three dr
 including a held server commit. It includes native noninteractive provisional items;
 the initial diagnostic helper wrongly observed only accepted draw IDs and its failed
 receipt remains retained. Evidence is under `target/m98/coordination/drag-repair/`.
-Integrated qualification and replacement delivery remain pending.
+Integrated qualification and replacement delivery were pending at this development
+checkpoint; the final F028–F030 qualification below supersedes it.
 
 Native authoring reconstruction also begins immediately after authenticated join,
 overlapping shared text and scene loading. Complete unchanged model replacement is
@@ -852,7 +853,8 @@ bound native history. Tests cover cache isolation, failed durability, timeout/re
 and full scene parity. A resize-first refinement failed the existing fitted-point
 picking test; preserving native constructor and first-resize semantics corrects it.
 The failed collateral receipt remains failed; all other 39 collateral cases passed.
-Integrated qualification and preview delivery are pending.
+Integrated qualification and preview delivery were pending at this development
+checkpoint; see the final F028–F030 qualification below.
 No equation, tolerance, branch choice or golden-oracle bytes change. Generated-polyline
 Undo remains the separately recorded open finding.
 
@@ -916,7 +918,7 @@ fails on the previous WASM. The rebuilt actual-WASM browsing suite passes all fo
 cases. Its first post-build run exposed a new-test expectation that selecting only
 a circle center marked the whole declaration selected; the expected `partial`
 state now matches the existing native contract while requiring exact center
-identity and a populated radius Inspector. Final qualification is pending.
+identity and a populated radius Inspector. Final qualification is recorded below.
 An incidental development assertion assumed an allocator collision during parallel
 tests; that assumption was removed while retaining all ownership assertions and
 the separately captured real collision reproduction. No mathematical behavior,
@@ -943,5 +945,30 @@ GEOSOLVE_DIST=target/m98/coordination/drag-repair/native-replacement-artifacts/g
 cargo fmt --all -- --check
 ```
 
-Both commands pass. Combined integrated nomination and preserved preview delivery
-remain the final required steps; focused success does not establish release qualification.
+Both focused commands pass. The following integrated qualification and preserved
+preview delivery complete the repair.
+
+### Final F028–F030 qualification and preserved delivery
+
+Clean `9b64c29` passes all 288 obligations in `20260910T233626-b8af5961`:
+34 fresh, 254 authenticated reused, 36m7.710s. All 49 ordinary and 11 collaboration
+browser workflows pass with no failures, skips or retries. The 363-case native
+workbench stage, 271-case unchanged golden, 140 runtime, 44 package and 62 frontend
+collaboration assertions pass. [Full qualification and exact commands](M98_QUALIFICATION.md#qualified-shared-dragging-repair)
+record authentication and retained failed attempts.
+
+Final drag trials record zero reversals, warm local p95 63.0/75.8 ms and warm
+release-to-peer 351.1/383.3 ms. First use is 426.8 ms locally; held authoring/terminal
+navigation is 59.7–166.0 ms with zero navigation RPCs in both prediction modes.
+First-use GPU latency remains an explicit limitation. The generated-polyline Undo
+finding remains separate and open.
+
+On 2026-09-11, both existing shared previews receive exact frozen/installed artifacts.
+Playground revision 6 and manifold revision 1, all 32/25 retained files, three users'
+histories per document, drafts, models and invitations compare unchanged before restart
+and after browser verification. Each service passes all 24 exact HTTP/MIME routes and
+two-editor readiness with the three exact nominated WASM files and zero page errors.
+Two ignored delivery-helper mistakes were corrected without changing the qualified
+product; their original failed observations remain recorded in the qualification report.
+Static 18110 and the original 18108 manifold remain preserved. M98 acceptance/closure
+remains open; F028–F030 implementation, mechanical qualification and delivery are complete.

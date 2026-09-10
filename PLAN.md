@@ -8476,16 +8476,19 @@ merge or qualify that product.
   durable recovery, local authoring prediction and opt-in workbench collaboration.
 - [x] Qualify four-browser collaboration and the eight-editor/24-viewer fault/load targets.
 - [x] Verify exact qualified static and collaborative replacement previews.
-- [ ] Repair and qualify shared dragging flicker and tiny-edit publication latency
+- [x] Repair and qualify shared dragging flicker and tiny-edit publication latency
   (M98-F028/F029), including native selection/pin reconciliation (M98-F030), retaining
   server authority and current user document/history.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Status: **collaboration mechanically qualified and delivered; supervising-user acceptance
-and milestone closure remain open**. Clean source `513463f` passes **288/288
-obligations** in `20260910T204328-4a05c31a` (32 fresh, 256 authenticated reused;
-44m4.890s). [Final qualification](docs/M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
-records authenticated evidence and preserves all failed nomination attempts.
+and milestone closure remain open**. The F028–F030 dragging repair from clean source
+`9b64c29` passes **288/288 obligations** in `20260910T233626-b8af5961` (34 fresh,
+254 authenticated reused; 36m7.710s).
+[Final qualification](docs/M98_QUALIFICATION.md#qualified-shared-dragging-repair)
+records zero backward jumps, 63–76 ms warm preview p95 and 351–383 ms warm peer
+publication. First use remains about 427 ms. The native selection/pin repair preserves
+source ownership. All failed nomination attempts remain recorded.
 
 Independent compiler/solver workers, shared raw text and personal history, immutable
 Apply, latest-model gesture replay, structural/extraction/suppression Undo, external
@@ -8496,10 +8499,12 @@ picking, selection and personal visibility; the server validates and persists ed
 GUI construction supports Segment, Polyline, Center-radius Circle and Two-point aligned
 Rectangle, plus native point dragging; broader GUI tools disclose unavailable routes.
 
-Exact production and all four archives are frozen and installed offline. New static
-`http://100.94.63.83:18110/` and collaborative port 18111 each pass 24 exact HTTP routes
-and actual-WASM readiness. Private invitations and delivery receipts are linked in the
-final qualification report. The original
+Exact production and all four archives are frozen and installed offline. Shared
+playground port 18112 and manifold port 18111 pass 24 exact HTTP routes each and
+two-editor readiness with all three nominated WASM modules. Current revisions 6 and 1,
+all retained files, drafts, journals, invitations and personal histories are preserved.
+Private invitations and delivery receipts are linked in the final qualification report.
+Static port 18110 remains at the preceding qualified `513463f` product. The original
 manifold's seven authored files, 40 mm reservoir, 12 mm channels and preceding services
 remain preserved. The canvas dims after 500 ms of slow work while local navigation
 continues. No supervising-user acceptance or milestone closure is implied.

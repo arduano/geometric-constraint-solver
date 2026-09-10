@@ -7,6 +7,117 @@ qualified and delivered on 2026-09-10.
 Supervising-user acceptance and milestone closure remain open. Work is isolated on
 `m98/file-workspace`; accepted M97 remains unchanged.
 
+## Qualified shared dragging repair
+
+Delivered on 2026-09-11 from clean source
+`9b64c29e188b1e74f5802d170ca40ced107b28b1`, tree
+`9a58a5d7401741b60f142d5af5dfe00100ce5254`. Run
+`20260910T233626-b8af5961` passes **288/288 obligations**: **34 fresh, 254 authenticated
+reused**, **36m7.710s**. Independent verification authenticates every linked passing
+receipt and the complete-release, clean-source and unchanged-source flags.
+Evidence: `target/m98/coordination/drag-repair/final-qualification-r3.json`.
+
+M98-F028–F030 are recorded in the hardening report:
+retained authenticated document workers remove repeated cold initialization; bounded
+native result ownership prevents result/history exhaustion. Genuine compiler receipts,
+historical source/target authentication, independent residual validation and durable
+publication remain required. Local provisional geometry owns paint through gesture
+completion and accepted reconciliation; both client and server prediction forward the
+same opaque native presentation to the independent navigation worker. Native partial
+source-symbol mapping preserves surviving selection, exact curve occurrences and pins,
+while dropping deleted, incompatible or ambiguous owners. Strict prediction mapping
+and shared target lifetimes remain unchanged. No equation, tolerance, branch or reviewed
+golden expectation changed.
+
+The integrated gate passes format, strict Clippy, workspace/headless tests, release
+WASM, optimized lifecycle, native/WASM parity, golden, package, license and performance
+requirements. The fresh native workbench stage passes all 363 ordinary cases (the existing
+external-payload-only M92 legacy test remains ignored). All 271 reviewed golden cases
+remain clean. Browser prefix **17/17** and full workflows **49/49** pass without failures,
+skips or retries. Engine **22**, folder Node **111**, folder browser **11**, examples and
+offline package checks pass. Collaboration runtime **140**, package **44**, frontend
+**62** and browser **11** pass without failed/skipped/cancelled/todo assertions.
+
+Final integrated measurements include Chromium software rendering and event delivery:
+
+| Measurement | Before repair | Qualified repair |
+| --- | ---: | ---: |
+| Backward jumps in three straight drags | 5 / 2 / 4 | 0 / 0 / 0 |
+| Warm event-to-preview p95 | Visible repeated accepted-frame flicker | 63.0 / 75.8 ms |
+| Warm release-to-peer | 3,251–3,740 ms | 351.1 / 383.3 ms |
+| First drag event-to-preview p95 | — | 426.8 ms |
+| Pan/wheel/resize with independently held authoring or terminal | Previously blocked | 59.7–166.0 ms; zero navigation RPCs |
+
+The first trial's release-to-peer is 744.2 ms. First-use browser/GPU cost remains;
+the unachieved 200 ms cold aspiration and fully reverted warmup experiment are retained
+in the hardening record. The accepted regression budgets are 500 ms first use, 200 ms
+warm preview and 1,000 ms warm peer publication. No 60 Hz or arbitrary-size claim is made.
+Four editors during a held ten-second solve navigate at 431.7 ms p95; manifold/Gridfinity
+at 321.5/234.4 ms. Eight editors and 24 viewers acknowledge text at 267.6 ms p95; bounded
+stalled-TCP recovery passes. Detailed diagnostics:
+`target/m98/coordination/drag-repair/integrated-metrics-r3.json` and the gate's
+`stages/collaboration.browser/output.log`.
+
+Exact production (23 files) and four archives are frozen and installed offline without
+rebuilding; all **283 installed package files** match authenticated archive hashes.
+The existing **18112 playground** and **18111 shared manifold** each pass **24 HTTP/MIME
+routes**, two-editor readiness and the exact three nominated WASM modules with zero page
+errors. Browser verification makes no authored edits. A final comparison after browser
+verification preserves all retained disk files, accepted/working source, native model,
+shared target lifetimes, document identity/epoch, invitations and each user's text and
+semantic history. Transient presentation-native point-target IDs and process locks/session
+metadata are excluded from equality; none of them confer durable authoring authority.
+
+| Existing preview | Preserved accepted revision | Retained files | Users |
+| --- | ---: | ---: | --- |
+| Playground, port 18112 | 6 | 32 | tab-a, tab-b, tab-c |
+| Shared manifold, port 18111 | 1 | 25 | arduano, review-editor, review-viewer |
+
+Original private links remain unchanged. Current process/invitation records:
+`target/m98/playground-preview-location.json` and
+`target/m98/manifold-collaboration-preview-location-20260910T233626-b8af5961.json`.
+Complete settled folders and external invitations were backed up before reopening the same
+journals, without initialization. Static port 18110 remains on preceding `513463f`; the old
+combined location record is historical and still owns that static process. The original
+18108 manifold and its 40 mm reservoir/12 mm channels remain preserved.
+
+Qualification and delivery use the pinned Nix shell shown below. Executed gate/install
+commands (all passed):
+
+```sh
+./scripts/release-gate.sh --since 513463f
+python3 target/m98/verify-qualification.py 20260910T233626-b8af5961
+python3 target/m98/freeze-preview.py 20260910T233626-b8af5961
+python3 target/m98/coordination/drag-repair/install-qualified.py 20260910T233626-b8af5961
+```
+
+The executed delivery sequence and exact per-service arguments are recorded in
+`target/m98/coordination/drag-repair/delivery-executed.md`. Each service ran fresh
+`capture-preview.mjs`, `restart-preview.py` with that capture, `compare-preview.mjs`,
+`verify-delivery.mjs`, then a final capture/comparison. All final checks pass. Receipts
+under `target/m98/coordination/drag-repair/` include:
+
+- `playground-delivery-r2-20260910T233626-b8af5961.json`
+- `manifold-delivery-20260910T233626-b8af5961.json`
+- `playground-final-preservation-20260910T233626-b8af5961.json`
+- `manifold-final-preservation-20260910T233626-b8af5961.json`
+
+The initial delivery helper failed before stopping a service because it passed `opener`
+to `Path.open`; the corrected helper uses Python's built-in `open`. The first playground
+verifier expected standalone `accepted` instead of the existing detached
+`accepted-presentation` provenance. Correcting only the ignored helper preserves the
+strong ready/authority/byte assertions, and the same installed bytes pass. Both failed
+helper observations remain recorded; no product rebuild or full-gate rerun followed them.
+The interrupted `20260910T224255-cf8bbde7` and failed `20260910T224940-a860c18d`
+nomination attempts remain historical, with only authenticated unchanged-input successes
+eligible for reuse.
+
+The generated-polyline Undo `.invocation` failure remains separately open; broader GUI
+authoring, production identity providers and full offline reconciliation retain their
+previous scope limits. **M98 supervising-user acceptance and closure remain open.**
+Documentation-only closeout uses `./scripts/release-gate.sh --docs-only --since 9b64c29`
+and preserves the qualified product and installed bytes.
+
 ## Qualified multi-editor collaboration
 
 Candidate `513463f822083385edaccded05d8ed901e479dab`, tree
