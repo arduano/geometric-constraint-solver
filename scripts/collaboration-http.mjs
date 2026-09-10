@@ -32,16 +32,22 @@ function sendJson(response, status, value) {
  * domain adapters. A network body can never call completion/install/rebuild.
  * Canvas camera/picking/selection stay local; no navigation route exists here.
  */
-export function createCollaborationHttpServer({ host, invitations, execute, captureApply, captureSemantic, receiveText, textDelta, documentSnapshot, scene, staticRoutes, limits: overrides, allowedOrigins = [] }) {
+export function createCollaborationHttpServer({ host, invitations, execute, captureApply, captureSemantic, receiveText, textDelta, documentSnapshot, scene, staticRoutes, authoringPreview, limits: overrides, allowedOrigins = [] }) {
   if (!host || !(invitations instanceof Map) || !invitations.size || typeof execute !== "function") throw Error("A durable host, trusted invitations and domain worker are required");
   const limits = limitsOf(overrides), origins = new Set(allowedOrigins);
   const sessions = new Map(), streams = new Set(), presence = new Map(), pendingJoins = new Set();
-  let processing = false, stopped = false, activeRequests = 0, workerError, closing;
+  let processing = false, stopped = false, activeRequests = 0, workerError, closing, previewClosing;
+  const retiringPreviews = new Set();
   let cachedScene;
   const identity = (userId, clientId) => JSON.stringify([userId, clientId]);
   function dropSession(session) {
     sessions.delete(session.token); presence.delete(session.token);
     for (const stream of session.streams) stream.close();
+    if (authoringPreview?.dropConnection) {
+      const retired = Promise.resolve().then(() => authoringPreview.dropConnection(session.connection));
+      retiringPreviews.add(retired);
+      void retired.catch(() => {}).finally(() => retiringPreviews.delete(retired));
+    }
   }
   function kick() {
     if (processing || stopped) return;
@@ -171,6 +177,17 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
         exact(body, ["revision"]);
         sendJson(response, 200, textDelta(session.connection, body.revision)); return;
       }
+      if (route === "authoring-preview") {
+        if (!authoringPreview?.request) throw problem("preview_disabled", "Server authoring preview is disabled", 503);
+        if (session.connection.role !== "editor") throw problem("preview_forbidden", "Authoring preview requires an editor connection", 403);
+        const controller = new AbortController();
+        const disconnected = () => { if (!response.writableEnded) controller.abort(); };
+        response.once("close", disconnected);
+        if (response.destroyed) controller.abort();
+        try { sendJson(response, 200, await authoringPreview.request(session.connection, body, { signal: controller.signal })); }
+        finally { response.off("close", disconnected); }
+        return;
+      }
       if (route === "commands") {
         exact(body, ["requestId", "command"]);
         const request = { connection: session.connection, requestId: body.requestId, command: body.command };
@@ -220,7 +237,11 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
     }
   }, Math.min(30_000, Math.max(1, Math.floor(limits.sessionIdleMs / 2))));
   expiry.unref();
-  const stop = () => { if (stopped) return; stopped = true; clearInterval(expiry); unsubscribe(); for (const stream of streams) stream.close(); };
+  const stop = () => {
+    if (stopped) return; stopped = true; clearInterval(expiry); unsubscribe(); for (const stream of streams) stream.close();
+    previewClosing = Promise.resolve().then(() => authoringPreview?.close?.());
+    void previewClosing.catch(() => {});
+  };
   return { server, kick, stats: () => ({ sessions: sessions.size, pendingJoins: pendingJoins.size, streams: streams.size, presence: presence.size, activeRequests, workerBusy: processing, subscriberBytes: [...streams].reduce((sum, stream) => sum + stream.bufferedBytes(), 0) }),
     allowOrigin(origin) { const parsed = new URL(origin); if (parsed.origin !== origin || !["http:", "https:"].includes(parsed.protocol)) throw Error("Expected an explicit host origin"); origins.add(origin); },
     stop,
@@ -228,6 +249,8 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
       if (closing) return closing;
       stop();
       closing = (async () => {
+        await previewClosing;
+        await Promise.all(retiringPreviews);
         await new Promise((resolve, reject) => { server.close((error) => error && error.code !== "ERR_SERVER_NOT_RUNNING" ? reject(error) : resolve()); server.closeIdleConnections(); });
         // The caller may keep the host alive or attach a new transport. Release
         // native sessions after in-flight joins/leaves finish, preserving its cap.

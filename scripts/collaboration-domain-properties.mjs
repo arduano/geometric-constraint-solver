@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Equation-free normalized history coordinates over native ManagedValue trees.
-import { compilerMetadata } from "./collaboration-domain-structure.mjs";
+import { compilerMetadata, suppressionChanges } from "./collaboration-domain-structure.mjs";
 export const sorted = (value) => Array.isArray(value) ? value.map(sorted) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])])) : value;
 export const same = (a, b) => JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
 const absent = Object.freeze({ state: "absent" });
@@ -68,6 +68,7 @@ export function canonicalPropertyChanges(beforeCompiled, before, afterCompiled, 
     const owned = explicitSource || metadataScopes.some((scope) => scope?.mutation === "set_metadata" && same(scope.target, item.target) && scope.property === item.property);
     if (!same(old.value, item.value) || owned) result.push({ object: item.object, property: JSON.stringify(["metadata", item.target.target, item.property]), before: old.value, after: item.value });
   }
+  result.push(...suppressionChanges(beforeCompiled, afterCompiled, explicitMetadata));
   return result;
 }
 export function deepestTouches(touches) {

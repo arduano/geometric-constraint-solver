@@ -55,6 +55,155 @@ async function fixture(t, options = {}) {
 }
 function value(target, declaration, radius) { return { kind: "semantic", basisRevision: 0, payload: { action: "values", writes: [{ target, declaration, path: ["radius"], value: { kind: "unit", value: { unit: "mm", value: radius } } }] } }; }
 
+test("configured HTTP authoring preview remains provisional and its terminal uses durable latest-model replay", async t => {
+  const f = await fixture(t, { authoringPreview: { enabled: true, preferred: "server" } });
+  const app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob"), initial = await app.state(alice);
+  assert.deepEqual(initial.document.authoringPreview, { server: true, preferred: "server" });
+  const basis = { documentEpoch: alice.connection.documentEpoch, revision: initial.authority.acceptedRevision, sourceDesignDigest: initial.document.model.sourceDesignDigest };
+  const target = initial.document.pointTargets.find(item => item.target.address?.owner.address.declaration === "bore").target;
+  const opened = await app.request("authoring-preview", alice.token, { action: "begin", basis, kind: "point", target, gestureId: 73,
+    viewport: { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 } });
+  assert.equal(opened.kind, "preview"); assert.equal(typeof opened.presentation, "string");
+  await app.request("authoring-preview", alice.token, { action: "advance", ticket: opened.ticket, samples: [{ sequence: 1, position: [8, 4] }] });
+  assert.equal((await app.state(alice)).authority.acceptedInput, initial.authority.acceptedInput);
+  assert.equal((await app.state(alice)).authority.acceptedRevision, 0);
+  assert.equal((await app.send(bob, "intervening-radius", value(initial.document.targets["sketch.ts#other"], "other", 7))).outcome.status, "accepted");
+  const terminal = await app.request("authoring-preview", alice.token, { action: "finish", ticket: opened.ticket });
+  assert.equal(terminal.kind, "point"); assert.equal(app.runtime.previews.stats().previews, 0);
+  const command = { kind: "semantic", basisRevision: 0, payload: { action: "point_gesture", targets: [initial.document.targets["sketch.ts#bore"]], gesture: terminal.terminal.command } };
+  const committed = await app.send(alice, "remote-point", command);
+  assert.equal(committed.outcome.status, "accepted", JSON.stringify(committed));
+  const final = await app.state(alice);
+  assert.deepEqual(final.document.pointTargets.find(item => item.target.address?.owner.address.declaration === "bore").position, [8, 4]);
+  assert.match(final.document.accepted.files["sketch.ts"], /radius:\s*mm\(7\)/u);
+  assert.equal(final.authority.acceptedRevision, 2);
+  const stale = await fetch(app.base + "authoring-preview", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${alice.token}` },
+    body: JSON.stringify({ action: "begin", basis, kind: "point", target, gestureId: 74, viewport: { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 } }) });
+  assert.equal(stale.status, 409); assert.equal((await stale.json()).error.code, "preview_stale_basis");
+  assert.equal((await app.state(alice)).authority.acceptedInput, final.authority.acceptedInput);
+});
+
+async function predictedCommand(t, initial, kind, positions, suppressed = true) {
+  const engine = await createEngine(); t.after(() => engine.dispose());
+  const local = engine.openEditableSession(initial.model.project, { design: initial.model.design }); t.after(() => local.dispose());
+  const options = { expected: local.token, gestureId: 99, viewport: { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 } };
+  if (kind === "point") {
+    const target = local.pointGestureTargets().find(entry => entry.target.address?.owner.address.declaration === "bore").target;
+    const prediction = local.beginPointGesture(target, options);
+    assert.equal(prediction.advance({ sequence: 1, position: positions[0] }).accepted, true);
+    return { kind: "semantic", basisRevision: 0, payload: { action: "point_gesture", targets: [initial.targets["sketch.ts#bore"]], gesture: prediction.finish().command } };
+  }
+  const prediction = local.beginConstruction(kind, options); let sequence = 0;
+  for (const position of positions) for (const event of ["move", "click"]) {
+    const frame = prediction.advance({ sequence: ++sequence, input: { event, position, suppressed, regularized: false } });
+    assert.equal(frame.diagnostic, null);
+  }
+  return { kind: "semantic", basisRevision: 0, payload: { action: "construction", gesture: prediction.finish() } };
+}
+
+test("concurrent constructions replay their immutable original basis and retain distinct durable allocation results", async t => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const initial = (await app.state(alice)).document;
+  const a = await predictedCommand(t, initial, "segment", [[-40, -20], [-20, -13]]);
+  const b = await predictedCommand(t, initial, "segment", [[40, 30], [50, 40]]);
+  const outcomes = await Promise.all([app.send(alice, "create-a", a), app.send(bob, "create-b", b)]);
+  for (const receipt of outcomes) assert.equal(receipt.outcome.status, "accepted", JSON.stringify(receipt));
+  const state = await app.state(alice), mappingA = (await app.request("result?requestId=create-a", alice.token)).result;
+  const mappingB = (await app.request("result?requestId=create-b", bob.token)).result;
+  assert.equal(state.authority.acceptedRevision, 2);
+  assert.equal(state.document.inventory.objects.length, initial.inventory.objects.length + 2);
+  assert.equal(mappingA.allocationMapping.length, 1); assert.equal(mappingB.allocationMapping.length, 1);
+  assert.notEqual(mappingA.allocationMapping[0].persistent, mappingB.allocationMapping[0].persistent);
+  assert.equal((await app.request("result?requestId=create-a", bob.token)).result, null);
+  const before = state.authority.acceptedInput;
+  await app.runtime.close(); const restored = await f.open(false), rejoined = await restored.connect("bob");
+  assert.deepEqual((await restored.request("commands", rejoined.token, { requestId: "create-b", command: b })).receipt, outcomes[1]);
+  assert.deepEqual((await restored.request("result?requestId=create-b", rejoined.token)).result, mappingB);
+  assert.equal((await restored.state(rejoined)).authority.acceptedInput, before);
+});
+
+test("stale point gestures retain disjoint source edits and later same-point writes win without borrowing a replacement lifetime", async t => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const initial = (await app.state(alice)).document, bore = initial.targets["sketch.ts#bore"];
+  const a = await predictedCommand(t, initial, "point", [[4, 5]]), b = await predictedCommand(t, initial, "point", [[8, 9]]);
+  assert.equal((await app.send(bob, "resize-other", value(initial.targets["sketch.ts#other"], "other", 7))).outcome.status, "accepted");
+  for (const [who, id, command] of [[alice, "move-a", a], [bob, "move-b", b]]) {
+    const receipt = await app.send(who, id, command); assert.equal(receipt.outcome.status, "accepted", JSON.stringify(receipt));
+  }
+  let state = await app.state(alice);
+  assert.deepEqual(state.document.pointTargets.find(entry => entry.target.address?.owner.address.declaration === "bore").position, [8, 9]);
+  assert.match(state.document.accepted.files["sketch.ts"], /mm\(7\)/u);
+  assert.equal((await app.send(alice, "undo-foreign-point", { kind: "undo", basisRevision: 0, payload: {} })).outcome.status, "rejected");
+  const forged = structuredClone(a); forged.payload.gesture.target.address.owner.generation++;
+  assert.equal((await app.send(alice, "forged-native-owner", forged)).outcome.status, "rejected");
+  assert.equal((await app.state(alice)).authority.acceptedInput, state.authority.acceptedInput);
+  const deletion = { kind: "semantic", basisRevision: 0, payload: { action: "mutation", targets: [bore], deletion: { roots: [bore], closure: [bore] }, mutation: { mutation: "delete", target: { target: "declaration", declaration: "bore" } } } };
+  assert.equal((await app.send(bob, "delete-bore", deletion)).outcome.status, "accepted");
+  assert.equal((await app.send(bob, "restore-bore", { kind: "undo", basisRevision: 0, payload: {} })).outcome.status, "accepted");
+  state = await app.state(alice); assert.ok(state.document.targets["sketch.ts#bore"].generation > bore.generation);
+  // Even substituting the fresh outer token cannot authenticate an old native
+  // gesture as an edit of the restored object's new lifetime.
+  const borrowed = structuredClone(a); borrowed.payload.targets = [state.document.targets["sketch.ts#bore"]];
+  assert.equal((await app.send(alice, "borrow-new-generation", borrowed)).outcome.status, "rejected");
+  assert.equal((await app.state(alice)).authority.acceptedInput, state.authority.acceptedInput);
+  assert.equal(app.runtime.host.snapshot().needsRecovery, false);
+});
+
+test("queued gesture resumes its admitted historical checkpoint after restart and external inference cannot acquire a restored lifetime", async t => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const initial = (await app.state(alice)).document, bore = initial.targets["sketch.ts#bore"];
+  const command = await predictedCommand(t, initial, "segment", [[0, 0], [35, 15]], false);
+  assert.ok(command.payload.gesture.expected_declarations.some(item => JSON.stringify(item).includes("bore")));
+  assert.equal((await app.send(bob, "resize-other", value(initial.targets["sketch.ts#other"], "other", 7))).outcome.status, "accepted");
+  // Stop only disposable transport before admitting through the trusted host.
+  // This freezes a genuinely pending journal operation without substituting a
+  // client-supplied model or mocking native checkpoint restoration.
+  app.runtime.transport.stop();
+  const historical = await app.runtime.host.acceptedCheckpoint(0);
+  const admitted = await app.runtime.host.admit({ connection: alice.connection, requestId: "queued-construction", command }, () => ({
+    replayBasis: Buffer.from(JSON.stringify({ revision: 0, acceptedInput: historical.acceptedInput })), replayModel: historical.checkpoints.model,
+    replaySource: historical.checkpoints.source, replayTargets: historical.checkpoints.targets, replayHistory: historical.checkpoints.history,
+  }));
+  assert.equal(admitted.outcome, null); await app.runtime.close();
+  const restored = await f.open(false), rejoined = await restored.connect("alice"), b = await restored.connect("bob");
+  const outcome = await restored.send(rejoined, "queued-construction", command); assert.equal(outcome.outcome.status, "accepted", JSON.stringify(outcome));
+  assert.match((await restored.state(rejoined)).document.accepted.files["sketch.ts"], /bore\.center/u);
+  assert.equal((await restored.send(rejoined, "undo-create", { kind: "undo", basisRevision: 0, payload: {} })).outcome.status, "accepted");
+  const deletion = { kind: "semantic", basisRevision: 0, payload: { action: "mutation", targets: [bore], deletion: { roots: [bore], closure: [bore] }, mutation: { mutation: "delete", target: { target: "declaration", declaration: "bore" } } } };
+  assert.equal((await restored.send(b, "delete-old-operand", deletion)).outcome.status, "accepted");
+  assert.equal((await restored.send(b, "restore-operand", { kind: "undo", basisRevision: 0, payload: {} })).outcome.status, "accepted");
+  const before = await restored.state(rejoined);
+  assert.ok(before.document.targets["sketch.ts#bore"].generation > bore.generation);
+  const rejected = await restored.send(rejoined, "old-inference-new-lifetime", command);
+  assert.equal(rejected.outcome.status, "rejected", JSON.stringify(rejected));
+  assert.equal((await restored.state(rejoined)).authority.acceptedInput, before.authority.acceptedInput);
+  assert.equal(restored.runtime.host.snapshot().needsRecovery, false);
+});
+
+test("concurrent parameter extraction allocates on the server and personal Undo protects foreign parameter writes", async t => {
+  const f=await fixture(t),app=f.first,alice=await app.connect("alice"),bob=await app.connect("bob"),initial=(await app.state(alice)).document;
+  const extraction=declaration=>({kind:"semantic",basisRevision:0,payload:{action:"mutation",targets:[initial.targets[`sketch.ts#${declaration}`]],mutation:{mutation:"extract_parameter",declaration,path:["radius"],symbol:"parameter1",variable:"parameter1",presentation:{label:`${declaration} radius`,isKeyParameter:true}}}});
+  const receipts=await Promise.all([app.send(alice,"extract-bore",extraction("bore")),app.send(bob,"extract-other",extraction("other"))]);
+  for(const receipt of receipts)assert.equal(receipt.outcome.status,"accepted",JSON.stringify(receipt));
+  const a=(await app.request("result?requestId=extract-bore",alice.token)).result.allocationMapping[0].persistent;
+  const b=(await app.request("result?requestId=extract-other",bob.token)).result.allocationMapping[0].persistent;
+  assert.notEqual(a,b);
+  let state=(await app.state(alice)).document;
+  assert.equal(state.inventory.objects.length,4);assert.ok(state.targets[`sketch.ts#${a}`]);assert.ok(state.targets[`sketch.ts#${b}`]);
+  const undone = await app.send(alice,"undo-extract",{kind:"undo",basisRevision:0,payload:{}});
+  assert.equal(undone.outcome.status,"accepted",JSON.stringify(undone));
+  state=(await app.state(alice)).document;
+  assert.equal(state.targets[`sketch.ts#${a}`],undefined);assert.ok(state.targets[`sketch.ts#${b}`]);
+  const redone = await app.send(alice,"redo-extract",{kind:"redo",basisRevision:0,payload:{}});
+  assert.equal(redone.outcome.status,"accepted",JSON.stringify(redone));
+  state=(await app.state(alice)).document;
+  const write={kind:"semantic",basisRevision:0,payload:{action:"values",writes:[{target:state.targets[`sketch.ts#${a}`],declaration:a,path:[],value:{kind:"unit",value:{unit:"mm",value:2}}}]}};
+  assert.equal((await app.send(bob,"same-value-foreign-parameter",write)).outcome.status,"accepted");
+  const before=(await app.state(alice)).authority.acceptedInput;
+  assert.equal((await app.send(alice,"cannot-remove-foreign-parameter",{kind:"undo",basisRevision:0,payload:{}})).outcome.status,"rejected");
+  assert.equal((await app.state(alice)).authority.acceptedInput,before);assert.equal(app.runtime.host.snapshot().needsRecovery,false);
+});
+
 
 test("actual collaborative folder accepts independent edits, personal Undo and original outcomes after native rebuild", async (t) => {
   const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
@@ -321,4 +470,61 @@ test("point contribution resolves restored target identity after another editor 
   assert.deepEqual(state.pointTargets.find(entry => entry.target.address?.owner.address.declaration === "bore").position, [0, 0]);
   assert.deepEqual(state.pointTargets.find(entry => entry.target.address?.owner.address.declaration === "other").position, [20, 0]);
   assert.equal(reopened.runtime.host.snapshot().needsRecovery, false);
+});
+
+test("external mirror feeds invalid raw saves through durable text gateway and exports other editors without applying", async (t) => {
+  const f = await fixture(t, { mirror: true }), app = f.first, alice = await app.connect("alice");
+  const initial = (await app.state(alice)), input = initial.authority.acceptedInput;
+  assert.equal(app.runtime.mirror().status, "synchronized");
+  await app.text(alice, await app.replica(alice), "comment", 'return {bore,other};', '// Alice 😀\n return {bore,other};');
+  // The on-disk save still has the old comment-free export, so merging must
+  // preserve Alice's independent insertion and the incomplete external literal.
+  await writeFile(join(f.folder, "sketch.ts"), source.replace("radius:mm(2)", "radius:mm("));
+  const status = await app.runtime.reconcileMirror(); assert.equal(status.status, "synchronized", JSON.stringify(status));
+  let state = await app.state(alice);
+  assert.match(state.document.working.files["sketch.ts"], /Alice 😀/u);
+  assert.match(state.document.working.files["sketch.ts"], /radius:mm\(\}/u);
+  assert.equal(state.authority.acceptedInput, input);
+  assert.equal(state.authority.acceptedRevision, 0);
+  await app.runtime.close(); const reopened = await f.open(false), rejoined = await reopened.connect("alice");
+  state = await reopened.state(rejoined);
+  assert.match(state.document.working.files["sketch.ts"], /Alice 😀/u);
+  assert.equal(state.authority.acceptedInput, input);
+  assert.equal(reopened.runtime.mirror().status, "synchronized");
+});
+
+test("source suppression has personal Undo and Redo without losing another editor's shape edit", async t => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const targets = (await app.state(alice)).document.targets;
+  const mutation = { mutation: "set_suppressed", target: { target: "declaration", declaration: "bore" }, suppressed: true };
+  const command = { kind: "semantic", basisRevision: 0, payload: { action: "mutation", mutation, targets: [targets["sketch.ts#bore"]] } };
+  const suppressed = await app.send(alice, "suppress-bore", command);
+  assert.equal(suppressed.outcome.status, "accepted", JSON.stringify(suppressed));
+  assert.match((await app.state(alice)).document.accepted.files["sketch.ts"], /\$\.suppress\(bore\)/u);
+  const edit = await app.send(bob, "other-radius", value(targets["sketch.ts#other"], "other", 7));
+  assert.equal(edit.outcome.status, "accepted", JSON.stringify(edit));
+  const undo = await app.send(alice, "undo-suppression", { kind: "undo", basisRevision: 0, payload: {} });
+  assert.equal(undo.outcome.status, "accepted", JSON.stringify(undo));
+  const restored = (await app.state(alice)).document.accepted.files["sketch.ts"];
+  assert.doesNotMatch(restored, /\$\.suppress/u); assert.match(restored, /mm\(7\)/u);
+  const redo = await app.send(alice, "redo-suppression", { kind: "redo", basisRevision: 0, payload: {} });
+  assert.equal(redo.outcome.status, "accepted", JSON.stringify(redo));
+  const final = await app.state(alice); assert.match(final.document.accepted.files["sketch.ts"], /\$\.suppress\(bore\)/u); assert.match(final.document.accepted.files["sketch.ts"], /mm\(7\)/u);
+  await app.runtime.close(); const reopened = await f.open(false), reconnect = await reopened.connect("alice");
+  assert.equal((await reopened.state(reconnect)).authority.acceptedInput, final.authority.acceptedInput);
+});
+
+test("same-value source suppression owns activation and rejects stale targets transactionally", async t => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob");
+  const target = (await app.state(alice)).document.targets["sketch.ts#bore"];
+  const command = { kind: "semantic", basisRevision: 0, payload: { action: "mutation", targets: [target], mutation: { mutation: "set_suppressed", target: { target: "declaration", declaration: "bore" }, suppressed: true } } };
+  for (const [who, id] of [[alice, "first-suppression"], [bob, "same-suppression"]]) {
+    const outcome = await app.send(who, id, command); assert.equal(outcome.outcome.status, "accepted", JSON.stringify(outcome));
+  }
+  const before = (await app.state(alice)).authority.acceptedInput;
+  const undo = await app.send(alice, "blocked-suppression-undo", { kind: "undo", basisRevision: 0, payload: {} });
+  assert.equal(undo.outcome.status, "rejected"); assert.match(undo.outcome.message, /owns|overwrit/u);
+  const stale = structuredClone(command); stale.payload.targets[0].generation += 100;
+  assert.equal((await app.send(alice, "stale-suppression", stale)).outcome.status, "rejected");
+  assert.equal((await app.state(alice)).authority.acceptedInput, before); assert.equal(app.runtime.host.snapshot().needsRecovery, false);
 });

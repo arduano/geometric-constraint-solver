@@ -126,3 +126,23 @@ test("domain reference replacement and its native structural inverse preserve ex
     mutation: { mutation: "set_value", declaration: "linked", path: ["point"], expected: reference("other"), value: reference("other") } });
   assert.equal(same.structuralChanges.dependencies.length, 1); assert.deepEqual(same.structuralChanges.dependencies[0].before, same.structuralChanges.dependencies[0].after);
 });
+
+test("compiler suppression history preserves exact activation, explicit same-value ownership and independent values", async () => {
+  const { compileManagedSource, applyManagedSketchMutation } = await import("../packages/geosolve-sketch-code/dist/src/managed.js");
+  const { suppressionChanges, prepareStructuralSource } = await import("./collaboration-domain-structure.mjs");
+  const before = { entry: "sketch.ts", compiled: compileManagedSource(source), patches: {} };
+  const mutation = { mutation: "set_suppressed", target: { target: "declaration", declaration: "bore" }, suppressed: true };
+  const after = { ...before, compiled: applyManagedSketchMutation(before.compiled, mutation).compiled };
+  const change = { object: "sketch.ts#bore", property: '["suppression",[]]', before: false, after: true };
+  assert.deepEqual(suppressionChanges(before, after, mutation), [change]);
+  assert.deepEqual(suppressionChanges(after, after, mutation), [{ ...change, before: true }]);
+  assert.deepEqual(suppressionChanges(before, before, { ...mutation, suppressed: false }), [{ ...change, after: false }]);
+  const changed = { ...after, compiled: applyManagedSketchMutation(after.compiled, { mutation: "set_value", declaration: "other", path: ["radius"], expected: { kind: "unit", value: { unit: "mm", value: 3 } }, value: { kind: "unit", value: { unit: "mm", value: 7 } } }).compiled };
+  const inverse = { structural: {}, changes: [{ address: { target: { object: change.object, generation: 1 }, property: change.property }, before: true, after: false }] };
+  const restored = prepareStructuralSource(changed, changed.compiled.normalizedSource, inverse);
+  assert.doesNotMatch(restored.source, /\$\.suppress/u); assert.match(restored.source, /mm\(7\)/u);
+  assert.throws(() => prepareStructuralSource(before, before.compiled.normalizedSource, inverse), /no longer matches/u);
+  const redo = { ...inverse, changes: inverse.changes.map(item => ({ ...item, before: false, after: true })) };
+  const suppressed = prepareStructuralSource({ ...changed, compiled: restored.compiled }, restored.source, redo);
+  assert.equal(suppressed.compiled.canonicalArtifactJson, changed.compiled.canonicalArtifactJson);
+});

@@ -17,6 +17,29 @@ const bytes = (value) => Buffer.from(JSON.stringify(value));
 const checkpoints = (input, draft) => ({ model: bytes({ input }), source: bytes({ input, draft }), targets: bytes({ generation: 1 }), history: bytes({ contributions: [] }) });
 const invitations = () => new Map([["alice-invite", { userId: "alice", role: "editor" }], ["bob-invite", { userId: "bob", role: "editor" }], ["view-invite", { userId: "visitor", role: "viewer" }]]);
 function deferred() { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; }
+
+test("preview HTTP authenticates editors, keeps text and reads independent, and retires connection compute", async t => {
+  const entered = deferred(), release = deferred(), dropped = [], calls = [];
+  const f = await fixture(t, { transportOptions: { authoringPreview: {
+    async request(connection, body, { signal }) { calls.push({ connection, body, signal }); entered.resolve(); await release.promise; return { kind: "preview" }; },
+    async dropConnection(connection) { dropped.push(connection); release.resolve(); }, close() { release.resolve(); },
+  } } });
+  const app = f.first ?? f;
+  const alice = await app.connect(), viewer = await app.connect("view-invite", "view-tab");
+  assert.equal((await app.request("authoring-preview", { body: { action: "begin" } })).status, 401);
+  assert.equal((await app.request("authoring-preview", { token: viewer.token, body: { action: "begin" } })).status, 403);
+  assert.equal(calls.length, 0);
+  const pending = app.request("authoring-preview", { token: alice.token, body: { action: "begin" } });
+  await entered.promise;
+  const initial = app.host.snapshot().acceptedInput;
+  assert.equal((await app.request("state", { token: alice.token })).status, 200);
+  assert.equal((await app.request("text", { token: alice.token, body: { requestId: "typing-during-preview", text: "unfinished(" } })).status, 200);
+  assert.equal(app.host.snapshot().acceptedInput, initial);
+  assert.equal((await app.request("leave", { token: alice.token, body: {} })).status, 200);
+  await until(() => dropped.length === 1);
+  assert.equal(dropped[0].sessionId, alice.connection.sessionId);
+  await pending;
+});
 async function until(predicate, message = "condition was not reached") {
   const deadline = Date.now() + 3_000;
   while (!predicate()) { if (Date.now() > deadline) throw Error(message); await immediate(); }

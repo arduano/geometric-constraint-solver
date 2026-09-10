@@ -87,7 +87,8 @@ function placeAll(statements, placements, entry) {
 }
 export function prepareStructuralSource(compiled, source, inverse) {
   if (!inverse || !Array.isArray(inverse.changes) || !inverse.structural) fail("Expected native prepared semantic inverse");
-  const ir = structuredClone(compiled.compiled.ir), plan = inverse.structural, restoredSources = [], entry = compiled.entry;
+  let ir = structuredClone(compiled.compiled.ir);
+  const plan = inverse.structural, restoredSources = [], entry = compiled.entry;
   if ((plan.create?.length ?? 0) > 1024 || (plan.reorders?.length ?? 0) > 1024) fail("Structural inverse exceeds compiler batch limit");
   const created = plan.create ?? [], removed = new Set((plan.delete?.closure ?? []).map((target) => declarationFromTarget(entry, target)));
   for (const addition of created) {
@@ -115,6 +116,28 @@ export function prepareStructuralSource(compiled, source, inverse) {
     const name = declarationFromTarget(entry, reorder.target);
     if (!removed.has(name)) placements.push({ declaration: name, position: reorder.after });
   }
+  // Both old and recreated bindings exist here. Authenticate value CAS before
+  // removing old owners, then compile only the complete structural candidate.
+  const values = inverse.changes.flatMap((change) => {
+    const declaration = declarationFromTarget(entry, change.address.target); if (removed.has(declaration)) return [];
+    const path = JSON.parse(change.address.property);
+    if (path[0] === "metadata" || path[0] === "suppression") return [];
+    if (!Array.isArray(path) || path[0] === "point" && typeof path[1] === "object") fail("Mixed point/source structural inverse requires explicit native overlay replay");
+    return [{ declaration, path, expected: change.before, value: change.after }];
+  });
+  if (values.length) ir = structuredClone(managed.rewriteManagedSketchIrValues(ir, values));
+  for (const change of inverse.changes) {
+    const [kind, path] = JSON.parse(change.address.property); if (kind !== "suppression") continue;
+    const declaration = declarationFromTarget(entry, change.address.target);
+    if (removed.has(declaration)) continue;
+    const owner = ir.statements.find(item => item.statement === "declaration" && item.symbol === declaration);
+    if (!owner || !Array.isArray(path) || path.some(part => typeof part !== "string" && !Number.isSafeInteger(part) && !(part && typeof part === "object" && Object.keys(part).length === 1 && typeof part.member === "string")) || typeof change.before !== "boolean" || typeof change.after !== "boolean") fail("Suppression inverse has an invalid native owner or path");
+    const matches = item => item.statement === "suppression" && item.target.declaration === owner.variable && same(item.target.path, path);
+    const present = ir.statements.filter(matches);
+    if (present.length > 1 || Boolean(present.length) !== change.before) fail("Suppression inverse no longer matches native compiler value");
+    if (change.after && !present.length) ir.statements.push({ statement: "suppression", target: { declaration: owner.variable, path, site: "suppression_inverse" }, site: "suppression_inverse", comments: [] });
+    if (!change.after) ir.statements = ir.statements.filter(item => !matches(item));
+  }
   const removedVariables = new Set(ir.statements.filter((item) => removed.has(symbol(item))).map((item) => item.variable));
   if (removedVariables.size !== removed.size) fail("Inverse deletion closure contains an absent declaration");
   ir.statements = ir.statements.flatMap((item) => {
@@ -126,14 +149,6 @@ export function prepareStructuralSource(compiled, source, inverse) {
   if (placements.length) ir.statements = placeAll(ir.statements, placements, entry);
   let candidate = managed.compileManagedSource(managed.printManagedSource(ir), { patches: compiled.patches });
   if (inverse.changes.length) {
-    const values = inverse.changes.flatMap((change) => {
-      const declaration = declarationFromTarget(entry, change.address.target); if (removed.has(declaration)) return [];
-      const path = JSON.parse(change.address.property);
-      if (path[0] === "metadata") return [];
-      if (!Array.isArray(path) || path[0] === "point" && typeof path[1] === "object") fail("Mixed point/source structural inverse requires explicit native overlay replay");
-      return [{ declaration, path, expected: change.before, value: change.after }];
-    });
-    if (values.length) candidate = managed.applyManagedSketchMutation(candidate, { mutation: "set_values", values }, { patches: compiled.patches }).compiled;
     for (const change of inverse.changes) {
       const path = JSON.parse(change.address.property); if (path[0] !== "metadata") continue;
       const target = path[1] === "document" ? { target: "document" } : { target: path[1], declaration: declarationFromTarget(entry, change.address.target) };
@@ -179,4 +194,32 @@ export function metadataChanges(before, after, mutation) {
     return old && (!same(old.value, item.value) || mutation?.mutation === "set_metadata" && same(mutation.target, item.target) && mutation.property === item.property)
       ? [{ object: item.object, target: item.target, property: item.property, before: old.value, after: item.value }] : [];
   });
+}
+
+
+/** Suppression is source-owned activation state, independent of shape values. */
+export function compilerSuppressions(compiled) {
+  const owners = new Map(compiled.compiled.ir.statements.filter(item => item.statement === "declaration").map(item => [item.variable, item.symbol]));
+  const result = new Map();
+  for (const item of compiled.compiled.ir.statements) {
+    if (item.statement !== "suppression") continue;
+    const declaration = owners.get(item.target.declaration); if (!declaration) fail("Suppression has no current compiler declaration owner");
+    const object = `${compiled.entry}#${declaration}`, property = JSON.stringify(["suppression", item.target.path]);
+    const key = JSON.stringify([object, property]); if (result.has(key)) fail("Suppression repeats an exact compiler target");
+    result.set(key, { object, property });
+  }
+  return result;
+}
+export function suppressionChanges(before, after, mutation) {
+  const previous = compilerSuppressions(before), current = compilerSuppressions(after), touched = new Set();
+  if (mutation?.mutation === "set_suppressed") {
+    // Let the existing compiler resolve generated semantic addresses to lexical
+    // reference paths. The history adapter never duplicates that correspondence.
+    const withState = suppressed => compilerSuppressions({ ...after, compiled: managed.applyManagedSketchMutation(after.compiled, { ...mutation, suppressed }, { patches: after.patches }).compiled });
+    const enabled = withState(false), disabled = withState(true);
+    for (const key of disabled.keys()) if (!enabled.has(key)) { touched.add(key); if (!current.has(key)) current.set(key, disabled.get(key)); }
+  }
+  const actual = compilerSuppressions(after);
+  return [...new Set([...previous.keys(), ...current.keys()])].flatMap(key => previous.has(key) !== actual.has(key) || touched.has(key)
+    ? [{ ...(current.get(key) ?? previous.get(key)), before: previous.has(key), after: actual.has(key) }] : []);
 }

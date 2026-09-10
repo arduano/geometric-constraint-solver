@@ -551,6 +551,20 @@ export function recompileManagedSketchIr(
   return compileManagedSource(printManagedSource(ir), options);
 }
 
+/** Internal source-composition helper, with no compiler or publication authority.
+ * Checked value changes can detach consumers in the same candidate that removes
+ * their former bindings. The caller must recompile the complete resulting IR.
+ */
+export function rewriteManagedSketchIrValues(
+  ir: ManagedSketchIr,
+  values: readonly ManagedValueMutation[],
+): ManagedSketchIr {
+  validateMutationRequest({ mutation: "set_values", values });
+  const statements = [...ir.statements];
+  setManagedValues(statements, values);
+  return deepFreeze({ ...ir, statements });
+}
+
 /**
  * Apply one bounded semantic mutation to an exact compiled managed sketch owner.
  *

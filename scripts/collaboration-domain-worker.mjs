@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
 import { readWorkspaceSnapshot, evaluateWorkspaceSnapshot } from "./workspace-loader.mjs";
-import { engineModuleUrl, sdkDirectory } from "./workspace-runtime-paths.mjs";
-import { capturedManagedPropertyTouches, capturedManagedMetadataTouches } from "./collaboration-domain-syntax.mjs";
+import { engineModuleUrl, sdkDirectory, collaborationHostModuleUrl } from "./workspace-runtime-paths.mjs";
+import { capturedManagedPropertyTouches, capturedManagedMetadataTouches, declarationSourceProjection } from "./collaboration-domain-syntax.mjs";
 import { enrichInventory, prepareStructuralSource, metadataChanges, compilerMetadata } from "./collaboration-domain-structure.mjs";
 import { canonicalPropertyChanges, canonicalSourceWrites, deepestTouches, semanticPointLens, pointPropertyKey, pointCodec } from "./collaboration-domain-properties.mjs";
 
@@ -103,6 +103,49 @@ async function reopen(engine, folder, files, model) {
     return { session, compiled };
   } catch (error) { session.dispose(); throw error; }
 }
+async function openReplayBasis(engine, input) {
+  if (input.replayBasis && input.replayCheckpoint) fail("invalid_input", "Expected one trusted replay basis");
+  if (!input.replayBasis && !input.replayCheckpoint) return undefined;
+  if (!["point_gesture", "construction"].includes(input.kind)) fail("invalid_input", "Historical replay is only available to semantic gestures");
+  let source, semantic, historical;
+  try {
+    let basis = input.replayBasis;
+    if (input.replayCheckpoint) {
+      const saved = input.replayCheckpoint;
+      const { createTrustedSourceHost, createTrustedSemanticHost } = await import(collaborationHostModuleUrl);
+      source = await createTrustedSourceHost({ configuration: { documentEpoch: saved.documentEpoch, serverEpoch: saved.serverEpoch, initialInput: saved.initialInput, files: {} },
+        actor: createHash("sha256").update(`replay:${saved.documentEpoch}`).digest(), checkpointJson: saved.source });
+      const snapshot = source.snapshot().accepted;
+      if (snapshot.modelRevision !== saved.revision || snapshot.acceptedInput !== saved.acceptedInput) fail("invalid_model", "Historical source and authority revision disagree");
+      semantic = await createTrustedSemanticHost({ configuration: { documentEpoch: saved.documentEpoch, serverEpoch: saved.serverEpoch }, checkpoint: {
+        documentEpoch: saved.documentEpoch, revision: saved.revision, targetsJson: saved.targets, historyJson: saved.history,
+      } });
+      for (const target of input.originalTargets ?? []) semantic.authenticate(target);
+      basis = { files: snapshot.files, model: saved.model };
+      if (inputIdentity(basis.files, basis.model.sourceDesignDigest) !== saved.acceptedInput) fail("invalid_model", "Historical source/design differs from its accepted identity");
+    }
+    if (basis.model.entry !== input.model.entry) fail("stale_input", "Gesture source entry changed since its original basis");
+    historical = await reopen(engine, input.folder, basis.files, basis.model);
+    // Native checkpoint restoration and genuine compiler reconstruction run in
+    // this worker; neither can stall the HTTP host's text/navigation handlers.
+    const generations = new Map();
+    if (semantic) for (const item of inventory(historical.compiled, basis.model.project).objects) {
+      const target = semantic.current(item.object);
+      if (!target) fail("invalid_model", "Historical declaration has no native target lifetime");
+      generations.set(item.declaration, target);
+    }
+    return { session: historical.session,
+      stableTargets(declarations) {
+        if (!input.replayCheckpoint) return [];
+        return [...new Set(declarations)].sort().map(name => {
+          const target = generations.get(name); if (!target) fail("stale_target", "Gesture dependency has no original accepted lifetime");
+          return target;
+        });
+      },
+    };
+  } catch (error) { historical?.session.dispose(); throw error; }
+  finally { source?.dispose(); semantic?.dispose(); }
+}
 function output(session, compiled, files, extra = {}) {
   const result = accepted(session), model = modelFor(session, compiled);
   const observed = inventory(compiled, model.project, files[compiled.entry]);
@@ -112,7 +155,8 @@ function output(session, compiled, files, extra = {}) {
       suppressed_children: model.design.overrides.suppressed_children.filter(([address]) => owns(address)) };
     if (model.design.generated.overrides.some(([, override]) => override.address.invocation === item.declaration)) item.payload.unsupported = "Legacy generated value override requires a native restoration API";
   }
-  return { acceptedInput: inputIdentity(files, model.sourceDesignDigest), model, result, candidateFiles: files, inventory: observed, pointTargets: session.pointGestureTargets(), ...extra };
+  return { acceptedInput: inputIdentity(files, model.sourceDesignDigest), model, result, candidateFiles: files, inventory: observed,
+    sourceProjection: declarationSourceProjection(compiled.compiled.normalizedSource, files[compiled.entry], compiled.entry), pointTargets: session.pointGestureTargets(), ...extra };
 }
 const pointOwnerDeclaration = (address) => address.owner.address.owner === "direct_declaration" ? address.owner.address.declaration : address.owner.address.address.invocation;
 const addressKey = (address) => JSON.stringify(sorted(address));
@@ -205,7 +249,7 @@ async function run(input) {
     } else fail("invalid_input", "Unknown prepared contribution");
     return { reconciliations, workingFiles };
   }
-  const engine = await createEngine(); let session;
+  const engine = await createEngine(); let session, replay;
   try {
     if (input.kind === "initialize") {
       const compiled = await compile(input.folder, input.files);
@@ -214,6 +258,7 @@ async function run(input) {
       return output(session, compiled, input.files);
     }
     const reopened = await reopen(engine, input.folder, input.files, input.model); session = reopened.session;
+    replay = await openReplayBasis(engine, input);
     if (input.expectedInput !== undefined && input.expectedInput !== inputIdentity(input.files, session.sourceDesignDigest())) fail("stale_input", "Domain job does not match its expected accepted input");
     if (input.kind === "rebuild") return output(session, reopened.compiled, input.files);
     if (input.kind === "scene") {
@@ -237,12 +282,14 @@ async function run(input) {
     }
     if (input.kind === "point_gesture" || input.kind === "point_properties") {
       const before = session.exportDesign(), project = session.exportProject();
-      let ownedAddresses;
+      let ownedAddresses, replayWitness;
       if (input.kind === "point_gesture") {
-        const prepared = session.preparePointGestureCommit(input.command, { expected: session.token });
+        const prepared = replay ? session.preparePointGestureReplay(replay.session, input.command, { expected: session.token })
+          : session.preparePointGestureCommit(input.command, { expected: session.token });
+        replayWitness = prepared.replay;
         checkedUpdate(session.applyPointGestureCommit(prepared));
         if (session.sourceDesignDigest() !== prepared.source_design_digest) fail("invalid_result", "Installed gesture differs from its native prepared input");
-        ownedAddresses = pointTargetAddresses(input.command.target);
+        ownedAddresses = pointTargetAddresses(replayWitness?.resolvedTarget ?? input.command.target);
       } else {
         if (!Array.isArray(input.writes) || input.writes.length < 1 || input.writes.length > 4096) fail("invalid_input", "Expected bounded point property writes");
         const writes = input.writes.map((write) => ({ ...write, address: currentPointAddress(session, reopened.compiled, write.address) }));
@@ -271,6 +318,11 @@ async function run(input) {
       const result = output(session, reopened.compiled, input.files, { patches: [{ path: entry, patch: exactPatch(input.files[entry], input.files[entry]) }],
         preparedContribution: { kind: "point", entry }, pointChanges: pointChanges(entry, before, session.exportDesign(), ownedAddresses) });
       result.propertyChanges = result.pointChanges.map(({ object, address, before, after }) => ({ object, property: pointPropertyKey(address, pointCodec(result.inventory, address)), before, after }));
+      if (replay) {
+        if (!replayWitness) fail("invalid_result", "Native point replay omitted its original dependency witness");
+        result.requiredStableDeclarations = replayWitness.requiredStableDeclarations;
+        result.requiredStableTargets = replay.stableTargets(replayWitness.requiredStableDeclarations);
+      }
       return result;
     }
     if (input.kind === "structural_inverse") {
@@ -340,8 +392,11 @@ async function run(input) {
     }
     if (["values", "mutation", "construction"].includes(input.kind)) {
       const highWater = projectValue(input.model.project).managed.declaration_name_high_water ?? 0;
-      const prepared = input.kind === "construction" ? session.prepareConstruction(input.command, { expected: session.token })
-        : session.prepareAuthoring(input.kind === "values" ? { kind: "values", writes: input.writes }
+      const extraction = input.kind === "mutation" && input.mutation?.mutation === "extract_parameter";
+      const prepared = input.kind === "construction" ? replay ? session.prepareConstructionReplay(replay.session, input.command, { expected: session.token })
+        : session.prepareConstruction(input.command, { expected: session.token })
+        : session.prepareAuthoring(extraction ? { kind: "extract_parameter", declaration: input.mutation.declaration, path: input.mutation.path, presentation: input.mutation.presentation }
+          : input.kind === "values" ? { kind: "values", writes: input.writes }
           : { kind: "mutation", mutation: input.mutation, candidate_name_high_water: input.candidateNameHighWater ?? highWater }, { expected: session.token });
       const current = prepared.request.current, mutation = prepared.request.ticket.mutation, entry = reopened.compiled.entry;
       const receipt = managed.applyManagedSketchSourceMutation(current, mutation, { source: input.files[entry], patches: input.model.patches });
@@ -356,8 +411,19 @@ async function run(input) {
       const files = { ...input.files, [entry]: receipt.source }, compiled = { ...reopened.compiled, compiled: receipt.compiled };
       const result = output(session, compiled, files, { valueChanges: update.valueChanges ?? [], ...(input.kind === "construction" ? { createdDeclarations: prepared.declarations } : {}),
         patches: [{ path: entry, patch: receipt.patch }], preparedContribution: { kind: "values", entry, current, mutation, acceptedSource: input.files[entry], patch: receipt.patch, patches: input.model.patches } });
+      if (replay) {
+        if (!prepared.replay) fail("invalid_result", "Native construction replay omitted its original dependency witness");
+        result.requiredStableDeclarations = prepared.replay.requiredStableDeclarations;
+        result.requiredStableTargets = replay.stableTargets(prepared.replay.requiredStableDeclarations);
+        result.allocationMapping = prepared.replay.allocationMapping;
+      }
       const prior = inventory(reopened.compiled, input.model.project, input.files[entry]);
       result.structuralChanges = observeStructuralChanges(prior, result.inventory, mutation);
+      if (extraction) {
+        result.createdDeclarations = result.inventory.objects.filter(item => !prior.objects.some(old => old.object === item.object)).map(item => item.declaration);
+        result.allocationMapping = [{ provisional: input.mutation.symbol, persistent: mutation.symbol,
+          provisionalVariable: input.mutation.variable, persistentVariable: mutation.variable }];
+      }
       result.metadataChanges = metadataChanges(reopened.compiled, compiled, mutation);
       result.propertyChanges = canonicalPropertyChanges(reopened.compiled, prior, compiled, result.inventory,
         mutation.mutation === "set_values" ? mutation.values : mutation.mutation === "set_value" ? [mutation] : [], mutation);
@@ -427,7 +493,7 @@ async function run(input) {
       return result;
     }
     fail("invalid_input", "Unknown domain job kind");
-  } finally { session?.dispose(); engine.dispose(); }
+  } finally { replay?.session.dispose(); session?.dispose(); engine.dispose(); }
 }
 try {
   const result = await run(JSON.parse(workerData.encoded));

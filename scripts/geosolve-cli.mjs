@@ -46,9 +46,12 @@ export async function runCli(args) {
   if (command === "init") return initProject(folder);
   if (command === "serve") {
     if (flags.collaboration === "true") {
+      const previewMode = flags["authoring-preview"] ?? "disabled";
+      if (!["disabled", "client", "server"].includes(previewMode)) throw Error("--authoring-preview must be disabled, client or server");
       const { serveCollaborativeProject } = await import("./collaboration-serve.mjs");
       const session = await serveCollaborativeProject(folder, { invitationsFile: flags.invitations, artifactManifest: flags.artifact,
-        initialize: flags.initialize === "true", port: Number(flags.port ?? 0), hostname: flags.host ?? "127.0.0.1" });
+        initialize: flags.initialize === "true", port: Number(flags.port ?? 0), hostname: flags.host ?? "127.0.0.1",
+        authoringPreview: { enabled: previewMode !== "disabled", preferred: previewMode === "server" ? "server" : "client" } });
       for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { void session.close().then(() => process.exit(0)); });
       return { ok: true, collaboration: true, urls: session.urls, folder, pid: process.pid };
     }

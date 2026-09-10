@@ -5,8 +5,11 @@ import { join } from "node:path";
 import { acquireWorkspaceLock } from "./workspace-storage.mjs";
 import { openDurableCollaborationHost } from "./collaboration-host.mjs";
 import { createCollaborationHttpServer } from "./collaboration-http.mjs";
-import { createTrustedSourceHost, createTrustedSemanticHost } from "../packages/geosolve-collaboration/dist/host.js";
+import { collaborationHostModuleUrl } from "./workspace-runtime-paths.mjs";
+const { createTrustedSourceHost, createTrustedSemanticHost } = await import(collaborationHostModuleUrl);
 import { runCollaborationDomainJob } from "./collaboration-domain.mjs";
+import { createCollaborationPreviewService } from "./collaboration-preview.mjs";
+import { createCollaborationPreviewRoute } from "./collaboration-preview-route.mjs";
 
 const encode = (value) => Buffer.from(JSON.stringify(value));
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
@@ -55,16 +58,20 @@ async function authoredFiles(folder) {
  * target lifetimes, contribution ownership and prepared validation.
  */
 export async function openCollaborationRuntime(folder, {
-  initialize = false, invitations, limits, storageOptions, domainOptions, allowedOrigins = [], staticRoutes, workbenchScenes = false, documentId = randomUUID(),
+  initialize = false, invitations, limits, storageOptions, domainOptions, allowedOrigins = [], staticRoutes, workbenchScenes = false, documentId = randomUUID(), mirror: mirrorEnabled = false, authoringPreview = {},
 } = {}) {
+  exact(authoringPreview, ["enabled", "preferred", "limits"]);
+  const previewMode = authoringPreview.preferred ?? "client";
+  if (!["client", "server"].includes(previewMode) || previewMode === "server" && authoringPreview.enabled !== true) throw Error("Server preview preference requires an enabled server preview service");
   if (!(invitations instanceof Map) || !invitations.size || [...invitations.values()].some((principal) => typeof principal?.userId !== "string" || principal.userId.startsWith("geosolve.server."))) throw Error("Provide invited principals outside the reserved server identity namespace");
   folder = await realpath(folder);
   const lock = acquireWorkspaceLock(folder), serverEpoch = randomUUID();
-  let source, semantic, host, transport, accepted, initial;
+  let source, semantic, host, transport, accepted, initial, mirror, mirrorConnection, mirrorStatus, mirrorTimer, mirrorUnsubscribe, mirrorWork, previews;
+  let stoppingMirror = false;
   const jobs = new Set();
   const domain = async (input) => {
     const controller = new AbortController(); jobs.add(controller);
-    try { return await runCollaborationDomainJob(input, { ...domainOptions, signal: controller.signal }); }
+    try { await domainOptions?.beforeJob?.(input); return await runCollaborationDomainJob(input, { ...domainOptions, signal: controller.signal }); }
     finally { jobs.delete(controller); }
   };
   const sourceOptions = (documentEpoch, input, files) => ({ configuration: { documentEpoch, serverEpoch, initialInput: input, files }, actor: sourceActor(documentEpoch, "server", serverEpoch) });
@@ -104,6 +111,40 @@ export async function openCollaborationRuntime(folder, {
         } catch (error) { restoredSource.dispose(); restoredSemantic?.dispose(); throw error; }
       },
     });
+    const reconcileMirror = () => {
+      if (!mirror || stoppingMirror) return Promise.resolve(mirrorStatus);
+      if (mirrorWork) return mirrorWork;
+      mirrorWork = mirror.reconcile().then(status => { mirrorStatus = status; return status; }, error => {
+        mirrorStatus = { status: "reconciliation_pending", notices: [{ path: "", reason: String(error.message ?? error) }] };
+        return mirrorStatus;
+      }).finally(() => { mirrorWork = undefined; });
+      return mirrorWork;
+    };
+    const scheduleMirror = (delay = 1000) => {
+      if (!mirror || stoppingMirror || mirrorTimer) return;
+      mirrorTimer = setTimeout(() => {
+        mirrorTimer = undefined; void reconcileMirror().finally(() => scheduleMirror());
+      }, delay);
+      mirrorTimer.unref();
+    };
+    if (mirrorEnabled) {
+      const { createMirrorWorker } = await import("./collaboration-mirror-worker-bridge.mjs");
+      const userId = "geosolve.server.external-files", clientId = "filesystem-mirror";
+      mirrorConnection = await host.connect({ userId, role: "editor" }, clientId);
+      mirror = await createMirrorWorker({ folder, ...host.configuration, userId, clientId,
+        readCommitted: () => host.withCommittedState(() => ({ checkpoint: source.textCheckpoint(), snapshot: source.snapshot() })),
+        admitWorkingEdits: async ({ operation, expectedRevision, edits }) => {
+          if (operation?.userId !== userId || operation.clientId !== clientId) throw Error("External mirror principal does not match its configured identity");
+          const body = { requestId: operation.requestId, action: "working", revision: expectedRevision, edits };
+          try {
+            await host.writeText(mirrorConnection, () => receiveText(mirrorConnection, body), { requestId: body.requestId, payload: body });
+            return { status: "committed" };
+          } catch (error) { if (error.code === "text_rejected") return { status: "rejected", reason: error.message }; throw error; }
+        },
+      });
+      await reconcileMirror();
+      mirrorUnsubscribe = host.subscribe(() => scheduleMirror(50)); scheduleMirror();
+    }
     const generationSnapshot = () => Object.fromEntries([documentObject(accepted.model), ...accepted.inventory.objects.map(({ object }) => object)].map(object => [object, semantic.current(object)]));
     const buildScene = async (candidate) => {
       if (!workbenchScenes) return undefined;
@@ -117,12 +158,31 @@ export async function openCollaborationRuntime(folder, {
       try { return { applyCapture: Buffer.from(capture.captureJson), applyBasis: encode(capture.acceptedBasis), targetBasis: encode(generationSnapshot()) }; }
       finally { source.release(capture); }
     }
+    async function captureSemantic(_connection, command) {
+      if (!["point_gesture", "construction"].includes(command.payload?.action)) return {};
+      const captured = await host.acceptedCheckpoint(command.basisRevision);
+      const model = restoreModelCheckpoint(captured.checkpoints.model);
+      if (command.payload.gesture?.basis !== model.sourceDesignDigest) throw Error("Gesture basis differs from the historical accepted model revision");
+      return { replayBasis: encode({ revision: captured.revision, acceptedInput: captured.acceptedInput }), replayModel: captured.checkpoints.model,
+        replaySource: captured.checkpoints.source, replayTargets: captured.checkpoints.targets, replayHistory: captured.checkpoints.history };
+    }
+    function replayCheckpoint(command, attachments) {
+      if (!["replayBasis", "replayModel", "replaySource", "replayTargets", "replayHistory"].every(name => attachments[name])) throw Error("Gesture lacks its durable original accepted checkpoint");
+      const basis = JSON.parse(attachments.replayBasis), model = restoreModelCheckpoint(attachments.replayModel);
+      if (basis.revision !== command.basisRevision || model.sourceDesignDigest !== command.payload.gesture?.basis) throw Error("Gesture historical checkpoint identity changed");
+      return { ...basis, model, documentEpoch: host.configuration.documentEpoch, initialInput: host.configuration.initialInput, serverEpoch,
+        source: attachments.replaySource.toString(), targets: attachments.replayTargets.toString(), history: attachments.replayHistory.toString() };
+    }
     function receiveText(connection, body) {
       const operation = { userId: connection.userId, clientId: connection.clientId, requestId: body.requestId };
       let stage;
       if (body.action === "undo" || body.action === "redo") {
         exact(body, ["requestId", "action"]);
         stage = body.action === "undo" ? source.stageUserUndo(operation) : source.stageUserRedo(operation);
+      } else if (body.action === "working") {
+        exact(body, ["requestId", "action", "revision", "edits"]);
+        if (!body.revision || !Array.isArray(body.edits) || !body.edits.length || body.edits.length > 256) throw Error("Expected bounded working source edits with an exact revision");
+        stage = source.stageUserWorkingEdits(body.edits, operation, body.revision);
       } else if (body.action === "files") {
         exact(body, ["requestId", "action", "revision", "edits"]);
         if (!body.revision || !Array.isArray(body.edits) || !body.edits.length || body.edits.length > 256
@@ -175,18 +235,21 @@ export async function openCollaborationRuntime(folder, {
               if (payload.targets[index]?.object !== object) throw Error("Gesture semantic target does not match its native owner");
               semantic.authenticate(payload.targets[index]);
             }
-            result = await domain({ kind: "point_gesture", folder, files: basis.files, model: accepted.model, command: payload.gesture });
+            result = await domain({ kind: "point_gesture", folder, files: basis.files, model: accepted.model, command: payload.gesture,
+              replayCheckpoint: replayCheckpoint(prepared.command, attachments), originalTargets: payload.targets });
           } else if (prepared.command.payload?.action === "construction") {
             exact(prepared.command.payload, ["action", "gesture"]);
-            result = await domain({ kind: "construction", folder, files: basis.files, model: accepted.model, command: prepared.command.payload.gesture });
+            result = await domain({ kind: "construction", folder, files: basis.files, model: accepted.model, command: prepared.command.payload.gesture,
+              replayCheckpoint: replayCheckpoint(prepared.command, attachments) });
           } else if (prepared.command.payload?.action === "mutation") {
             const payload = prepared.command.payload;
             exact(payload, ["action", "mutation", "targets", "deletion"]);
             const mutation = payload.mutation;
-            if (!mutation || !["set_metadata", "reorder_declaration", "delete"].includes(mutation.mutation)) throw Error("Unsupported collaborative structured mutation");
-            const names = mutation.mutation === "reorder_declaration" ? [mutation.declaration, ...(mutation.before === null ? [] : [mutation.before])]
+            if (!mutation || !["set_metadata", "reorder_declaration", "delete", "extract_parameter", "set_suppressed"].includes(mutation.mutation)) throw Error("Unsupported collaborative structured mutation");
+            const names = mutation.mutation === "extract_parameter" ? [mutation.declaration] : mutation.mutation === "reorder_declaration" ? [mutation.declaration, ...(mutation.before === null ? [] : [mutation.before])]
               : mutation.target?.target === "document" && mutation.mutation === "set_metadata" ? ["@document"]
-              : mutation.target?.target === "declaration" || mutation.target?.target === "parameter" ? [mutation.target.declaration] : [];
+              : mutation.target?.target === "declaration" || mutation.target?.target === "parameter" ? [mutation.target.declaration]
+              : mutation.mutation === "set_suppressed" && mutation.target?.target === "generated" ? [mutation.target.address?.invocation] : [];
             const required = [...new Set(names.map(name => objectName(accepted.model.entry, name)))].sort();
             if (!required.length || !Array.isArray(payload.targets) || !same(payload.targets.map(target => target.object).sort(), required)) throw Error("Structured mutation requires exact explicit target lifetimes");
             for (const target of payload.targets) semantic.authenticate(target);
@@ -219,6 +282,10 @@ export async function openCollaborationRuntime(folder, {
             semantic.authenticate(generations[name]);
           }
         } else throw Error("Unsupported collaborative semantic operation");
+        // These targets come from the native historical registry, never from a
+        // replacement token supplied by the client. A delete/restore cycle is a
+        // different lifetime even when its source and geometry look identical.
+        for (const target of result.requiredStableTargets ?? []) semantic.authenticate(target);
         const candidateScene = await buildScene(result);
         sourcePrepared = await host.withCommittedState(() => capture ? source.prepareApplyUpdate(capture, result.candidateFiles) : source.prepareCanvasUpdate(result.patches));
         const working = source.snapshot().working;
@@ -230,6 +297,7 @@ export async function openCollaborationRuntime(folder, {
           lock.assertHeld();
           let sourceStage, semanticStage;
           try {
+            for (const target of result.requiredStableTargets ?? []) semantic.authenticate(target);
             const latest = source.snapshot().working;
             const updates = same(latest.revision, working.revision) ? reconciled.reconciliations : sourcePrepared.changedPaths.map((path) => {
               const prior = reconciled.reconciliations.find((entry) => entry.path === path);
@@ -239,7 +307,7 @@ export async function openCollaborationRuntime(folder, {
             const revision = basis.modelRevision + 1;
             if (inverse) semanticStage = semantic.stageValidatedInverse(inverse, prepared.operation, revision);
             else semanticStage = stageSemanticResult(result, prepared, basis.modelRevision, revision);
-            return { completion: { status: "accepted", acceptedInput: result.acceptedInput, summary: prepared.command.kind === "apply" ? "Applied captured shared draft" : `${prepared.command.kind} accepted` },
+            return { result: { allocationMapping: result.allocationMapping ?? [], createdDeclarations: result.createdDeclarations ?? [] }, completion: { status: "accepted", acceptedInput: result.acceptedInput, summary: prepared.command.kind === "apply" ? "Applied captured shared draft" : `${prepared.command.kind} accepted` },
               checkpoints: { source: Buffer.from(sourceStage.checkpointJson), model: modelCheckpoint(result.model), targets: Buffer.from(semanticStage.targetsJson), history: Buffer.from(semanticStage.historyJson) },
               install: () => { source.commitStage(sourceStage); sourcePrepared = undefined; semantic.commitStage(semanticStage); inverse = undefined; accepted = result; acceptedScene = candidateScene; releaseHandles(); },
               abort: () => { if (source.snapshot().hasPendingStage) source.failStage(sourceStage); if (semantic.snapshot().hasPendingStage) semantic.failStage(semanticStage); sourcePrepared = undefined; capture = undefined; inverse = undefined; },
@@ -293,17 +361,24 @@ export async function openCollaborationRuntime(folder, {
         ...(changes.length || structural.created.length || structural.deleted.length || structural.reorders.length || changedDependencies.size ? { record: { operation, changes, structural } } : {}),
       });
     }
-    const documentSnapshot = (connection) => ({ ...source.snapshot(), targets: generationSnapshot(), inventory: accepted.inventory,
-      textHistory: source.userHistory(connection.userId), semanticHistory: semantic.userHistory(connection.userId),
+    previews = createCollaborationPreviewService({ enabled: authoringPreview.enabled ?? false, limits: authoringPreview.limits,
+      authenticate(connection) { host.resume(connection, host.snapshot().latestSequence); },
+      captureBasis() { return { documentEpoch: host.configuration.documentEpoch, revision: host.snapshot().acceptedRevision,
+        sourceDesignDigest: accepted.model.sourceDesignDigest, project: accepted.model.project, design: accepted.model.design }; },
+    });
+    const documentSnapshot = (connection) => ({ ...source.snapshot(), targets: generationSnapshot(), documentTarget: semantic.current(documentObject(accepted.model)), inventory: accepted.inventory, sourceProjection: accepted.sourceProjection,
+      authoringPreview: { server: previews.enabled, preferred: previewMode },
+      mirror: mirrorStatus, textHistory: source.userHistory(connection.userId), semanticHistory: semantic.userHistory(connection.userId),
       pointTargets: accepted.pointTargets, model: { project: accepted.model.project, design: accepted.model.design, sourceDesignDigest: accepted.model.sourceDesignDigest },
       textActor: Array.from(sourceActor(connection.documentEpoch, connection.userId, connection.clientId)), textCheckpoint: Array.from(source.textCheckpoint()),
     });
-    transport = createCollaborationHttpServer({ host, invitations, execute, captureApply, receiveText, documentSnapshot,
+    transport = createCollaborationHttpServer({ host, invitations, execute, captureApply, captureSemantic, receiveText, documentSnapshot,
       textDelta: (connection, revision) => ({ ...source.textChangesSince(revision), history: source.userHistory(connection.userId) }),
       scene: () => encode(acceptedScene ?? accepted.result), limits: limits?.http, allowedOrigins, staticRoutes,
+      authoringPreview: { request: createCollaborationPreviewRoute(previews), dropConnection: previews.dropConnection, close: previews.close },
     });
     let closing;
-    return { host, source: () => source, semantic: () => semantic, transport,
+    return { host, source: () => source, semantic: () => semantic, transport, previews, mirror: () => mirrorStatus, reconcileMirror,
       async listen(port = 0, hostname = "127.0.0.1") {
         await new Promise((resolve, reject) => { transport.server.once("error", reject); transport.server.listen(port, hostname, resolve); });
         const address = transport.server.address();
@@ -312,15 +387,16 @@ export async function openCollaborationRuntime(folder, {
       },
       close() {
         if (closing) return closing;
-        transport.stop();
+        transport.stop(); stoppingMirror = true; clearTimeout(mirrorTimer); mirrorUnsubscribe?.();
         closing = (async () => {
           for (const controller of jobs) controller.abort();
           while (transport.stats().workerBusy) await new Promise((resolve) => setTimeout(resolve, 5));
-          try { await transport.close(); }
+          await mirror?.close(); await mirrorWork;
+          try { await transport.close(); if (mirrorConnection && !host.snapshot().needsRecovery) await host.disconnect(mirrorConnection); }
           finally { try { await host.close(); } finally { source.dispose(); semantic.dispose(); lock.release(); } }
         })();
         return closing;
       },
     };
-  } catch (error) { for (const controller of jobs) controller.abort(); if (transport) await transport.close(); await host?.close(); source?.dispose(); semantic?.dispose(); lock.release(); throw error; }
+  } catch (error) { stoppingMirror = true; clearTimeout(mirrorTimer); mirrorUnsubscribe?.(); await mirror?.close(); await mirrorWork; for (const controller of jobs) controller.abort(); if (transport) await transport.close(); await previews?.close(); await host?.close(); source?.dispose(); semantic?.dispose(); lock.release(); throw error; }
 }
