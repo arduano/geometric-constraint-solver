@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { createHash, randomUUID } from "node:crypto";
-import { createDocumentAuthorityHost } from "../packages/geosolve-collaboration/dist/host.js";
+import { collaborationHostModuleUrl } from "./workspace-runtime-paths.mjs";
+const { createDocumentAuthorityHost } = await import(collaborationHostModuleUrl);
 import { openCollaborationStorage } from "./collaboration-storage.mjs";
 
 const format = "geosolve-collaboration-host-v1";
@@ -9,7 +10,7 @@ const frozen = (value) => { if (value && typeof value === "object") { Object.val
 const copy = (value) => frozen(JSON.parse(JSON.stringify(value)));
 function failure(code, message) { return Object.assign(Error(message), { code }); }
 function checkpointBytes(attachments) {
-  if (!attachments || Object.keys(attachments).sort().join(",") !== checkpointNames.slice().sort().join(",")) throw Error("Accepted publication requires exact model/source/targets/history checkpoints");
+  if (!attachments || Object.keys(attachments).filter(name => name !== "operationResult").sort().join(",") !== checkpointNames.slice().sort().join(",")) throw Error("Accepted publication requires exact model/source/targets/history checkpoints");
   return Object.fromEntries(checkpointNames.map((name) => {
     const bytes = attachments[name];
     if (!(bytes instanceof Uint8Array) || bytes.length === 0) throw Error(`Missing exact ${name} checkpoint bytes`);
@@ -53,8 +54,9 @@ export async function openDurableCollaborationHost(folder, {
     if (initial && JSON.stringify(copy(initial.configuration)) !== JSON.stringify(configuration)) throw Error("Existing collaboration identity differs from initialization");
     const records = [];
     let current = { acceptedRevision: 0, acceptedInput: configuration.initialInput, references: boot.attachments };
+    const acceptedCheckpoints = new Map([[0, { revision: 0, acceptedInput: configuration.initialInput, references: boot.attachments }]]);
     let textReferences = { source: boot.attachments.source };
-    const admissionAttachments = new Map();
+    const admissionAttachments = new Map(), operationResults = new Map();
     const textReceipts = new Map();
     for (const envelope of envelopes.slice(1)) {
       const payload = envelope.payload;
@@ -70,9 +72,11 @@ export async function openDurableCollaborationHost(folder, {
         else if (record.event.event !== "finished") throw Error("Invalid collaboration authority event");
         if (record.event.event === "finished" && record.event.outcome.status === "accepted") {
           checkpointBytes(await loadCheckpoints(storage, envelope.attachments));
+          if (envelope.attachments.operationResult) operationResults.set(operationKey(record.event.operation), envelope.attachments.operationResult);
           const outcome = record.event.outcome;
           if (outcome.revision !== current.acceptedRevision + 1) throw Error("Accepted checkpoint revision gap");
           current = { acceptedRevision: outcome.revision, acceptedInput: outcome.accepted_input, references: envelope.attachments };
+          acceptedCheckpoints.set(outcome.revision, { revision: outcome.revision, acceptedInput: outcome.accepted_input, references: envelope.attachments });
           textReferences = { source: envelope.attachments.source };
         }
       } else if (payload.kind === "text") {
@@ -117,10 +121,26 @@ export async function openDurableCollaborationHost(folder, {
     const host = {
       configuration: copy(configuration),
       snapshot() { return { ...authority.snapshot(), latestEnvelope: storage.latestSequence, ingressCount: queued, workerBusy: !!worker, needsRecovery: poisoned || storage.needsRecovery || authority.snapshot().needsRecovery }; },
+      /** Trusted immutable historical accepted bytes. No native publication
+       * handles or client-supplied basis can enter this lookup. */
+      async acceptedCheckpoint(revision) {
+        live(); if (!Number.isSafeInteger(revision) || revision < 0) throw Error("Expected an accepted model revision");
+        const value = acceptedCheckpoints.get(revision); if (!value) throw Error("Accepted model revision is unavailable");
+        return { revision, acceptedInput: value.acceptedInput, checkpoints: await loadCheckpoints(storage, value.references) };
+      },
       restoredCheckpoints: () => Object.fromEntries(Object.entries(restoredCheckpoints).map(([key, bytes]) => [key, Buffer.from(bytes)])),
       connect(principal, clientId, sessionId = randomUUID()) { return enqueue(() => authority.connect(principal, clientId, sessionId)); },
       disconnect(connection) { return enqueue(() => { authenticate(connection); authority.disconnect(connection.sessionId); }); },
       receipt(connection, requestId) { live(); return authority.receipt(connection, requestId); },
+      async operationResult(connection, requestId) {
+        live(); authenticate(connection);
+        const receipt = authority.receipt(connection, requestId);
+        if (receipt?.outcome?.status !== "accepted") return null;
+        const key = operationKey({ userId: connection.userId, clientId: connection.clientId, requestId }), reference = operationResults.get(key);
+        if (!reference) return null;
+        const bytes = await storage.readBlob(reference); if (bytes.length > 2 * 1024 * 1024) throw Error("Invalid durable operation result size");
+        return JSON.parse(bytes);
+      },
       resume(connection, after) { live(); return authority.resume(connection, after); },
       subscribe(listener) { live(); if (listeners.size >= 256 || typeof listener !== "function") throw failure("backpressure", "Collaboration subscription limit"); listeners.add(listener); return () => listeners.delete(listener); },
       /** Trusted short native preparation between fsynced source stages. Do
@@ -188,7 +208,13 @@ export async function openDurableCollaborationHost(folder, {
             }
             const accepted = publication?.completion?.status === "accepted";
             let checkpoints;
-            try { checkpoints = accepted ? checkpointBytes(publication.checkpoints) : {}; }
+            try {
+              checkpoints = accepted ? checkpointBytes(publication.checkpoints) : {};
+              if (accepted && publication.result !== undefined) {
+                const bytes = Buffer.from(JSON.stringify(publication.result)); if (bytes.length > 2 * 1024 * 1024) throw Error("Operation result exceeds 2 MiB");
+                checkpoints.operationResult = bytes;
+              }
+            }
             catch (error) { publication.abort?.(); throw error; }
             const stage = authority.stageValidatedCompletion(prepared, publication.completion);
             try {
@@ -199,7 +225,9 @@ export async function openDurableCollaborationHost(folder, {
               const receipt = authority.commitStage(stage);
               publication.install?.();
               if (accepted) {
+                if (envelope.attachments.operationResult) operationResults.set(operationKey(receipt.operation), envelope.attachments.operationResult);
                 current = { acceptedRevision: receipt.outcome.revision, acceptedInput: receipt.outcome.accepted_input, references: envelope.attachments };
+                acceptedCheckpoints.set(receipt.outcome.revision, { revision: receipt.outcome.revision, acceptedInput: receipt.outcome.accepted_input, references: envelope.attachments });
                 textReferences = { source: envelope.attachments.source };
               }
               publish(envelope); return receipt;

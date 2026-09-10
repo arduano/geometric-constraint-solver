@@ -9,7 +9,7 @@ function counter(value) { if (!Number.isSafeInteger(value) || value < 0) throw p
 function object(value) { if (!value || typeof value !== "object" || Array.isArray(value)) throw problem("invalid_request", "Expected JSON object"); return value; }
 function exact(value, keys) { object(value); if (Object.keys(value).some((key) => !keys.includes(key))) throw problem("invalid_request", "Unknown request field"); }
 function limitsOf(overrides) {
-  const defaults = { maxBodyBytes: 1024 * 1024, maxConnections: 128, maxStreamsPerConnection: 2, maxSubscriberBytes: 256 * 1024, maxPresenceBytes: 16 * 1024, maxRequestsPerSecond: 120, maxConcurrentRequests: 128 };
+  const defaults = { maxBodyBytes: 1024 * 1024, maxConnections: 128, maxStreamsPerConnection: 2, maxSubscriberBytes: 256 * 1024, maxPresenceBytes: 16 * 1024, maxRequestsPerSecond: 120, maxConcurrentRequests: 128, sessionIdleMs: 120_000 };
   const limits = { ...defaults, ...overrides };
   if (Object.keys(limits).some((key) => !Object.hasOwn(defaults, key)) || Object.values(limits).some((value) => !Number.isSafeInteger(value) || value < 1)) throw Error("Invalid collaboration HTTP limits");
   return limits;
@@ -32,7 +32,7 @@ function sendJson(response, status, value) {
  * domain adapters. A network body can never call completion/install/rebuild.
  * Canvas camera/picking/selection stay local; no navigation route exists here.
  */
-export function createCollaborationHttpServer({ host, invitations, execute, captureApply, receiveText, textDelta, documentSnapshot, scene, limits: overrides, allowedOrigins = [] }) {
+export function createCollaborationHttpServer({ host, invitations, execute, captureApply, captureSemantic, receiveText, textDelta, documentSnapshot, scene, staticRoutes, limits: overrides, allowedOrigins = [] }) {
   if (!host || !(invitations instanceof Map) || !invitations.size || typeof execute !== "function") throw Error("A durable host, trusted invitations and domain worker are required");
   const limits = limitsOf(overrides), origins = new Set(allowedOrigins);
   const sessions = new Map(), streams = new Set(), presence = new Map(), pendingJoins = new Set();
@@ -68,7 +68,7 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
     // Validate epochs and native host session on every request; transport tokens
     // cannot outlive Rust authority restoration or manufacture an editor role.
     host.resume(session.connection, host.snapshot().latestSequence);
-    const now = Date.now();
+    const now = Date.now(); session.lastSeen = now;
     if (now - session.window >= 1000) { session.window = now; session.requests = 0; }
     if (++session.requests > limits.maxRequestsPerSecond) throw problem("backpressure", "Request rate exceeded; retain work and retry", 429);
     return session;
@@ -80,6 +80,13 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
       if (activeRequests > limits.maxConcurrentRequests) throw problem("backpressure", "Too many concurrent requests", 429);
       if (request.headers.origin && !origins.has(request.headers.origin)) throw problem("origin", "Origin is not admitted by this host", 403);
       const url = new URL(request.url, "http://collaboration.local");
+      if (!url.pathname.startsWith(prefix) && ["GET", "HEAD"].includes(request.method)) {
+        const asset = staticRoutes?.get(url.pathname);
+        if (asset) {
+          response.writeHead(200, { "Content-Type": asset.type, "Content-Length": asset.body.length, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" });
+          response.end(request.method === "HEAD" ? undefined : asset.body); return;
+        }
+      }
       if (!url.pathname.startsWith(prefix)) throw problem("not_found", "Unknown route", 404);
       const route = url.pathname.slice(prefix.length);
       if (request.method === "POST" && route === "join") {
@@ -107,7 +114,7 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
             return;
           }
           const token = randomBytes(32).toString("hex");
-          sessions.set(token, { token, connection, streams: new Set(), window: Date.now(), requests: 0 });
+          sessions.set(token, { token, connection, streams: new Set(), window: Date.now(), lastSeen: Date.now(), requests: 0 });
           sendJson(response, 200, { connection, token, authority: host.snapshot(), participants: participants() }); notify("participants", participants()); kick(); return;
         } finally { pendingJoins.delete(joining); }
       }
@@ -134,6 +141,9 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
       if (request.method === "GET" && route === "receipt") {
         const requestId = url.searchParams.get("requestId"); sendJson(response, 200, { receipt: host.receipt(session.connection, requestId) }); return;
       }
+      if (request.method === "GET" && route === "result") {
+        sendJson(response, 200, { result: await host.operationResult(session.connection, url.searchParams.get("requestId")) }); return;
+      }
       if (request.method === "GET" && route === "scene") {
         if (!scene) throw problem("unavailable", "Accepted scene is not ready", 503);
         const snapshot = host.snapshot();
@@ -153,6 +163,9 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
       if (stopped) throw problem("unavailable", "Collaboration transport is stopping", 503);
       if (sessions.get(session.token) !== session) throw problem("unauthorized", "This document connection has ended", 401);
       host.resume(session.connection, host.snapshot().latestSequence);
+      if (route === "heartbeat") {
+        exact(body, []); sendJson(response, 200, { ok: true }); return;
+      }
       if (route === "text-state") {
         if (!textDelta) throw problem("unavailable", "Incremental shared text is not ready", 503);
         exact(body, ["revision"]);
@@ -161,7 +174,7 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
       if (route === "commands") {
         exact(body, ["requestId", "command"]);
         const request = { connection: session.connection, requestId: body.requestId, command: body.command };
-        const receipt = await host.admit(request, body.command?.kind === "apply" && captureApply ? () => captureApply(session.connection) : undefined);
+        const receipt = await host.admit(request, body.command?.kind === "apply" && captureApply ? () => captureApply(session.connection) : body.command?.kind === "semantic" && captureSemantic ? () => captureSemantic(session.connection, body.command) : undefined);
         sendJson(response, 200, { receipt }); kick(); return;
       }
       if (route === "text") {
@@ -195,8 +208,21 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
     } finally { activeRequests--; }
   });
   server.requestTimeout = 30_000; server.headersTimeout = 10_000; server.keepAliveTimeout = 5_000;
-  const stop = () => { if (stopped) return; stopped = true; unsubscribe(); for (const stream of streams) stream.close(); };
+  const retiring = new Set();
+  const expiry = setInterval(() => {
+    if (stopped) return;
+    for (const session of sessions.values()) {
+      if (Date.now() - session.lastSeen < limits.sessionIdleMs) continue;
+      // Remove disposable transport identity immediately. A request body that
+      // completes later cannot revive presence or use this expired token.
+      dropSession(session); notify("participants", participants());
+      const task = host.disconnect(session.connection).catch(() => {}).finally(() => retiring.delete(task)); retiring.add(task);
+    }
+  }, Math.min(30_000, Math.max(1, Math.floor(limits.sessionIdleMs / 2))));
+  expiry.unref();
+  const stop = () => { if (stopped) return; stopped = true; clearInterval(expiry); unsubscribe(); for (const stream of streams) stream.close(); };
   return { server, kick, stats: () => ({ sessions: sessions.size, pendingJoins: pendingJoins.size, streams: streams.size, presence: presence.size, activeRequests, workerBusy: processing, subscriberBytes: [...streams].reduce((sum, stream) => sum + stream.bufferedBytes(), 0) }),
+    allowOrigin(origin) { const parsed = new URL(origin); if (parsed.origin !== origin || !["http:", "https:"].includes(parsed.protocol)) throw Error("Expected an explicit host origin"); origins.add(origin); },
     stop,
     close() {
       if (closing) return closing;
@@ -205,6 +231,7 @@ export function createCollaborationHttpServer({ host, invitations, execute, capt
         await new Promise((resolve, reject) => { server.close((error) => error && error.code !== "ERR_SERVER_NOT_RUNNING" ? reject(error) : resolve()); server.closeIdleConnections(); });
         // The caller may keep the host alive or attach a new transport. Release
         // native sessions after in-flight joins/leaves finish, preserving its cap.
+        await Promise.all(retiring);
         try { for (const session of sessions.values()) if (!host.snapshot().needsRecovery) await host.disconnect(session.connection); }
         finally { sessions.clear(); presence.clear(); cachedScene = undefined; }
       })();

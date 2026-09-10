@@ -197,3 +197,22 @@ test("lost text ACK restores both invalid source and original dedup receipt afte
   assert.deepEqual(await restored.writeText(connection, () => { throw Error("duplicate must not replay source splice"); }, request), ack);
   assert.equal(JSON.parse(restored.restoredCheckpoints().source).draft, "const incomplete =");
 });
+
+test("historical accepted basis and original operation mappings remain immutable through restart", async (t) => {
+  const {host,open}=await fixture(t),alice=await host.connect({userId:"alice",role:"editor"},"tab");
+  const original=await host.acceptedCheckpoint(0),mapping={allocationMapping:[{provisional:"line1",persistent:"line7"}]};
+  await host.admit(submit(alice,"created"));
+  await host.runNext(async()=>()=>({...accepted("created-input")(),result:mapping}));
+  assert.deepEqual(await host.operationResult(alice,"created"),mapping);
+  await host.admit(submit(alice,"next",1),async()=>({historicalBasis:(await host.acceptedCheckpoint(0)).checkpoints.model}));
+  await host.runNext(async(_prepared,attachments)=>{
+    assert.deepEqual(attachments.historicalBasis,original.checkpoints.model);return accepted("later-input");
+  });
+  assert.deepEqual(await host.acceptedCheckpoint(0),original);
+  await host.close();const restored=await open(),rejoined=await restored.connect({userId:"alice",role:"editor"},"tab");
+  assert.deepEqual(await restored.operationResult(rejoined,"created"),mapping);
+  assert.deepEqual(await restored.acceptedCheckpoint(0),original);
+  const bob=await restored.connect({userId:"bob",role:"editor"},"tab");
+  assert.equal(await restored.operationResult(bob,"created"),null);
+  await assert.rejects(restored.acceptedCheckpoint(99),/unavailable/u);
+});

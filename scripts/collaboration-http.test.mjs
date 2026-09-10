@@ -383,3 +383,22 @@ test("SSE never coalesces durable IDs or overflows the bound with its recovery h
   const bounded = subscriber(tiny, 8); bounded.send("operation", { order: 1 }, 1);
   assert.equal(tiny.destroyed, true); assert.ok(Buffer.concat(tiny.chunks).length <= 8);
 });
+
+test("expired connections release participants, presence and native slots while live heartbeats retain viewers", async (t) => {
+  const f = await fixture(t, { transportOptions: { limits: { sessionIdleMs: 200, maxConnections: 2 } } });
+  const alice = await f.request("join", { body: { protocol: 1, inviteToken: "alice-invite", clientId: "abandoned" } });
+  const bob = await f.request("join", { body: { protocol: 1, inviteToken: "view-invite", clientId: "live-viewer" } });
+  assert.equal(alice.status, 200); assert.equal(bob.status, 200);
+  const oldToken = alice.body.token, token = bob.body.token;
+  assert.equal((await f.request("presence", { token: oldToken, body: { sequence: 1, cursor: [3, 4], selection: ["ring"] } })).status, 200);
+  const deadline = Date.now() + 5000;
+  while (f.transport.stats().sessions > 1 && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 40));
+    assert.equal((await f.request("heartbeat", { token, body: {} })).status, 200);
+  }
+  assert.equal(f.transport.stats().sessions, 1); assert.equal(f.transport.stats().presence, 0);
+  const state = await f.request("state", { token }); assert.equal(state.status, 200);
+  assert.deepEqual(state.body.participants.map(person => person.clientId), ["live-viewer"]);
+  assert.equal((await f.request("presence", { token: oldToken, body: { sequence: 2, cursor: [5, 6] } })).status, 401);
+  assert.equal((await f.request("join", { body: { protocol: 1, inviteToken: "bob-invite", clientId: "replacement" } })).status, 200);
+});
