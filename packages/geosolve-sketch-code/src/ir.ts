@@ -13,6 +13,7 @@ export {
   MANAGED_SKETCH_SOURCE_LIMIT,
   ManagedCompileError,
   compileManagedSource,
+  applyManagedSourcePatch,
 } from "./managed.js";
 
 export type {
@@ -41,6 +42,9 @@ export type {
   ManagedSourceSite,
   ManagedSourceSiteKind,
   ManagedSourceSpan,
+  ManagedSourceEdit,
+  ManagedSourcePatch,
+  ManagedSourceMutationReceipt,
   ManagedStatement,
   ManagedSuppressionStatement,
   ManagedValue,

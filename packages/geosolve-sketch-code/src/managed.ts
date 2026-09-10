@@ -11,6 +11,9 @@
 import ts from "typescript";
 import { validatePresentation, validateSketchOptions } from "./presentation.js";
 import type { ParameterOptions, PresentationOptions, SketchOptions } from "./presentation.js";
+import { localizedManagedSourceEdits } from "./source-patch.js";
+import type { ManagedSourceEdit, ManagedSourcePatch } from "./source-patch.js";
+export type { ManagedSourceEdit, ManagedSourcePatch } from "./source-patch.js";
 
 import {
   AUTHORING_METHOD_CATALOG,
@@ -323,9 +326,22 @@ export interface ManagedMutationReceipt {
   readonly compiled: CompiledManagedSource;
 }
 
+/** Authenticated localized text plus the existing normalized CAD receipt. */
+export interface ManagedSourceMutationReceipt extends ManagedMutationReceipt {
+  /** Exact authored candidate, preserving text outside the mutation's owners. */
+  readonly source: string;
+  /** UTF-16 edits against options.source, or normalizedSource when omitted. */
+  readonly patch: ManagedSourcePatch;
+}
+
 export interface ManagedCompileOptions {
   /** Pinned patch plans keyed by their local managed import binding. */
   readonly patches?: Readonly<Record<string, PatchArtifactPlan>>;
+}
+
+export interface ManagedMutationOptions extends ManagedCompileOptions {
+  /** Exact authored text, independently authenticated against current. */
+  readonly source?: string;
 }
 
 /** Site-free semantic declaration prepared by Rust or another trusted host. */
@@ -540,8 +556,30 @@ export function applyManagedSketchMutation(
   mutation: ManagedSketchMutation,
   options: ManagedCompileOptions = {},
 ): ManagedMutationReceipt {
+  const receipt = applyManagedSketchSourceMutation(current, mutation, options);
+  // Existing Rust transports deliberately deny unknown receipt properties.
+  return deepFreeze({
+    baseSourceDigest: receipt.baseSourceDigest,
+    candidateSourceDigest: receipt.candidateSourceDigest,
+    compiled: receipt.compiled,
+  });
+}
+
+/** Prepare exact localized text alongside the independently compiled mutation. */
+export function applyManagedSketchSourceMutation(
+  current: CompiledManagedSource,
+  mutation: ManagedSketchMutation,
+  options: ManagedMutationOptions = {},
+): ManagedSourceMutationReceipt {
   validateMutationRequest(mutation);
   const authenticated = authenticateMutationCurrent(current, options);
+  const source = options.source ?? authenticated.normalizedSource;
+  if (options.source !== undefined) {
+    const raw = compileManagedSourceVersion(source, options, authenticated.ir.format === "geosolve-managed-sketch-ir-v3" ? 3 : 4);
+    if (raw.canonicalIrJson !== authenticated.canonicalIrJson || raw.canonicalArtifactJson !== authenticated.canonicalArtifactJson) {
+      return mutationFail("invalid_current", "managed sketch authored source does not match its compiled authority");
+    }
+  }
   let imports = authenticated.ir.imports;
   const statements = [...authenticated.ir.statements];
   let output = authenticated.ir.output;
@@ -620,18 +658,111 @@ export function applyManagedSketchMutation(
     );
   }
   const { document: _oldDocument, ...irWithoutDocument } = authenticated.ir;
-  const compiled = compileMutatedStatements(
+  const expectedCompiled = compileMutatedStatements(
     { ...irWithoutDocument, ...(document === undefined ? {} : { document }) },
     imports,
     statements,
     options,
     output,
   );
+  const edits = localizedManagedSourceEdits(source, expectedCompiled.normalizedSource);
+  const candidate = spliceManagedSource(source, edits);
+  const patch = {
+    baseSourceDigest: sha256(source),
+    candidateSourceDigest: sha256(candidate),
+    edits,
+  };
+  applyManagedSourcePatch(source, patch);
+  const localizedCompiled = compileManagedSource(candidate, options);
+  if (semanticManagedIr(localizedCompiled.ir) !== semanticManagedIr(expectedCompiled.ir)) {
+    return mutationFail("invalid_draft", "localized managed source does not reproduce the prepared semantic mutation");
+  }
+  // Existing normalized-only transports persist this exact compiler envelope.
+  // Raw-source hosts opt into the authored input digest explicitly.
+  const compiled = options.source === undefined ? expectedCompiled : localizedCompiled;
   return deepFreeze({
     baseSourceDigest: authenticated.ir.source_digest,
     candidateSourceDigest: compiled.ir.source_digest,
     compiled,
+    source: candidate,
+    patch,
   });
+}
+
+/** Apply text changes atomically after exact full-source and slice checks. */
+export function applyManagedSourcePatch(source: string, patch: ManagedSourcePatch): string {
+  const fail = (message: string): never => mutationFail("invalid_current", `managed source patch ${message}`);
+  if (typeof source !== "string" || source.length > MANAGED_SKETCH_SOURCE_LIMIT
+    || new TextEncoder().encode(source).length > MANAGED_SKETCH_SOURCE_LIMIT) return fail("source exceeds its bound");
+  if (!wellFormedUtf16(source)) return fail("source contains an unpaired UTF-16 surrogate");
+  if (typeof patch !== "object" || patch === null || !Array.isArray(patch.edits)
+    || patch.edits.length > MANAGED_STATEMENT_LIMIT * 4
+    || typeof patch.baseSourceDigest !== "string" || typeof patch.candidateSourceDigest !== "string"
+    || !/^[0-9a-f]{64}$/u.test(patch.baseSourceDigest)
+    || !/^[0-9a-f]{64}$/u.test(patch.candidateSourceDigest)
+    || sha256(source) !== patch.baseSourceDigest) return fail("does not match the exact source digest");
+  let previousEnd = -1;
+  let previousStart = -1;
+  let replacementBytes = 0;
+  for (const edit of patch.edits) {
+    if (typeof edit !== "object" || edit === null || !Number.isSafeInteger(edit.start) || !Number.isSafeInteger(edit.end)
+      || edit.start < 0 || edit.end < edit.start || edit.end > source.length
+      || edit.start < previousEnd || edit.start === previousStart
+      || typeof edit.expected !== "string" || typeof edit.replacement !== "string"
+      || !utf16ScalarBoundary(source, edit.start) || !utf16ScalarBoundary(source, edit.end)
+      || source.slice(edit.start, edit.end) !== edit.expected) return fail("has invalid UTF-16 offsets, order, or expected text");
+    if (edit.replacement.length > MANAGED_SKETCH_SOURCE_LIMIT) return fail("replacement text exceeds its bound");
+    if (!wellFormedUtf16(edit.replacement)) return fail("replacement contains an unpaired UTF-16 surrogate");
+    previousStart = edit.start;
+    previousEnd = edit.end;
+    replacementBytes += new TextEncoder().encode(edit.replacement).length;
+    if (replacementBytes > MANAGED_SKETCH_SOURCE_LIMIT) return fail("replacement text exceeds its bound");
+  }
+  const candidate = spliceManagedSource(source, patch.edits);
+  if (new TextEncoder().encode(candidate).length > MANAGED_SKETCH_SOURCE_LIMIT) return fail("candidate text exceeds its bound");
+  if (sha256(candidate) !== patch.candidateSourceDigest) return fail("candidate digest does not match");
+  return candidate;
+}
+
+function utf16ScalarBoundary(source: string, offset: number): boolean {
+  const left = source.charCodeAt(offset - 1);
+  const right = source.charCodeAt(offset);
+  return !(left >= 0xd800 && left <= 0xdbff && right >= 0xdc00 && right <= 0xdfff);
+}
+
+function wellFormedUtf16(source: string): boolean {
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    if (code >= 0xdc00 && code <= 0xdfff) return false;
+    if (code < 0xd800 || code > 0xdbff) continue;
+    const next = source.charCodeAt(++index);
+    if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+  }
+  return true;
+}
+
+function spliceManagedSource(source: string, edits: readonly ManagedSourceEdit[]): string {
+  const pieces: string[] = [];
+  let offset = 0;
+  for (const edit of edits) {
+    pieces.push(source.slice(offset, edit.start), edit.replacement);
+    offset = edit.end;
+  }
+  pieces.push(source.slice(offset));
+  return pieces.join("");
+}
+
+function semanticManagedIr(ir: ManagedSketchIr): string {
+  // Locations and attached trivia are derived from each exact source. They may
+  // differ after preserving comments, while all executable ownership must agree.
+  const strip = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(strip);
+    if (typeof value !== "object" || value === null) return value;
+    return Object.fromEntries(Object.entries(value)
+      .filter(([key]) => !["site", "source_sites", "source_digest", "ir_digest", "comments"].includes(key))
+      .map(([key, child]) => [key, strip(child)]));
+  };
+  return canonicalJson(strip(ir));
 }
 
 /** Exact data bytes admitted by Rust's managed sketch IR validator. */

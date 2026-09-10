@@ -11,9 +11,12 @@ import { definePatch } from "../src/authoring.js";
 import { recordPatchArtifact } from "../src/compiler.js";
 import {
   applyManagedSketchMutation,
+  applyManagedSketchSourceMutation,
+  applyManagedSourcePatch,
   compileManagedSource,
   executeManagedSketch,
   canonicalExecutedSketchArtifact,
+  managedContentDigest,
   type ManagedDeclarationDraft,
 } from "../src/managed.js";
 
@@ -24,6 +27,194 @@ export default sketch(($) => {
   return {};
 });
 `;
+
+const localizedSource = `"use geosolve sketch";
+import { sketch, mm } from '@geosolve/sketch-code'; // keep import trivia
+export default sketch(($) => {
+  // 🧭 日本語: keep coordinates readable
+  const a=$.geometry.segment('a',{ start : [0, 0], end:[12, 0] /* endpoint */ }); const b = $.geometry.segment("b", {start:[0,1],end:[4,1]}); // b annotation
+  return { a, b }; // keep output shorthand
+});
+`;
+
+test("localized value patches retain Unicode, comments, quote style and same-line neighbors", () => {
+  const current = compileManagedSource(localizedSource);
+  const receipt = applyManagedSketchSourceMutation(current, {
+    mutation: "set_value", declaration: "a", path: ["end", 0],
+    expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 },
+  }, { source: localizedSource });
+  const start = localizedSource.indexOf("12, 0");
+  assert.deepEqual(receipt.patch.edits, [{ start, end: start + 2, expected: "12", replacement: "14" }]);
+  assert.equal(receipt.source, localizedSource.replace("12, 0", "14, 0"));
+  assert.equal(applyManagedSourcePatch(localizedSource, receipt.patch), receipt.source);
+  assert.equal(receipt.patch.baseSourceDigest, managedContentDigest(localizedSource));
+  assert.equal(receipt.baseSourceDigest, current.ir.source_digest);
+  assert.equal(receipt.compiled.inputSourceDigest, receipt.patch.candidateSourceDigest);
+  assert.equal(compileManagedSource(receipt.source).canonicalArtifactJson, receipt.compiled.canonicalArtifactJson);
+  assert.equal(current.normalizedSource, compileManagedSource(localizedSource).normalizedSource);
+});
+
+test("localized patch authentication rejects stale text, forged slices, offset units and candidate bytes", () => {
+  const receipt = applyManagedSketchSourceMutation(compileManagedSource(localizedSource), {
+    mutation: "set_value", declaration: "a", path: ["end", 0],
+    expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 },
+  }, { source: localizedSource });
+  assert.throws(() => applyManagedSourcePatch(localizedSource + " ", receipt.patch), /exact source digest/u);
+  const edit = receipt.patch.edits[0]!;
+  for (const forged of [
+    { ...edit, expected: "13" }, { ...edit, start: -1 }, { ...edit, start: edit.start + 0.5 },
+    { ...edit, end: localizedSource.length + 1 }, { ...edit, replacement: "15" },
+  ]) assert.throws(() => applyManagedSourcePatch(localizedSource, { ...receipt.patch, edits: [forged] }));
+  assert.throws(() => applyManagedSourcePatch(localizedSource, { ...receipt.patch, edits: [edit, edit] }), /offsets, order/u);
+  const split = localizedSource.indexOf("🧭") + 1;
+  const replacement = localizedSource.slice(0, split) + "x" + localizedSource.slice(split);
+  assert.throws(() => applyManagedSourcePatch(localizedSource, {
+    baseSourceDigest: managedContentDigest(localizedSource), candidateSourceDigest: managedContentDigest(replacement),
+    edits: [{ start: split, end: split, expected: "", replacement: "x" }],
+  }), /UTF-16/u);
+  assert.throws(() => applyManagedSketchSourceMutation(compileManagedSource(localizedSource), {
+    mutation: "set_suppressed", target: { target: "declaration", declaration: "a" }, suppressed: true,
+  }, { source: localizedSource.replace("12, 0", "13, 0") }), /does not match its compiled authority/u);
+});
+
+test("localized metadata insertion, update and reset preserve neighboring properties and comments", () => {
+  const current = compileManagedSource(localizedSource);
+  const inserted = applyManagedSketchSourceMutation(current, {
+    mutation: "set_metadata", target: { target: "declaration", declaration: "a" },
+    property: "label", value: { kind: "string", value: "Passage 🧭" },
+  }, { source: localizedSource });
+  assert.equal(inserted.patch.edits.length, 1);
+  assert.equal(inserted.patch.edits[0]!.expected, "");
+  assert.ok(inserted.source.includes("end:[12, 0] /* endpoint */ "));
+  assert.ok(inserted.source.includes('}); const b = $.geometry.segment("b", {start:[0,1],end:[4,1]}); // b annotation'));
+  const updated = applyManagedSketchSourceMutation(inserted.compiled, {
+    mutation: "set_metadata", target: { target: "declaration", declaration: "a" },
+    property: "label", value: { kind: "string", value: "Water" },
+  }, { source: inserted.source });
+  assert.equal(updated.patch.edits.length, 1);
+  assert.equal(updated.patch.edits[0]!.expected, '"Passage 🧭"');
+  const reset = applyManagedSketchSourceMutation(updated.compiled, {
+    mutation: "set_metadata", target: { target: "declaration", declaration: "a" }, property: "label", value: null,
+  }, { source: updated.source });
+  assert.equal(reset.compiled.artifact.declarations[0]?.family, "geometry.segment");
+  assert.ok(!reset.source.includes("label:"));
+  assert.ok(reset.source.includes("/* endpoint */"));
+  assert.ok(reset.source.includes("return { a, b }; // keep output shorthand"));
+});
+
+test("localized lifecycle mutations preserve same-line statements and exact moved comments", () => {
+  const current = compileManagedSource(localizedSource);
+  const reordered = applyManagedSketchSourceMutation(current, {
+    mutation: "reorder_declaration", declaration: "b", before: "a",
+  }, { source: localizedSource });
+  assert.ok(reordered.source.indexOf('const b =') < reordered.source.indexOf("const a="));
+  assert.ok(reordered.source.includes('const b = $.geometry.segment("b", {start:[0,1],end:[4,1]}); // b annotation'));
+  assert.ok(reordered.source.includes("// 🧭 日本語: keep coordinates readable"));
+  assert.ok(reordered.source.includes("const a=$.geometry.segment('a',{ start : [0, 0], end:[12, 0] /* endpoint */ });"));
+  const suppressed = applyManagedSketchSourceMutation(current, {
+    mutation: "set_suppressed", target: { target: "declaration", declaration: "a" }, suppressed: true,
+  }, { source: localizedSource });
+  assert.ok(suppressed.source.includes("$.suppress(a);"));
+  assert.equal(suppressed.patch.edits.length, 1);
+  assert.equal(suppressed.patch.edits[0]!.expected, "");
+  const restored = applyManagedSketchSourceMutation(suppressed.compiled, {
+    mutation: "set_suppressed", target: { target: "declaration", declaration: "a" }, suppressed: false,
+  }, { source: suppressed.source });
+  assert.deepEqual(restored.compiled.artifact.suppressions, []);
+  assert.ok(restored.source.includes("// b annotation"));
+  const deleted = applyManagedSketchSourceMutation(current, {
+    mutation: "delete", target: { target: "declaration", declaration: "a" },
+  }, { source: localizedSource });
+  assert.ok(!deleted.source.includes("const a="));
+  assert.ok(deleted.source.includes('const b = $.geometry.segment("b", {start:[0,1],end:[4,1]}); // b annotation'));
+  assert.equal(deleted.compiled.artifact.declarations.length, 1);
+  assert.deepEqual(deleted.compiled.artifact.output, { kind: "object", value: { b: { kind: "reference", value: { declaration: "b", path: [] } } } });
+});
+
+test("localized insertion closes helper imports and preserves existing CRLF source bytes", () => {
+  const source = localizedSource.replace("sketch, mm", "sketch").replaceAll("\n", "\r\n");
+  const inserted = applyManagedSketchSourceMutation(compileManagedSource(source), {
+    mutation: "insert_declarations", declarations: [circleDraft("circle", "circle")],
+  }, { source });
+  assert.ok(inserted.source.includes("'@geosolve/sketch-code'; // keep import trivia\r\n"));
+  assert.ok(inserted.source.includes("const a=$.geometry.segment('a',{ start : [0, 0], end:[12, 0] /* endpoint */ }); const b ="));
+  assert.equal(inserted.compiled.artifact.declarations.length, 3);
+  assert.ok(inserted.patch.edits.every((edit) => edit.expected === ""));
+  assert.ok(!inserted.source.replaceAll("\r\n", "").includes("\n"));
+});
+
+test("localized document and parameter metadata preserve original callback and scalar spelling", () => {
+  const source = localizedSource.replace("  // 🧭", "  const width=mm(/* dimension */ 1.2e1);\n  // 🧭");
+  const extracted = applyManagedSketchSourceMutation(compileManagedSource(source), {
+    mutation: "extract_parameter", declaration: "width", path: [], symbol: "channelWidth", variable: "width",
+  }, { source });
+  assert.ok(extracted.source.includes('$.parameter("channelWidth", mm(/* dimension */ 1.2e1))'));
+  assert.ok(extracted.source.includes("const a=$.geometry.segment('a',{ start : [0, 0], end:[12, 0] /* endpoint */ }); const b ="));
+  assert.equal(extracted.compiled.artifact.parameters?.[0]?.declaration, "channelWidth");
+  const titled = applyManagedSketchSourceMutation(extracted.compiled, {
+    mutation: "set_metadata", target: { target: "document" }, property: "title", value: { kind: "string", value: "Plate 🧭" },
+  }, { source: extracted.source });
+  assert.equal(titled.patch.edits.length, 1);
+  assert.equal(titled.patch.edits[0]!.expected, "");
+  const marked = applyManagedSketchSourceMutation(titled.compiled, {
+    mutation: "set_metadata", target: { target: "parameter", declaration: "channelWidth" }, property: "isKeyParameter", value: { kind: "bool", value: true },
+  }, { source: titled.source });
+  assert.equal(marked.compiled.artifact.parameters?.[0]?.presentation.isKeyParameter, true);
+  const reset = applyManagedSketchSourceMutation(marked.compiled, {
+    mutation: "set_metadata", target: { target: "document" }, property: "title", value: null,
+  }, { source: marked.source });
+  assert.equal(reset.compiled.artifact.document, undefined);
+  assert.ok(reset.source.includes("return { a, b }; // keep output shorthand"));
+});
+
+test("localized batch values authenticate all expected owners before returning any patch", () => {
+  const current = compileManagedSource(localizedSource);
+  const values = [
+    { declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 } },
+    { declaration: "b", path: ["end", 0], expected: { kind: "number", value: 4 }, value: { kind: "number", value: 6 } },
+  ] as const;
+  const receipt = applyManagedSketchSourceMutation(current, { mutation: "set_values", values }, { source: localizedSource });
+  assert.equal(receipt.patch.edits.length, 2);
+  assert.equal(receipt.source, localizedSource.replace("12, 0", "14, 0").replace("end:[4,1]", "end:[6,1]"));
+  assert.throws(() => applyManagedSketchSourceMutation(current, {
+    mutation: "set_values", values: [values[0], { ...values[1], expected: { kind: "number", value: 5 } }],
+  }, { source: localizedSource }), /expected/u);
+  assert.equal(current.canonicalArtifactJson, compileManagedSource(localizedSource).canonicalArtifactJson);
+  const noop = applyManagedSketchSourceMutation(current, {
+    mutation: "reorder_declaration", declaration: "a", before: "a",
+  }, { source: localizedSource });
+  assert.deepEqual(noop.patch.edits, []);
+  assert.equal(noop.source, localizedSource);
+});
+
+test("localized patches reject ill-formed Unicode and bounded transport amplification", () => {
+  const source = "valid 🧭 text";
+  const patch = { baseSourceDigest: managedContentDigest(source), candidateSourceDigest: managedContentDigest(source), edits: [] };
+  assert.equal(applyManagedSourcePatch(source, patch), source);
+  for (const malformed of ["\ud800", "\udc00", "\ud800x"]) {
+    assert.throws(() => applyManagedSourcePatch(malformed, {
+      baseSourceDigest: managedContentDigest(malformed), candidateSourceDigest: managedContentDigest(malformed), edits: [],
+    }), /unpaired UTF-16/u);
+    assert.throws(() => applyManagedSourcePatch(source, {
+      ...patch, edits: [{ start: 0, end: 0, expected: "", replacement: malformed }],
+    }), /UTF-16/u);
+  }
+  assert.throws(() => applyManagedSourcePatch(source, {
+    ...patch, edits: [{ start: 0, end: 0, expected: "", replacement: "x".repeat(4 * 1024 * 1024 + 1) }],
+  }), /replacement text exceeds/u);
+});
+
+test("legacy managed receipt retains its exact Rust wire shape while localized transport is explicit", () => {
+  const current = compileManagedSource(localizedSource);
+  const mutation = { mutation: "set_value", declaration: "a", path: ["end", 0], expected: { kind: "number", value: 12 }, value: { kind: "number", value: 14 } } as const;
+  const legacy = applyManagedSketchMutation(current, mutation);
+  assert.deepEqual(Object.keys(legacy), ["baseSourceDigest", "candidateSourceDigest", "compiled"]);
+  const localized = applyManagedSketchSourceMutation(current, mutation, { source: localizedSource });
+  assert.equal(localized.compiled.canonicalArtifactJson, legacy.compiled.canonicalArtifactJson);
+  assert.equal(localized.compiled.canonicalIrJson, legacy.compiled.canonicalIrJson);
+  assert.equal("applyManagedSketchSourceMutation" in publicManagedIr, false);
+  assert.equal(typeof publicManagedIr.applyManagedSourcePatch, "function");
+});
 
 function circleDraft(
   variable: string,
