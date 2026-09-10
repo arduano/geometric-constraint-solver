@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { diagnosticCount } from "@codemirror/lint";
 import { EditorView } from "@codemirror/view";
+import { undo } from "@codemirror/commands";
 import { describe, expect, it, vi } from "vitest";
 import { CodeEditor, showSelectionInCanvas } from "./code-editor";
 import type { TypeScriptLanguageWorkerPort } from "../language/client";
@@ -82,6 +83,19 @@ class EditorLanguageWorker implements TypeScriptLanguageWorkerPort {
 }
 
 describe("CodeEditor TypeScript language integration", () => {
+  it("installs remote Unicode edits without echo or Undo ownership and preserves the surviving cursor",()=>{
+    const onChange=vi.fn(),onEdit=vi.fn();
+    const collaboration={displayId:1,onEdit,undo:vi.fn(),redo:vi.fn()};
+    const {container,rerender}=render(<CodeEditor value={"const a = '😀';\nconst b = 2;"} onChange={onChange} collaboration={collaboration}/>);
+    const editor=EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    editor.dispatch({selection:{anchor:25}});
+    rerender(<CodeEditor value={"// Bob\nconst a = '😁';\nconst b = 2;"} onChange={onChange} collaboration={{...collaboration,displayId:2}}/>);
+    expect(onChange).not.toHaveBeenCalled();expect(onEdit).not.toHaveBeenCalled();
+    expect(editor.state.selection.main.anchor).toBe(32);
+    expect(undo(editor)).toBe(false);
+    editor.dispatch({changes:{from:editor.state.doc.length,insert:"\n// Alice"}});
+    expect(onEdit).toHaveBeenCalledWith({displayId:2,before:"// Bob\nconst a = '😁';\nconst b = 2;",after:"// Bob\nconst a = '😁';\nconst b = 2;\n// Alice",changes:[{from:35,to:35,insert:"\n// Alice"}]});
+  });
   it("shows editor-only diagnostics and keeps source publication callback separate", async () => {
     const worker = new EditorLanguageWorker();
     const onChange = vi.fn();

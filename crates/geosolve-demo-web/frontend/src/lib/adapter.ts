@@ -82,6 +82,8 @@ export interface WorkbenchProblem {
 }
 
 export interface SourceFileSnapshot {
+  /** Optional opaque shared editor display identity, independent of model revision. */
+  sharedRevision?:number;
   path: string;
   language: "typescript" | "json" | "text";
   contents: string;

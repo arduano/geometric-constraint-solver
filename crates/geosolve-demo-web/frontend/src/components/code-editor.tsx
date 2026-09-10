@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { javascript } from "@codemirror/lang-javascript";
-import { Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
+import { Annotation, Compartment, EditorState, StateEffect, StateField, Transaction } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Decoration, type DecorationSet, EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
@@ -22,6 +22,22 @@ import { TYPESCRIPT_LANGUAGE_VERSION } from "../language/protocol";
 import type { Utf16SourceRange } from "../lib/source-navigation";
 
 const replaceSourceOwners = StateEffect.define<readonly Utf16SourceRange[]>();
+const installedSource = Annotation.define<boolean>();
+export interface SourceEditorEdit {
+  /** Opaque host display identity; local keystrokes retain it until an actual
+   * received document is installed into this editor. */
+  readonly displayId?:number;
+  readonly before:string;
+  readonly after:string;
+  /** CodeMirror positions count UTF-16 units in the before document. */
+  readonly changes:readonly {readonly from:number;readonly to:number;readonly insert:string}[];
+}
+export interface SharedSourceEditor {
+  readonly displayId?:number;
+  onEdit:(edit:SourceEditorEdit)=>void;
+  undo:()=>void;
+  redo:()=>void;
+}
 const sourceOwners = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(value, transaction) {
@@ -48,6 +64,7 @@ interface CodeEditorProps {
   value: string;
   readOnly?: boolean;
   onChange: (value: string) => void;
+  collaboration?:SharedSourceEditor;
   navigation?: EditorNavigation | null;
   highlights?: readonly Utf16SourceRange[];
   onShowInCanvas?: (range: Utf16SourceRange) => void;
@@ -70,6 +87,7 @@ export function CodeEditor({
   value,
   readOnly = false,
   onChange,
+  collaboration,
   navigation,
   highlights = [],
   onShowInCanvas,
@@ -84,6 +102,9 @@ export function CodeEditor({
   const languageClient = useRef<TypeScriptLanguageWorkerClient | null>(null);
   const languageProjectRef = useRef(languageProject);
   const onChangeRef = useRef(onChange);
+  const collaborationRef = useRef(collaboration);
+  const displayedRevision = useRef(collaboration?.displayId);
+  collaborationRef.current = collaboration;
   const lastNavigationRequest = useRef<number | null>(null);
   const onShowInCanvasRef = useRef(onShowInCanvas);
   onShowInCanvasRef.current = onShowInCanvas;
@@ -107,14 +128,26 @@ export function CodeEditor({
         highlightActiveLineGutter(),
         history(),
         sourceOwners,
-        keymap.of([{ key: "Mod-Shift-Enter", run: showSelectionInCanvas }, ...defaultKeymap, ...historyKeymap]),
+        keymap.of([
+          { key: "Mod-z", run: () => { if (!collaborationRef.current) return false; collaborationRef.current.undo(); return true; } },
+          { key: "Mod-Shift-z", run: () => { if (!collaborationRef.current) return false; collaborationRef.current.redo(); return true; } },
+          { key: "Mod-y", run: () => { if (!collaborationRef.current) return false; collaborationRef.current.redo(); return true; } },
+          { key: "Mod-Shift-Enter", run: showSelectionInCanvas }, ...defaultKeymap, ...historyKeymap,
+        ]),
         javascript({ typescript: true }),
         oneDark,
         readOnlyCompartment.current.of(EditorState.readOnly.of(readOnly)),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             synchronize(update.view);
-            onChangeRef.current(update.state.doc.toString());
+            if (!collaborationRef.current || !update.transactions.some((transaction) => transaction.annotation(installedSource))) {
+              if (collaborationRef.current) {
+                const changes:SourceEditorEdit["changes"][number][]=[];
+                update.changes.iterChanges((from,to,_fromB,_toB,insert)=>changes.push({from,to,insert:insert.toString()}));
+                collaborationRef.current.onEdit({displayId:displayedRevision.current,before:update.startState.doc.toString(),after:update.state.doc.toString(),changes});
+              }
+              onChangeRef.current(update.state.doc.toString());
+            }
           }
         }),
         languageCompartment.current.of([]),
@@ -199,9 +232,20 @@ export function CodeEditor({
 
   useEffect(() => {
     const editor = view.current;
-    if (!editor || editor.state.doc.toString() === value) return;
-    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } });
-  }, [value]);
+    if (!editor) return;
+    displayedRevision.current=collaboration?.displayId;
+    if (editor.state.doc.toString() === value) return;
+    // Preserve surviving selection/scroll and keep received contributions out
+    // of personal CodeMirror history. CRDT authority stays in the text worker.
+    const current=editor.state.doc.toString();
+    let from=0,oldEnd=current.length,newEnd=value.length;
+    while(from<oldEnd&&from<newEnd&&current.charCodeAt(from)===value.charCodeAt(from))from++;
+    // A changed non-BMP scalar must never be split into isolated surrogates.
+    if(from>0&&from<current.length&&current.charCodeAt(from)>=0xdc00&&current.charCodeAt(from)<=0xdfff)from--;
+    while(oldEnd>from&&newEnd>from&&current.charCodeAt(oldEnd-1)===value.charCodeAt(newEnd-1)){oldEnd--;newEnd--;}
+    if(oldEnd<current.length&&current.charCodeAt(oldEnd)>=0xdc00&&current.charCodeAt(oldEnd)<=0xdfff){oldEnd++;newEnd++;}
+    editor.dispatch({changes:{from,to:oldEnd,insert:value.slice(from,newEnd)},annotations:[installedSource.of(true),Transaction.addToHistory.of(false)]});
+  }, [value,collaboration?.displayId]);
 
   useEffect(() => {
     const editor = view.current;
