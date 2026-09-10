@@ -190,10 +190,14 @@ impl WorkbenchBridge {
             curve_picks: state.curve_picks,
         };
         selection.validate(scene).map_err(|e| e.to_string())?;
-        let scene = scene.clone();
-        self.editor_mut()
-            .restore_selection_presentation(&scene, selection)
-            .map_err(|e| e.to_string())?;
+        // Camera/dimension refreshes retain explicit Explorer row ownership,
+        // including declarations with no visible native selection items.
+        if selection != self.editor().editor().selection_presentation_state() {
+            let scene = scene.clone();
+            self.editor_mut()
+                .restore_selection_presentation(&scene, selection)
+                .map_err(|e| e.to_string())?;
+        }
         // All fallible admission precedes state publication. This changes no authored state.
         self.camera = camera;
         self.host_size = state.viewport.screen_size;
