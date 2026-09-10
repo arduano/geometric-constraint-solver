@@ -8476,6 +8476,8 @@ merge or qualify that product.
   durable recovery, local authoring prediction and opt-in workbench collaboration.
 - [x] Qualify four-browser collaboration and the eight-editor/24-viewer fault/load targets.
 - [x] Verify exact qualified static and collaborative replacement previews.
+- [ ] Repair and qualify shared dragging flicker and tiny-edit publication latency
+  (M98-F028/F029), retaining server authority and current user document/history.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Status: **collaboration mechanically qualified and delivered; supervising-user acceptance

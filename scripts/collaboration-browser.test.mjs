@@ -82,6 +82,167 @@ async function traceNavigation(context){
   });
 }
 
+test("shared circle dragging paints continuously through pending acceptance and reaches peers promptly", {timeout:120_000}, async t=>{
+  // The frame witness belongs to the actual canvas renderer. Geometry is never
+  // synthesized here: the fixture uses native point preview and server replay.
+  const held=deferred();let holding=false,holdNext=true;
+  const f=await fixture(t,{authoringPreview:{enabled:false,preferred:"client"},domainOptions:{beforeJob:async input=>{
+    if(input.kind==="point_gesture"&&holdNext){holdNext=false;holding=true;await held.promise;}
+  }}});
+  f.cleanup.push(()=>held.resolve());
+  const browser=await f.browser(),pages=[],errors=[],notices=[];
+  const observer=await f.client(0,"viewer");
+  for(let i=0;i<2;i++){
+    const context=await browser.newContext({viewport:{width:1280,height:900}}),page=await context.newPage();pages.push(page);
+    await context.addInitScript(()=>{
+      window.geosolveDragGpu=[];window.geosolveDragLongTasks=[];
+      new PerformanceObserver(list=>{for(const e of list.getEntries())if(window.geosolveDragLongTasks.length<128)window.geosolveDragLongTasks.push({at:e.startTime,duration:e.duration});}).observe({type:"longtask",buffered:true});
+      for(const method of ["compileShader","linkProgram","getProgramParameter","drawElements","drawArrays","getError","flush","checkFramebufferStatus","getShaderParameter"]){
+        const original=WebGL2RenderingContext.prototype[method];
+        WebGL2RenderingContext.prototype[method]=function(...args){const at=performance.now();try{return Reflect.apply(original,this,args);}finally{const elapsed=performance.now()-at;if(elapsed>5&&window.geosolveDragGpu.length<128)window.geosolveDragGpu.push({method,at,elapsed});}};
+      }
+    });
+    page.on("pageerror",error=>errors.push(String(error)));
+    await page.goto(`${f.origin}/?collaboration=1&authoringPreview=client#invite=editor-${i}`);await ready(page);
+    await page.getByRole("group",{name:"Workspace layout",exact:true}).getByRole("button",{name:"design",exact:true}).click();await resized(page);
+  }
+  const page=pages[0],peer=pages[1],trials=[];
+  for(let trial=0;trial<3;trial++){
+    await page.bringToFront();
+    const before=await observer.refresh(),peerBefore=await presented(peer),canvas=page.locator("canvas"),box=await canvas.boundingBox();
+    const point=await canvas.evaluate(canvas=>{
+      const frame=canvas.__geosolvePresentedFrame;
+      const item=frame.items.filter(item=>item.interactive&&item.kind==="circle"&&item.className.split(/\s/u).includes("wb-point")).sort((a,b)=>a.center[0]-b.center[0])[0];
+      if(!item)throw Error("Missing native draggable center");
+      return {id:item.id,x:item.center[0]-frame.viewBox[0],y:item.center[1]-frame.viewBox[1]};
+    });
+    await page.evaluate(id=>{
+      const trace={frames:[],events:[],active:true};window.geosolveDragTrace=trace;
+      const event=e=>{if(trace.active&&trace.events.length<256)trace.events.push({kind:e.type,at:performance.now(),x:e.clientX,y:e.clientY});};
+      window.addEventListener("pointermove",event,{capture:true});window.addEventListener("pointerup",event,{capture:true});
+      const tick=()=>{
+        if(!trace.active){window.removeEventListener("pointermove",event,{capture:true});window.removeEventListener("pointerup",event,{capture:true});return;}
+        const canvas=document.querySelector("canvas"),frame=canvas?.__geosolvePresentedFrame;
+        // Native predictions deliberately disable picking and use their own
+        // draw IDs. Match the left centre in this non-crossing two-circle scene.
+        const item=frame?.items.filter(item=>item.kind==="circle"&&item.className.split(/\s/u).includes("wb-point")).sort((a,b)=>a.center[0]-b.center[0])[0];
+        if(frame&&item&&trace.frames.length<2400)trace.frames.push({at:performance.now(),id:item.id,x:item.center[0]-frame.viewBox[0],y:item.center[1]-frame.viewBox[1],provenance:frame.provenance});
+        requestAnimationFrame(tick);
+      };requestAnimationFrame(tick);
+    },point.id);
+    const x=box.x+point.x,y=box.y+point.y;
+    await page.mouse.move(x,y);await page.mouse.down();
+    // Distinct moves are separated by one display interval, exposing accepted
+    // pointer/presence frames interleaved with the native authoring preview.
+    for(let step=1;step<=12;step++){await page.mouse.move(x+step*3,y-step);await sleep(20);}
+    const released=performance.now();await page.mouse.up();
+    if(trial===0){
+      await until(()=>holding,"The point commit did not reach the held server job");
+      // Pointer and presence updates must not repaint the pre-drag scene while
+      // its exact terminal is waiting for server authority.
+      for(let i=0;i<5;i++){await page.mouse.move(x+60+i,y+40);await sleep(40);}
+      held.resolve();
+    }
+    await until(()=>f.runtime.host.snapshot().acceptedRevision===before.authority.acceptedRevision+1,"Point drag did not publish",20_000);
+    await until(async()=>await presented(peer)!==peerBefore,"Peer did not present accepted point movement",20_000);
+    const releaseToPeerMs=performance.now()-released;
+    await sleep(120);
+    const trace=await page.evaluate(()=>{window.geosolveDragTrace.active=false;return {...window.geosolveDragTrace,gpu:window.geosolveDragGpu,longTasks:window.geosolveDragLongTasks};});
+    const after=await observer.refresh();
+    assert.notDeepEqual(after.document.pointTargets,before.document.pointTargets);
+    assert.deepEqual(after.document.pointTargets.find(item=>item.target.address.owner.address.declaration==="other").position,[20,0]);
+    const moved=trace.frames.findIndex(frame=>frame.x>point.x+2);
+    const reversals=moved<0?[]:trace.frames.slice(moved+1).filter((frame,i)=>frame.x<trace.frames[moved+i].x-1);
+    const moveEvents=trace.events.filter(event=>event.kind==="pointermove"&&event.x> x&&event.x<=x+36&&event.y<y);
+    const localMs=moveEvents.map(event=>{
+      const frame=trace.frames.find(frame=>frame.at>=event.at&&frame.x>=event.x-box.x-1);
+      return frame?frame.at-event.at:Infinity;
+    });
+    const result={trial,releaseToPeerMs,localP95Ms:p95(localMs),reversals:reversals.length,trace};trials.push(result);
+    progress("circle-drag-trial",{trial,releaseToPeerMs,localP95Ms:result.localP95Ms,reversals:result.reversals});
+    notices.push(await page.getByRole("region",{name:"Shared document",exact:true}).innerText());
+  }
+  t.diagnostic(JSON.stringify({trials,errors,notices}));
+  assert.deepEqual(errors,[]);
+  assert.ok(notices.every(notice=>!notice.includes("Browsing model was replaced")));
+  for(const trial of trials){
+    assert.ok(trial.trace.frames.length>12,"Require actual display observations throughout drag and release");
+    assert.equal(trial.reversals,0,`Trial ${trial.trial}: accepted coordinates flashed over the forward drag`);
+    // Initial browser/GPU setup has the existing 500 ms navigation budget;
+    // subsequent gestures must meet the tighter sustained interaction budget.
+    const localBudget=trial.trial===0?500:200;
+    assert.ok(trial.localP95Ms<localBudget,`Trial ${trial.trial}: event-to-painted-preview p95 ${trial.localP95Ms} ms`);
+    if(trial.trial>0)assert.ok(trial.releaseToPeerMs<1000,`Warm release-to-peer ${trial.releaseToPeerMs} ms`);
+  }
+});
+
+test("predicted geometry pans zooms and resizes while authoring and server completion are independently held",{timeout:120_000},async t=>{
+  const terminal=deferred();let serverHeld=false;
+  const f=await fixture(t,{domainOptions:{beforeJob:async input=>{if(input.kind==="point_gesture"){serverHeld=true;await terminal.promise;}}}});
+  f.cleanup.push(()=>terminal.resolve());
+  const browser=await f.browser(),context=await browser.newContext({viewport:{width:1280,height:900}});
+  await context.addInitScript(()=>{
+    window.geosolveHoldAuthoring=false;window.geosolveHeldAuthoring=false;
+    const NativeWorker=window.Worker;
+    window.Worker=class extends NativeWorker{
+      constructor(url,options){
+        super(url,options);
+        if(!String(url).includes("collaboration-authoring-worker"))return;
+        this.addEventListener("message",event=>{
+          if(!window.geosolveHoldAuthoring||event.data?.result?.kind!=="preview")return;
+          event.stopImmediatePropagation();window.geosolveHeldAuthoring=true;
+          // Hold delivery of one genuine native response, keeping the author's
+          // queue occupied without manufacturing any solver/presentation data.
+          window.geosolveReleaseAuthoring=()=>{window.geosolveHoldAuthoring=false;this.dispatchEvent(new MessageEvent("message",{data:event.data}));};
+        });
+      }
+    };
+  });
+  const page=await context.newPage(),errors=[],requests=[],measurements=[];
+  page.on("pageerror",error=>errors.push(String(error)));
+  page.on("request",request=>{if(/\/api\/collaboration\/(?:commands|authoring-preview|scene)$/u.test(new URL(request.url()).pathname))requests.push(request.url());});
+  await page.goto(`${f.origin}/?collaboration=1&authoringPreview=client#invite=editor-0`);await ready(page);
+  await page.getByRole("group",{name:"Workspace layout",exact:true}).getByRole("button",{name:"design",exact:true}).click();await resized(page);
+  const canvas=page.locator("canvas"),box=await canvas.boundingBox();
+  const location=await canvas.evaluate(canvas=>{
+    const frame=canvas.__geosolvePresentedFrame,point=frame.items.filter(item=>item.kind==="circle"&&item.className.split(/\s/u).includes("wb-point")).sort((a,b)=>a.center[0]-b.center[0])[0];
+    return [point.center[0]-frame.viewBox[0],point.center[1]-frame.viewBox[1]];
+  });
+  const x=box.x+location[0],y=box.y+location[1];
+  await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+20,y-10);
+  await until(()=>canvas.evaluate(c=>c.__geosolvePresentedFrame?.provenance.scene==="provisional"),"Missing genuine point preview");
+  await page.evaluate(()=>{window.geosolveHoldAuthoring=true;});
+  await page.mouse.move(x+40,y-20);
+  await until(()=>page.evaluate(()=>window.geosolveHeldAuthoring),"Authoring response was not held");
+  await page.mouse.up();
+  const drawing=()=>canvas.evaluate(c=>JSON.stringify({view:c.__geosolvePresentedFrame.viewBox,items:c.__geosolvePresentedFrame.items.filter(i=>i.kind==="circle").map(i=>({center:i.center,radius:i.radius}))}));
+  async function navigation(phase){
+    const count=requests.length;
+    for(const action of ["wheel","pan","resize"]){
+      const before=await drawing(),start=performance.now();
+      if(action==="wheel")await page.mouse.wheel(0,-60);
+      if(action==="pan"){
+        const bounds=await canvas.boundingBox();await page.mouse.move(bounds.x+bounds.width*.6,bounds.y+bounds.height*.6);
+        await page.mouse.down({button:"middle"});await page.mouse.move(bounds.x+bounds.width*.6+24,bounds.y+bounds.height*.6+18);await page.mouse.up({button:"middle"});
+      }
+      if(action==="resize")await page.setViewportSize({width:phase==="prediction"?1320:1280,height:900});
+      await until(async()=>await drawing()!==before,`${action} waited for held ${phase}`,2000);
+      const elapsedMs=performance.now()-start;measurements.push({phase,action,elapsedMs});
+      assert.equal(await canvas.evaluate(c=>c.__geosolvePresentedFrame.provenance.scene),"provisional");
+      assert.ok(elapsedMs<500,`${phase} ${action} took ${elapsedMs} ms`);
+    }
+    assert.equal(requests.length,count,"Prediction navigation must issue zero model/scene/preview RPCs");
+    assert.equal(f.runtime.host.snapshot().acceptedRevision,0);
+  }
+  await navigation("prediction");assert.equal(serverHeld,false);
+  await page.evaluate(()=>window.geosolveReleaseAuthoring());
+  await until(()=>serverHeld,"Finished authoring did not reach the held durable server job");
+  await navigation("terminal");terminal.resolve();
+  await until(()=>f.runtime.host.snapshot().acceptedRevision===1,"Held gesture did not publish after release");
+  await until(()=>canvas.evaluate(c=>c.__geosolvePresentedFrame.provenance.scene==="accepted-presentation"),"Accepted scene did not replace provisional frame");
+  assert.deepEqual(errors,[]);t.diagnostic(JSON.stringify({measurements,errors}));
+});
+
 test("four real browser editors retain independent navigation and typing during a ten-second solve",{timeout:180_000},async t=>{
   const release=deferred();let held=false,started=0,released=0,timer;
   const f=await fixture(t,{domainOptions:{beforeJob:async input=>{if(input.kind==="values"&&!held){held=true;started=performance.now();timer=afterMinimum(10_000,()=>{released=performance.now();release.resolve();});await release.promise;}}}});

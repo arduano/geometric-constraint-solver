@@ -763,3 +763,83 @@ domain profiling separates millisecond native solving from repeated cold compile
 session and scene reconstruction. No production repair or new qualification is
 claimed. The circle playground avoids the generated-polyline inverse path, passes
 two-tab dragging/Undo and preserves the existing manifold preview.
+
+### M98-F028 — Shared drag preview overwritten by accepted pointer frames
+
+The user reports large back-and-forth flicker and input delay while dragging either
+centre in the two-circle shared playground on qualified `513463f` (documentation
+HEAD `48ff14f`). The adapter's exact frame-stream regression reproduces accepted
+coordinates replacing every provisional preview. An isolated actual-browser fixture
+against the installed qualified runtime and artifact independently records five
+backward jumps during its first forward drag and two during its next drag. The
+fixture holds the first server terminal and sends ordinary pointer/presence updates.
+No live user document is changed. Classification: **DEFECT**, owned by the browser
+collaboration adapter/controller; native preview geometry is already valid.
+
+`installLocal` unconditionally paints accepted geometry over authoring prediction;
+terminal handling also restores the pre-edit frame before refreshing the accepted
+scene. The correction gives the provisional frame ownership through gesture and
+pending terminal resolution, and retains native terminal presentation for camera
+reprojection. Cancellation, rejection and accepted-model replacement release that
+ownership. Ordered native path samples are preserved while intermediate rendering
+is batched. Superseded browsing errors no longer become visible error notices.
+
+Owning regressions cover every emitted/returned frame, held acceptance, cancellation,
+rejection, remote replacement and stale gesture replies. The browser regression
+`shared circle dragging paints continuously through pending acceptance and reaches
+peers promptly` samples actual presented geometry/provenance throughout three drags,
+including a held server commit. It includes native noninteractive provisional items;
+the initial diagnostic helper wrongly observed only accepted draw IDs and its failed
+receipt remains retained. Evidence is under `target/m98/coordination/drag-repair/`.
+Integrated qualification and replacement delivery remain pending.
+
+Native authoring reconstruction also begins immediately after authenticated join,
+overlapping shared text and scene loading. Complete unchanged model replacement is
+idempotent, and queued scene refreshes recheck their revision before replacing local
+state. Three startup/duplicate-refresh regressions reproduce the old behavior; the
+24-case adapter/controller suite passes the correction. The earlier six-file owner
+run passes all 34 cases, including actual-WASM reprojection and accepted picking.
+
+Focused browser runs now record zero backward jumps and approximately 80–101 ms
+warm event-to-preview p95, with warm release-to-peer around 332–412 ms. Initial
+browser/GPU use remains roughly 318–379 ms. A diagnostic observed a 227 ms first
+highlight WebGL error-check stall; preparing the same filter offscreen did not improve
+the full cold interaction and that experiment was completely reverted. Renderer code
+and its existing qualification assertions remain unchanged. The new browser case
+uses the existing M98 500 ms local-navigation budget on first use, a tighter 200 ms
+budget on subsequent drags, and 1000 ms for warm release-to-peer. Its provisional
+200 ms cold target was not achieved and is not claimed. Bounded GPU/long-task traces
+and the failed development receipts remain available. Pan, wheel and resize during
+independently held authoring and server completion pass at 30–171 ms, with zero
+model/scene/preview requests. Final integrated measurements supersede these focused
+development timings.
+
+### M98-F029 — Repeated cold domain and scene reconstruction on each shared edit
+
+The same isolated browser reproduction records roughly 3.3–3.7 seconds from release
+to peer geometry for two circles. Earlier detached profiling isolates 6.87 ms native
+preview and 64.30 ms terminal preparation, with 2.82 seconds in repeated server
+reconstruction. Classification: **DEFECT**, owned by the collaboration domain worker
+lifecycle, rather than a solver convergence failure.
+
+Each open document now owns a serial, bounded, terminable worker with genuine compiler
+receipts and exact-input authenticated native sessions. Sessions leave the cache
+before mutation; historical replay and target-generation authentication remain intact.
+Workbench scene construction retains its loaded worker, reconstructs each distinct
+candidate's native presentation context and validates complete exported project/design
+identity. Cached candidates never become durable authority before the
+existing publication transaction. Cold ephemeral execution remains an independent
+parity path. Cancellation/timeout discard the worker and its retained state.
+
+Final focused two-circle measurements including historical replay, scene composition
+and reconciliation are 127–213 ms warm (134 ms median), versus 2.13 s cold, with exact
+accepted model/design/result parity. Five retained owner cases, the unchanged scene
+owner and both before-append/after-fsync durability scenarios pass. Explicit result
+ownership releases intermediate and evicted native results; fresh writable sessions
+bound native history. Tests cover cache isolation, failed durability, timeout/restart
+and full scene parity. A resize-first refinement failed the existing fitted-point
+picking test; preserving native constructor and first-resize semantics corrects it.
+The failed collateral receipt remains failed; all other 39 collateral cases passed.
+Integrated qualification and preview delivery are pending.
+No equation, tolerance, branch choice or golden-oracle bytes change. Generated-polyline
+Undo remains the separately recorded open finding.
