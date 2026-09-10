@@ -21,6 +21,8 @@ export interface ClientOptions<Document> {
   readonly fetch?:typeof fetch; readonly pending?:PendingCheckpoint;
   /** Persist before transmitting. Failure retains intent in memory and prevents send. */
   readonly savePending?:(checkpoint:PendingCheckpoint)=>void|Promise<void>;
+  /** Host-provided local ownership fence, checked before connect/retry/send. */
+  readonly assertOwned?:()=>void|Promise<void>;
   readonly onState?:(state:CollaborationState<Document>)=>void;
   readonly onEvent?:(event:{type:string;data:unknown})=>void;
   readonly onConnection?:(state:"connecting"|"connected"|"disconnected"|"closed",error?:Error)=>void;
@@ -31,6 +33,11 @@ export class CollaborationRequestError extends Error {
 }
 const clone=<T>(value:T):T=>JSON.parse(JSON.stringify(value)) as T;
 const byteLength=(value:unknown)=>new TextEncoder().encode(JSON.stringify(value)).length;
+/** getRandomValues is available on the trusted HTTP/Tailscale demo as well as
+ * HTTPS; randomUUID alone is restricted to secure browser contexts. */
+export function collaborationRequestId():string{
+  return Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,"0")).join("");
+}
 
 /** Connected HTTP/SSE client. This contains no server authority, model equations,
  * text algorithm or canvas navigation. Unknown outcomes retain their original
@@ -53,6 +60,7 @@ export class CollaborationClient<Document=unknown> {
   private persistTail:Promise<unknown>=Promise.resolve();
   private reconnectTimer?:ReturnType<typeof setTimeout>;
   private retryMs=250;
+  private heartbeatTimer?:ReturnType<typeof setTimeout>;
   private readonly fetch:typeof fetch;
   private readonly base:string;
   constructor(private readonly options:ClientOptions<Document>){
@@ -95,8 +103,11 @@ export class CollaborationClient<Document=unknown> {
       const state=await this.refresh();this.lastSequence=state.authority.latestSequence;
       this.startEvents(epoch);
       // Original IDs are replayed even when the response was lost after fsync.
-      for(const request of [...this.pending.values()])await this.sendPending(request);
-      this.retryMs=250;this.options.onConnection?.("connected");return state;
+      for(const request of [...this.pending.values()]){
+        try{await this.sendPending(request);}
+        catch(error){if(!(error instanceof CollaborationRequestError)||error.code!=="text_rejected")throw error;}
+      }
+      this.retryMs=250;this.scheduleHeartbeat(epoch);this.options.onConnection?.("connected");return state;
     })().catch(error=>{this.disconnected(error,epoch);throw error;}).finally(()=>{this.connecting=undefined;});
     return this.connecting;
   }
@@ -115,20 +126,23 @@ export class CollaborationClient<Document=unknown> {
   }
   /** Text batches serialize within a client. Other clients and model solving
    * continue independently. Keep native change bytes while disconnected. */
-  writeText(changes:readonly Uint8Array[],requestId=crypto.randomUUID()):Promise<unknown>{
+  writeText(changes:readonly Uint8Array[],requestId=collaborationRequestId()):Promise<unknown>{
     const item=this.add("text",requestId,{requestId,changes:changes.map(bytes=>Array.from(bytes))});
     return this.enqueue(item);
   }
   /** Ordered draft lifecycle and personal history use the same durable source
    * gateway as typing. They do not apply or replace the accepted model. */
-  editFiles(edits:readonly Exclude<TextEdit,{kind:"splice"}>[],revision:TextRevision,requestId=crypto.randomUUID()):Promise<unknown>{
+  editFiles(edits:readonly Exclude<TextEdit,{kind:"splice"}>[],revision:TextRevision,requestId=collaborationRequestId()):Promise<unknown>{
     return this.enqueue(this.add("text",requestId,{requestId,action:"files",revision,edits}));
   }
-  undoText(redo=false,requestId=crypto.randomUUID()):Promise<unknown>{
+  editWorking(edits:readonly TextEdit[],revision:TextRevision,requestId=collaborationRequestId()):Promise<unknown>{
+    return this.enqueue(this.add("text",requestId,{requestId,action:"working",revision,edits}));
+  }
+  undoText(redo=false,requestId=collaborationRequestId()):Promise<unknown>{
     return this.enqueue(this.add("text",requestId,{requestId,action:redo?"redo":"undo"}));
   }
   /** Apply waits for this client's earlier text ACKs before server capture. */
-  async submit(command:Command,requestId=crypto.randomUUID()):Promise<Receipt>{
+  async submit(command:Command,requestId=collaborationRequestId()):Promise<Receipt>{
     const item=this.add("commands",requestId,{requestId,command});
     return await this.enqueue(item) as Receipt;
   }
@@ -136,11 +150,17 @@ export class CollaborationClient<Document=unknown> {
     const {receipt}=await this.rpc<{receipt:Receipt|null}>(`receipt?requestId=${encodeURIComponent(requestId)}`);
     if(receipt)await this.observeReceipt(receipt);return receipt;
   }
+  async result<T=unknown>(requestId:string):Promise<T|null>{
+    return (await this.rpc<{result:T|null}>(`result?requestId=${encodeURIComponent(requestId)}`)).result;
+  }
   presence(value:{sequence:number;cursor?:readonly[number,number]|null;selection?:readonly string[]}):Promise<unknown>{return this.rpc("presence",value);}
   /** Explicit reconnect also retries requests that received admission backpressure. */
   async retry():Promise<CollaborationState<Document>>{const state=await this.connect();this.ingressTail=Promise.resolve();return state;}
+  async leave():Promise<void>{
+    try{if(this.token&&!this.closed)await this.rpc("leave",{});}finally{this.dispose();}
+  }
   dispose():void{
-    if(this.closed)return;this.closed=true;++this.epoch;clearTimeout(this.reconnectTimer);
+    if(this.closed)return;this.closed=true;++this.epoch;clearTimeout(this.reconnectTimer);clearTimeout(this.heartbeatTimer);
     this.eventController?.abort();for(const request of this.requests)request.abort();this.token=undefined;
     this.options.onConnection?.("closed");
   }
@@ -158,7 +178,10 @@ export class CollaborationClient<Document=unknown> {
   }
   private persist():Promise<void>{
     const checkpoint=this.checkpoint();
-    const run=this.persistTail.catch(()=>{}).then(()=>this.options.savePending?.(checkpoint));
+    const run=this.persistTail.catch(()=>{}).then(async()=>{
+      await this.options.savePending?.(checkpoint);
+      this.options.onEvent?.({type:"pending_saved",data:{requestIds:checkpoint.requests.map(request=>request.requestId)}});
+    });
     this.persistTail=run;return run;
   }
   private enqueue(item:PendingRequest):Promise<unknown>{
@@ -181,10 +204,12 @@ export class CollaborationClient<Document=unknown> {
       if(item.route==="commands"){
         const receipt=(result as {receipt:Receipt}).receipt;await this.observeReceipt(receipt);return receipt;
       }
-      this.pending.delete(item.requestId);await this.persist();return result;
+      this.pending.delete(item.requestId);await this.persist();
+      this.options.onEvent?.({type:"text_receipt",data:{requestId:item.requestId,ack:result}});return result;
     }catch(error){
       if(error instanceof CollaborationRequestError&&error.code==="text_rejected"){
         this.pending.delete(item.requestId);await this.persist();
+        this.options.onEvent?.({type:"text_refused",data:{requestId:item.requestId,message:error.message}});
       }else if(!(error instanceof CollaborationRequestError)||[401,503].includes(error.status))this.disconnected(error,this.epoch);
       throw error;
     }
@@ -200,6 +225,8 @@ export class CollaborationClient<Document=unknown> {
   private startEvents(epoch:number):void{
     const controller=new AbortController();this.eventController=controller;
     void(async()=>{
+      await this.options.assertOwned?.();
+      if(this.closed||epoch!==this.epoch)return;
       const response=await this.fetch(new URL(`events?after=${this.lastSequence}`,this.base),{headers:{Authorization:`Bearer ${this.token}`},signal:controller.signal});
       await this.checkResponse(response);
       if(!response.body||!response.headers.get("Content-Type")?.startsWith("text/event-stream"))throw Error("Missing collaboration event stream");
@@ -222,9 +249,15 @@ export class CollaborationClient<Document=unknown> {
       throw Error("Document event stream disconnected");
     })().catch(error=>{if(!controller.signal.aborted)this.disconnected(error,epoch);});
   }
+  private scheduleHeartbeat(epoch:number):void{
+    clearTimeout(this.heartbeatTimer);
+    this.heartbeatTimer=setTimeout(()=>{void this.rpc("heartbeat",{}).then(()=>{
+      if(!this.closed&&epoch===this.epoch)this.scheduleHeartbeat(epoch);
+    },error=>this.disconnected(error,epoch));},20_000);
+  }
   private disconnected(error:unknown,epoch:number):void{
     if(this.closed||epoch!==this.epoch)return;
-    this.token=undefined;this.eventController?.abort();
+    clearTimeout(this.heartbeatTimer);this.token=undefined;this.eventController?.abort();
     this.options.onConnection?.("disconnected",error instanceof Error?error:Error(String(error)));
     if(this.reconnectTimer)return;
     this.reconnectTimer=setTimeout(()=>{this.reconnectTimer=undefined;void this.retry().catch(()=>{});},this.retryMs);
@@ -234,6 +267,8 @@ export class CollaborationClient<Document=unknown> {
     return await(await this.response(route,body,authenticated)).json() as T;
   }
   private async response(route:string,body?:unknown,authenticated=true):Promise<Response>{
+    if(this.closed)throw Error("Collaboration client is closed");
+    await this.options.assertOwned?.();
     if(this.closed)throw Error("Collaboration client is closed");
     if(authenticated&&!this.token)throw Error("Document connection is unavailable; pending work is retained");
     const controller=new AbortController();this.requests.add(controller);

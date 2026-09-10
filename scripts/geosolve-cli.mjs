@@ -45,6 +45,13 @@ export async function runCli(args) {
   const flags = parseFlags(rest);
   if (command === "init") return initProject(folder);
   if (command === "serve") {
+    if (flags.collaboration === "true") {
+      const { serveCollaborativeProject } = await import("./collaboration-serve.mjs");
+      const session = await serveCollaborativeProject(folder, { invitationsFile: flags.invitations, artifactManifest: flags.artifact,
+        initialize: flags.initialize === "true", port: Number(flags.port ?? 0), hostname: flags.host ?? "127.0.0.1" });
+      for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { void session.close().then(() => process.exit(0)); });
+      return { ok: true, collaboration: true, urls: session.urls, folder, pid: process.pid };
+    }
     const session = await serveProject(folder, { port: Number(flags.port ?? 0) });
     for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { void session.close().then(() => process.exit(0)); });
     return { ok: true, url: session.url, folder, pid: process.pid };
@@ -58,6 +65,10 @@ export async function runCli(args) {
     return { ok: true, folder, entry: snapshot.entry, mode: snapshot.mode, revision: snapshot.revision,
       sourceHash: snapshot.sourceHash, toolchain: snapshot.toolchain, inputs: snapshot.inputs,
       files: snapshot.files.map(({ path, sha256, contents }) => ({ path, sha256, bytes: Buffer.byteLength(contents), ...(flags.contents === "true" ? { contents } : {}) })) };
+  }
+  if (flags.collaboration === "true") {
+    const { runCollaborationCli } = await import("./collaboration-cli.mjs");
+    return runCollaborationCli(command, folder, flags);
   }
   const { rpc, clientId } = await connect(folder, flags);
   if (command === "status") {
