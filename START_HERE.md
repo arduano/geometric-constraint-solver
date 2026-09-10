@@ -1,11 +1,15 @@
 # GeoSolve active handoff
 
-Current roadmap: **M97 is accepted and closed. M98 collaboration hardening is in implementation.**
+Current roadmap: **M97 is accepted and closed. M98 collaboration hardening is ready for integrated qualification.**
 
 The approved [multi-editor amendment](docs/M98_COLLABORATION.md) extends the previously
 qualified M98 authoring product. Shared draft text, server-ordered semantic edits, per-user
-Undo, durable recovery and local authoring prediction are active work. The qualified preview
-and original manifold folder remain preserved until a replacement passes qualification.
+Undo, durable recovery and configurable client/server authoring prediction are implemented
+with focused owner and browser evidence. Four-editor navigation during a ten-second held
+solve and the 32-client load case pass focused checks; the clean integrated gate and
+verified replacement delivery remain required. GUI construction currently supports four
+native tools, with broader tools explicitly unavailable. The qualified preview and original
+manifold folder remain preserved until a replacement passes qualification.
 
 [M97 closure and fresh-session handoff](docs/M97_CLOSURE.md) records the supervising
 user's acceptance and unchanged qualified product. Accepted source

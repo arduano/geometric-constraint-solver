@@ -638,5 +638,29 @@ an unauthored source rewrite. Its exact terminal, one durable publication, reloa
 and cold restart pass in `collaboration-browser-followup-r4.log`. Peer CodeMirror
 also receives text before release. The repeated four-context navigation measurement
 is 615.02 ms despite 2–4 ms native wheel work; this remains an open performance
-concern, not a passing result or waived target. Recovery browser and integrated
-qualification remain open.
+concern at this checkpoint, not a passing result or waived target. The following
+checkpoint records its correction and recovery coverage.
+
+### Final toolbar correction and browser recovery
+
+The same settled-layout harness measured four-editor navigation p95 624.49 ms with
+the ordinary toolbar CSS and 348.08 ms with only its backdrop filter disabled.
+Removing `backdrop-blur-sm` from `canvas-controls.tsx` preserves the existing
+95%-opaque surface, shadow and layout. This extends M98-F020's presentation repair;
+native navigation remains 2–4 ms and no numerical or authority contract changes.
+
+Ordinary development-r5 passes navigation p95 360.53 ms and text ACK 162.08 ms during
+a 10,000.095 ms held solve, with independent cameras and zero navigation computation
+RPCs (`collaboration-browser-product-r5.log`, 1 pass / 39.04 s). Diagnostic CSS
+overrides are unset. Integrated performance scheduling remains required; these are
+focused measurements rather than authenticated release evidence.
+
+Both real browser recovery cases pass in `collaboration-browser-recovery-r3.log`
+(2 pass / 45.04 s): exact persisted IndexedDB command retry after lost admission
+ACK, cold server restart and page reload; and shared invalid source with retained
+accepted canvas, canvas editing, rejected Apply and later immutable Apply while
+typing remains unapplied. Join observation reads actual HTTP bodies, with separate
+empty browser-error and observer-error assertions. No response or storage is faked.
+
+The complete focused browser inventory now has passing evidence. Clean integrated
+nomination and verified replacement delivery remain open.

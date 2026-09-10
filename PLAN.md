@@ -8477,10 +8477,14 @@ Focused runtime checkpoint: independent compiler/solver workers, durable HTTP/SS
 native shared text and personal history, immutable Apply, latest-model gesture replay,
 structural/extraction/suppression Undo, external mirrors/CLI and configurable native
 prediction are implemented. Combined actual-WASM package44, runtime/domain/HTTP63 and
-frontend8 cases pass. The coherent development-r4 artifact includes personal visibility
-and the dense-text performance repair. Final browser fault/load qualification, remaining
-workbench capability review and clean integrated nomination remain open. The qualified
-preview is preserved; the amendment checklist records focused implementation progress.
+frontend8 cases pass. The coherent development-r5 artifact includes personal visibility,
+the dense-text performance repair and the toolbar compositing correction. All eight
+browser/fault/load scenarios have focused passing evidence, including four editors
+during a ten-second held solve, 32 clients and actual browser outbox recovery. GUI
+construction supports Segment, Polyline, Center-radius Circle and aligned Rectangle;
+other tools disclose their unavailable routes. Clean integrated nomination and verified
+replacement delivery remain open. The qualified preview is preserved; the amendment
+checklist records focused implementation progress.
 
 - [ ] Implement the approved [multi-editor collaboration amendment](docs/M98_COLLABORATION.md):
   reusable Rust authority/shared text, explicit Apply, semantic rebasing and per-user Undo,

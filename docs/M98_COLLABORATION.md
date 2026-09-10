@@ -421,3 +421,55 @@ reason. This availability projection does not qualify the remaining construction
 constraint, dimension or modify authoring routes as complete; that coverage remains
 an explicit milestone limitation. Source/Inspector value edits remain available. Changing existing selected curve
 roles is likewise marked unavailable; selecting the role of new geometry remains local.
+
+## Browser recovery and coherent integration evidence
+
+The development-r4 source performance repair now passes dense manifold navigation
+p95 422.32 ms and text ACK 345.58 ms; Gridfinity is 195.04 / 370.62 ms. The 32-client
+case passes text p95 274.90 ms with SSE-inclusive bandwidth recorded. A real paused
+TCP reader is retired below its 128 KiB bound while healthy clients continue.
+`collaboration-browser-development-r4.log` retains all outcomes, including the two
+initial harness failures described in the hardening ledger.
+
+`collaboration-browser-followup-r4.log` passes real server prediction with held
+HTTP delivery, local navigation p95 61.78 ms and zero navigation preview/model
+requests. The native terminal commits once, retains authored source, changes the
+exact design override and reconstructs through both page reload and cold server
+restart. Four-editor text reaches a peer CodeMirror before the held solve releases.
+Its repeated navigation p95 615.02 ms exposed browser compositing cost despite
+2–4 ms native wheel work. The final toolbar correction and passing ordinary-product
+measurements below supersede that performance finding without changing its threshold.
+
+`collaboration-browser-recovery-r3.log` passes both assembled-workbench fault cases:
+exact IndexedDB outbox replay after a lost admission ACK, native server restart and
+page reload; and invalid shared TypeScript with rejected Apply, accepted canvas
+editing and a later immutable Apply while peer-visible typing remains unapplied.
+The source and accepted input, receipt identity, number of publications, personal
+client identity and visible Inspector/source are checked independently. Join
+observation reads actual HTTP bodies before delivery; browser errors and observer
+errors are separately required to remain empty.
+
+These focused commands use the pinned Nix shell documented above:
+
+```bash
+GEOSOLVE_DIST=target/m98/geosolve-collaboration-development-r4 node --test scripts/collaboration-browser.test.mjs
+GEOSOLVE_DIST=target/m98/geosolve-collaboration-development-r4 node --test --test-name-pattern="four real|remote server preview" scripts/collaboration-browser.test.mjs
+GEOSOLVE_DIST=target/m98/geosolve-collaboration-development-r4 node --test scripts/collaboration-browser-recovery.test.mjs
+```
+
+The settled-layout controlled comparison measured navigation p95 624.49 ms with
+the existing toolbar backdrop filter and 348.08 ms with only that filter disabled.
+The product now omits the toolbar's backdrop blur, retaining its opaque surface,
+shadow and layout. Ordinary development-r5 passes four-editor navigation p95
+360.53 ms, text ACK 162.08 ms and a 10,000.095 ms held solve, with zero navigation
+computation RPCs (`collaboration-browser-product-r5.log`). The diagnostic CSS
+overrides are unset. This is focused evidence; the integrated runner owns exclusive
+performance scheduling and final qualification.
+
+```bash
+env -u GEOSOLVE_BROWSER_DIAGNOSTIC_NO_BACKDROP -u GEOSOLVE_BROWSER_DIAGNOSTIC_NO_TOOLBAR_BACKDROP GEOSOLVE_DIST=target/m98/geosolve-collaboration-development-r5 GEOSOLVE_BROWSER_TRACE=1 node --test --test-name-pattern="four real browser editors" scripts/collaboration-browser.test.mjs
+```
+
+Full clean integrated qualification and replacement preview verification remain
+open. The last qualified preview is preserved. The GUI construction scope is the
+four native tools documented above; broader GUI tool parity is not claimed.
