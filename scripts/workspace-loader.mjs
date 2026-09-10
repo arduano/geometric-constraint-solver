@@ -86,7 +86,7 @@ function imports(file) {
   return found;
 }
 
-function resolveImport(folder, importer, imported, overrides) {
+function resolveImport(folder, importer, imported, overrides, capturedOnly = false) {
   if (imported.specifier === sdkName) return sdkName;
   if (!imported.specifier.startsWith("./") && !imported.specifier.startsWith("../")) fail("invalid_project", `Unsupported project import ${imported.specifier}; only local files and ${sdkName} are available`, importer, imported.node, imported.source);
   const base = relative(folder, resolve(folder, dirname(importer), imported.specifier));
@@ -95,6 +95,7 @@ function resolveImport(folder, importer, imported, overrides) {
   for (const candidate of candidates) {
     const local = localPath(folder, candidate);
     if (overrides?.has(local.path)) return local.path;
+    if (capturedOnly) continue;
     let stat;
     try { stat = lstatSync(local.absolute); } catch (error) { if (error.code === "ENOENT") continue; throw error; }
     if (stat.isFile() && [".ts", ".mts", ".js", ".mjs"].includes(extname(candidate))) return local.path;
@@ -119,16 +120,22 @@ function freeze(value) {
 }
 
 /** Capture every consumed local byte before executing trusted code in a worker. */
-export function readWorkspaceSnapshot(folder, { inputs, sidecarPaths = sidecars, sdkDirectory = defaultSdkDirectory, fileOverrides } = {}) {
+export function readWorkspaceSnapshot(folder, { inputs, sidecarPaths = sidecars, sdkDirectory = defaultSdkDirectory, fileOverrides, capturedFiles } = {}) {
   folder = realpathSync(folder);
+  if (fileOverrides !== undefined && capturedFiles !== undefined) fail("invalid_project", "Choose disk overrides or a complete captured file tree");
   const overrides = new Map();
-  for (const [path, contents] of Object.entries(fileOverrides ?? {})) {
+  let capturedBytes = 0;
+  for (const [path, contents] of Object.entries(capturedFiles ?? fileOverrides ?? {})) {
     const local = localPath(folder, path);
     if (typeof contents !== "string" || Buffer.byteLength(contents) > maxFileBytes) fail("invalid_project", "Candidate files require UTF-8 text of at most 4 MiB", path);
     overrides.set(local.path, contents);
+    capturedBytes += Buffer.byteLength(contents);
+    if (capturedFiles !== undefined && (overrides.size > maxFiles || capturedBytes > maxBytes)) fail("invalid_project", "Captured project exceeds its 512 file / 16 MiB bound", path);
   }
   const read = (path, optional = false) => overrides.has(path)
-    ? { path, contents: overrides.get(path), sha256: digest(overrides.get(path)) } : readFile(folder, path, optional);
+    ? { path, contents: overrides.get(path), sha256: digest(overrides.get(path)) }
+    : capturedFiles === undefined ? readFile(folder, path, optional)
+    : optional ? null : fail("invalid_project", "File is absent from the captured source tree", path);
   const files = new Map();
   let bytes = 0;
   function include(path, optional = false) {
@@ -153,7 +160,7 @@ export function readWorkspaceSnapshot(folder, { inputs, sidecarPaths = sidecars,
     const file = include(path);
     dependencies[path] = {};
     for (const imported of imports(file)) {
-      const target = resolveImport(folder, path, imported, overrides);
+      const target = resolveImport(folder, path, imported, overrides, capturedFiles !== undefined);
       dependencies[path][imported.specifier] = target;
       if (target !== sdkName) collect(target);
     }

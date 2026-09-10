@@ -159,3 +159,22 @@ test("candidate file graph is compiled without changing original disk and can ad
   assert.equal(f.snapshot().revision, original.revision);
   assert.throws(() => f.snapshot({ fileOverrides: { "../escape.ts": "x" } }), /escapes/);
 });
+
+test("complete collaborative source snapshots never import omitted disk bytes or newer mirror edits", async (t) => {
+  const f = fixture(t, {
+    "sketch.ts": 'import {sketch} from "@geosolve/sketch-code"; import {point} from "./helper.ts"; export default sketch(($)=>{const p=$.geometry.sketchPoint("p",{point}); return {p};});',
+    "helper.ts": "export const point=[12,8] as const;",
+  });
+  const disk = f.snapshot();
+  const capturedFiles = Object.fromEntries(disk.files.map(({ path, contents }) => [path, contents]));
+  f.write("helper.ts", "export const point=[99,99] as const;");
+  const captured = f.snapshot({ capturedFiles });
+  assert.equal(captured.revision, disk.revision);
+  const result = await f.run(captured);
+  assert.deepEqual(result.generated.declarations[0].arguments.value.point.value.map(({ value }) => value), [12, 8]);
+  const omitted = { ...capturedFiles }; delete omitted["helper.ts"];
+  assert.throws(() => f.snapshot({ capturedFiles: omitted }), /Cannot resolve local import/u);
+  assert.throws(() => f.snapshot({ capturedFiles, fileOverrides: {} }), /Choose disk overrides/u);
+  const absentManifest = { ...capturedFiles }; delete absentManifest["geosolve.json"];
+  assert.throws(() => f.snapshot({ capturedFiles: absentManifest }), /absent from the captured source tree/u);
+});
