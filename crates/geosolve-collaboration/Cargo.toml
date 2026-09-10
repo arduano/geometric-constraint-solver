@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[package]
+name = "geosolve-collaboration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+authors.workspace = true
+rust-version = "1.90"
+readme = "README.md"
+description = "Shared source text and publication authority for GeoSolve collaboration"
+
+[dependencies]
+automerge.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+automerge = { workspace = true, features = ["wasm"] }
+
+[lints]
+workspace = true

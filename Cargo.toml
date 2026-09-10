@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "crates/geosolve-collaboration",
+    "crates/geosolve-collaboration-wasm",
     "crates/geosolve-constraint-editor",
     "crates/geosolve-core",
     "crates/geosolve-demo-web",
@@ -28,6 +30,7 @@ rust-version = "1.89"
 authors = ["Leonid Shchurov"]
 
 [workspace.dependencies]
+automerge = { version = "=0.11.0", default-features = false, features = ["utf16-indexing"] }
 base64 = { version = "0.23.1", default-features = false, features = ["alloc"] }
 nalgebra = "0.35.0"
 faer = { version = "=0.24.4", default-features = false, features = ["std", "sparse-linalg"] }
