@@ -147,15 +147,15 @@ nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-sourc
 Passing Rust checks include `cargo fmt --all -- --check`,
 `cargo test --locked -p geosolve-collaboration -p geosolve-collaboration-wasm` and
 `cargo clippy --locked -p geosolve-collaboration -p geosolve-collaboration-wasm --all-targets -- -D warnings`.
-That full foundation run covered 35 native cases; the subsequent source-anchor refactor
-passes all five source owner cases (including the added rename/retyping case) and its
-strict scoped Clippy check. Separate engine `managed_authoring` and `editable_session`
-checks pass seven cases with strict scoped engine Clippy.
+The final owner run covers 41 native cases (12 authority, two journal, 16 text, five
+source-patch and six target-lifetime cases), with strict Clippy across both new crates.
+Separate engine `managed_authoring` and `editable_session` checks pass seven cases with
+strict scoped engine Clippy.
 
 The managed package build/runtime/fixture/bundled-sample/type/managed checks pass 62 runtime
 cases with unchanged fixtures; the final allocation guard additionally passes all 24
-managed owner cases. The collaboration package builds real WASM and passes five package
-cases, including native-to-WASM-to-native checkpoint exchange. Logs remain under
+managed owner cases. The collaboration package builds real WASM and passes seven package
+cases, including native-to-WASM-to-native checkpoint exchange and large Unicode paste. Logs remain under
 `target/m98/collaboration-*`, `root-collaboration-*` and `localized-source-*`.
 These focused checks are development evidence; the integrated gate still needs registration
 and complete qualification after server/workbench integration.
@@ -166,3 +166,9 @@ admission, the HTTP/SSE host, worker-driven construction/drag, collaborative Cod
 participant UI, and the four-browser/32-client load gates. The current text wrapper's Undo
 stack is bounded and instance-local; it excludes file lifecycle and clears on restart.
 That limitation is not the final approved durable collaboration history contract.
+
+Final foundation evidence is `target/m98/collaboration-owner-final-checks-r2.log`; the
+locked release WASM build and seven actual-WASM cases pass against the same text owner.
+Package dry-run contains nine files; no registry publication occurred. Full-history validation
+currently runs on each text admission, so load targets remain unmeasured. Native inverse
+tokens are runtime-local and source ownership anchors have a 64 KiB span bound.
