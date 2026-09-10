@@ -5,7 +5,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, realpath, rename, link, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { createSharedText } from "../packages/geosolve-collaboration/dist/index.js";
+import { collaborationModuleUrl } from "./workspace-runtime-paths.mjs";
+const { createSharedText } = await import(collaborationModuleUrl);
 
 const FORMAT = "geosolve-collaboration-mirror-v1";
 const MAX_FILE = 4 * 1024 * 1024, MAX_TREE = 16 * 1024 * 1024, MAX_CHECKPOINT = 64 * 1024 * 1024;
