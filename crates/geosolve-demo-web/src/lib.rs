@@ -70,6 +70,13 @@ mod wasm {
             .map_err(|error| JsValue::from_str(&error))
     }
 
+    /// Map personal selection through exact source-owned presentation bindings.
+    #[wasm_bindgen(js_name = mapAuthoringSelection)]
+    pub fn map_authoring_selection(request: &str) -> Result<String, JsValue> {
+        crate::workbench::bridge::local_interaction::map_authoring_selection_json(request)
+            .map_err(|error| JsValue::from_str(&error))
+    }
+
     /// Independent per-tab accepted-model Inspector/Explorer presentation.
     /// The adapter exposes no authoring or accepted publication command.
     #[wasm_bindgen]

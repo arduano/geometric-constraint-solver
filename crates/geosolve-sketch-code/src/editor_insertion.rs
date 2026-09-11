@@ -827,8 +827,10 @@ fn direct_single_curve_polyline_source(
     let ManagedValue::Object(arguments) = &declaration.arguments else {
         return None;
     };
-    let Some(ManagedValue::Bool(closed)) = arguments.get("closed") else {
-        return None;
+    let closed = match arguments.get("closed") {
+        Some(ManagedValue::Bool(closed)) => *closed,
+        None => false,
+        Some(_) => return None,
     };
     let Some(ManagedValue::Array(vertices)) = arguments.get("vertices") else {
         return None;
@@ -845,7 +847,7 @@ fn direct_single_curve_polyline_source(
             Some(key.clone())
         })
         .collect::<Option<Vec<_>>>()?;
-    Some((keys, *closed))
+    Some((keys, closed))
 }
 
 fn direct_single_curve_polyline_owner(
@@ -1578,6 +1580,27 @@ fn clean_geometry_arguments(
     insert_geometry_independent_values(editor, declaration, node, recipe, &mut arguments)?;
     insert_display_label(editor, declaration, node, &mut arguments);
     Ok(arguments)
+}
+
+fn insert_tangent_arc_reconstruction_state(
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+    node: &IntentNode,
+    arguments: &mut BTreeMap<String, ManagedValue>,
+) -> Result<(), EditorDeclarationInsertionError> {
+    let center = accepted_curve_control_position(editor, node, DocumentCurveControlKind::Center)
+        .ok_or_else(|| EditorDeclarationInsertionError::MissingNativePoint {
+            symbol: declaration.symbol.0.clone(),
+            output: "tangent arc center",
+        })?;
+    arguments.insert("center".into(), finite_point_value(declaration, center)?);
+    let contact = accepted_contact_state(editor, declaration, node, 0)?;
+    if let ManagedValue::Object(contact) = contact
+        && let Some(orientation) = contact.get("orientation")
+    {
+        arguments.insert("orientation".into(), orientation.clone());
+    }
+    Ok(())
 }
 
 #[allow(
@@ -2441,6 +2464,9 @@ fn insert_geometry_independent_values(
 ) -> Result<(), EditorDeclarationInsertionError> {
     use GeometryRecipeKind as G;
     let values: &[(&str, IntentPortRole, u16, LeafField, IntentUnit)] = match recipe {
+        G::TangentArc => {
+            return insert_tangent_arc_reconstruction_state(editor, declaration, node, arguments);
+        }
         G::CenterRadiusCircle => &[(
             "radius",
             IntentPortRole::Target,

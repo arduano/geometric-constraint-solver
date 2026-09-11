@@ -2259,7 +2259,33 @@ pub fn compose_prediction_guides(
     preview: Option<&ConstructionPreviewGeometry>,
     guides: &[DraftGuideGeometry],
 ) -> Result<DrawFrame, DrawFrameError> {
-    if let Some(ConstructionPreviewGeometry::Rectangle { first, second }) = preview
+    compose_prediction_stage(viewport, preview.map(PredictionPreview::Geometry), guides)
+}
+
+/// Borrowed native preview; complete geometry and staged recipe guides share one painter.
+#[derive(Clone, Copy, Debug)]
+pub enum PredictionPreview<'a> {
+    Geometry(&'a ConstructionPreviewGeometry),
+    Guide(&'a ConstructionPreview),
+}
+
+/// Paints native staged construction cues without granting document or picking authority.
+///
+/// # Errors
+/// Rejects invalid viewports and non-finite or invalid drawing primitives.
+pub fn compose_prediction_stage(
+    viewport: Viewport,
+    preview: Option<PredictionPreview<'_>>,
+    guides: &[DraftGuideGeometry],
+) -> Result<DrawFrame, DrawFrameError> {
+    let geometry = match preview {
+        Some(
+            PredictionPreview::Geometry(geometry)
+            | PredictionPreview::Guide(ConstructionPreview::Complete { geometry, .. }),
+        ) => Some(geometry),
+        _ => None,
+    };
+    if let Some(ConstructionPreviewGeometry::Rectangle { first, second }) = geometry
         && first
             .iter()
             .chain(second.iter())
@@ -2284,8 +2310,12 @@ pub fn compose_prediction_guides(
         occurrences: BTreeMap::new(),
         invalid: None,
     };
-    if let Some(preview) = preview {
-        draw_preview_geometry(&mut painter, preview, viewport);
+    match preview {
+        Some(PredictionPreview::Geometry(geometry)) => {
+            draw_preview_geometry(&mut painter, geometry, viewport);
+        }
+        Some(PredictionPreview::Guide(guide)) => draw_preview(&mut painter, guide, viewport),
+        None => {}
     }
     for (index, guide) in guides.iter().enumerate() {
         let base = format!("prediction-guide:{index}");
@@ -2911,6 +2941,75 @@ mod tests {
         let ids = first.items.iter().map(|x| &x.id).collect::<BTreeSet<_>>();
         assert_eq!(ids.len(), first.items.len());
     }
+    #[test]
+    fn prediction_stage_preserves_native_support_and_control_cues_under_navigation() {
+        let previews = [
+            ConstructionPreview::ArcRadiusGuide {
+                center: [0.0, 0.0],
+                start: [4.0, 0.0],
+            },
+            ConstructionPreview::EllipticalArcSupport {
+                center: [0.0, 0.0],
+                major_axis_point: [4.0, 0.0],
+                support_points: vec![[4.0, 0.0], [0.0, 2.0], [-4.0, 0.0], [0.0, -2.0], [4.0, 0.0]],
+                trim_start: Some([0.0, 2.0]),
+            },
+            ConstructionPreview::ControlPolygon {
+                kind: AdvancedConstructionKind::CubicBezier,
+                points: vec![[0.0, 0.0], [1.0, 2.0], [3.0, 2.0]],
+            },
+        ];
+        for preview in previews {
+            let first = compose_prediction_stage(
+                crate::viewport(),
+                Some(PredictionPreview::Guide(&preview)),
+                &[],
+            )
+            .unwrap();
+            assert!(!first.items.is_empty());
+            assert!(
+                first
+                    .items
+                    .iter()
+                    .all(|item| !item.interactive && item.id.starts_with("prediction:"))
+            );
+            let viewport = Viewport::new([1200.0, 700.0], [2.0, -1.0], 83.0).unwrap();
+            let moved =
+                compose_prediction_stage(viewport, Some(PredictionPreview::Guide(&preview)), &[])
+                    .unwrap();
+            assert_eq!(first.items.len(), moved.items.len());
+            assert_eq!(
+                first.items.iter().map(|item| &item.id).collect::<Vec<_>>(),
+                moved.items.iter().map(|item| &item.id).collect::<Vec<_>>()
+            );
+            assert!(
+                first
+                    .items
+                    .iter()
+                    .zip(&moved.items)
+                    .any(|(a, b)| a.geometry != b.geometry)
+            );
+            assert!(moved.items.iter().all(|item| !item.interactive));
+        }
+        let invalid = ConstructionPreview::ArcRadiusGuide {
+            center: [f64::NAN, 0.0],
+            start: [1.0, 0.0],
+        };
+        assert!(
+            compose_prediction_stage(
+                crate::viewport(),
+                Some(PredictionPreview::Guide(&invalid)),
+                &[]
+            )
+            .is_err()
+        );
+        let rectangle = ConstructionPreviewGeometry::Rectangle {
+            first: [f64::NAN, 0.0],
+            second: [1.0, 1.0],
+        };
+        assert!(compose_prediction_guides(crate::viewport(), Some(&rectangle), &[]).is_err());
+    }
+
     #[test]
     fn drawing_reprojection_matches_cold_scene_without_mutating_the_owner() {
         let owner = session();

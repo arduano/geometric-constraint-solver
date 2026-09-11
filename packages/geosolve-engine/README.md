@@ -71,24 +71,47 @@ The trusted server independently calls `preparePointGestureCommit(command,
 `design` and `source_design_digest`, then call synchronous
 `applyPointGestureCommit(prepared)`. The candidate result has no accepted export
 authority until installation. Dropping/releasing a candidate preserves the live
-session. Foreign, consumed and stale preparations cannot publish. Exact source/design
-bases must match; latest-state gesture rebase is not yet supported.
+session. Foreign, consumed and stale preparations cannot publish. For latest-model replay, use `preparePointGestureReplay` with the independently admitted
+original session and authenticate its required target lifetimes against server history.
 
 Construction uses `beginConstruction(tool, { expected, gestureId, viewport, role? })`
-for `segment`, `polyline`, `center_radius_circle` and `two_point_aligned_rectangle`.
-The returned prediction accepts ordered `move`, `click`, `complete` and `step_back`
-events. Each pointer event independently controls inference suppression and recipe
-regularization. Render the shared native preview and inference guides from each frame
-together with `sceneJSON()`. A correction-ready diagnostic remains local to the draft.
+for all 25 existing native geometry variants. `initialFrame` exposes native defaults
+and capabilities before the first click. Send ordered `move`, `click`, `complete`,
+`step_back`, `reset`, `flip_branch`, `cycle_inference`, `conic_options` and
+`nurbs_options` events as applicable. Pointer events carry explicit inference
+suppression and recipe regularization choices. After navigation, send a `viewport`
+event before the next authoring input; this updates pixel picking/snap tolerances
+without changing the command's original camera or publishing a model edit.
 
-`finish()` returns a semantic command, including the resolved source references and
-branch choices. The trusted server calls `prepareConstruction`, runs its exact compiler
-request, then calls `resolveConstruction` with that receipt. This returns an unpublished
-project/design/digest candidate; persist it before `applyConstructionCommit`. Compiler
-preparations and durable candidates are separately owned and one use. Neither a client
-scene nor a copied candidate object can become accepted server authority. Construction
-uses the default shared inference cohort; explicit candidate cycling and advanced tool
-variants remain outside this API.
+Constraint, dimension, Fillet and Profile Offset authoring use
+`beginToolOperation(tool, { expected, gestureId, viewport, selection, options? })`.
+Options apply before preselection, which may complete an ordinary relation or
+dimension immediately. Use `toolOperationPresentationJSON(viewport)` and
+`toolOperationOperands(nativeSelection)` to resolve exact accepted selection into
+source-owned semantic operands. A detached workbench scene has its own namespace;
+map its source bindings and full curve-pick occurrences before this conversion.
+Selected geometry roles use the same operation API with `toggle_geometry_role`.
+Generated outputs require a source-owned writable role path.
+
+Operation events include pointer motion/clicks, explicit `pick`/`pick_selection`,
+`authoring_options`, `fillet_options`, `fillet_radius`, `offset_distance`,
+`offset_flip`, `complete`, `step_back`, `reset` and `viewport`. The native frame
+supplies pending operands, applicability diagnostics, reset/finish capabilities and
+exact per-corner Fillet options. `presentationJSON()` combines the detached scene,
+source correspondence and native paint-only guides/highlights; reproject it using
+the current personal camera. Prediction never publishes source or history.
+
+For either tool family, `finish()` returns replay intent with its original basis,
+ordered bounded samples and explicit resolved declarations/branches. The trusted
+server independently calls `prepareConstructionReplay` or
+`prepareToolOperationReplay` with its admitted original and current sessions. It
+must authenticate required declaration lifetimes against its own ordered history.
+Run the returned compiler request, resolve its genuine receipt with
+`resolveConstruction` or `resolveToolOperation`, and persist the resulting complete
+candidate before `applyConstructionCommit` or `applyToolOperationCommit`.
+Preparation and commit handles are one use. Neither client paint nor a copied
+candidate grants accepted authority. Exact replay rejects changed operand meaning;
+server conflict policy and personal contribution history remain host-owned.
 
 `exportProject()`, `exportDesign()` and `sourceDesignDigest()` provide complete durable
 accepted inputs. Reopening those inputs independently revalidates geometry and preserves

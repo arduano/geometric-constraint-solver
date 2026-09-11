@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 mod authoring;
 mod construction;
 mod point_gesture;
+mod tool_operations;
+mod tool_selection;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,6 +42,7 @@ pub struct EngineAdapter {
     point_commits: BTreeMap<String, point_gesture::HeldPointCommit>,
     point_sequence: u64,
     constructions: BTreeMap<String, construction::HeldConstruction>,
+    tool_operations: BTreeMap<String, tool_operations::HeldToolOperation>,
     accepted: Option<AcceptedEvaluation>,
 }
 
@@ -148,6 +151,7 @@ impl EngineAdapter {
             self.point_gestures.retain(|_, held| held.session != id);
             self.point_commits.retain(|_, held| held.session != id);
             self.constructions.retain(|_, held| held.session != id);
+            self.tool_operations.retain(|_, held| held.session != id);
             self.sessions.remove(&id).is_some()
         })
     }
@@ -297,6 +301,103 @@ mod wasm {
         pub fn new() -> Self {
             console_error_panic_hook::set_once();
             Self(EngineAdapter::new())
+        }
+
+        #[wasm_bindgen(js_name = beginEditableToolOperation)]
+        pub fn begin_editable_tool_operation(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .begin_editable_tool_operation(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = advanceEditableToolOperation)]
+        pub fn advance_editable_tool_operation(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .advance_editable_tool_operation(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableToolOperationPresentation)]
+        pub fn editable_tool_operation_presentation(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_tool_operation_presentation(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableToolOperationContext)]
+        pub fn editable_tool_operation_context(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_tool_operation_context(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableToolOperationOperands)]
+        pub fn editable_tool_operation_operands(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_tool_operation_operands(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableToolOperationScene)]
+        pub fn editable_tool_operation_scene(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_tool_operation_scene(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = finishEditableToolOperation)]
+        pub fn finish_editable_tool_operation(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .finish_editable_tool_operation(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = cancelEditableToolOperation)]
+        pub fn cancel_editable_tool_operation(&mut self, json: &str) -> Result<(), JsValue> {
+            self.0
+                .cancel_editable_tool_operation(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = prepareEditableToolOperation)]
+        pub fn prepare_editable_tool_operation(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .prepare_editable_tool_operation(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = prepareEditableToolOperationReplay)]
+        pub fn prepare_editable_tool_operation_replay(
+            &mut self,
+            json: &str,
+        ) -> Result<String, JsValue> {
+            self.0
+                .prepare_editable_tool_operation_replay(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = resolveEditableToolOperation)]
+        pub fn resolve_editable_tool_operation(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .resolve_editable_tool_operation(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = applyEditableToolOperationCommit)]
+        pub fn apply_editable_tool_operation_commit(
+            &mut self,
+            json: &str,
+        ) -> Result<String, JsValue> {
+            self.0
+                .apply_editable_tool_operation_commit(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = releaseEditableToolOperation)]
+        pub fn release_editable_tool_operation(&mut self, json: &str) -> Result<(), JsValue> {
+            self.0
+                .release_editable_tool_operation(json)
+                .map_err(|error| JsValue::from_str(&error))
         }
 
         #[wasm_bindgen(js_name = beginEditableConstruction)]

@@ -15,6 +15,8 @@ mod replay;
 pub use replay::{ConstructionAllocation, ConstructionReplayWitness, PointReplayWitness};
 mod session;
 mod terminal;
+mod tool_operations;
+mod tool_selection;
 pub use authoring::{
     AuthoringPrediction, AuthoringValueInverse, AuthoringValueWrite, PreparedAuthoringMutation,
     PreparedAuthoringSource, PreparedAuthoringValues,
@@ -31,6 +33,13 @@ pub use point_gesture::{
 pub use session::{
     EditableDesign, EditableSession, EditableSessionState, PreparedPointGestureCommit,
 };
+pub use tool_operations::{
+    MAX_TOOL_OPERATION_SAMPLES, PreparedToolOperation, PreparedToolOperationCommit,
+    ToolFilletCornerOptions, ToolOperationCommand, ToolOperationEvent, ToolOperationFrame,
+    ToolOperationOperand, ToolOperationOptions, ToolOperationPrediction, ToolOperationSample,
+    ToolOperationTerminal, ToolOperationTool,
+};
+pub use tool_selection::{ToolCurveOccurrence, ToolSelectionBinding};
 
 use geosolve_sketch::{
     CurveSpan, DesignCurve, DesignPoint, DesignPointId, DesignScalar, DocumentArcSweep, DocumentId,

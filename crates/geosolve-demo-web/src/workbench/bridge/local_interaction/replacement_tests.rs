@@ -77,6 +77,53 @@ fn select_and_pin(local: &mut LocalInteraction) {
 }
 
 #[test]
+fn authoring_selection_maps_exact_source_curve_occurrences_between_engine_namespaces() {
+    let (mut first, second, mut local, seed) = fixture();
+    select_and_pin(&mut local);
+    let pair: serde_json::Value =
+        serde_json::from_str(&first.interaction_snapshot_json().unwrap()).unwrap();
+    let request = serde_json::json!({
+        "scene": seed["scene"], "bindings": seed["bindings"],
+        "view": { "seed": pair["seed"], "state": local.state() }
+    });
+    let before = (
+        first.export_project_json().unwrap(),
+        second.export_project_json().unwrap(),
+    );
+    let mapped: SelectionPresentationState =
+        serde_json::from_str(&map_authoring_selection_json(&request.to_string()).unwrap()).unwrap();
+    let destination = LocalInteraction::new(&seed.to_string()).unwrap();
+    assert_eq!(
+        mapped.items,
+        vec![
+            SelectionItem::Point(destination.scene.points[1].id),
+            SelectionItem::Curve(destination.scene.curves[0].span)
+        ]
+    );
+    assert_eq!(
+        mapped.curve_picks,
+        vec![CurvePickContext {
+            span: destination.scene.curves[0].span,
+            parameter: 0.5,
+            origin: geosolve_constraint_editor::SceneCurveOrigin::Native
+        }]
+    );
+    assert_eq!(
+        before,
+        (
+            first.export_project_json().unwrap(),
+            second.export_project_json().unwrap()
+        )
+    );
+    let mut stale = request.clone();
+    stale["view"]["state"]["sceneKey"] = "obsolete".into();
+    assert!(map_authoring_selection_json(&stale.to_string()).is_err());
+    let mut invalid = request;
+    invalid["view"]["state"]["curvePicks"][0]["parameter"] = 2.0.into();
+    assert!(map_authoring_selection_json(&invalid.to_string()).is_err());
+}
+
+#[test]
 fn replacement_reconciles_selection_curve_occurrence_and_dimension_preferences_across_native_namespaces()
  {
     let (first, second, mut local, seed) = fixture();

@@ -1,0 +1,886 @@
+{
+  "inputSourceDigest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611",
+  "normalizedSource": "\"use geosolve sketch\";\nimport { sketch } from \"@geosolve/sketch-code\";\n\nexport default sketch(($) => {\n  const skew = $.geometry.segment(\"skew\", {\n    start: [0, 0],\n    end: [20, 10],\n  });\n  const fixedStart = $.constraint.fixedPoint(\"fixedStart\", {\n    point: skew.start,\n    target: [0, 0],\n  });\n  const fixedEnd = $.constraint.fixedPoint(\"fixedEnd\", {\n    point: skew.end,\n    target: [20, 10],\n  });\n  const good = $.geometry.segment(\"good\", {\n    start: [0, 30],\n    end: [20, 30],\n  });\n  return {\n    skew: skew,\n    fixedStart: fixedStart,\n    fixedEnd: fixedEnd,\n    good: good,\n  };\n});\n",
+  "ir": {
+    "format": "geosolve-managed-sketch-ir-v4",
+    "imports": [
+      {
+        "module": "@geosolve/sketch-code",
+        "bindings": [
+          "sketch"
+        ]
+      }
+    ],
+    "statements": [
+      {
+        "statement": "declaration",
+        "variable": "skew",
+        "symbol": "skew",
+        "builder_path": [
+          "geometry",
+          "segment"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "start",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "386c99f034af8b8d538c2542f24f475eb2c6b636dc08dd04fa0c5e7b00340c22"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "685f18e1e2326c4d8248eb4d981bbcd322bcc4a2de41a0ed23e10d2e7faf55de"
+                  }
+                ],
+                "site": "9537750fbab06a304e21cd6d8485c34f9d2aa2be6c22e54e5fa3d748248ea331"
+              },
+              "comments": []
+            },
+            {
+              "name": "end",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 20,
+                    "site": "f2b40968c8caca6856ccdacdbbfdc1a67ca41cb657cc0214bca0a75a9e6d13e2"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 10,
+                    "site": "65779259ecb3ed09a2e1f0ea4bf3a14e658704619ff88d96f0ef319109229178"
+                  }
+                ],
+                "site": "ca4fe728faabdef698ae8beced23f6ca2fb2409e689ff282a5c6bbdb4507b80b"
+              },
+              "comments": []
+            }
+          ],
+          "site": "46a50d8c48b6a07a64688ed0c49d3115f66fe05d5791cc9aee3fdd61b350c11e"
+        },
+        "site": "343830d90812a90de28b43ef38cb9380e5ec9ba6a1a26a83e2a5de62f282f086",
+        "comments": []
+      },
+      {
+        "statement": "declaration",
+        "variable": "fixedStart",
+        "symbol": "fixedStart",
+        "builder_path": [
+          "constraint",
+          "fixedPoint"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "point",
+              "value": {
+                "kind": "reference",
+                "declaration": "skew",
+                "path": [
+                  "start"
+                ],
+                "site": "e4c706afe62a4119afa9ec5ff0570777a0fb353cb559b4639baf9ccb863809c6"
+              },
+              "comments": []
+            },
+            {
+              "name": "target",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "8af5fc50fdb3a654c6d7fdb87fca06a8619732daaaa34a268a5ade94d6b741c7"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "da4c1f1f32a51eb992866ce1d0e362215b95647657c0f784bff1ecfef207cf51"
+                  }
+                ],
+                "site": "25df4712781e17565d31ca591190f354975b6443e990ed7062a9407d546be65d"
+              },
+              "comments": []
+            }
+          ],
+          "site": "968663c768cfa41ec55d98606c03798971b605ac60672b2bf01e1f443e579030"
+        },
+        "site": "e0dc96dbb58e6e00616b60431257829b0313f0638d7e28ab20dd295c2c4ec5c3",
+        "comments": []
+      },
+      {
+        "statement": "declaration",
+        "variable": "fixedEnd",
+        "symbol": "fixedEnd",
+        "builder_path": [
+          "constraint",
+          "fixedPoint"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "point",
+              "value": {
+                "kind": "reference",
+                "declaration": "skew",
+                "path": [
+                  "end"
+                ],
+                "site": "a8805fed70b42a7a96345d60b321df835f425e5e8c5fdd03cb275761aaa969c3"
+              },
+              "comments": []
+            },
+            {
+              "name": "target",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 20,
+                    "site": "b2a791dd4ef180729573803e9f1965b38bfc3cbc99e1c55ae6c87fc3a71f6cc2"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 10,
+                    "site": "913cfebc74e8fa45f75ee84654a0ffb5fd461b35a86dee8172445e7be0a7208d"
+                  }
+                ],
+                "site": "38021629332df28ddda5578d4659ba6dfba1daae14a3771c4a88b96c4eb90311"
+              },
+              "comments": []
+            }
+          ],
+          "site": "aaaa6a8b9a69136ee15343ca525ab72cd634162065dd620c993303c6b20fc270"
+        },
+        "site": "a1947dea41bf5df91319dc15657b2306c285064205872af6da44996e51334297",
+        "comments": []
+      },
+      {
+        "statement": "declaration",
+        "variable": "good",
+        "symbol": "good",
+        "builder_path": [
+          "geometry",
+          "segment"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "start",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 0,
+                    "site": "eb33d554bc733715f26fb2d55a37b8583fa46cf5f98b4a87d978fbe1625f85fd"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 30,
+                    "site": "92689b05090fbee7ed6dab23b56bd64a27b6eacdfb860b473bbe0ad3f7e63d3f"
+                  }
+                ],
+                "site": "8498b9e2f5a0f4ec16b64493223d0e22be56d9b3816e9b6cc0c766f053b6ccff"
+              },
+              "comments": []
+            },
+            {
+              "name": "end",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "number",
+                    "value": 20,
+                    "site": "f7d80d4b1edab4c841b98d56f4d181e14afdc5725b1604a8c2984eff39771cf4"
+                  },
+                  {
+                    "kind": "number",
+                    "value": 30,
+                    "site": "f40ebc6f59cdccfe1a06f3ee324e86378310083fda4e7f52b74292f88a2fe303"
+                  }
+                ],
+                "site": "fe009ea1e141b5571763e18a5684f10fdce67cb36b5441b55112ab03937c5b66"
+              },
+              "comments": []
+            }
+          ],
+          "site": "f2e7a579c0fb30a89efdb1c1679871f2f602533f7189030b31cc109acadc583a"
+        },
+        "site": "da05037473a7cfcb83832b406b1e409e7e934210257e1fc4f517641e59f250a4",
+        "comments": []
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "fields": [
+        {
+          "name": "skew",
+          "value": {
+            "kind": "reference",
+            "declaration": "skew",
+            "path": [],
+            "site": "2c4193e33553fa169f161813d7d0fa142547be3496cdd305a9eb6cc68dcd0c18"
+          },
+          "comments": []
+        },
+        {
+          "name": "fixedStart",
+          "value": {
+            "kind": "reference",
+            "declaration": "fixedStart",
+            "path": [],
+            "site": "045fa7425382a4191f56e55332686d5f6e0f247de37f1beb70320738f16fb494"
+          },
+          "comments": []
+        },
+        {
+          "name": "fixedEnd",
+          "value": {
+            "kind": "reference",
+            "declaration": "fixedEnd",
+            "path": [],
+            "site": "7b5102308c93748bf2d7f0c1dbc9f0241a856fe304ccb613486e4683f3a88f25"
+          },
+          "comments": []
+        },
+        {
+          "name": "good",
+          "value": {
+            "kind": "reference",
+            "declaration": "good",
+            "path": [],
+            "site": "0309d870def82e09b005073fc676d544b4e83bf2441bf90ef8836eb4a224428c"
+          },
+          "comments": []
+        }
+      ],
+      "site": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a"
+    },
+    "source_sites": [
+      {
+        "id": "343830d90812a90de28b43ef38cb9380e5ec9ba6a1a26a83e2a5de62f282f086",
+        "kind": "declaration",
+        "span": {
+          "start": 118,
+          "end": 189
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "386c99f034af8b8d538c2542f24f475eb2c6b636dc08dd04fa0c5e7b00340c22",
+        "kind": "value",
+        "span": {
+          "start": 159,
+          "end": 160
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "685f18e1e2326c4d8248eb4d981bbcd322bcc4a2de41a0ed23e10d2e7faf55de",
+        "kind": "value",
+        "span": {
+          "start": 162,
+          "end": 163
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "9537750fbab06a304e21cd6d8485c34f9d2aa2be6c22e54e5fa3d748248ea331",
+        "kind": "value",
+        "span": {
+          "start": 158,
+          "end": 164
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "f2b40968c8caca6856ccdacdbbfdc1a67ca41cb657cc0214bca0a75a9e6d13e2",
+        "kind": "value",
+        "span": {
+          "start": 176,
+          "end": 178
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "65779259ecb3ed09a2e1f0ea4bf3a14e658704619ff88d96f0ef319109229178",
+        "kind": "value",
+        "span": {
+          "start": 180,
+          "end": 182
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "ca4fe728faabdef698ae8beced23f6ca2fb2409e689ff282a5c6bbdb4507b80b",
+        "kind": "value",
+        "span": {
+          "start": 175,
+          "end": 183
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "46a50d8c48b6a07a64688ed0c49d3115f66fe05d5791cc9aee3fdd61b350c11e",
+        "kind": "value",
+        "span": {
+          "start": 145,
+          "end": 188
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "e0dc96dbb58e6e00616b60431257829b0313f0638d7e28ab20dd295c2c4ec5c3",
+        "kind": "declaration",
+        "span": {
+          "start": 212,
+          "end": 299
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "e4c706afe62a4119afa9ec5ff0570777a0fb353cb559b4639baf9ccb863809c6",
+        "kind": "value",
+        "span": {
+          "start": 263,
+          "end": 273
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "8af5fc50fdb3a654c6d7fdb87fca06a8619732daaaa34a268a5ade94d6b741c7",
+        "kind": "value",
+        "span": {
+          "start": 288,
+          "end": 289
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "da4c1f1f32a51eb992866ce1d0e362215b95647657c0f784bff1ecfef207cf51",
+        "kind": "value",
+        "span": {
+          "start": 291,
+          "end": 292
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "25df4712781e17565d31ca591190f354975b6443e990ed7062a9407d546be65d",
+        "kind": "value",
+        "span": {
+          "start": 287,
+          "end": 293
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "968663c768cfa41ec55d98606c03798971b605ac60672b2bf01e1f443e579030",
+        "kind": "value",
+        "span": {
+          "start": 250,
+          "end": 298
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "a1947dea41bf5df91319dc15657b2306c285064205872af6da44996e51334297",
+        "kind": "declaration",
+        "span": {
+          "start": 320,
+          "end": 405
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "a8805fed70b42a7a96345d60b321df835f425e5e8c5fdd03cb275761aaa969c3",
+        "kind": "value",
+        "span": {
+          "start": 369,
+          "end": 377
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "b2a791dd4ef180729573803e9f1965b38bfc3cbc99e1c55ae6c87fc3a71f6cc2",
+        "kind": "value",
+        "span": {
+          "start": 392,
+          "end": 394
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "913cfebc74e8fa45f75ee84654a0ffb5fd461b35a86dee8172445e7be0a7208d",
+        "kind": "value",
+        "span": {
+          "start": 396,
+          "end": 398
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "38021629332df28ddda5578d4659ba6dfba1daae14a3771c4a88b96c4eb90311",
+        "kind": "value",
+        "span": {
+          "start": 391,
+          "end": 399
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "aaaa6a8b9a69136ee15343ca525ab72cd634162065dd620c993303c6b20fc270",
+        "kind": "value",
+        "span": {
+          "start": 356,
+          "end": 404
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "da05037473a7cfcb83832b406b1e409e7e934210257e1fc4f517641e59f250a4",
+        "kind": "declaration",
+        "span": {
+          "start": 422,
+          "end": 494
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "eb33d554bc733715f26fb2d55a37b8583fa46cf5f98b4a87d978fbe1625f85fd",
+        "kind": "value",
+        "span": {
+          "start": 463,
+          "end": 464
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "92689b05090fbee7ed6dab23b56bd64a27b6eacdfb860b473bbe0ad3f7e63d3f",
+        "kind": "value",
+        "span": {
+          "start": 466,
+          "end": 468
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "8498b9e2f5a0f4ec16b64493223d0e22be56d9b3816e9b6cc0c766f053b6ccff",
+        "kind": "value",
+        "span": {
+          "start": 462,
+          "end": 469
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "f7d80d4b1edab4c841b98d56f4d181e14afdc5725b1604a8c2984eff39771cf4",
+        "kind": "value",
+        "span": {
+          "start": 481,
+          "end": 483
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "f40ebc6f59cdccfe1a06f3ee324e86378310083fda4e7f52b74292f88a2fe303",
+        "kind": "value",
+        "span": {
+          "start": 485,
+          "end": 487
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "fe009ea1e141b5571763e18a5684f10fdce67cb36b5441b55112ab03937c5b66",
+        "kind": "value",
+        "span": {
+          "start": 480,
+          "end": 488
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "f2e7a579c0fb30a89efdb1c1679871f2f602533f7189030b31cc109acadc583a",
+        "kind": "value",
+        "span": {
+          "start": 449,
+          "end": 493
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "2c4193e33553fa169f161813d7d0fa142547be3496cdd305a9eb6cc68dcd0c18",
+        "kind": "value",
+        "span": {
+          "start": 517,
+          "end": 521
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "045fa7425382a4191f56e55332686d5f6e0f247de37f1beb70320738f16fb494",
+        "kind": "value",
+        "span": {
+          "start": 539,
+          "end": 549
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "7b5102308c93748bf2d7f0c1dbc9f0241a856fe304ccb613486e4683f3a88f25",
+        "kind": "value",
+        "span": {
+          "start": 565,
+          "end": 573
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "0309d870def82e09b005073fc676d544b4e83bf2441bf90ef8836eb4a224428c",
+        "kind": "value",
+        "span": {
+          "start": 585,
+          "end": 589
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      },
+      {
+        "id": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a",
+        "kind": "value",
+        "span": {
+          "start": 505,
+          "end": 594
+        },
+        "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611"
+      }
+    ],
+    "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611",
+    "ir_digest": "1c5c34638b6fe5693bb2194d9b3ce6bfa62aec5659cf0f72f3e667b6e74f4c06"
+  },
+  "artifact": {
+    "format": "geosolve-executed-sketch-artifact-v4",
+    "source_digest": "ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611",
+    "ir_digest": "1c5c34638b6fe5693bb2194d9b3ce6bfa62aec5659cf0f72f3e667b6e74f4c06",
+    "declarations": [
+      {
+        "declaration": "skew",
+        "family": "geometry.segment",
+        "patch": null,
+        "site": "343830d90812a90de28b43ef38cb9380e5ec9ba6a1a26a83e2a5de62f282f086",
+        "result": [
+          {
+            "kind": "curve",
+            "path": [
+              "curve"
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "end"
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "span"
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "start"
+            ]
+          }
+        ]
+      },
+      {
+        "declaration": "fixedStart",
+        "family": "constraint.fixedPoint",
+        "patch": null,
+        "site": "e0dc96dbb58e6e00616b60431257829b0313f0638d7e28ab20dd295c2c4ec5c3",
+        "result": [
+          {
+            "kind": "constraint",
+            "path": [
+              "constraint"
+            ]
+          }
+        ]
+      },
+      {
+        "declaration": "fixedEnd",
+        "family": "constraint.fixedPoint",
+        "patch": null,
+        "site": "a1947dea41bf5df91319dc15657b2306c285064205872af6da44996e51334297",
+        "result": [
+          {
+            "kind": "constraint",
+            "path": [
+              "constraint"
+            ]
+          }
+        ]
+      },
+      {
+        "declaration": "good",
+        "family": "geometry.segment",
+        "patch": null,
+        "site": "da05037473a7cfcb83832b406b1e409e7e934210257e1fc4f517641e59f250a4",
+        "result": [
+          {
+            "kind": "curve",
+            "path": [
+              "curve"
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "end"
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "span"
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "start"
+            ]
+          }
+        ]
+      }
+    ],
+    "generated_members": [],
+    "groups": [],
+    "suppressions": [],
+    "value_consumers": [
+      {
+        "value_site": "386c99f034af8b8d538c2542f24f475eb2c6b636dc08dd04fa0c5e7b00340c22",
+        "target": {
+          "target": "declaration",
+          "declaration": "skew",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "start",
+          0
+        ]
+      },
+      {
+        "value_site": "685f18e1e2326c4d8248eb4d981bbcd322bcc4a2de41a0ed23e10d2e7faf55de",
+        "target": {
+          "target": "declaration",
+          "declaration": "skew",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "start",
+          1
+        ]
+      },
+      {
+        "value_site": "f2b40968c8caca6856ccdacdbbfdc1a67ca41cb657cc0214bca0a75a9e6d13e2",
+        "target": {
+          "target": "declaration",
+          "declaration": "skew",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "end",
+          0
+        ]
+      },
+      {
+        "value_site": "65779259ecb3ed09a2e1f0ea4bf3a14e658704619ff88d96f0ef319109229178",
+        "target": {
+          "target": "declaration",
+          "declaration": "skew",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "end",
+          1
+        ]
+      },
+      {
+        "value_site": "e4c706afe62a4119afa9ec5ff0570777a0fb353cb559b4639baf9ccb863809c6",
+        "target": {
+          "target": "declaration",
+          "declaration": "fixedStart",
+          "family": "constraint.fixedPoint"
+        },
+        "property": [
+          "point"
+        ]
+      },
+      {
+        "value_site": "8af5fc50fdb3a654c6d7fdb87fca06a8619732daaaa34a268a5ade94d6b741c7",
+        "target": {
+          "target": "declaration",
+          "declaration": "fixedStart",
+          "family": "constraint.fixedPoint"
+        },
+        "property": [
+          "target",
+          0
+        ]
+      },
+      {
+        "value_site": "da4c1f1f32a51eb992866ce1d0e362215b95647657c0f784bff1ecfef207cf51",
+        "target": {
+          "target": "declaration",
+          "declaration": "fixedStart",
+          "family": "constraint.fixedPoint"
+        },
+        "property": [
+          "target",
+          1
+        ]
+      },
+      {
+        "value_site": "a8805fed70b42a7a96345d60b321df835f425e5e8c5fdd03cb275761aaa969c3",
+        "target": {
+          "target": "declaration",
+          "declaration": "fixedEnd",
+          "family": "constraint.fixedPoint"
+        },
+        "property": [
+          "point"
+        ]
+      },
+      {
+        "value_site": "b2a791dd4ef180729573803e9f1965b38bfc3cbc99e1c55ae6c87fc3a71f6cc2",
+        "target": {
+          "target": "declaration",
+          "declaration": "fixedEnd",
+          "family": "constraint.fixedPoint"
+        },
+        "property": [
+          "target",
+          0
+        ]
+      },
+      {
+        "value_site": "913cfebc74e8fa45f75ee84654a0ffb5fd461b35a86dee8172445e7be0a7208d",
+        "target": {
+          "target": "declaration",
+          "declaration": "fixedEnd",
+          "family": "constraint.fixedPoint"
+        },
+        "property": [
+          "target",
+          1
+        ]
+      },
+      {
+        "value_site": "eb33d554bc733715f26fb2d55a37b8583fa46cf5f98b4a87d978fbe1625f85fd",
+        "target": {
+          "target": "declaration",
+          "declaration": "good",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "start",
+          0
+        ]
+      },
+      {
+        "value_site": "92689b05090fbee7ed6dab23b56bd64a27b6eacdfb860b473bbe0ad3f7e63d3f",
+        "target": {
+          "target": "declaration",
+          "declaration": "good",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "start",
+          1
+        ]
+      },
+      {
+        "value_site": "f7d80d4b1edab4c841b98d56f4d181e14afdc5725b1604a8c2984eff39771cf4",
+        "target": {
+          "target": "declaration",
+          "declaration": "good",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "end",
+          0
+        ]
+      },
+      {
+        "value_site": "f40ebc6f59cdccfe1a06f3ee324e86378310083fda4e7f52b74292f88a2fe303",
+        "target": {
+          "target": "declaration",
+          "declaration": "good",
+          "family": "geometry.segment"
+        },
+        "property": [
+          "end",
+          1
+        ]
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "value": {
+        "fixedEnd": {
+          "kind": "reference",
+          "value": {
+            "declaration": "fixedEnd",
+            "path": []
+          }
+        },
+        "fixedStart": {
+          "kind": "reference",
+          "value": {
+            "declaration": "fixedStart",
+            "path": []
+          }
+        },
+        "good": {
+          "kind": "reference",
+          "value": {
+            "declaration": "good",
+            "path": []
+          }
+        },
+        "skew": {
+          "kind": "reference",
+          "value": {
+            "declaration": "skew",
+            "path": []
+          }
+        }
+      }
+    },
+    "artifact_digest": "dc1810c044994bb4ed8e5784d1d4a624d23063908a173fbaae1085ee60807202"
+  },
+  "canonicalIrJson": "{\"format\":\"geosolve-managed-sketch-ir-v4\",\"imports\":[{\"module\":\"@geosolve/sketch-code\",\"bindings\":[\"sketch\"]}],\"statements\":[{\"statement\":\"declaration\",\"variable\":\"skew\",\"symbol\":\"skew\",\"builder_path\":[\"geometry\",\"segment\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"start\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":0.0,\"site\":\"386c99f034af8b8d538c2542f24f475eb2c6b636dc08dd04fa0c5e7b00340c22\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"685f18e1e2326c4d8248eb4d981bbcd322bcc4a2de41a0ed23e10d2e7faf55de\"}],\"site\":\"9537750fbab06a304e21cd6d8485c34f9d2aa2be6c22e54e5fa3d748248ea331\"},\"comments\":[]},{\"name\":\"end\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":20.0,\"site\":\"f2b40968c8caca6856ccdacdbbfdc1a67ca41cb657cc0214bca0a75a9e6d13e2\"},{\"kind\":\"number\",\"value\":10.0,\"site\":\"65779259ecb3ed09a2e1f0ea4bf3a14e658704619ff88d96f0ef319109229178\"}],\"site\":\"ca4fe728faabdef698ae8beced23f6ca2fb2409e689ff282a5c6bbdb4507b80b\"},\"comments\":[]}],\"site\":\"46a50d8c48b6a07a64688ed0c49d3115f66fe05d5791cc9aee3fdd61b350c11e\"},\"site\":\"343830d90812a90de28b43ef38cb9380e5ec9ba6a1a26a83e2a5de62f282f086\",\"comments\":[]},{\"statement\":\"declaration\",\"variable\":\"fixedStart\",\"symbol\":\"fixedStart\",\"builder_path\":[\"constraint\",\"fixedPoint\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"point\",\"value\":{\"kind\":\"reference\",\"declaration\":\"skew\",\"path\":[\"start\"],\"site\":\"e4c706afe62a4119afa9ec5ff0570777a0fb353cb559b4639baf9ccb863809c6\"},\"comments\":[]},{\"name\":\"target\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":0.0,\"site\":\"8af5fc50fdb3a654c6d7fdb87fca06a8619732daaaa34a268a5ade94d6b741c7\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"da4c1f1f32a51eb992866ce1d0e362215b95647657c0f784bff1ecfef207cf51\"}],\"site\":\"25df4712781e17565d31ca591190f354975b6443e990ed7062a9407d546be65d\"},\"comments\":[]}],\"site\":\"968663c768cfa41ec55d98606c03798971b605ac60672b2bf01e1f443e579030\"},\"site\":\"e0dc96dbb58e6e00616b60431257829b0313f0638d7e28ab20dd295c2c4ec5c3\",\"comments\":[]},{\"statement\":\"declaration\",\"variable\":\"fixedEnd\",\"symbol\":\"fixedEnd\",\"builder_path\":[\"constraint\",\"fixedPoint\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"point\",\"value\":{\"kind\":\"reference\",\"declaration\":\"skew\",\"path\":[\"end\"],\"site\":\"a8805fed70b42a7a96345d60b321df835f425e5e8c5fdd03cb275761aaa969c3\"},\"comments\":[]},{\"name\":\"target\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":20.0,\"site\":\"b2a791dd4ef180729573803e9f1965b38bfc3cbc99e1c55ae6c87fc3a71f6cc2\"},{\"kind\":\"number\",\"value\":10.0,\"site\":\"913cfebc74e8fa45f75ee84654a0ffb5fd461b35a86dee8172445e7be0a7208d\"}],\"site\":\"38021629332df28ddda5578d4659ba6dfba1daae14a3771c4a88b96c4eb90311\"},\"comments\":[]}],\"site\":\"aaaa6a8b9a69136ee15343ca525ab72cd634162065dd620c993303c6b20fc270\"},\"site\":\"a1947dea41bf5df91319dc15657b2306c285064205872af6da44996e51334297\",\"comments\":[]},{\"statement\":\"declaration\",\"variable\":\"good\",\"symbol\":\"good\",\"builder_path\":[\"geometry\",\"segment\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"start\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":0.0,\"site\":\"eb33d554bc733715f26fb2d55a37b8583fa46cf5f98b4a87d978fbe1625f85fd\"},{\"kind\":\"number\",\"value\":30.0,\"site\":\"92689b05090fbee7ed6dab23b56bd64a27b6eacdfb860b473bbe0ad3f7e63d3f\"}],\"site\":\"8498b9e2f5a0f4ec16b64493223d0e22be56d9b3816e9b6cc0c766f053b6ccff\"},\"comments\":[]},{\"name\":\"end\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":20.0,\"site\":\"f7d80d4b1edab4c841b98d56f4d181e14afdc5725b1604a8c2984eff39771cf4\"},{\"kind\":\"number\",\"value\":30.0,\"site\":\"f40ebc6f59cdccfe1a06f3ee324e86378310083fda4e7f52b74292f88a2fe303\"}],\"site\":\"fe009ea1e141b5571763e18a5684f10fdce67cb36b5441b55112ab03937c5b66\"},\"comments\":[]}],\"site\":\"f2e7a579c0fb30a89efdb1c1679871f2f602533f7189030b31cc109acadc583a\"},\"site\":\"da05037473a7cfcb83832b406b1e409e7e934210257e1fc4f517641e59f250a4\",\"comments\":[]}],\"output\":{\"kind\":\"object\",\"fields\":[{\"name\":\"skew\",\"value\":{\"kind\":\"reference\",\"declaration\":\"skew\",\"path\":[],\"site\":\"2c4193e33553fa169f161813d7d0fa142547be3496cdd305a9eb6cc68dcd0c18\"},\"comments\":[]},{\"name\":\"fixedStart\",\"value\":{\"kind\":\"reference\",\"declaration\":\"fixedStart\",\"path\":[],\"site\":\"045fa7425382a4191f56e55332686d5f6e0f247de37f1beb70320738f16fb494\"},\"comments\":[]},{\"name\":\"fixedEnd\",\"value\":{\"kind\":\"reference\",\"declaration\":\"fixedEnd\",\"path\":[],\"site\":\"7b5102308c93748bf2d7f0c1dbc9f0241a856fe304ccb613486e4683f3a88f25\"},\"comments\":[]},{\"name\":\"good\",\"value\":{\"kind\":\"reference\",\"declaration\":\"good\",\"path\":[],\"site\":\"0309d870def82e09b005073fc676d544b4e83bf2441bf90ef8836eb4a224428c\"},\"comments\":[]}],\"site\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\"},\"source_sites\":[{\"id\":\"343830d90812a90de28b43ef38cb9380e5ec9ba6a1a26a83e2a5de62f282f086\",\"kind\":\"declaration\",\"span\":{\"start\":118,\"end\":189},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"386c99f034af8b8d538c2542f24f475eb2c6b636dc08dd04fa0c5e7b00340c22\",\"kind\":\"value\",\"span\":{\"start\":159,\"end\":160},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"685f18e1e2326c4d8248eb4d981bbcd322bcc4a2de41a0ed23e10d2e7faf55de\",\"kind\":\"value\",\"span\":{\"start\":162,\"end\":163},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"9537750fbab06a304e21cd6d8485c34f9d2aa2be6c22e54e5fa3d748248ea331\",\"kind\":\"value\",\"span\":{\"start\":158,\"end\":164},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"f2b40968c8caca6856ccdacdbbfdc1a67ca41cb657cc0214bca0a75a9e6d13e2\",\"kind\":\"value\",\"span\":{\"start\":176,\"end\":178},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"65779259ecb3ed09a2e1f0ea4bf3a14e658704619ff88d96f0ef319109229178\",\"kind\":\"value\",\"span\":{\"start\":180,\"end\":182},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"ca4fe728faabdef698ae8beced23f6ca2fb2409e689ff282a5c6bbdb4507b80b\",\"kind\":\"value\",\"span\":{\"start\":175,\"end\":183},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"46a50d8c48b6a07a64688ed0c49d3115f66fe05d5791cc9aee3fdd61b350c11e\",\"kind\":\"value\",\"span\":{\"start\":145,\"end\":188},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"e0dc96dbb58e6e00616b60431257829b0313f0638d7e28ab20dd295c2c4ec5c3\",\"kind\":\"declaration\",\"span\":{\"start\":212,\"end\":299},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"e4c706afe62a4119afa9ec5ff0570777a0fb353cb559b4639baf9ccb863809c6\",\"kind\":\"value\",\"span\":{\"start\":263,\"end\":273},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"8af5fc50fdb3a654c6d7fdb87fca06a8619732daaaa34a268a5ade94d6b741c7\",\"kind\":\"value\",\"span\":{\"start\":288,\"end\":289},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"da4c1f1f32a51eb992866ce1d0e362215b95647657c0f784bff1ecfef207cf51\",\"kind\":\"value\",\"span\":{\"start\":291,\"end\":292},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"25df4712781e17565d31ca591190f354975b6443e990ed7062a9407d546be65d\",\"kind\":\"value\",\"span\":{\"start\":287,\"end\":293},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"968663c768cfa41ec55d98606c03798971b605ac60672b2bf01e1f443e579030\",\"kind\":\"value\",\"span\":{\"start\":250,\"end\":298},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"a1947dea41bf5df91319dc15657b2306c285064205872af6da44996e51334297\",\"kind\":\"declaration\",\"span\":{\"start\":320,\"end\":405},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"a8805fed70b42a7a96345d60b321df835f425e5e8c5fdd03cb275761aaa969c3\",\"kind\":\"value\",\"span\":{\"start\":369,\"end\":377},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"b2a791dd4ef180729573803e9f1965b38bfc3cbc99e1c55ae6c87fc3a71f6cc2\",\"kind\":\"value\",\"span\":{\"start\":392,\"end\":394},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"913cfebc74e8fa45f75ee84654a0ffb5fd461b35a86dee8172445e7be0a7208d\",\"kind\":\"value\",\"span\":{\"start\":396,\"end\":398},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"38021629332df28ddda5578d4659ba6dfba1daae14a3771c4a88b96c4eb90311\",\"kind\":\"value\",\"span\":{\"start\":391,\"end\":399},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"aaaa6a8b9a69136ee15343ca525ab72cd634162065dd620c993303c6b20fc270\",\"kind\":\"value\",\"span\":{\"start\":356,\"end\":404},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"da05037473a7cfcb83832b406b1e409e7e934210257e1fc4f517641e59f250a4\",\"kind\":\"declaration\",\"span\":{\"start\":422,\"end\":494},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"eb33d554bc733715f26fb2d55a37b8583fa46cf5f98b4a87d978fbe1625f85fd\",\"kind\":\"value\",\"span\":{\"start\":463,\"end\":464},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"92689b05090fbee7ed6dab23b56bd64a27b6eacdfb860b473bbe0ad3f7e63d3f\",\"kind\":\"value\",\"span\":{\"start\":466,\"end\":468},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"8498b9e2f5a0f4ec16b64493223d0e22be56d9b3816e9b6cc0c766f053b6ccff\",\"kind\":\"value\",\"span\":{\"start\":462,\"end\":469},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"f7d80d4b1edab4c841b98d56f4d181e14afdc5725b1604a8c2984eff39771cf4\",\"kind\":\"value\",\"span\":{\"start\":481,\"end\":483},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"f40ebc6f59cdccfe1a06f3ee324e86378310083fda4e7f52b74292f88a2fe303\",\"kind\":\"value\",\"span\":{\"start\":485,\"end\":487},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"fe009ea1e141b5571763e18a5684f10fdce67cb36b5441b55112ab03937c5b66\",\"kind\":\"value\",\"span\":{\"start\":480,\"end\":488},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"f2e7a579c0fb30a89efdb1c1679871f2f602533f7189030b31cc109acadc583a\",\"kind\":\"value\",\"span\":{\"start\":449,\"end\":493},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"2c4193e33553fa169f161813d7d0fa142547be3496cdd305a9eb6cc68dcd0c18\",\"kind\":\"value\",\"span\":{\"start\":517,\"end\":521},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"045fa7425382a4191f56e55332686d5f6e0f247de37f1beb70320738f16fb494\",\"kind\":\"value\",\"span\":{\"start\":539,\"end\":549},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"7b5102308c93748bf2d7f0c1dbc9f0241a856fe304ccb613486e4683f3a88f25\",\"kind\":\"value\",\"span\":{\"start\":565,\"end\":573},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"0309d870def82e09b005073fc676d544b4e83bf2441bf90ef8836eb4a224428c\",\"kind\":\"value\",\"span\":{\"start\":585,\"end\":589},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"},{\"id\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\",\"kind\":\"value\",\"span\":{\"start\":505,\"end\":594},\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\"}],\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\",\"ir_digest\":\"1c5c34638b6fe5693bb2194d9b3ce6bfa62aec5659cf0f72f3e667b6e74f4c06\"}",
+  "canonicalArtifactJson": "{\"format\":\"geosolve-executed-sketch-artifact-v4\",\"source_digest\":\"ee34b828f8be11136ad645b4077a9da73d57d9c2793363173b48ceef97965611\",\"ir_digest\":\"1c5c34638b6fe5693bb2194d9b3ce6bfa62aec5659cf0f72f3e667b6e74f4c06\",\"declarations\":[{\"declaration\":\"skew\",\"family\":\"geometry.segment\",\"patch\":null,\"site\":\"343830d90812a90de28b43ef38cb9380e5ec9ba6a1a26a83e2a5de62f282f086\",\"result\":[{\"kind\":\"curve\",\"path\":[\"curve\"]},{\"kind\":\"point\",\"path\":[\"end\"]},{\"kind\":\"curve_span\",\"path\":[\"span\"]},{\"kind\":\"point\",\"path\":[\"start\"]}]},{\"declaration\":\"fixedStart\",\"family\":\"constraint.fixedPoint\",\"patch\":null,\"site\":\"e0dc96dbb58e6e00616b60431257829b0313f0638d7e28ab20dd295c2c4ec5c3\",\"result\":[{\"kind\":\"constraint\",\"path\":[\"constraint\"]}]},{\"declaration\":\"fixedEnd\",\"family\":\"constraint.fixedPoint\",\"patch\":null,\"site\":\"a1947dea41bf5df91319dc15657b2306c285064205872af6da44996e51334297\",\"result\":[{\"kind\":\"constraint\",\"path\":[\"constraint\"]}]},{\"declaration\":\"good\",\"family\":\"geometry.segment\",\"patch\":null,\"site\":\"da05037473a7cfcb83832b406b1e409e7e934210257e1fc4f517641e59f250a4\",\"result\":[{\"kind\":\"curve\",\"path\":[\"curve\"]},{\"kind\":\"point\",\"path\":[\"end\"]},{\"kind\":\"curve_span\",\"path\":[\"span\"]},{\"kind\":\"point\",\"path\":[\"start\"]}]}],\"generated_members\":[],\"groups\":[],\"suppressions\":[],\"value_consumers\":[{\"value_site\":\"386c99f034af8b8d538c2542f24f475eb2c6b636dc08dd04fa0c5e7b00340c22\",\"target\":{\"target\":\"declaration\",\"declaration\":\"skew\",\"family\":\"geometry.segment\"},\"property\":[\"start\",0]},{\"value_site\":\"685f18e1e2326c4d8248eb4d981bbcd322bcc4a2de41a0ed23e10d2e7faf55de\",\"target\":{\"target\":\"declaration\",\"declaration\":\"skew\",\"family\":\"geometry.segment\"},\"property\":[\"start\",1]},{\"value_site\":\"f2b40968c8caca6856ccdacdbbfdc1a67ca41cb657cc0214bca0a75a9e6d13e2\",\"target\":{\"target\":\"declaration\",\"declaration\":\"skew\",\"family\":\"geometry.segment\"},\"property\":[\"end\",0]},{\"value_site\":\"65779259ecb3ed09a2e1f0ea4bf3a14e658704619ff88d96f0ef319109229178\",\"target\":{\"target\":\"declaration\",\"declaration\":\"skew\",\"family\":\"geometry.segment\"},\"property\":[\"end\",1]},{\"value_site\":\"e4c706afe62a4119afa9ec5ff0570777a0fb353cb559b4639baf9ccb863809c6\",\"target\":{\"target\":\"declaration\",\"declaration\":\"fixedStart\",\"family\":\"constraint.fixedPoint\"},\"property\":[\"point\"]},{\"value_site\":\"8af5fc50fdb3a654c6d7fdb87fca06a8619732daaaa34a268a5ade94d6b741c7\",\"target\":{\"target\":\"declaration\",\"declaration\":\"fixedStart\",\"family\":\"constraint.fixedPoint\"},\"property\":[\"target\",0]},{\"value_site\":\"da4c1f1f32a51eb992866ce1d0e362215b95647657c0f784bff1ecfef207cf51\",\"target\":{\"target\":\"declaration\",\"declaration\":\"fixedStart\",\"family\":\"constraint.fixedPoint\"},\"property\":[\"target\",1]},{\"value_site\":\"a8805fed70b42a7a96345d60b321df835f425e5e8c5fdd03cb275761aaa969c3\",\"target\":{\"target\":\"declaration\",\"declaration\":\"fixedEnd\",\"family\":\"constraint.fixedPoint\"},\"property\":[\"point\"]},{\"value_site\":\"b2a791dd4ef180729573803e9f1965b38bfc3cbc99e1c55ae6c87fc3a71f6cc2\",\"target\":{\"target\":\"declaration\",\"declaration\":\"fixedEnd\",\"family\":\"constraint.fixedPoint\"},\"property\":[\"target\",0]},{\"value_site\":\"913cfebc74e8fa45f75ee84654a0ffb5fd461b35a86dee8172445e7be0a7208d\",\"target\":{\"target\":\"declaration\",\"declaration\":\"fixedEnd\",\"family\":\"constraint.fixedPoint\"},\"property\":[\"target\",1]},{\"value_site\":\"eb33d554bc733715f26fb2d55a37b8583fa46cf5f98b4a87d978fbe1625f85fd\",\"target\":{\"target\":\"declaration\",\"declaration\":\"good\",\"family\":\"geometry.segment\"},\"property\":[\"start\",0]},{\"value_site\":\"92689b05090fbee7ed6dab23b56bd64a27b6eacdfb860b473bbe0ad3f7e63d3f\",\"target\":{\"target\":\"declaration\",\"declaration\":\"good\",\"family\":\"geometry.segment\"},\"property\":[\"start\",1]},{\"value_site\":\"f7d80d4b1edab4c841b98d56f4d181e14afdc5725b1604a8c2984eff39771cf4\",\"target\":{\"target\":\"declaration\",\"declaration\":\"good\",\"family\":\"geometry.segment\"},\"property\":[\"end\",0]},{\"value_site\":\"f40ebc6f59cdccfe1a06f3ee324e86378310083fda4e7f52b74292f88a2fe303\",\"target\":{\"target\":\"declaration\",\"declaration\":\"good\",\"family\":\"geometry.segment\"},\"property\":[\"end\",1]}],\"output\":{\"kind\":\"object\",\"value\":{\"fixedEnd\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"fixedEnd\",\"path\":[]}},\"fixedStart\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"fixedStart\",\"path\":[]}},\"good\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"good\",\"path\":[]}},\"skew\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"skew\",\"path\":[]}}}},\"artifact_digest\":\"dc1810c044994bb4ed8e5784d1d4a624d23063908a173fbaae1085ee60807202\"}"
+}

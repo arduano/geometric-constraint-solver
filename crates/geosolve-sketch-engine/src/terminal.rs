@@ -2059,6 +2059,10 @@ fn document_object_label(
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one authenticated witness checks source identity, native ownership and exact label projection together"
+)]
 fn authenticated_declaration_object_relabels(
     terminal: &ProjectionalEditorSession,
     staged: &ProjectionalEditorSession,
@@ -2115,6 +2119,23 @@ fn authenticated_declaration_object_relabels(
         if !witnessed_staged_nodes.insert(staged_node.id) {
             return Err("declaration relabel witness repeats a staged persistent node".into());
         }
+        // Logical aggregate helpers own typed references but no native object labels.
+        // Admit only an exact equation-free helper; every native owner below remains exact.
+        if terminal_authority.ownership.node(projection.node).is_none()
+            && staged_authority.ownership.node(staged_node.id).is_none()
+            && matches!(terminal_node.kind, IntentNodeKind::Aggregate { .. })
+            && terminal_node.kind == staged_node.kind
+            && terminal_node.fields == staged_node.fields
+            && terminal_node.inputs == staged_node.inputs
+            && terminal_node.reservations.is_empty()
+            && staged_node.reservations.is_empty()
+            && terminal_node.operation_outputs.is_empty()
+            && staged_node.operation_outputs.is_empty()
+            && terminal_node.children.is_empty()
+            && staged_node.children.is_empty()
+        {
+            continue;
+        }
         let terminal_owner = terminal_authority
             .ownership
             .node(projection.node)
@@ -2149,10 +2170,20 @@ fn authenticated_declaration_object_relabels(
                 "declaration-owned native label does not carry the exact terminal symbol prefix"
                     .to_owned()
             })?;
-            if !suffix.is_empty() && !suffix.starts_with('.') {
-                return Err(
-                    "declaration-owned native label has a non-canonical symbol suffix".into(),
-                );
+            let offset_distance = suffix == " distance"
+                && matches!(
+                    terminal_node.kind,
+                    IntentNodeKind::Operation {
+                        operation: geosolve_sketch_intent::OperationKind::ProfileOffset
+                    }
+                )
+                && terminal_node.kind == staged_node.kind
+                && matches!(object, DocumentObjectId::Scalar(_));
+            if !suffix.is_empty() && !suffix.starts_with('.') && !offset_distance {
+                return Err(format!(
+                    "declaration-owned native label has a non-canonical symbol suffix: declaration={} object={object:?} current={current:?} terminal={terminal_prefix:?} replacement={replacement:?}",
+                    projection.declaration.0
+                ));
             }
             let expected = format!("{staged_prefix}{suffix}");
             if replacement != expected {

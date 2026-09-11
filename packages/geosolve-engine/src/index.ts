@@ -168,3 +168,5 @@ export async function createEngine(options: EngineOptions = {}): Promise<Engine>
   await module.default({ module_or_path: bytes! });
   return new Engine(new module.SketchEngine());
 }
+
+export { ToolOperationPrediction, type ToolOperationTool, type ToolOperationOperand, type ToolOperationOptions, type ToolOperationEvent, type ToolOperationSample, type ToolOperationCommand, type ToolOperationFrame, type ToolAuthoringOptions, type ToolFilletOptions, type PreparedToolOperation, type PreparedToolOperationCommit, type PreparedToolOperationReplay, type ToolOperationReplayWitness } from "./tool-operations.js";

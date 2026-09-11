@@ -1,0 +1,586 @@
+{
+  "inputSourceDigest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7",
+  "normalizedSource": "\"use geosolve sketch\";\nimport { sketch } from \"@geosolve/sketch-code\";\n\nexport default sketch(($) => {\n  const corner = $.geometry.polyline(\"corner\", {\n    vertices: [{\n      key: \"start\",\n      position: [200, 0],\n    }, {\n      key: \"corner\",\n      position: [220, 0],\n    }, {\n      key: \"end\",\n      position: [220, 20],\n    }],\n  });\n  return {\n    corner: corner,\n  };\n});\n",
+  "ir": {
+    "format": "geosolve-managed-sketch-ir-v4",
+    "imports": [
+      {
+        "module": "@geosolve/sketch-code",
+        "bindings": [
+          "sketch"
+        ]
+      }
+    ],
+    "statements": [
+      {
+        "statement": "declaration",
+        "variable": "corner",
+        "symbol": "corner",
+        "builder_path": [
+          "geometry",
+          "polyline"
+        ],
+        "patch": null,
+        "arguments": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "vertices",
+              "value": {
+                "kind": "array",
+                "values": [
+                  {
+                    "kind": "object",
+                    "fields": [
+                      {
+                        "name": "key",
+                        "value": {
+                          "kind": "string",
+                          "value": "start",
+                          "site": "ce5c7c516343f5827a73066fabad90a747c4887bc0920275420089da80157934"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "position",
+                        "value": {
+                          "kind": "array",
+                          "values": [
+                            {
+                              "kind": "number",
+                              "value": 200,
+                              "site": "79f1548dfc57e0b79676bc2eaef7baef9d74cb3beb1244a08a29c3ac251a6461"
+                            },
+                            {
+                              "kind": "number",
+                              "value": 0,
+                              "site": "dc17fd8895f78fbe783b3b72657a50a5ada93395dc1dbfbd5685dddbfcdb97d2"
+                            }
+                          ],
+                          "site": "5f40aae21881c287b35c792799e47393904ff87e66cfba1efdacc3d30f3727d9"
+                        },
+                        "comments": []
+                      }
+                    ],
+                    "site": "b64c4640fee5bf9b8bb7c5c90b52ed6925bc36cf1df61ad6c0121c0a5ac86998"
+                  },
+                  {
+                    "kind": "object",
+                    "fields": [
+                      {
+                        "name": "key",
+                        "value": {
+                          "kind": "string",
+                          "value": "corner",
+                          "site": "68bb4fbd152a2c15cbd0305cf7b75b243760986fcfa9fa2612645cb134a3bd5f"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "position",
+                        "value": {
+                          "kind": "array",
+                          "values": [
+                            {
+                              "kind": "number",
+                              "value": 220,
+                              "site": "5dc4c6257f5c23d08280c3bd24328730eb7f0cbb1118d6852f4b1b582058da2d"
+                            },
+                            {
+                              "kind": "number",
+                              "value": 0,
+                              "site": "557492b59c841e84d53faa059f84d9117a89a1c42957bed97b32f4a2804c3bd0"
+                            }
+                          ],
+                          "site": "04bff26ab7a51e25b2345756b39988559ec38b3d6b9b347026fa1e8f1634e8c5"
+                        },
+                        "comments": []
+                      }
+                    ],
+                    "site": "c0569d437178e5957835817c7f58bda3294e0081e2f3d4360524fef0fefecbd2"
+                  },
+                  {
+                    "kind": "object",
+                    "fields": [
+                      {
+                        "name": "key",
+                        "value": {
+                          "kind": "string",
+                          "value": "end",
+                          "site": "c833430c7d89126033f0e1d3b2789dcca3f6c08e5d3c919ce0f2ea60adb927ce"
+                        },
+                        "comments": []
+                      },
+                      {
+                        "name": "position",
+                        "value": {
+                          "kind": "array",
+                          "values": [
+                            {
+                              "kind": "number",
+                              "value": 220,
+                              "site": "d42cdefd21d443e0dbffac863766b2a47d92a9b13aa3452011f016d78a71c1b4"
+                            },
+                            {
+                              "kind": "number",
+                              "value": 20,
+                              "site": "eb1b360548d2b0a219c3f77f597d34f03e8bcea1f6882fdd4c5f338caa22c898"
+                            }
+                          ],
+                          "site": "668ebc9031614cd03f5aa1dfe0ac1b4c474eb1aaa0a87196ce569e5bc9615a21"
+                        },
+                        "comments": []
+                      }
+                    ],
+                    "site": "3285b9afa9fc607fa5ab77ab4a51c2d952243c3d0d0e8db0c8f8e54fe587f99f"
+                  }
+                ],
+                "site": "91a052479d123e162f41de8225a7b6928dca512abce1a348669e9b75a3cf342f"
+              },
+              "comments": []
+            }
+          ],
+          "site": "e7edf91cfe67fa9f106118b13e4345fed2c07ddbd03f0b24af154c24593180b0"
+        },
+        "site": "7c1fa7455c4cdffbe199f40d2ea5712e76385ce85b212386349d34c8b81a9c61",
+        "comments": []
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "fields": [
+        {
+          "name": "corner",
+          "value": {
+            "kind": "reference",
+            "declaration": "corner",
+            "path": [],
+            "site": "04f6cccc8bb7e05d3afb3fd59957133c56a77919c2fa0ef7b291fb23d7e0c5d1"
+          },
+          "comments": []
+        }
+      ],
+      "site": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a"
+    },
+    "source_sites": [
+      {
+        "id": "7c1fa7455c4cdffbe199f40d2ea5712e76385ce85b212386349d34c8b81a9c61",
+        "kind": "declaration",
+        "span": {
+          "start": 120,
+          "end": 337
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "ce5c7c516343f5827a73066fabad90a747c4887bc0920275420089da80157934",
+        "kind": "value",
+        "span": {
+          "start": 180,
+          "end": 187
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "79f1548dfc57e0b79676bc2eaef7baef9d74cb3beb1244a08a29c3ac251a6461",
+        "kind": "value",
+        "span": {
+          "start": 206,
+          "end": 209
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "dc17fd8895f78fbe783b3b72657a50a5ada93395dc1dbfbd5685dddbfcdb97d2",
+        "kind": "value",
+        "span": {
+          "start": 211,
+          "end": 212
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "5f40aae21881c287b35c792799e47393904ff87e66cfba1efdacc3d30f3727d9",
+        "kind": "value",
+        "span": {
+          "start": 205,
+          "end": 213
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "b64c4640fee5bf9b8bb7c5c90b52ed6925bc36cf1df61ad6c0121c0a5ac86998",
+        "kind": "value",
+        "span": {
+          "start": 167,
+          "end": 220
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "68bb4fbd152a2c15cbd0305cf7b75b243760986fcfa9fa2612645cb134a3bd5f",
+        "kind": "value",
+        "span": {
+          "start": 235,
+          "end": 243
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "5dc4c6257f5c23d08280c3bd24328730eb7f0cbb1118d6852f4b1b582058da2d",
+        "kind": "value",
+        "span": {
+          "start": 262,
+          "end": 265
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "557492b59c841e84d53faa059f84d9117a89a1c42957bed97b32f4a2804c3bd0",
+        "kind": "value",
+        "span": {
+          "start": 267,
+          "end": 268
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "04bff26ab7a51e25b2345756b39988559ec38b3d6b9b347026fa1e8f1634e8c5",
+        "kind": "value",
+        "span": {
+          "start": 261,
+          "end": 269
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "c0569d437178e5957835817c7f58bda3294e0081e2f3d4360524fef0fefecbd2",
+        "kind": "value",
+        "span": {
+          "start": 222,
+          "end": 276
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "c833430c7d89126033f0e1d3b2789dcca3f6c08e5d3c919ce0f2ea60adb927ce",
+        "kind": "value",
+        "span": {
+          "start": 291,
+          "end": 296
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "d42cdefd21d443e0dbffac863766b2a47d92a9b13aa3452011f016d78a71c1b4",
+        "kind": "value",
+        "span": {
+          "start": 315,
+          "end": 318
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "eb1b360548d2b0a219c3f77f597d34f03e8bcea1f6882fdd4c5f338caa22c898",
+        "kind": "value",
+        "span": {
+          "start": 320,
+          "end": 322
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "668ebc9031614cd03f5aa1dfe0ac1b4c474eb1aaa0a87196ce569e5bc9615a21",
+        "kind": "value",
+        "span": {
+          "start": 314,
+          "end": 323
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "3285b9afa9fc607fa5ab77ab4a51c2d952243c3d0d0e8db0c8f8e54fe587f99f",
+        "kind": "value",
+        "span": {
+          "start": 278,
+          "end": 330
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "91a052479d123e162f41de8225a7b6928dca512abce1a348669e9b75a3cf342f",
+        "kind": "value",
+        "span": {
+          "start": 166,
+          "end": 331
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "e7edf91cfe67fa9f106118b13e4345fed2c07ddbd03f0b24af154c24593180b0",
+        "kind": "value",
+        "span": {
+          "start": 150,
+          "end": 336
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "04f6cccc8bb7e05d3afb3fd59957133c56a77919c2fa0ef7b291fb23d7e0c5d1",
+        "kind": "value",
+        "span": {
+          "start": 362,
+          "end": 368
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      },
+      {
+        "id": "537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a",
+        "kind": "value",
+        "span": {
+          "start": 348,
+          "end": 373
+        },
+        "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7"
+      }
+    ],
+    "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7",
+    "ir_digest": "31fd933e20b47250f3a2ac35faab3cb85ca1ba7085267df8a2d1279b539c0284"
+  },
+  "artifact": {
+    "format": "geosolve-executed-sketch-artifact-v4",
+    "source_digest": "0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7",
+    "ir_digest": "31fd933e20b47250f3a2ac35faab3cb85ca1ba7085267df8a2d1279b539c0284",
+    "declarations": [
+      {
+        "declaration": "corner",
+        "family": "geometry.polyline",
+        "patch": null,
+        "site": "7c1fa7455c4cdffbe199f40d2ea5712e76385ce85b212386349d34c8b81a9c61",
+        "result": [
+          {
+            "kind": "curve",
+            "path": [
+              "curve"
+            ]
+          },
+          {
+            "kind": "collection",
+            "path": [
+              "filletableCorners"
+            ]
+          },
+          {
+            "kind": "feature_corner",
+            "path": [
+              "filletableCorners",
+              {
+                "member": "corner"
+              }
+            ]
+          },
+          {
+            "kind": "collection",
+            "path": [
+              "segments"
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "segments",
+              {
+                "member": "start"
+              }
+            ]
+          },
+          {
+            "kind": "curve_span",
+            "path": [
+              "segments",
+              {
+                "member": "corner"
+              }
+            ]
+          },
+          {
+            "kind": "collection",
+            "path": [
+              "vertices"
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "vertices",
+              {
+                "member": "start"
+              }
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "vertices",
+              {
+                "member": "corner"
+              }
+            ]
+          },
+          {
+            "kind": "point",
+            "path": [
+              "vertices",
+              {
+                "member": "end"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "generated_members": [],
+    "groups": [],
+    "suppressions": [],
+    "value_consumers": [
+      {
+        "value_site": "ce5c7c516343f5827a73066fabad90a747c4887bc0920275420089da80157934",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          0,
+          "key"
+        ]
+      },
+      {
+        "value_site": "79f1548dfc57e0b79676bc2eaef7baef9d74cb3beb1244a08a29c3ac251a6461",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          0,
+          "position",
+          0
+        ]
+      },
+      {
+        "value_site": "dc17fd8895f78fbe783b3b72657a50a5ada93395dc1dbfbd5685dddbfcdb97d2",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          0,
+          "position",
+          1
+        ]
+      },
+      {
+        "value_site": "68bb4fbd152a2c15cbd0305cf7b75b243760986fcfa9fa2612645cb134a3bd5f",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          1,
+          "key"
+        ]
+      },
+      {
+        "value_site": "5dc4c6257f5c23d08280c3bd24328730eb7f0cbb1118d6852f4b1b582058da2d",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          1,
+          "position",
+          0
+        ]
+      },
+      {
+        "value_site": "557492b59c841e84d53faa059f84d9117a89a1c42957bed97b32f4a2804c3bd0",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          1,
+          "position",
+          1
+        ]
+      },
+      {
+        "value_site": "c833430c7d89126033f0e1d3b2789dcca3f6c08e5d3c919ce0f2ea60adb927ce",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          2,
+          "key"
+        ]
+      },
+      {
+        "value_site": "d42cdefd21d443e0dbffac863766b2a47d92a9b13aa3452011f016d78a71c1b4",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          2,
+          "position",
+          0
+        ]
+      },
+      {
+        "value_site": "eb1b360548d2b0a219c3f77f597d34f03e8bcea1f6882fdd4c5f338caa22c898",
+        "target": {
+          "target": "declaration",
+          "declaration": "corner",
+          "family": "geometry.polyline"
+        },
+        "property": [
+          "vertices",
+          2,
+          "position",
+          1
+        ]
+      }
+    ],
+    "output": {
+      "kind": "object",
+      "value": {
+        "corner": {
+          "kind": "reference",
+          "value": {
+            "declaration": "corner",
+            "path": []
+          }
+        }
+      }
+    },
+    "artifact_digest": "668bfb8e483552bee82c823ae2e3a56aa61db82613090557c2459d794c93afd1"
+  },
+  "canonicalIrJson": "{\"format\":\"geosolve-managed-sketch-ir-v4\",\"imports\":[{\"module\":\"@geosolve/sketch-code\",\"bindings\":[\"sketch\"]}],\"statements\":[{\"statement\":\"declaration\",\"variable\":\"corner\",\"symbol\":\"corner\",\"builder_path\":[\"geometry\",\"polyline\"],\"patch\":null,\"arguments\":{\"kind\":\"object\",\"fields\":[{\"name\":\"vertices\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"object\",\"fields\":[{\"name\":\"key\",\"value\":{\"kind\":\"string\",\"value\":\"start\",\"site\":\"ce5c7c516343f5827a73066fabad90a747c4887bc0920275420089da80157934\"},\"comments\":[]},{\"name\":\"position\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":200.0,\"site\":\"79f1548dfc57e0b79676bc2eaef7baef9d74cb3beb1244a08a29c3ac251a6461\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"dc17fd8895f78fbe783b3b72657a50a5ada93395dc1dbfbd5685dddbfcdb97d2\"}],\"site\":\"5f40aae21881c287b35c792799e47393904ff87e66cfba1efdacc3d30f3727d9\"},\"comments\":[]}],\"site\":\"b64c4640fee5bf9b8bb7c5c90b52ed6925bc36cf1df61ad6c0121c0a5ac86998\"},{\"kind\":\"object\",\"fields\":[{\"name\":\"key\",\"value\":{\"kind\":\"string\",\"value\":\"corner\",\"site\":\"68bb4fbd152a2c15cbd0305cf7b75b243760986fcfa9fa2612645cb134a3bd5f\"},\"comments\":[]},{\"name\":\"position\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":220.0,\"site\":\"5dc4c6257f5c23d08280c3bd24328730eb7f0cbb1118d6852f4b1b582058da2d\"},{\"kind\":\"number\",\"value\":0.0,\"site\":\"557492b59c841e84d53faa059f84d9117a89a1c42957bed97b32f4a2804c3bd0\"}],\"site\":\"04bff26ab7a51e25b2345756b39988559ec38b3d6b9b347026fa1e8f1634e8c5\"},\"comments\":[]}],\"site\":\"c0569d437178e5957835817c7f58bda3294e0081e2f3d4360524fef0fefecbd2\"},{\"kind\":\"object\",\"fields\":[{\"name\":\"key\",\"value\":{\"kind\":\"string\",\"value\":\"end\",\"site\":\"c833430c7d89126033f0e1d3b2789dcca3f6c08e5d3c919ce0f2ea60adb927ce\"},\"comments\":[]},{\"name\":\"position\",\"value\":{\"kind\":\"array\",\"values\":[{\"kind\":\"number\",\"value\":220.0,\"site\":\"d42cdefd21d443e0dbffac863766b2a47d92a9b13aa3452011f016d78a71c1b4\"},{\"kind\":\"number\",\"value\":20.0,\"site\":\"eb1b360548d2b0a219c3f77f597d34f03e8bcea1f6882fdd4c5f338caa22c898\"}],\"site\":\"668ebc9031614cd03f5aa1dfe0ac1b4c474eb1aaa0a87196ce569e5bc9615a21\"},\"comments\":[]}],\"site\":\"3285b9afa9fc607fa5ab77ab4a51c2d952243c3d0d0e8db0c8f8e54fe587f99f\"}],\"site\":\"91a052479d123e162f41de8225a7b6928dca512abce1a348669e9b75a3cf342f\"},\"comments\":[]}],\"site\":\"e7edf91cfe67fa9f106118b13e4345fed2c07ddbd03f0b24af154c24593180b0\"},\"site\":\"7c1fa7455c4cdffbe199f40d2ea5712e76385ce85b212386349d34c8b81a9c61\",\"comments\":[]}],\"output\":{\"kind\":\"object\",\"fields\":[{\"name\":\"corner\",\"value\":{\"kind\":\"reference\",\"declaration\":\"corner\",\"path\":[],\"site\":\"04f6cccc8bb7e05d3afb3fd59957133c56a77919c2fa0ef7b291fb23d7e0c5d1\"},\"comments\":[]}],\"site\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\"},\"source_sites\":[{\"id\":\"7c1fa7455c4cdffbe199f40d2ea5712e76385ce85b212386349d34c8b81a9c61\",\"kind\":\"declaration\",\"span\":{\"start\":120,\"end\":337},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"ce5c7c516343f5827a73066fabad90a747c4887bc0920275420089da80157934\",\"kind\":\"value\",\"span\":{\"start\":180,\"end\":187},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"79f1548dfc57e0b79676bc2eaef7baef9d74cb3beb1244a08a29c3ac251a6461\",\"kind\":\"value\",\"span\":{\"start\":206,\"end\":209},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"dc17fd8895f78fbe783b3b72657a50a5ada93395dc1dbfbd5685dddbfcdb97d2\",\"kind\":\"value\",\"span\":{\"start\":211,\"end\":212},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"5f40aae21881c287b35c792799e47393904ff87e66cfba1efdacc3d30f3727d9\",\"kind\":\"value\",\"span\":{\"start\":205,\"end\":213},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"b64c4640fee5bf9b8bb7c5c90b52ed6925bc36cf1df61ad6c0121c0a5ac86998\",\"kind\":\"value\",\"span\":{\"start\":167,\"end\":220},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"68bb4fbd152a2c15cbd0305cf7b75b243760986fcfa9fa2612645cb134a3bd5f\",\"kind\":\"value\",\"span\":{\"start\":235,\"end\":243},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"5dc4c6257f5c23d08280c3bd24328730eb7f0cbb1118d6852f4b1b582058da2d\",\"kind\":\"value\",\"span\":{\"start\":262,\"end\":265},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"557492b59c841e84d53faa059f84d9117a89a1c42957bed97b32f4a2804c3bd0\",\"kind\":\"value\",\"span\":{\"start\":267,\"end\":268},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"04bff26ab7a51e25b2345756b39988559ec38b3d6b9b347026fa1e8f1634e8c5\",\"kind\":\"value\",\"span\":{\"start\":261,\"end\":269},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"c0569d437178e5957835817c7f58bda3294e0081e2f3d4360524fef0fefecbd2\",\"kind\":\"value\",\"span\":{\"start\":222,\"end\":276},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"c833430c7d89126033f0e1d3b2789dcca3f6c08e5d3c919ce0f2ea60adb927ce\",\"kind\":\"value\",\"span\":{\"start\":291,\"end\":296},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"d42cdefd21d443e0dbffac863766b2a47d92a9b13aa3452011f016d78a71c1b4\",\"kind\":\"value\",\"span\":{\"start\":315,\"end\":318},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"eb1b360548d2b0a219c3f77f597d34f03e8bcea1f6882fdd4c5f338caa22c898\",\"kind\":\"value\",\"span\":{\"start\":320,\"end\":322},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"668ebc9031614cd03f5aa1dfe0ac1b4c474eb1aaa0a87196ce569e5bc9615a21\",\"kind\":\"value\",\"span\":{\"start\":314,\"end\":323},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"3285b9afa9fc607fa5ab77ab4a51c2d952243c3d0d0e8db0c8f8e54fe587f99f\",\"kind\":\"value\",\"span\":{\"start\":278,\"end\":330},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"91a052479d123e162f41de8225a7b6928dca512abce1a348669e9b75a3cf342f\",\"kind\":\"value\",\"span\":{\"start\":166,\"end\":331},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"e7edf91cfe67fa9f106118b13e4345fed2c07ddbd03f0b24af154c24593180b0\",\"kind\":\"value\",\"span\":{\"start\":150,\"end\":336},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"04f6cccc8bb7e05d3afb3fd59957133c56a77919c2fa0ef7b291fb23d7e0c5d1\",\"kind\":\"value\",\"span\":{\"start\":362,\"end\":368},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"},{\"id\":\"537c63b70eabbd6d2de3113ace31b13b698e96ae61b111c06cdf7a80e388aa9a\",\"kind\":\"value\",\"span\":{\"start\":348,\"end\":373},\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\"}],\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\",\"ir_digest\":\"31fd933e20b47250f3a2ac35faab3cb85ca1ba7085267df8a2d1279b539c0284\"}",
+  "canonicalArtifactJson": "{\"format\":\"geosolve-executed-sketch-artifact-v4\",\"source_digest\":\"0c782433dd0aa2f22d004f153aad725f6ce41c392e9da8a99f79661f45414df7\",\"ir_digest\":\"31fd933e20b47250f3a2ac35faab3cb85ca1ba7085267df8a2d1279b539c0284\",\"declarations\":[{\"declaration\":\"corner\",\"family\":\"geometry.polyline\",\"patch\":null,\"site\":\"7c1fa7455c4cdffbe199f40d2ea5712e76385ce85b212386349d34c8b81a9c61\",\"result\":[{\"kind\":\"curve\",\"path\":[\"curve\"]},{\"kind\":\"collection\",\"path\":[\"filletableCorners\"]},{\"kind\":\"feature_corner\",\"path\":[\"filletableCorners\",{\"member\":\"corner\"}]},{\"kind\":\"collection\",\"path\":[\"segments\"]},{\"kind\":\"curve_span\",\"path\":[\"segments\",{\"member\":\"start\"}]},{\"kind\":\"curve_span\",\"path\":[\"segments\",{\"member\":\"corner\"}]},{\"kind\":\"collection\",\"path\":[\"vertices\"]},{\"kind\":\"point\",\"path\":[\"vertices\",{\"member\":\"start\"}]},{\"kind\":\"point\",\"path\":[\"vertices\",{\"member\":\"corner\"}]},{\"kind\":\"point\",\"path\":[\"vertices\",{\"member\":\"end\"}]}]}],\"generated_members\":[],\"groups\":[],\"suppressions\":[],\"value_consumers\":[{\"value_site\":\"ce5c7c516343f5827a73066fabad90a747c4887bc0920275420089da80157934\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",0,\"key\"]},{\"value_site\":\"79f1548dfc57e0b79676bc2eaef7baef9d74cb3beb1244a08a29c3ac251a6461\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",0,\"position\",0]},{\"value_site\":\"dc17fd8895f78fbe783b3b72657a50a5ada93395dc1dbfbd5685dddbfcdb97d2\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",0,\"position\",1]},{\"value_site\":\"68bb4fbd152a2c15cbd0305cf7b75b243760986fcfa9fa2612645cb134a3bd5f\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",1,\"key\"]},{\"value_site\":\"5dc4c6257f5c23d08280c3bd24328730eb7f0cbb1118d6852f4b1b582058da2d\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",1,\"position\",0]},{\"value_site\":\"557492b59c841e84d53faa059f84d9117a89a1c42957bed97b32f4a2804c3bd0\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",1,\"position\",1]},{\"value_site\":\"c833430c7d89126033f0e1d3b2789dcca3f6c08e5d3c919ce0f2ea60adb927ce\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",2,\"key\"]},{\"value_site\":\"d42cdefd21d443e0dbffac863766b2a47d92a9b13aa3452011f016d78a71c1b4\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",2,\"position\",0]},{\"value_site\":\"eb1b360548d2b0a219c3f77f597d34f03e8bcea1f6882fdd4c5f338caa22c898\",\"target\":{\"target\":\"declaration\",\"declaration\":\"corner\",\"family\":\"geometry.polyline\"},\"property\":[\"vertices\",2,\"position\",1]}],\"output\":{\"kind\":\"object\",\"value\":{\"corner\":{\"kind\":\"reference\",\"value\":{\"declaration\":\"corner\",\"path\":[]}}}},\"artifact_digest\":\"668bfb8e483552bee82c823ae2e3a56aa61db82613090557c2459d794c93afd1\"}"
+}

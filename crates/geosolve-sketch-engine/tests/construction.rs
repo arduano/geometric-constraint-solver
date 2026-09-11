@@ -214,7 +214,7 @@ fn stale_forged_and_failed_construction_candidates_preserve_all_live_authority()
     wrong.basis = "foreign".into();
     assert!(session.prepare_construction(&wrong).is_err());
     wrong = command.clone();
-    wrong.samples = vec![wrong.samples[0]; MAX_CONSTRUCTION_SAMPLES + 1];
+    wrong.samples = vec![wrong.samples[0].clone(); MAX_CONSTRUCTION_SAMPLES + 1];
     assert!(session.prepare_construction(&wrong).is_err());
     let prepared = session.prepare_construction(&command).unwrap();
     let mut forged = receipt(&prepared, "segment");
@@ -258,11 +258,11 @@ fn cancellation_invalid_routing_and_incomplete_drafts_never_publish() {
             regularized: false,
         },
     };
-    assert!(prediction.advance(10, first).is_err());
-    let mut invalid = first;
+    assert!(prediction.advance(10, first.clone()).is_err());
+    let mut invalid = first.clone();
     invalid.sequence = 2;
     assert!(prediction.advance(9, invalid).is_err());
-    invalid = first;
+    invalid = first.clone();
     invalid.input = ConstructionEvent::Move {
         position: [f64::NAN, 0.0],
         suppressed: false,

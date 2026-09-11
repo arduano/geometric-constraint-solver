@@ -1260,6 +1260,23 @@ impl ProjectionalEditorSession {
         self.finish_feature_authoring_transition(state, trial, outcome, symbol)
     }
 
+    /// Updates explicit Fillet branch options together with their validated preview.
+    ///
+    /// # Errors
+    /// A stale or invalid replacement retains the collector and prior preview.
+    pub fn transact_feature_authoring_options(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        options: FeatureAuthoringOptions,
+        selected_corner: Option<usize>,
+        symbol: IntentKey,
+    ) -> Result<FeatureAuthoringOutcome, ProjectionalEditorError> {
+        let snapshot = self.feature_authoring_snapshot()?;
+        let mut trial = state.clone();
+        let outcome = trial.set_options_with_corner(&snapshot, options, selected_corner);
+        self.finish_feature_authoring_transition(state, trial, outcome, symbol)
+    }
+
     /// Publishes the exact Fillet item an unchanged press would consume.
     /// This hover path changes no intent, preview or authoring candidate.
     ///

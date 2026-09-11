@@ -769,6 +769,16 @@ fn tangent_arc_keeps_its_named_source_contact() {
         },
     );
     assert!(matches!(source["contact"], ManagedValue::Object(_)));
+    assert_eq!(
+        arguments["center"],
+        ManagedValue::Array(vec![ManagedValue::Number(2.0), ManagedValue::Number(1.0)]),
+        "Tangent Arc source must contain the explicit native center required by cold lowering"
+    );
+    assert_eq!(
+        arguments["orientation"],
+        ManagedValue::String("aligned".into()),
+        "top-level branch and source-contact branch must agree"
+    );
     assert_clean_named_value(&declaration.arguments, GeometryToolVariant::TangentArc);
     let compact = compact_source(&declaration.arguments);
     assert!(

@@ -319,6 +319,20 @@ impl FeatureAuthoringState {
         self.corners.len()
     }
 
+    /// Native source curves collected by this draft, including completed corners.
+    #[must_use]
+    pub fn pending_items(&self) -> Vec<SelectionItem> {
+        let mut items = self
+            .pending
+            .iter()
+            .chain(self.corners.iter().flat_map(|corner| &corner.picks))
+            .map(|pick| SelectionItem::Curve(pick.curve.source.span))
+            .collect::<Vec<_>>();
+        items.sort_unstable();
+        items.dedup();
+        items
+    }
+
     /// Activates grouped Fillet authoring and consumes every complete preselected
     /// semantic target. Point corners remain atomic when mixed with curve picks.
     #[must_use]

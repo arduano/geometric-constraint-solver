@@ -10,6 +10,7 @@ use geosolve_constraint_editor::{
 };
 use std::collections::BTreeMap;
 
+mod authoring_presentation;
 mod presence;
 #[cfg(test)]
 mod replacement_tests;
@@ -528,15 +529,97 @@ impl BrowsingPresentation {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum PredictionGuide {
-    Point { position: [f64; 2] },
-    Polyline { points: Vec<[f64; 2]>, closed: bool },
-    Rectangle { first: [f64; 2], second: [f64; 2] },
-    Circle { center: [f64; 2], radius: f64 },
+    Point {
+        position: [f64; 2],
+    },
+    Polyline {
+        points: Vec<[f64; 2]>,
+        closed: bool,
+    },
+    Rectangle {
+        first: [f64; 2],
+        second: [f64; 2],
+    },
+    Circle {
+        center: [f64; 2],
+        radius: f64,
+    },
+    ArcRadius {
+        center: [f64; 2],
+        start: [f64; 2],
+    },
+    EllipticalArcSupport {
+        center: [f64; 2],
+        major_axis_point: [f64; 2],
+        support_points: Vec<[f64; 2]>,
+        trim_start: Option<[f64; 2]>,
+    },
+    ControlPolygon {
+        curve_kind: PredictionCurveKind,
+        points: Vec<[f64; 2]>,
+    },
+    CircularArc {
+        center: [f64; 2],
+        start: [f64; 2],
+        end: [f64; 2],
+        radius: f64,
+        sweep_radians: f64,
+        large_arc: bool,
+        sweep: geosolve_sketch::DocumentArcSweep,
+    },
+    AdvancedCurve {
+        curve_kind: PredictionCurveKind,
+        control_points: Vec<[f64; 2]>,
+        curve_points: Vec<[f64; 2]>,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PredictionCurveKind {
+    QuadraticBezier,
+    CubicBezier,
+    Ellipse,
+    EllipticalArc,
+    RationalQuadraticConic,
+    Parabola,
+    Hyperbola,
+    Nurbs,
+}
+impl PredictionCurveKind {
+    fn native(self) -> geosolve_constraint_editor::AdvancedConstructionKind {
+        use geosolve_constraint_editor::AdvancedConstructionKind as Kind;
+        match self {
+            Self::QuadraticBezier => Kind::QuadraticBezier,
+            Self::CubicBezier => Kind::CubicBezier,
+            Self::Ellipse => Kind::Ellipse,
+            Self::EllipticalArc => Kind::EllipticalArc,
+            Self::RationalQuadraticConic => Kind::RationalQuadraticConic,
+            Self::Parabola => Kind::Parabola,
+            Self::Hyperbola => Kind::Hyperbola,
+            Self::Nurbs => Kind::Nurbs,
+        }
+    }
+}
+enum PredictionStage {
+    Geometry(geosolve_constraint_editor::ConstructionPreviewGeometry),
+    Guide(geosolve_constraint_editor::ConstructionPreview),
+}
+impl PredictionStage {
+    fn borrowed(&self) -> geosolve_sketch_render::PredictionPreview<'_> {
+        match self {
+            Self::Geometry(geometry) => {
+                geosolve_sketch_render::PredictionPreview::Geometry(geometry)
+            }
+            Self::Guide(guide) => geosolve_sketch_render::PredictionPreview::Guide(guide),
+        }
+    }
 }
 impl PredictionGuide {
-    fn preview(self) -> geosolve_constraint_editor::ConstructionPreviewGeometry {
+    fn preview(self) -> PredictionStage {
+        use geosolve_constraint_editor::ConstructionPreview as Guide;
         use geosolve_constraint_editor::ConstructionPreviewGeometry as Geometry;
-        match self {
+        let geometry = match self {
             Self::Point { position } => Geometry::Point { position },
             Self::Polyline { mut points, closed } => {
                 if closed && let Some(first) = points.first().copied() {
@@ -546,7 +629,56 @@ impl PredictionGuide {
             }
             Self::Rectangle { first, second } => Geometry::Rectangle { first, second },
             Self::Circle { center, radius } => Geometry::Circle { center, radius },
-        }
+            Self::CircularArc {
+                center,
+                start,
+                end,
+                radius,
+                sweep_radians,
+                large_arc,
+                sweep,
+            } => Geometry::CircularArc {
+                center,
+                start,
+                end,
+                radius,
+                sweep_radians,
+                large_arc,
+                sweep,
+            },
+            Self::AdvancedCurve {
+                curve_kind,
+                control_points,
+                curve_points,
+            } => Geometry::AdvancedCurve {
+                kind: curve_kind.native(),
+                control_points,
+                curve_points,
+            },
+            Self::ArcRadius { center, start } => {
+                return PredictionStage::Guide(Guide::ArcRadiusGuide { center, start });
+            }
+            Self::EllipticalArcSupport {
+                center,
+                major_axis_point,
+                support_points,
+                trim_start,
+            } => {
+                return PredictionStage::Guide(Guide::EllipticalArcSupport {
+                    center,
+                    major_axis_point,
+                    support_points,
+                    trim_start,
+                });
+            }
+            Self::ControlPolygon { curve_kind, points } => {
+                return PredictionStage::Guide(Guide::ControlPolygon {
+                    kind: curve_kind.native(),
+                    points,
+                });
+            }
+        };
+        PredictionStage::Geometry(geometry)
     }
     fn inference(self) -> Result<geosolve_constraint_editor::DraftGuideGeometry, String> {
         use geosolve_constraint_editor::DraftGuideGeometry as Geometry;
@@ -883,6 +1015,62 @@ impl PresentationMapping {
     }
 }
 
+/// Translate personal selection between exact source-owned native namespaces.
+/// This returns presentation context, never a native editing capability.
+pub(crate) fn map_authoring_selection_json(encoded: &str) -> Result<String, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct View {
+        seed: InteractionSeed,
+        state: InteractionState,
+    }
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Request {
+        scene: String,
+        bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
+        view: View,
+    }
+    let request: Request = decode_request(encoded)?;
+    let state = request.view.state;
+    if state.format != FORMAT || state.scene_key != request.view.seed.scene_key {
+        return Err("Authoring selection belongs to a stale accepted scene".into());
+    }
+    let source = LocalInteraction::new(
+        &serde_json::to_string(&request.view.seed).map_err(|e| e.to_string())?,
+    )?;
+    let destination = EditorScene::from_detached_json(&request.scene).map_err(|e| e.to_string())?;
+    let selection = SelectionPresentationState {
+        items: state.selection,
+        curve_picks: state.curve_picks,
+    };
+    selection
+        .validate(&source.scene)
+        .map_err(|e| e.to_string())?;
+    let mapping = PresentationMapping::new(
+        request.view.seed.bindings.as_ref(),
+        request.bindings.as_ref(),
+        source.scene.presentation_document().id(),
+        destination.presentation_document().id(),
+    )?;
+    let selection = SelectionPresentationState {
+        items: selection
+            .items
+            .into_iter()
+            .map(|item| mapping.selection(item))
+            .collect::<Result<_, _>>()?,
+        curve_picks: selection
+            .curve_picks
+            .into_iter()
+            .map(|pick| mapping.curve_pick(pick, &destination))
+            .collect::<Result<_, _>>()?,
+    };
+    selection
+        .validate(&destination)
+        .map_err(|e| e.to_string())?;
+    serde_json::to_string(&selection).map_err(|e| e.to_string())
+}
+
 /// Converts a detached native prediction into paint only. No accepted-scene owner
 /// or native editing handle is constructed from this transport.
 pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
@@ -905,6 +1093,7 @@ pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
         bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
         view: View,
         construction: Option<Construction>,
+        operation: Option<authoring_presentation::OperationPresentation>,
     }
     let request: Request = decode_request(encoded)?;
     let state = request.view.state;
@@ -959,7 +1148,7 @@ pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
         .collect::<Result<_, _>>()?;
     local.dimensions.state.focus = state.dimension_focus.as_ref().map(key).transpose()?;
     local.dimensions.context.navigation_active = true;
-    let mut frame = local.compose_frame()?;
+    let mut frame = local.compose_frame_with_operation(request.operation.as_ref())?;
     if let Some(construction) = request.construction {
         let preview = construction.preview.map(PredictionGuide::preview);
         let guides = construction
@@ -967,9 +1156,9 @@ pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
             .into_iter()
             .map(PredictionGuide::inference)
             .collect::<Result<Vec<_>, _>>()?;
-        let overlay = geosolve_sketch_render::compose_prediction_guides(
+        let overlay = geosolve_sketch_render::compose_prediction_stage(
             state.viewport,
-            preview.as_ref(),
+            preview.as_ref().map(PredictionStage::borrowed),
             &guides,
         )
         .map_err(|e| e.to_string())?;
@@ -1187,6 +1376,12 @@ impl LocalInteraction {
         Ok(())
     }
     fn compose_frame(&mut self) -> Result<FrameSnapshot, String> {
+        self.compose_frame_with_operation(None)
+    }
+    fn compose_frame_with_operation(
+        &mut self,
+        operation: Option<&authoring_presentation::OperationPresentation>,
+    ) -> Result<FrameSnapshot, String> {
         if self.scene.viewport != self.camera.viewport() {
             self.scene
                 .reproject_viewport(self.camera.viewport())
@@ -1196,19 +1391,40 @@ impl LocalInteraction {
             .populate_curve_controls(&mut self.scene)
             .map_err(|e| e.to_string())?;
         self.dimensions.context.selection = self.editor.selection().to_vec();
+        if let Some(operation) = operation {
+            self.dimensions.context.active = operation
+                .provisional
+                .iter()
+                .find(|item| matches!(item, SelectionItem::Dimension(_)))
+                .copied();
+            // An authored value first enters this detached scene during the
+            // tool preview. Let its native explicit-interest rule reveal it;
+            // navigation-only frames otherwise retain the existing callouts.
+            if self.dimensions.context.active.is_some() {
+                self.dimensions.context.navigation_active = false;
+            }
+        }
         self.dimensions.state.apply(
             &mut self.scene,
             &self.dimensions.layout,
             &self.dimensions.context,
         );
+        let offset = operation.and_then(authoring_presentation::OperationPresentation::offset);
+        let mut pending = operation.map_or_else(Vec::new, |operation| operation.pending.clone());
+        if let Some(offset) = &offset {
+            pending.extend(&offset.pending);
+        }
         let mut scene = geosolve_sketch_render::compose_draw_frame(
             Some(&self.scene),
             None,
             &[],
             self.editor.selection(),
-            &[],
-            &[],
-            self.editor.hover_state(),
+            &pending,
+            operation.map_or(&[], |operation| operation.provisional.as_slice()),
+            operation.map_or_else(
+                || self.editor.hover_state(),
+                authoring_presentation::OperationPresentation::hover,
+            ),
             None,
             None,
             None,
@@ -1219,7 +1435,7 @@ impl LocalInteraction {
                 grid_visible: self.grid_visible,
                 retain_contextual_annotations: true,
             },
-            None,
+            offset.as_ref(),
             self.camera.viewport(),
         )
         .map_err(|e| e.to_string())?;
@@ -2186,6 +2402,126 @@ mod tests {
         let mut invalid = input;
         invalid["construction"]["preview"]["radius"] = (-1.0).into();
         assert!(authoring_preview_json(&invalid.to_string()).is_err());
+        assert_eq!(bridge.export_project_json().unwrap(), source);
+    }
+
+    #[test]
+    fn operation_prediction_paint_preserves_native_pending_and_offset_guides_after_navigation() {
+        let compiled =
+            geosolve_sketch_code::CompiledManagedSource::from_json(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../geosolve-sketch-engine/tests/fixtures/point-gesture-constrained.json"
+            )))
+            .unwrap();
+        let project = geosolve_sketch_code::CodeProject::managed(
+            geosolve_sketch_code::ProjectKey("operation-paint".into()),
+            compiled,
+        )
+        .unwrap()
+        .to_canonical_json()
+        .unwrap();
+        let mut bridge = WorkbenchBridge::restore(&project).unwrap();
+        let pair: serde_json::Value =
+            serde_json::from_str(&bridge.interaction_snapshot_json().unwrap()).unwrap();
+        let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
+        let source = bridge.export_project_json().unwrap();
+        let curve = local.scene.curves.first().unwrap();
+        let span = curve.span;
+        let active_dimension = local
+            .scene
+            .annotations
+            .iter()
+            .find(|annotation| matches!(annotation.item, SelectionItem::Dimension(_)))
+            .unwrap()
+            .item;
+        local.dimensions.state.mode = DimensionDisplayMode::Hidden;
+        let start = local
+            .scene
+            .viewport
+            .screen_to_model(curve.screen_polyline[0]);
+        let end = local
+            .scene
+            .viewport
+            .screen_to_model(*curve.screen_polyline.last().unwrap());
+        local
+            .wheel_json(r#"{"version":2,"x":300,"y":250,"deltaX":0,"deltaY":-70,"ctrl":false}"#)
+            .unwrap();
+        let input = serde_json::json!({"scene":pair["seed"]["scene"],"view":{"seed":pair["seed"],"state":local.state()},
+            "operation":{"pending":[SelectionItem::Curve(span)],"provisional":[active_dimension],"hover":null,"context_owner":null,
+                "offset":{"pending":[SelectionItem::Curve(span)],"unavailable":[],"unavailable_message":null,
+                    "chain":{"spans":[{"span":span,"traversal":"forward"}],
+                        "start":{"span":span,"endpoint":"start","model_position":start},
+                        "end":{"span":span,"endpoint":"end","model_position":end}}}}});
+        let frame: serde_json::Value =
+            serde_json::from_str(&authoring_preview_json(&input.to_string()).unwrap()).unwrap();
+        let items = frame["scene"]["items"].as_array().unwrap();
+        assert!(items.iter().all(|item| item["interactive"] == false));
+        assert!(
+            items
+                .iter()
+                .any(|item| item["className"] == "wb-offset-chain-direction")
+        );
+        assert!(
+            items.iter().any(|item| item["className"]
+                .as_str()
+                .is_some_and(|class| class.contains("dimension"))
+                && item["visible"] != false),
+            "the active authored dimension remains visible in Hidden mode"
+        );
+        assert!(
+            items
+                .iter()
+                .any(|item| item["style"]["stroke"] == "#79bfc4")
+        );
+        let expected = local.camera.viewport().model_to_screen(start);
+        assert!(
+            items
+                .iter()
+                .any(|item| item["center"] == serde_json::json!([expected.x, expected.y]))
+        );
+        assert_eq!(bridge.export_project_json().unwrap(), source);
+    }
+
+    #[test]
+    fn authoring_prediction_renders_staged_and_advanced_native_guides() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        let pair: serde_json::Value =
+            serde_json::from_str(&bridge.interaction_snapshot_json().unwrap()).unwrap();
+        let local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
+        let source = bridge.export_project_json().unwrap();
+        let cases = [
+            (
+                serde_json::json!({"kind":"arc_radius","center":[0,0],"start":[3,0]}),
+                "wb-draft-radius",
+            ),
+            (
+                serde_json::json!({"kind":"elliptical_arc_support","center":[0,0],"major_axis_point":[3,0],"support_points":[[3,0],[0,2],[-3,0]],"trim_start":[3,0]}),
+                "wb-draft-ellipse-support",
+            ),
+            (
+                serde_json::json!({"kind":"control_polygon","curve_kind":"cubic_bezier","points":[[0,0],[3,2],[6,2]]}),
+                "wb-draft-control-polygon",
+            ),
+            (
+                serde_json::json!({"kind":"circular_arc","center":[0,0],"start":[3,0],"end":[0,3],"radius":3,"sweep_radians":std::f64::consts::FRAC_PI_2,"large_arc":false,"sweep":"counter_clockwise"}),
+                "wb-draft-arc",
+            ),
+            (
+                serde_json::json!({"kind":"advanced_curve","curve_kind":"quadratic_bezier","control_points":[[0,0],[3,2],[6,0]],"curve_points":[[0,0],[3,1],[6,0]]}),
+                "wb-draft-advanced-curve",
+            ),
+        ];
+        for (preview, class) in cases {
+            let input = serde_json::json!({"scene":pair["seed"]["scene"],"view":{"seed":pair["seed"],"state":local.state()},"construction":{"preview":preview,"inference_guides":[]}});
+            let frame: serde_json::Value =
+                serde_json::from_str(&authoring_preview_json(&input.to_string()).unwrap()).unwrap();
+            let items = frame["scene"]["items"].as_array().unwrap();
+            assert!(
+                items.iter().any(|item| item["className"] == class),
+                "missing {class}"
+            );
+            assert!(items.iter().all(|item| item["interactive"] == false));
+        }
         assert_eq!(bridge.export_project_json().unwrap(), source);
     }
 

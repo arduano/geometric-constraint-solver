@@ -2,7 +2,8 @@
 import type { AcceptedResult, EvaluationFailure } from "./index.js";
 import type { CompiledManagedSource, ManagedValue, SemanticPathSegment } from "@geosolve/sketch-code/ir";
 import { RetainedPointGesture, decodePointValue, type PointGestureNativeHandle, type PointGestureHandle, type PointGestureTarget, type PointGestureViewport, type PointGestureCommand, type PreparedPointGestureCommit, type PreparedPointGestureReplay } from "./point-gesture.js";
-import { ConstructionPrediction, type ConstructionNativeHandle, type ConstructionTool, type ConstructionCommand, type PreparedConstruction, type PreparedConstructionCommit, type PreparedConstructionReplay } from "./construction.js";
+import { ConstructionPrediction, type ConstructionNativeHandle, type ConstructionTool, type ConstructionCommand, type ConstructionFrame, type PreparedConstruction, type PreparedConstructionCommit, type PreparedConstructionReplay } from "./construction.js";
+import { ToolOperationPrediction, type ToolOperationNativeHandle, type ToolOperationTool, type ToolOperationCommand, type ToolOperationFrame, type ToolOperationOperand, type ToolOperationOptions, type PreparedToolOperation, type PreparedToolOperationCommit, type PreparedToolOperationReplay } from "./tool-operations.js";
 
 export interface AuthoringValueWrite {
   readonly declaration: string;
@@ -49,7 +50,7 @@ export interface EditableDesign {
   readonly generated: unknown;
   readonly overrides: unknown;
 }
-export interface EditableNativeHandle extends Partial<PointGestureNativeHandle>, Partial<ConstructionNativeHandle> {
+export interface EditableNativeHandle extends Partial<PointGestureNativeHandle>, Partial<ConstructionNativeHandle>, Partial<ToolOperationNativeHandle> {
   openEditableSession(json: string): string;
   editableSessionState(id: string): string;
   applyEditableProject(json: string): string;
@@ -81,6 +82,8 @@ export class EditableSession {
   private readonly pointPreparations = new Set<PreparedPointGestureCommit>();
   private readonly constructionPreparations = new Set<PreparedConstruction>();
   private readonly constructionCommits = new Set<PreparedConstructionCommit>();
+  private readonly toolOperationPreparations = new Set<PreparedToolOperation>();
+  private readonly toolOperationCommits = new Set<PreparedToolOperationCommit>();
   constructor(private readonly host: EditableSessionHost, project: unknown, options: { design?: EditableDesign | string } = {}) {
     if (!host.isLive()) throw Error("Engine has been disposed");
     const native = host.native;
@@ -96,13 +99,69 @@ export class EditableSession {
   get token(): EditableSessionToken { return this.current.token; }
   get accepted(): AcceptedResult { return this.current.result; }
 
+  /** Accepted presentation for source-owned personal selection translation. */
+  toolOperationPresentationJSON(viewport: PointGestureViewport): string {
+    return this.toolOperationNative().editableToolOperationContext(JSON.stringify({ session: this.token.session, expected: this.token, viewport }));
+  }
+  /** Validate translated native selection and retain exact semantic occurrences. */
+  toolOperationOperands(selection: unknown): readonly ToolOperationOperand[] {
+    return decodePointValue(this.toolOperationNative().editableToolOperationOperands(JSON.stringify({ session: this.token.session, expected: this.token, selection })));
+  }
+
+  beginToolOperation(tool: ToolOperationTool, options: { expected: EditableSessionToken; gestureId: number; viewport: PointGestureViewport; selection?: readonly ToolOperationOperand[]; options?: ToolOperationOptions }): ToolOperationPrediction {
+    const native = this.toolOperationNative();
+    const held = decodePointValue<{ ticket: string; frame: ToolOperationFrame }>(native.beginEditableToolOperation(JSON.stringify({
+      session: this.token.session, expected: options.expected, gesture_id: options.gestureId, tool,
+      viewport: options.viewport, selection: options.selection ?? [], options: options.options ?? {},
+    })));
+    return new ToolOperationPrediction(held.frame, native, () => this.assertLive(), { session: this.token.session, ticket: held.ticket, gesture_id: options.gestureId });
+  }
+  /** Trusted server replays the gesture and prepares its own exact compiler request. */
+  prepareToolOperation(command: ToolOperationCommand, options: { expected: EditableSessionToken }): PreparedToolOperation {
+    const prepared = decodePointValue<PreparedToolOperation>(this.toolOperationNative().prepareEditableToolOperation(JSON.stringify({ session: this.token.session, expected: options.expected, command })));
+    this.toolOperationPreparations.add(prepared); return prepared;
+  }
+  /** Trusted host: basis must be an independently authenticated accepted historical session.
+   * Host checks returned external declaration lifetimes before publishing the latest candidate.
+   */
+  prepareToolOperationReplay(basis: EditableSession, command: ToolOperationCommand, options: { expected: EditableSessionToken }): PreparedToolOperationReplay {
+    this.assertReplayBasis(basis);
+    const native = this.toolOperationNative();
+    if (!native.prepareEditableToolOperationReplay) throw Error("This engine build does not support latest toolOperation replay");
+    const prepared = decodePointValue<PreparedToolOperationReplay>(native.prepareEditableToolOperationReplay(JSON.stringify({
+      session: this.token.session, expected: options.expected, basis_session: basis.token.session, basis_expected: basis.token, command,
+    })));
+    this.toolOperationPreparations.add(prepared); return prepared;
+  }
+  /** Returns an unpublished candidate after receipt authentication and whole native parity. */
+  resolveToolOperation(prepared: PreparedToolOperation, receipt: AuthoringReceipt): PreparedToolOperationCommit {
+    this.assertLive();
+    if (!this.toolOperationPreparations.has(prepared)) throw Error("ToolOperation preparation is foreign, released or already consumed");
+    const candidate = decodePointValue<PreparedToolOperationCommit>(this.toolOperationNative().resolveEditableToolOperation(JSON.stringify({ session: this.token.session, ticket: prepared.ticket, receipt })));
+    this.toolOperationPreparations.delete(prepared); this.toolOperationCommits.add(candidate); return candidate;
+  }
+  /** Trusted synchronous publication after the host's durable transaction completes. */
+  applyToolOperationCommit(prepared: PreparedToolOperationCommit): EditableUpdate {
+    this.assertLive();
+    if (!this.toolOperationCommits.has(prepared)) throw Error("ToolOperation commit is foreign, released or already consumed");
+    const native = this.toolOperationNative();
+    const result = this.update(() => native.applyEditableToolOperationCommit(JSON.stringify({ session: this.token.session, ticket: prepared.ticket })));
+    if (result.status === "accepted") this.toolOperationCommits.delete(prepared); return result;
+  }
+  releaseToolOperation(prepared: PreparedToolOperation | PreparedToolOperationCommit): void {
+    this.assertLive();
+    if (!this.toolOperationPreparations.has(prepared as PreparedToolOperation) && !this.toolOperationCommits.has(prepared as PreparedToolOperationCommit)) return;
+    this.toolOperationNative().releaseEditableToolOperation(JSON.stringify({ session: this.token.session, ticket: prepared.ticket }));
+    this.toolOperationPreparations.delete(prepared as PreparedToolOperation); this.toolOperationCommits.delete(prepared as PreparedToolOperationCommit);
+  }
+
   beginConstruction(tool: ConstructionTool, options: { expected: EditableSessionToken; gestureId: number; viewport: PointGestureViewport; role?: "profile" | "construction" }): ConstructionPrediction {
     const native = this.constructionNative();
-    const held = decodePointValue<{ ticket: string }>(native.beginEditableConstruction(JSON.stringify({
+    const held = decodePointValue<{ ticket: string; frame: ConstructionFrame }>(native.beginEditableConstruction(JSON.stringify({
       session: this.token.session, expected: options.expected, gesture_id: options.gestureId, tool,
       viewport: options.viewport, role: options.role ?? "profile",
     })));
-    return new ConstructionPrediction(native, () => this.assertLive(), { session: this.token.session, ticket: held.ticket, gesture_id: options.gestureId });
+    return new ConstructionPrediction(held.frame, native, () => this.assertLive(), { session: this.token.session, ticket: held.ticket, gesture_id: options.gestureId });
   }
   /** Trusted server replays the gesture and prepares its own exact compiler request. */
   prepareConstruction(command: ConstructionCommand, options: { expected: EditableSessionToken }): PreparedConstruction {
@@ -245,6 +304,7 @@ export class EditableSession {
     this.preparations.clear();
     this.pointPreparations.clear();
     this.constructionPreparations.clear(); this.constructionCommits.clear();
+    this.toolOperationPreparations.clear(); this.toolOperationCommits.clear();
     if (this.host.isLive()) this.native.closeEditableSession(String(this.token.session));
   }
   private update(action: () => string): EditableUpdate {
@@ -280,6 +340,13 @@ export class EditableSession {
       if (typeof this.native[name] !== "function") throw Error("This engine build does not support retained point gestures");
     }
     return this.native as PointGestureNativeHandle;
+  }
+  private toolOperationNative(): ToolOperationNativeHandle {
+    this.assertLive();
+    for (const name of ["beginEditableToolOperation", "advanceEditableToolOperation", "editableToolOperationScene", "editableToolOperationPresentation", "finishEditableToolOperation", "cancelEditableToolOperation", "prepareEditableToolOperation", "resolveEditableToolOperation", "applyEditableToolOperationCommit", "releaseEditableToolOperation"] as const) {
+      if (typeof this.native[name] !== "function") throw Error("This engine build does not support toolOperation prediction");
+    }
+    return this.native as ToolOperationNativeHandle;
   }
   private constructionNative(): ConstructionNativeHandle {
     this.assertLive();
