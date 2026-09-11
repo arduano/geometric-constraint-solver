@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { ToolOperationFrame, ToolOperationCommand } from "../../../../../packages/geosolve-engine/src/tool-operations";
 import { LocalAuthoringWorker } from "./collaboration-authoring-adapter";
 import type { AuthoringModelIdentity, AuthoringPreview, AuthoringWorkerRequest, AuthoringWorkerResponse } from "./collaboration-authoring-worker";
 import type { RemotePaintRequest } from "./collaboration-remote-authoring-renderer";
@@ -6,9 +7,10 @@ import type { ConstructionCommand, ConstructionFrame, PointGestureFrame, PointGe
 
 type Transport = Pick<Worker, "postMessage" | "addEventListener" | "removeEventListener" | "terminate">;
 type PreviewReply =
-  | { kind: "preview"; basis: AuthoringModelIdentity; ticket: string; presentation: string; point?: PointGestureFrame; construction?: ConstructionFrame }
+  | { kind: "preview"; basis: AuthoringModelIdentity; ticket: string; presentation: string; point?: PointGestureFrame; construction?: ConstructionFrame; operation?: ToolOperationFrame }
   | { kind: "point"; basis: AuthoringModelIdentity; terminal: PointGestureTerminal }
   | { kind: "construction"; basis: AuthoringModelIdentity; command: ConstructionCommand }
+  | { kind: "operation"; basis: AuthoringModelIdentity; command: ToolOperationCommand }
   | { kind: "cancelled"; basis: AuthoringModelIdentity };
 export type PreviewRpc = (request: unknown, signal?: AbortSignal) => Promise<PreviewReply>;
 const sameModel = (a: AuthoringModelIdentity, b: AuthoringModelIdentity) => a.documentEpoch === b.documentEpoch && a.revision === b.revision && a.sourceDesignDigest === b.sourceDesignDigest;
@@ -24,7 +26,7 @@ export class RemoteAuthoringTransport extends EventTarget implements Transport {
   private model?: AuthoringModelIdentity;
   private generation = 0;
   private ticket?: string;
-  private kind?: "point" | "construction";
+  private kind?: "point" | "construction" | "operation";
   private cached?: Extract<PreviewReply, { kind: "preview" }>;
   private readonly requests = new Set<AbortController>();
   private stopped = false;
@@ -95,19 +97,22 @@ export class RemoteAuthoringTransport extends EventTarget implements Transport {
       this.retire(); this.reply({ id: request.id, generation, result: { kind: "cancelled", model } }); return;
     }
     let result: PreviewReply;
-    if (request.method === "beginPoint" || request.method === "beginConstruction") {
+    if (request.method === "beginPoint" || request.method === "beginConstruction" || request.method === "beginOperation") {
       if (this.ticket) throw Error("Finish or cancel the active gesture");
-      this.kind = request.method === "beginPoint" ? "point" : "construction";
+      this.kind = request.method === "beginPoint" ? "point" : request.method === "beginConstruction" ? "construction" : "operation";
       result = await this.send({ action: "begin", basis: model, kind: this.kind, gestureId: request.gestureId, viewport: request.viewport,
-        ...(request.method === "beginPoint" ? { target: request.target } : { tool: request.tool, role: request.role }) }, generation);
+        ...(request.method === "beginPoint" ? { target: request.target } : request.method === "beginConstruction" ? { tool: request.tool, role: request.role } : { tool: request.tool, selection: request.selection, options:request.options, view: {state:request.view.state} }) }, generation);
+    } else if(request.method === "pickOperationSelection") {
+      if(!this.ticket||this.kind!=="operation")throw Error("No active remote tool operation");
+      result=await this.send({action:"pick_selection",ticket:this.ticket,sequence:request.sequence,view:{state:request.view.state}},generation);
     } else if (request.method === "render") {
       if (!this.cached) throw Error("No authoring preview is available");
       result = this.cached;
     } else {
       if (!this.ticket) throw Error("No active remote authoring gesture");
-      const point = request.method === "advancePoint" || request.method === "finishPoint";
-      if (this.kind !== (point ? "point" : "construction")) throw Error("Authoring gesture kind changed");
-      if (request.method === "advancePoint" || request.method === "advanceConstruction") result = await this.send({ action: "advance", ticket: this.ticket, samples: request.samples }, generation);
+      const kind = request.method === "advancePoint" || request.method === "finishPoint" ? "point" : request.method === "advanceConstruction" || request.method === "finishConstruction" ? "construction" : "operation";
+      if (this.kind !== kind) throw Error("Authoring gesture kind changed");
+      if (request.method === "advancePoint" || request.method === "advanceConstruction" || request.method === "advanceOperation") result = await this.send({ action: "advance", ticket: this.ticket, samples: request.samples }, generation);
       else {
         try { result = await this.send({ action: "finish", ticket: this.ticket }, generation); }
         finally { if (generation === this.generation) { this.ticket = undefined; this.kind = undefined; this.cached = undefined; } }
@@ -115,10 +120,11 @@ export class RemoteAuthoringTransport extends EventTarget implements Transport {
     }
     if (request.method === "finishPoint" && result.kind === "point") this.reply({ id: request.id, generation, result: { kind: "point", model, terminal: result.terminal } });
     else if (request.method === "finishConstruction" && result.kind === "construction") this.reply({ id: request.id, generation, result: { kind: "construction", model, command: result.command } });
+    else if (request.method === "finishOperation" && result.kind === "operation") this.reply({ id: request.id, generation, result: { kind: "operation", model, command: result.command } });
     else {
       if (result.kind !== "preview" || !("view" in request) || typeof result.presentation !== "string" || !/^[a-f0-9]{64}$/u.test(result.ticket)) throw Error("Unexpected authoring preview response");
       this.ticket = result.ticket; this.cached = result;
-      const preview: Omit<AuthoringPreview, "frame"> = { kind: "preview", model, view: request.view, presentation: result.presentation, point: result.point, construction: result.construction };
+      const preview: Omit<AuthoringPreview, "frame"> = { kind: "preview", model, view: request.view, presentation: result.presentation, point: result.point, construction: result.construction, operation: result.operation };
       this.renderer.postMessage({ id: request.id, generation, presentation: result.presentation, result: preview } satisfies RemotePaintRequest);
     }
   }

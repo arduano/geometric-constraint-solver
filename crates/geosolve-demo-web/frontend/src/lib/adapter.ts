@@ -239,6 +239,11 @@ export interface WorkbenchSnapshot {
   dimensions?: DimensionsSnapshot;
   authoringDocument?: AuthoringDocumentSnapshot;
   selection?: { id: string; label: string; kind: string; ownership?: string; source?: { path: string; from: number; to: number }; metadata?: AuthoringMetadataSnapshot };
+  /** Personal retained native tool state; never accepted document authority. */
+  authoringContext?: {
+    construction?: import("../../../../../packages/geosolve-engine/src/construction").ConstructionFrame;
+    operation?: import("../../../../../packages/geosolve-engine/src/tool-operations").ToolOperationFrame;
+  };
   parameters: ParameterEntry[];
   problems: WorkbenchProblem[];
   pendingManagedMutation?: PendingManagedMutation;

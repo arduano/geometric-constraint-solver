@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { ToolOperationTool, ToolOperationOperand, ToolOperationSample } from "../../../../../packages/geosolve-engine/src/tool-operations";
 import { freezeDrawFrame } from "./canvas-scene";
 import type { ConstructionSample, ConstructionTool, PointGestureSample, PointGestureTarget, PointGestureViewport } from "../../../../../packages/geosolve-engine/src/index";
-import type { AuthoringAction, AuthoringModel, AuthoringPreview, AuthoringResult, AuthoringView, AuthoringWorkerRequest, AuthoringWorkerResponse } from "./collaboration-authoring-worker";
+import type { ToolOperationOptions, AuthoringAction, AuthoringModel, AuthoringPreview, AuthoringResult, AuthoringView, AuthoringWorkerRequest, AuthoringWorkerResponse } from "./collaboration-authoring-worker";
 export type { AuthoringModel, AuthoringModelIdentity, AuthoringPreview, AuthoringResult, AuthoringView } from "./collaboration-authoring-worker";
 
 type WorkerTransport = Pick<Worker, "postMessage" | "addEventListener" | "removeEventListener" | "terminate">;
@@ -16,6 +17,10 @@ export interface LocalAuthoringClient {
   beginConstruction(input: Start & { tool: ConstructionTool; role?: "profile" | "construction" }): Promise<AuthoringPreview>;
   advanceConstruction(sample: ConstructionSample, view: AuthoringView): Promise<AuthoringPreview>;
   finishConstruction(): Promise<Extract<AuthoringResult, { kind: "construction" }>>;
+  beginOperation(input: Start & { tool: ToolOperationTool; selection?: readonly ToolOperationOperand[]; options?:ToolOperationOptions }): Promise<AuthoringPreview>;
+  advanceOperation(sample: ToolOperationSample, view: AuthoringView): Promise<AuthoringPreview>;
+  pickOperationSelection(sequence:number,view:AuthoringView):Promise<AuthoringPreview>;
+  finishOperation(): Promise<Extract<AuthoringResult, { kind: "operation" }>>;
   render(view: AuthoringView): Promise<AuthoringPreview>;
   cancel(): Promise<Extract<AuthoringResult, { kind: "cancelled" }>>;
   dispose(): void;
@@ -49,6 +54,10 @@ export class LocalAuthoringWorker implements LocalAuthoringClient {
   beginConstruction(input: Start & { tool: ConstructionTool; role?: "profile" | "construction" }) { return this.request<AuthoringPreview>({ method: "beginConstruction", ...input, role: input.role ?? "profile" }); }
   advanceConstruction(sample: ConstructionSample, view: AuthoringView) { return this.request<AuthoringPreview>({ method: "advanceConstruction", samples: [sample], view }); }
   finishConstruction() { return this.request<Extract<AuthoringResult, { kind: "construction" }>>({ method: "finishConstruction" }); }
+  beginOperation(input: Start & { tool: ToolOperationTool; selection?: readonly ToolOperationOperand[]; options?:ToolOperationOptions }) { return this.request<AuthoringPreview>({ method: "beginOperation", ...input }); }
+  advanceOperation(sample: ToolOperationSample, view: AuthoringView) { return this.request<AuthoringPreview>({ method: "advanceOperation", samples: [sample], view }); }
+  pickOperationSelection(sequence:number,view:AuthoringView) { return this.request<AuthoringPreview>({method:"pickOperationSelection",sequence,view}); }
+  finishOperation() { return this.request<Extract<AuthoringResult, { kind: "operation" }>>({ method: "finishOperation" }); }
   render(view: AuthoringView) { return this.request<AuthoringPreview>({ method: "render", view }); }
   cancel() { return this.request<Extract<AuthoringResult, { kind: "cancelled" }>>({ method: "cancel" }); }
   dispose() { this.fail(Error("Authoring worker was disposed")); }
@@ -64,6 +73,8 @@ export class LocalAuthoringWorker implements LocalAuthoringClient {
         if (last.action.method === "advancePoint" && action.method === "advancePoint" && last.action.samples.length < 256) {
           last.action = { ...action, samples: [...last.action.samples, ...action.samples] }; combined = true;
         } else if (last.action.method === "advanceConstruction" && action.method === "advanceConstruction" && last.action.samples.length < 256) {
+          last.action = { ...action, samples: [...last.action.samples, ...action.samples] }; combined = true;
+        } else if (last.action.method === "advanceOperation" && action.method === "advanceOperation" && last.action.samples.length < 256) {
           last.action = { ...action, samples: [...last.action.samples, ...action.samples] }; combined = true;
         } else if (last.action.method === "render" && action.method === "render") {
           last.action = action; combined = true;
@@ -101,6 +112,7 @@ export class LocalAuthoringWorker implements LocalAuthoringClient {
         const expected = request.action.method === "replace" ? "ready"
           : request.action.method === "finishPoint" ? "point"
           : request.action.method === "finishConstruction" ? "construction"
+          : request.action.method === "finishOperation" ? "operation"
           : request.action.method === "cancel" ? "cancelled" : "preview";
         if (!data.result || data.result.kind !== expected || !data.result.model || !data.result.model.documentEpoch || !Number.isSafeInteger(data.result.model.revision) || !data.result.model.sourceDesignDigest) throw Error("Invalid authoring worker response");
         if (data.result.kind === "preview") {

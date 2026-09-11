@@ -203,7 +203,7 @@ async function dragFixture(){
     beginPoint:vi.fn(async input=>{lastView=input.view;return preview();}),
     advancePoint:vi.fn(async(sample,view)=>{samples.push(sample);x=sample.position[0];lastView=view;return preview();}),
     finishPoint:vi.fn<LocalAuthoringClient["finishPoint"]>(async()=>({kind:"point",model,terminal:{command:{basis:"digest",gesture_id:1,target,viewport,samples},accepted_position:[x,0]}})),
-    beginConstruction:vi.fn(),advanceConstruction:vi.fn(),finishConstruction:vi.fn(),
+    beginConstruction:vi.fn(),advanceConstruction:vi.fn(),finishConstruction:vi.fn(),beginOperation:vi.fn(),advanceOperation:vi.fn(),pickOperationSelection:vi.fn(),finishOperation:vi.fn(),
     render:vi.fn(async view=>{lastView=view;return preview();}),cancel:vi.fn<LocalAuthoringClient["cancel"]>(async()=>({kind:"cancelled",model})),dispose:vi.fn(),
   };
   const f=await fixture({authoring:worker});
@@ -216,7 +216,7 @@ async function dragFixture(){
   const pointer=async(phase:PointerSample["phase"],position:number)=>{
     record(await f.adapter.pointer({version:2,phase,pointerId:1,x:position,y:0,buttons:phase==="up"?0:1,modifiers:{alt:false,ctrl:false,meta:false,shift:false}}));
   };
-  return {...f,worker,displayed,pointer,record,frame};
+  return {...f,worker,displayed,pointer,record,frame,viewport};
 }
 
 it("retains the displayed drag through pointer/presence frames and its pending terminal, then installs only its new accepted geometry",async()=>{
@@ -328,9 +328,28 @@ it("installs simultaneous refreshes of the same accepted scene exactly once",asy
 
 it("starts native authoring reconstruction before shared text and scene loading, without delaying navigation",async()=>{
   const ready=deferred<Awaited<ReturnType<LocalAuthoringClient["replace"]>>>();
-  const authoring:LocalAuthoringClient={replace:vi.fn(()=>ready.promise),beginPoint:vi.fn(),advancePoint:vi.fn(),finishPoint:vi.fn(),beginConstruction:vi.fn(),advanceConstruction:vi.fn(),finishConstruction:vi.fn(),render:vi.fn(),cancel:vi.fn(),dispose:vi.fn()};
+  const authoring:LocalAuthoringClient={replace:vi.fn(()=>ready.promise),beginPoint:vi.fn(),advancePoint:vi.fn(),finishPoint:vi.fn(),beginConstruction:vi.fn(),advanceConstruction:vi.fn(),finishConstruction:vi.fn(),beginOperation:vi.fn(),advanceOperation:vi.fn(),pickOperationSelection:vi.fn(),finishOperation:vi.fn(),render:vi.fn(),cancel:vi.fn(),dispose:vi.fn()};
   const f=await fixture({authoring,onTextOpen:()=>expect(authoring.replace).toHaveBeenCalledOnce()});
   expect((await f.adapter.wheel({version:2,x:50,y:50,deltaX:0,deltaY:-30,ctrl:false}))?.frame.ariaLabel).toBe("local 1");
   expect(authoring.replace).toHaveBeenCalledOnce();
   ready.resolve({kind:"ready",model:vi.mocked(authoring.replace).mock.calls[0]![0]});
+});
+
+it("exposes the full native catalog and routes selected-role mutation through native operation prediction",async()=>{
+  const f=await dragFixture();
+  expect((await f.adapter.toolCatalog()).sections.flatMap(section=>section.commands)).toHaveLength(45);
+  expect((await f.adapter.toolCatalog()).sections.flatMap(section=>section.commands).every(command=>command.unavailableReason===undefined)).toBe(true);
+  const base=(await f.adapter.snapshot()).frame;
+  const operation={sequence:0,completed:true,can_finish:false,has_pending:false,can_reset:false,can_step_back:false,diagnostic:null,pending:[],authoring_options:{tangent_orientation:"aligned" as const,curvature_relation:"signed" as const,continuity:{kind:"g1" as const},dimension_mode:"driving" as const,angle_orientation:"counter_clockwise" as const},fillet_options:{fillet_radius:2,flip_first_side:false,flip_second_side:false,alternate_arc:false},fillet_corner_count:0,fillet_corners:[],offset_distance:null};
+  let captured!:Parameters<LocalAuthoringClient["beginOperation"]>[0];
+  f.worker.beginOperation=vi.fn<LocalAuthoringClient["beginOperation"]>(async input=>{captured=input;return {kind:"preview",model:{documentEpoch:"epoch",revision:0,sourceDesignDigest:"digest"},view:input.view,frame:{...base,scene:{...base.scene,provenance:{...base.scene.provenance,scene:"provisional"}}},operation};});
+  const gesture={basis:"digest",gesture_id:1,viewport:f.viewport,tool:"toggle_geometry_role" as const,selection:[],samples:[],expected_declarations:[]};
+  f.worker.finishOperation=vi.fn<LocalAuthoringClient["finishOperation"]>(async()=>({kind:"operation",model:{documentEpoch:"epoch",revision:0,sourceDesignDigest:"digest"},command:gesture}));
+  await f.adapter.dispatch({version:2,command:"geometry.role.toggle"});
+  await vi.waitFor(()=>expect(f.requests).toContain("commands"));
+  expect(captured.tool).toBe("toggle_geometry_role");expect(captured.selection).toBeUndefined();
+  expect(f.adapter.pending[0]).toMatchObject({body:{command:{kind:"semantic",payload:{action:"tool_operation",gesture}}}});
+  expect((await f.adapter.snapshot()).presentation.activeTool).toBe("select");
+  const requestId=f.adapter.pending[0]!.requestId;
+  f.held.resolve(f.json({receipt:{operation:{userId:"alice",clientId:"tab",requestId},admission:1,outcome:{status:"rejected",code:"fixture",message:"Completed role route witness"}}}));
 });

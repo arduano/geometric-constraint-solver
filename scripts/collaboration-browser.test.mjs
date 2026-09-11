@@ -69,6 +69,53 @@ async function resized(page){
   }),"The native canvas must present its resized viewport before navigation measurement");
 }
 async function select(page,name){await page.locator("[data-navigation-row]").filter({hasText:name}).first().click();await until(async()=>await page.locator('[data-navigation-row][aria-pressed="true"]').filter({hasText:name}).count()>0,`Explorer ${name} did not select`);}
+async function toolPage(f,index=0,mode="client"){
+  const browser=await f.browser(),context=await browser.newContext({viewport:{width:1440,height:900}});
+  await context.addInitScript(()=>{
+    window.geosolveToolTrace=[];const NativeWorker=window.Worker;
+    window.Worker=class extends NativeWorker{
+      constructor(url,options){super(url,options);if(String(url).includes("collaboration-authoring-worker"))this.addEventListener("message",({data})=>{if(data?.result?.operation){window.geosolveToolTrace.push(data.result.operation);if(window.geosolveToolTrace.length>20)window.geosolveToolTrace.shift();}});}
+    };
+  });
+  const page=await context.newPage();
+  const errors=[];page.on("pageerror",error=>errors.push(String(error)));
+  f.cleanup.push(async()=>progress("tool-page-final",{index,errors,alerts:await page.getByRole("alert").allTextContents(),shared:await page.getByRole("region",{name:"Shared document",exact:true}).allTextContents(),options:await page.getByRole("group",{name:"Active tool options",exact:true}).allTextContents(),trace:await page.evaluate(()=>window.geosolveToolTrace)}));
+  await page.goto(`${f.origin}/?collaboration=1&authoringPreview=${mode}#invite=editor-${index}`);await ready(page);
+  await page.getByRole("group",{name:"Workspace layout",exact:true}).getByRole("button",{name:"design",exact:true}).click();await resized(page);
+  return {page,errors};
+}
+async function chooseTool(page,section,name,waitOptions=true){
+  await page.getByRole("button",{name:section,exact:true}).click();
+  await page.getByRole("menuitem",{name,exact:true}).click();
+  if(waitOptions)await page.getByRole("group",{name:"Active tool options",exact:true}).waitFor();await resized(page);
+}
+// Locations come from the actual native drawing, including its current camera;
+// these helpers never duplicate curve evaluation or predict accepted geometry.
+async function curvePosition(page,index=0){
+  return page.locator("canvas").evaluate((canvas,index)=>{
+    const frame=canvas.__geosolvePresentedFrame,curves=frame.items.filter(item=>item.kind==="polyline"&&item.className.split(/\s/u).includes("wb-curve"));
+    const item=curves[index];if(!item)throw Error(`Missing native curve ${index}`);
+    const points=item.points,mid=Math.floor((points.length-1)/2),a=points[mid],b=points[mid+1];
+    const bounds=canvas.getBoundingClientRect();
+    return {x:bounds.x+(a[0]+b[0])/2-frame.viewBox[0],y:bounds.y+(a[1]+b[1])/2-frame.viewBox[1]};
+  },index);
+}
+async function clickCurve(page,index=0){const point=await curvePosition(page,index);await page.mouse.click(point.x,point.y);}
+async function setToolNumber(page,label,value){const input=page.getByLabel(label,{exact:true});await input.fill(String(value));await input.press("Enter");}
+async function published(f,revision,page){
+  await until(()=>f.runtime.host.snapshot().acceptedRevision===revision,`Native tool did not publish revision ${revision}`);
+  if(page)await until(()=>page.locator("canvas").evaluate(canvas=>canvas.__geosolvePresentedFrame?.provenance.scene==="accepted-presentation"),"Accepted scene did not replace the native draft");
+  return f.runtime.source().snapshot().accepted.files["sketch.ts"];
+}
+const cornerSource=`"use geosolve sketch";
+import { sketch, mm } from "@geosolve/sketch-code";
+export default sketch(($) => {
+ const corner = $.geometry.polyline("corner", {vertices:[
+  {key:"start",position:[200,0]}, {key:"corner",position:[220,0]}, {key:"end",position:[220,20]}
+ ]});
+ return {corner};
+});
+`;
 async function traceNavigation(context){
   await context.addInitScript(()=>{
     window.geosolveNavigationTrace=[];window.geosolveTextTrace=[];window.geosolveLongTasks=[];
@@ -83,6 +130,119 @@ async function traceNavigation(context){
     };
   });
 }
+
+test("shared tool parity exposes every native family and shares advanced construction, reference dimensions and personal history",{timeout:180_000},async t=>{
+  const f=await fixture(t,{authoringPreview:{enabled:false,preferred:"client"}});
+  const first=await toolPage(f),second=await toolPage(f,1),page=first.page,peer=second.page;
+  for(const [section,count] of [["Sketch",25],["Constraint",13],["Dimension",5],["Modify",2]]){
+    await page.getByRole("button",{name:section,exact:true}).click();
+    const items=page.getByRole("menuitem");assert.equal(await items.count(),count);
+    assert.equal(await items.evaluateAll(items=>items.filter(item=>item.hasAttribute("disabled")||item.getAttribute("aria-disabled")==="true").length),0,`${section} has disabled native tools`);
+    await page.keyboard.press("Escape");
+  }
+  await chooseTool(page,"Sketch","Rational Quadratic");await setToolNumber(page,"Middle weight",2);
+  const box=await page.locator("canvas").boundingBox();
+  for(const [x,y] of [[.25,.18],[.45,.1],[.62,.22]])await page.mouse.click(box.x+box.width*x,box.y+box.height*y);
+  const conic=await published(f,1,page);assert.match(conic,/\$\.geometry\.rationalQuadraticConic/u);assert.match(conic,/middleWeight:\s*2/u);
+  await until(()=>peer.locator("[data-navigation-row]").filter({hasText:"Rational"}).count(),"Peer did not receive the advanced curve");
+  // A native option chosen before any operands must survive opening the tool
+  // with an exact preselected curve and commit the reference measurement.
+  await peer.bringToFront();await chooseTool(peer,"Dimension","Radius");
+  await peer.getByRole("combobox",{name:"Dimension",exact:true}).selectOption("reference");
+  await peer.getByRole("button",{name:"Select",exact:true}).click();await resized(peer);
+  await clickCurve(peer,0);await chooseTool(peer,"Dimension","Radius",false);
+  const dimension=await published(f,2,peer);assert.match(dimension,/\$\.dimension\.radius/u);assert.match(dimension,/mode:\s*"reference"/u);
+  await page.bringToFront();await page.getByRole("button",{name:"Undo",exact:true}).click();
+  const undone=await published(f,3,page);assert.doesNotMatch(undone,/\$\.geometry\.rationalQuadraticConic/u);assert.match(undone,/\$\.dimension\.radius/u);
+  await page.getByRole("button",{name:"Redo",exact:true}).click();
+  const redone=await published(f,4,page);assert.match(redone,/\$\.geometry\.rationalQuadraticConic/u);assert.match(redone,/\$\.dimension\.radius/u);
+  assert.deepEqual([...first.errors,...second.errors],[]);
+});
+
+test("shared tool parity keeps native constraint preselection and pick tolerance across camera changes",{timeout:120_000},async t=>{
+  const source=`"use geosolve sketch";
+import { sketch } from "@geosolve/sketch-code";
+export default sketch(($) => {
+ const first = $.geometry.segment("first", {start:[0,0],end:[30,15]});
+ const second = $.geometry.segment("second", {start:[0,35],end:[25,48]});
+ return {first,second};
+});`;
+  const f=await fixture(t,{projectSource:source,authoringPreview:{enabled:false,preferred:"client"}}),{page,errors}=await toolPage(f),commands=[];
+  page.on("request",request=>{if(new URL(request.url()).pathname.endsWith("/commands"))commands.push(request.postDataJSON());});
+  await clickCurve(page,0);await chooseTool(page,"Constraint","Parallel");
+  const before=await presented(page),box=await page.locator("canvas").boundingBox();
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.wheel(0,-90);
+  await until(async()=>await presented(page)!==before,"Active native constraint did not reproject after zoom");
+  await clickCurve(page,1);
+  const accepted=await published(f,1,page);assert.match(accepted,/\$\.constraint\.parallel/u);
+  const operation=commands.map(request=>request.command?.payload?.gesture).find(gesture=>gesture?.tool==="parallel");
+  assert.ok(operation,"Expected native parallel command");assert.ok(operation.selection.length>0,"Native preselection was lost");
+  assert.ok(operation.samples.some(sample=>sample.input.event==="viewport"),"Current native pick camera was not recorded for replay");
+  assert.deepEqual(errors,[]);
+});
+
+test("shared tool parity authors Fillet options and selected geometry roles with reversible native history",{timeout:180_000},async t=>{
+  const f=await fixture(t,{projectSource:cornerSource,authoringPreview:{enabled:false,preferred:"client"}}),{page,errors}=await toolPage(f);
+  await chooseTool(page,"Modify","Fillet");await setToolNumber(page,"Radius",2);
+  await clickCurve(page,0);await clickCurve(page,1);
+  await page.getByRole("combobox",{name:"Branch target",exact:true}).waitFor();
+  await page.getByRole("combobox",{name:"Branch target",exact:true}).selectOption("0");
+  assert.equal(await page.getByLabel("Alternate arc",{exact:true}).isChecked(),false);
+  await until(()=>page.getByRole("button",{name:"Finish",exact:true}).isEnabled(),"Native Fillet did not enable Finish");
+  const draft=await page.locator("canvas").evaluate(canvas=>canvas.__geosolvePresentedFrame);
+  assert.equal(draft.provenance.scene,"provisional");
+  assert.ok(draft.items.some(item=>/fillet/u.test(item.className)),"Native Fillet geometry must be painted before publication");
+  assert.equal(f.runtime.host.snapshot().acceptedRevision,0);
+  await page.getByRole("button",{name:"Finish",exact:true}).click();
+  const created=await published(f,1,page);assert.match(created,/\$\.computed\.filletSet/u);assert.match(created,/radius:\s*mm\(2/u);
+  await page.getByRole("button",{name:"Select",exact:true}).click();
+  await select(page,"corner");
+  await page.getByRole("button",{name:/Selected curves:.*Change to Construction/u}).click();
+  const role=await published(f,2,page);assert.match(role,/role:\s*"construction"/u);assert.match(role,/\$\.computed\.filletSet/u);
+  await page.getByRole("button",{name:"Undo",exact:true}).click();
+  const undone=await published(f,3,page);assert.doesNotMatch(undone,/role:\s*"construction"/u);assert.match(undone,/\$\.computed\.filletSet/u);
+  await page.getByRole("button",{name:"Redo",exact:true}).click();
+  assert.match(await published(f,4,page),/role:\s*"construction"/u);assert.deepEqual(errors,[]);
+});
+
+for(const mode of ["client","server"])test(`shared tool parity ${mode} Offset keeps native preview and navigation responsive during held publication`,{timeout:120_000},async t=>{
+  const held=deferred();let holding=false;
+  const f=await fixture(t,{projectSource:cornerSource,authoringPreview:{enabled:mode==="server",preferred:mode},domainOptions:{beforeJob:async input=>{if(input.kind==="tool_operation"){holding=true;await held.promise;}}}});
+  f.cleanup.push(()=>held.resolve());const {page,errors}=await toolPage(f,0,mode),requests=[];
+  page.on("request",request=>{if(/\/api\/collaboration\/(?:commands|authoring-preview|scene)$/u.test(new URL(request.url()).pathname))requests.push(request.url());});
+  await chooseTool(page,"Modify","Offset");await setToolNumber(page,"Offset distance",2);
+  await clickCurve(page,0);await until(()=>page.getByRole("button",{name:"Clear picks",exact:true}).isEnabled(),"Offset did not retain its first native pick");
+  await page.keyboard.press("Escape");
+  await until(async()=>!await page.getByRole("button",{name:"Clear picks",exact:true}).isEnabled(),"First Escape did not reset native operands");
+  assert.equal(await page.getByLabel("Offset distance",{exact:true}).inputValue(),"2");
+  await page.keyboard.press("Escape");
+  await until(async()=>await page.getByRole("group",{name:"Active tool options",exact:true}).count()===0,"Second Escape did not leave the empty tool");
+  await chooseTool(page,"Modify","Offset");
+  // Explorer expansion must feed one native selection event, preserving the
+  // two ordered spans of this declaration as the chosen open chain.
+  await select(page,"corner");
+  await until(()=>page.getByRole("button",{name:"Finish",exact:true}).isEnabled(),"Explorer picks did not author a native Offset chain");
+  await page.getByRole("button",{name:"Flip offset",exact:true}).click();
+  await page.getByRole("button",{name:"Flip offset",exact:true}).click();
+  assert.equal(f.runtime.host.snapshot().acceptedRevision,0);
+  await page.getByRole("button",{name:"Finish",exact:true}).click();await until(()=>holding,"Offset commit did not reach held server job");
+  await page.getByText("Solving…",{exact:true}).waitFor();
+  const canvas=page.locator("canvas"),measurements=[];
+  const drawing=()=>canvas.evaluate(canvas=>JSON.stringify({view:canvas.__geosolvePresentedFrame.viewBox,items:canvas.__geosolvePresentedFrame.items}));
+  const count=requests.length;
+  for(const action of ["wheel","pan","resize"]){
+    const before=await drawing(),start=performance.now(),bounds=await canvas.boundingBox();
+    if(action==="wheel"){await page.mouse.move(bounds.x+bounds.width*.6,bounds.y+bounds.height*.6);await page.mouse.wheel(0,-60);}
+    if(action==="pan"){await page.mouse.down({button:"middle"});await page.mouse.move(bounds.x+bounds.width*.6+24,bounds.y+bounds.height*.6+18);await page.mouse.up({button:"middle"});}
+    if(action==="resize")await page.setViewportSize({width:1480,height:900});
+    await until(async()=>await drawing()!==before,`${action} waited for the Offset server job`,2000);
+    const elapsedMs=performance.now()-start;measurements.push({action,elapsedMs});assert.ok(elapsedMs<500,`${mode} ${action} took ${elapsedMs} ms`);
+    assert.equal(await canvas.evaluate(canvas=>canvas.__geosolvePresentedFrame.provenance.scene),"provisional");
+  }
+  assert.equal(requests.length,count,"Offset navigation issued a model, preview or scene RPC");assert.equal(f.runtime.host.snapshot().acceptedRevision,0);
+  held.resolve();const source=await published(f,1,page);assert.match(source,/\$\.operation\.profileOffset/u);assert.match(source,/distance:\s*mm\(2/u);
+  assert.deepEqual(errors,[]);t.diagnostic(JSON.stringify({mode,measurements}));
+});
 
 test("shared circle dragging paints continuously through pending acceptance and reaches peers promptly", {timeout:120_000}, async t=>{
   // The frame witness belongs to the actual canvas renderer. Geometry is never

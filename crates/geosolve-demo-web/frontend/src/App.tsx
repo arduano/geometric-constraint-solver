@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import { AuthoringOptions } from "./components/authoring-options";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Panel, PanelGroup, PanelResizeHandle, type PanelGroupStorage } from "react-resizable-panels";
 import { Activity, AlertTriangle, ChevronDown, Code2, Download, FileJson, FolderOpen, Focus, Menu, PackageOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Redo2, RotateCcw, Save, Undo2, X } from "lucide-react";
@@ -350,6 +351,12 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
         void saveBrowserProject();
         return;
       }
+      const toolContext = snapshotRef.current?.authoringContext;
+      const canvasKey = event.target instanceof Element && event.target.closest('[role="application"]') && !event.target.closest('input,textarea,select,[contenteditable="true"]');
+      if (canvasKey && !event.ctrlKey && !event.metaKey && !event.altKey && (toolContext?.construction || toolContext?.operation)) {
+        const action = event.key === "Backspace" ? "step_back" : event.key.toLowerCase() === "f" && toolContext.construction?.can_flip_branch ? "flip_branch" : event.key === "Tab" && toolContext.construction?.can_cycle_inference ? "cycle_inference" : undefined;
+        if (action) { event.preventDefault(); void command(action === "step_back" ? "tool.step_back" : "tool.construction.input", action === "step_back" ? undefined : { event: action }); return; }
+      }
       if (event.key === "Enter" && snapshotRef.current?.presentation.canFinish && event.target instanceof Element && event.target.closest('[role="application"]')) {
         event.preventDefault();
         void command("tool.finish");
@@ -359,6 +366,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       if (reproOpen) { event.preventDefault(); setReproOpen(false); return; }
       if (transient.active) { event.preventDefault(); transient.close(true); return; }
       if (capturedGesture) { event.preventDefault(); setCapturedGesture(false); void adapter.cancel({ version: 2, reason: "escape" }).then((next) => next && acceptSnapshot(next)).catch(reportError); return; }
+      if (toolContext?.construction?.can_reset || toolContext?.operation?.can_reset) { event.preventDefault(); void command(toolContext.construction ? "tool.construction.input" : "tool.operation.input", { event: "reset" }); return; }
       if (activeTool !== "select") { event.preventDefault(); chooseTool("select"); queueMicrotask(() => document.querySelector<HTMLElement>('[aria-label="Select"]')?.focus()); }
     };
     document.addEventListener("keydown", onWorkspaceKey);
@@ -491,10 +499,12 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       setMode((current) => current === "code" ? "split" : current);
     });
   };
+  const canPickForTool = Boolean(snapshot.authoringContext?.operation && !snapshot.authoringContext.operation.completed && !capturedGesture && !snapshot.pendingManagedMutation);
   const declarationActions: DeclarationPanelActions = {
+    canPickForTool,
     navigationBlockedReason: (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) ? "Finish the current tool or gesture before navigating between views." : undefined,
     onSelect: (id, mode = "replace") => {
-      if (capturedGesture || activeTool !== "select" || Boolean(snapshot.pendingManagedMutation)) return;
+      if (capturedGesture || activeTool !== "select" && !canPickForTool || Boolean(snapshot.pendingManagedMutation)) return;
       if (snapshot.navigation) void command("navigation.rows.select", { authority: snapshot.navigation.authority, ids: [id], mode });
       else void command("declaration.select", { id });
     },
@@ -633,6 +643,7 @@ function DesignWorkspace({ adapter, snapshot, catalog, editingBlockedReason, onS
         {authoring && <><span aria-hidden="true" className="mx-0.5 h-4 w-px bg-border" /><Button size="compact" variant="ghost" className="h-7" onClick={onCancel}>Cancel</Button><Button size="compact" variant="default" className="h-7" disabled={!snapshot.presentation.canFinish} onClick={onFinish}>Finish</Button></>}
       </span>
     </div>
+    {authoring && snapshot.authoringContext && (snapshot.authoringContext.construction || snapshot.authoringContext.operation) && <AuthoringOptions tool={activeTool} context={snapshot.authoringContext} disabled={Boolean(editingBlockedReason)} dispatch={(command, payload) => { void adapter.dispatch({ version: 2, command, payload }).then(onSnapshot).catch(onError); }} />}
     <div className="relative min-h-0 flex-1">
       <CanvasViewport adapter={adapter} snapshot={snapshot} onSnapshot={onSnapshot} onCaptureChange={captured} onError={onError} />
       <CanvasControls disabled={busy && !adapter.responsiveCanvas} gridVisible={snapshot.presentation.gridVisible} dimensionMode={snapshot.dimensions?.mode} onDimensionMode={onDimensionMode} onCommand={onViewCommand} />

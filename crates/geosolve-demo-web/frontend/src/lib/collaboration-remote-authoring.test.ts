@@ -122,3 +122,34 @@ describe("server prediction with local presentation", () => {
     expect(f.renderer.postMessage).not.toHaveBeenCalled();
   });
 });
+
+it("sends operation preselection for native mapping once and keeps subsequent navigation local",async()=>{
+  const operation={sequence:0,completed:false,can_finish:false,has_pending:false,can_reset:false,can_step_back:false,diagnostic:null,pending:[],authoring_options:{tangent_orientation:"aligned" as const,curvature_relation:"signed" as const,continuity:{kind:"g1" as const},dimension_mode:"driving" as const,angle_orientation:"counter_clockwise" as const},fillet_options:{fillet_radius:2,flip_first_side:false,flip_second_side:false,alternate_arc:false},fillet_corner_count:0,fillet_corners:[],offset_distance:null};
+  const command={basis:"digest",gesture_id:16,viewport,tool:"fillet" as const,selection:[],samples:[],expected_declarations:[]};
+  const f=await fixture(async body=>body.action==="finish"?{kind:"operation",basis,command}:{...preview(),kind:"preview",basis,ticket:"a".repeat(64),presentation:"native operation",operation});
+  try{
+    expect((await f.client.beginOperation({tool:"fillet",gestureId:16,viewport,view})).operation).toEqual(operation);
+    expect(f.rpc.mock.calls[0][0]).toEqual({action:"begin",basis,kind:"operation",tool:"fillet",gestureId:16,viewport,view:{state:view.state},selection:undefined,options:undefined});
+    const first=f.client.advanceOperation({sequence:1,input:{event:"fillet_radius",radius:4}},view);
+    const second=f.client.advanceOperation({sequence:2,input:{event:"complete"}},view);
+    await Promise.all([first,second]);
+    expect(f.rpc.mock.calls[1][0]).toEqual({action:"advance",ticket:"a".repeat(64),samples:[{sequence:1,input:{event:"fillet_radius",radius:4}},{sequence:2,input:{event:"complete"}}]});
+    const count=f.rpc.mock.calls.length;
+    await f.client.render({...view,state:{camera:"new camera"}});expect(f.rpc).toHaveBeenCalledTimes(count);
+    expect((await f.client.finishOperation()).command).toEqual(command);
+    expect(JSON.stringify(f.rpc.mock.calls)).not.toMatch(/private project|private design|new camera/);
+  }finally{f.client.dispose();}
+});
+
+it("maps Explorer picks on the server from personal state and preserves option choices before activation",async()=>{
+  const f=await fixture();
+  try{
+    const options={offset_distance:3};
+    await f.client.beginOperation({tool:"offset",gestureId:19,viewport,view,options});
+    expect(f.rpc.mock.calls[0][0]).toMatchObject({action:"begin",kind:"operation",options,view:{state:view.state}});
+    const selected={...view,state:{selection:"native curve occurrence"}};
+    await f.client.pickOperationSelection(1,selected);
+    expect(f.rpc.mock.calls[1][0]).toEqual({action:"pick_selection",ticket:"a".repeat(64),sequence:1,view:{state:selected.state}});
+    expect(JSON.stringify(f.rpc.mock.calls)).not.toContain("local scene");
+  }finally{f.client.dispose();}
+});

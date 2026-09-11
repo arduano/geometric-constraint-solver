@@ -1286,6 +1286,32 @@ class NavigationFixtureAdapter extends MockWorkbenchAdapter {
 }
 
 describe("M95 connected workspaces", () => {
+  it("collects Explorer operands for a retained native operation and uses two-stage Escape without opening source", async () => {
+    class NativeOperationAdapter extends NavigationFixtureAdapter {
+      override async dispatch(input: {command:string;payload?:unknown}) {
+        await super.dispatch(input);
+        if(input.command==="tool.select")this.state.authoringContext=(input.payload as {id:string}).id==="offset"?{operation:{sequence:0,completed:false,can_finish:false,has_pending:false,can_reset:false,can_step_back:false,diagnostic:null,pending:[],authoring_options:{tangent_orientation:"aligned",curvature_relation:"signed",continuity:{kind:"g1"},dimension_mode:"driving",angle_orientation:"counter_clockwise"},fillet_options:{fillet_radius:2,flip_first_side:false,flip_second_side:false,alternate_arc:false},fillet_corner_count:0,fillet_corners:[],offset_distance:2}}:undefined;
+        const operation=this.state.authoringContext?.operation;
+        if(operation&&(input.command==="navigation.rows.select"||input.command==="tool.operation.input"))this.state.authoringContext={operation:{...operation,has_pending:input.command==="navigation.rows.select",can_reset:input.command==="navigation.rows.select"}};
+        return structuredClone(this.state);
+      }
+    }
+    const adapter=new NativeOperationAdapter(),{user}=await ready(adapter);
+    await user.click(screen.getByRole("button",{name:"Modify"}));await user.click(screen.getByRole("menuitem",{name:"Offset"}));
+    const line=screen.getByRole("button",{name:"Line 1"});expect(line).toBeEnabled();
+    await user.click(line);
+    expect(adapter.commands.at(-1)).toMatchObject({command:"navigation.rows.select"});
+    expect(screen.getByRole("button",{name:"Show in code"})).toBeDisabled();
+    expect(screen.getByRole("button",{name:"Clear picks"})).toBeEnabled();
+    await user.keyboard("{Escape}");
+    expect(adapter.commands.at(-1)).toMatchObject({command:"tool.operation.input",payload:{event:"reset"}});
+    expect(screen.getByRole("group",{name:"Active tool options"})).toBeVisible();
+    expect(screen.getByRole("button",{name:"Clear picks"})).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(adapter.commands.at(-1)).toMatchObject({command:"tool.select",payload:{id:"select"}});
+    expect(screen.queryByRole("group",{name:"Active tool options"})).not.toBeInTheDocument();
+  });
+
   it("synchronizes Explorer selection and all source decorations without moving cursor, focus, layout or saving", async () => {
     const adapter = new NavigationFixtureAdapter();
     const { user, container } = await ready(adapter);

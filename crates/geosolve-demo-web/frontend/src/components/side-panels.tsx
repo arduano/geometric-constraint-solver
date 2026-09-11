@@ -13,6 +13,7 @@ export type DeclarationMove = { direction: "up" | "down" } | { targetId: string;
 export interface DeclarationPanelActions {
   onSelect: (id: string, mode?: "replace" | "toggle") => void;
   navigationBlockedReason?: string;
+  canPickForTool?: boolean;
   onNavigate: (row: DeclarationRow, edit: boolean) => void;
   onMove: (id: string, move: DeclarationMove) => void;
   onVisibility: (id: string, visible: boolean) => void;
@@ -62,7 +63,7 @@ export function DeclarationPanel({ rows, actions, navigation, blockedReason, cla
 function DeclarationTreeRow({ row, depth, selection, actions, blockedReason, dragged, drop, onDrag, onDropTarget, onDragEnd }: { row: DeclarationRow; depth: number; selection?: Map<string, "selected" | "partial">; actions: DeclarationPanelActions; blockedReason?: string; dragged: string | null; drop: { id: string; position: "before" | "after" } | null; onDrag: (id: string | null) => void; onDropTarget: (target: { id: string; position: "before" | "after" } | null) => void; onDragEnd: () => void }) {
   const selected = selection ? selection.get(row.id) : row.selected ? "selected" : undefined;
   const select = (event: React.MouseEvent) => actions.onSelect(row.id, event.shiftKey || event.ctrlKey || event.metaKey ? "toggle" : "replace");
-  const selectionAllowed = !actions.navigationBlockedReason && (selection !== undefined || row.capabilities.select.enabled);
+  const selectionAllowed = (!actions.navigationBlockedReason || actions.canPickForTool) && (selection !== undefined || row.capabilities.select.enabled);
   if (row.rowKind === "group") {
     return <li className="min-w-0"><div className="mt-2 flex h-7 items-center gap-1 border-b border-border px-1 text-[10px] font-semibold uppercase tracking-wider text-muted first:mt-0"><button type="button" data-navigation-row={row.id} data-navigation-state={selected} aria-pressed={selected === "partial" ? "mixed" : selected === "selected"} aria-label={row.label} disabled={!selectionAllowed} onClick={select} className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-1 text-left outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent data-[navigation-state=selected]:bg-amber-400/10 data-[navigation-state=selected]:text-accent data-[navigation-state=partial]:text-accent"><Box className="size-3 shrink-0" /><span className="min-w-0 flex-1 truncate" title={row.label}>{row.label}</span><span className="shrink-0 tabular-nums">{row.children.length}</span></button><VisibilityButton row={row} onVisibility={actions.onVisibility} /><button type="button" aria-label={`Isolate ${row.label}`} onClick={() => actions.onIsolate(row.id)} title={`Show only ${row.label}; Restore returns the previous visibility`} className="grid size-6 shrink-0 place-items-center rounded outline-none hover:bg-raised hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent"><Focus className="size-3" /></button></div>{row.children.length > 0 && <ul className="grid min-w-0 grid-cols-1 gap-1" aria-label={row.label}>{row.children.map((child) => <DeclarationTreeRow key={child.id} row={child} depth={depth} selection={selection} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={onDrag} onDropTarget={onDropTarget} onDragEnd={onDragEnd} />)}</ul>}</li>;
   }

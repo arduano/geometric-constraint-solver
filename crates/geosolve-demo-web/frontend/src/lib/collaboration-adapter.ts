@@ -4,7 +4,7 @@ import type { SourceSnapshot, UserTextHistory } from "../../../../../packages/ge
 import type { TextSnapshot } from "../../../../../packages/geosolve-collaboration/src/index";
 import type { SemanticTarget, UserSemanticHistory } from "../../../../../packages/geosolve-collaboration/src/semantic";
 import type { PointGestureHandle } from "../../../../../packages/geosolve-engine/src/point-gesture";
-import type { EditableDesign, ConstructionCommand, PointGestureCommand } from "../../../../../packages/geosolve-engine/src/index";
+import type { EditableDesign, PointGestureCommand } from "../../../../../packages/geosolve-engine/src/index";
 import { assertWorkbenchSnapshot, markCanvasOnlySnapshot, stampCanvasSnapshot, type PointerSample, type WheelSample, type WorkbenchAdapter, type WorkbenchSnapshot } from "./adapter";
 import { LocalInteractionWorker, type InteractionSeed, type LocalInteractionClient, type LocalInteractionUpdate } from "./local-interaction-adapter";
 import { CollaborationTextWorker, type TextRevision, type TextWorkerUpdate } from "./collaboration-text-adapter";
@@ -12,7 +12,7 @@ import { WorkbenchActivity } from "./workbench-activity";
 import { assertToolCatalog, type ToolCatalog } from "./tool-catalog";
 import type { SourceEditorEdit } from "../components/code-editor";
 import { LocalAuthoringWorker, type LocalAuthoringClient, type AuthoringModel, type AuthoringPreview, type AuthoringView } from "./collaboration-authoring-adapter";
-import { CollaborationAuthoringController, supportsCollaborativeConstruction } from "./collaboration-authoring-controller";
+import { CollaborationAuthoringController, supportsCollaborativeTool, type AuthoringCommand } from "./collaboration-authoring-controller";
 import { projectAuthoredSource, projectCanonicalSource, projectSourceNavigation, type SourceProjection } from "./collaboration-source-projection";
 import type { BrowsingNavigationCommand, BrowsingEditCommand, BrowsingChrome } from "./collaboration-browsing-worker";
 import type { ManagedSketchMutation } from "./managed-compiler";
@@ -101,7 +101,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
   private readonly saveSourceIntents?:(intents:readonly {path:string;edit:SourceEditorEdit}[])=>void;
   recoveryActions:readonly {label:string;run:()=>void}[]=[];
   get responsiveCanvas(){return this.installed!==undefined;}
-  readonly selectedGeometryRoleBlockedReason="Changing existing curve roles is not available in shared editing yet";
+  get selectedGeometryRoleBlockedReason(){return this.editingBlockedReason??(!this.authoring?"Authoring is unavailable in this session":undefined);}
   get editingBlockedReason(){return this.client.connection?.role==="viewer"?"You have view access to this document.":undefined;}
   get pending(){return this.client.pendingRequests;}
   get pendingSourceEdits(){return [...this.sourceIntents.values()];}
@@ -152,6 +152,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
       paint:preview=>this.presentPrediction(preview),
       changed:()=>{if(this.installed)this.notify(this.projectText());},
       cleared:()=>this.restoreAcceptedFrame(),
+      activity:()=>this.activity.begin(),
       error:error=>{this.notice=String(error);this.notify();},
       commit:(model,command,kind)=>this.commitGesture(model,command,kind),
     });
@@ -177,7 +178,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     if(!this.catalog)throw Error("Shared tool catalog has not loaded");
     const unavailableReason=this.editingBlockedReason??(!this.authoring?"Authoring is unavailable in this session":undefined);
     return {...this.catalog,geometryRole:{...this.catalog.geometryRole,unavailableReason},sections:this.catalog.sections.map(section=>({...section,commands:section.commands.map(command=>({...command,
-      unavailableReason:unavailableReason??(supportsCollaborativeConstruction(command.toolId)?undefined:"This tool is not available in shared editing yet"),
+      unavailableReason:unavailableReason??command.unavailableReason??(supportsCollaborativeTool(command.toolId)?undefined:"This tool is not available in shared editing yet"),
     }))}))};
   }
   subscribe(listener:(snapshot?:WorkbenchSnapshot)=>void){this.listeners.add(listener);return()=>{this.listeners.delete(listener);};}
@@ -189,10 +190,28 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     if(input.command==="tool.select"){
       if(!this.authoring)throw Error("Local authoring is unavailable");
       if(this.editingBlockedReason&&(input.payload as {id:string}).id!=="select")throw Error(this.editingBlockedReason);
-      this.authoring.select((input.payload as {id:string}).id);this.restoreAcceptedFrame();return this.projectText();
+      const id=(input.payload as {id:string}).id;
+      if(id!=="select"){
+        if(!this.local.authoringPointer||!this.view)throw Error("Accepted tool selection is still loading");
+        await this.queueLocal(async()=>{const {viewport}=await this.local.authoringPointer!({x:0,y:0});this.authoring!.select(id,{viewport,view:this.view!});});
+      }else this.authoring.select(id);
+      this.restoreAcceptedFrame();return this.projectText();
     }
-    if(input.command==="tool.finish"||input.command==="tool.step_back"){
-      if(input.command==="tool.finish")this.authoring?.finish();else this.authoring?.stepBack();return this.snapshot();
+    if(input.command==="tool.finish"||input.command==="feature.apply"||input.command==="tool.step_back"){
+      if(input.command!=="tool.step_back")this.authoring?.finish();else this.authoring?.stepBack();return this.snapshot();
+    }
+    if(input.command==="tool.construction.input"||input.command==="tool.operation.input"){
+      if(this.editingBlockedReason)throw Error(this.editingBlockedReason);
+      if(!this.authoring)throw Error("Authoring is unavailable in this session");
+      if(input.command==="tool.construction.input")this.authoring.constructionEvent(input.payload as Parameters<CollaborationAuthoringController["constructionEvent"]>[0]);
+      else this.authoring.operationEvent(input.payload as Parameters<CollaborationAuthoringController["operationEvent"]>[0]);
+      return this.projectText();
+    }
+    if(input.command==="geometry.role.toggle"){
+      if(this.editingBlockedReason)throw Error(this.editingBlockedReason);
+      if(!this.authoring||!this.local.authoringPointer||!this.view)throw Error("Accepted tool selection is still loading");
+      await this.queueLocal(async()=>{const {viewport}=await this.local.authoringPointer!({x:0,y:0});this.authoring!.applyOperation("toggle_geometry_role",{viewport,view:this.view!});});
+      return this.projectText();
     }
     if(input.command==="geometry.authoring-role.toggle"){this.authoring?.toggleRole();return this.projectText();}
     if(input.command==="source.select"){
@@ -229,7 +248,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     return this.queueLocal(async()=>{
       if(generation!==this.browsingGeneration||JSON.stringify(view.state)!==JSON.stringify(this.view?.state))throw Error("Your selection changed; select the item again");
       const update=await this.local.update("restoreSelection",{expected:view.state,state:result.state});
-      if(update){await this.installLocal(update);this.installChrome(result.chrome);}
+      if(update){await this.installLocal(update);this.installChrome(result.chrome);if(this.view&&this.authoring){const projection=await this.local.authoringPointer?.({x:0,y:0});this.authoring.pickSelection(this.view,projection?.viewport);}}
       return this.projectText();
     });
   }
@@ -362,7 +381,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     const selectedPath=files.find(file=>file.path===(this.selectedPath??this.installed!.source.selectedPath))?.path??files[0]?.path??"";
     const dirty=JSON.stringify(visible.files)!==JSON.stringify(this.state?.document.accepted.files);
     const history=this.state?.document.semanticHistory;
-    this.installed=stampCanvasSnapshot({...this.installed,source:{files,selectedPath,dirty},presentation:{...this.installed.presentation,
+    this.installed=stampCanvasSnapshot({...this.installed,source:{files,selectedPath,dirty},authoringContext:this.authoring?{construction:this.authoring.construction,operation:this.authoring.operation}:undefined,presentation:{...this.installed.presentation,
       canUndo:history?.canUndo??false,canRedo:history?.canRedo??false,
       activeTool:this.authoring?.tool??"select",canFinish:this.authoring?.canFinish??false,geometryRole:this.authoring?.role??"profile",
     }},++this.sequence);return this.installed;
@@ -457,9 +476,9 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     // owns every hit test, but cannot flash its old coordinates over prediction.
     return {...frame,scene:{...frame.scene,items:[...frame.scene.items.filter(item=>item.layer!=="presence"),...(this.acceptedFrame?.scene.items.filter(item=>item.layer==="presence")??[])]}};
   }
-  private async commitGesture(model:AuthoringModel,gesture:PointGestureCommand|ConstructionCommand,kind:"point"|"construction"){
+  private async commitGesture(model:AuthoringModel,gesture:AuthoringCommand,kind:"point"|"construction"|"operation"){
     if(model.revision!==this.modelRevision||model.documentEpoch!==this.client.connection?.documentEpoch)throw Error("The accepted sketch changed during drawing; draw again on the current sketch");
-    let payload:unknown={action:"construction",gesture};
+    let payload:unknown={action:kind==="operation"?"tool_operation":"construction",gesture};
     if(kind==="point"){
       const target=(gesture as PointGestureCommand).target,addresses=target.target==="point"?[target.address]:[target.lower_left,target.upper_right];
       const names=[...new Set(addresses.map(address=>address.owner.address.owner==="direct_declaration"?address.owner.address.declaration:address.owner.address.address.invocation))];
