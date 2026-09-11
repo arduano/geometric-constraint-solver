@@ -119,3 +119,10 @@ The asynchronous fence repair retains exact validated frame evidence and error
 checks; 39 focused renderer tests, dragging and all four actual-browser
 pixel/resize/context-recovery workflows pass. Renewed integrated qualification
 and preserved live delivery remain pending.
+
+The subsequent completed run `20260911T153007-f3ebd337` passes all 49 ordinary
+browser workflows and 15/16 collaboration workflows, but fails the unchanged
+manifold navigation budget at 506.9 ms. [M98-F040](M98_HARDENING.md#m98-f040--first-hover-shader-compilation-delays-queued-navigation)
+records first-hover blur shader compilation and queued-frame scheduling, its
+focused repair and pending browser/integrated evidence. This failed run is not
+qualification or authorization to replace the previews.

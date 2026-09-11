@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DrawFrame, DrawItem, DrawStyle } from "./canvas-scene";
 
-const fake = vi.hoisted(() => ({ uniformSystems: [] as Record<string, unknown>[], graphics: [] as { destroyed: boolean; clears: number; parent: { position: { set: ReturnType<typeof vi.fn> } } | null; stroke: ReturnType<typeof vi.fn> }[], texts: [] as { style: unknown }[], render: vi.fn(), rendererDestroy: vi.fn(), reorder: vi.fn() }));
+const fake = vi.hoisted(() => ({ shaderBind: vi.fn(), filters: [] as { blurXFilter: {destroy: ReturnType<typeof vi.fn>}; blurYFilter: {destroy: ReturnType<typeof vi.fn>}; destroy: ReturnType<typeof vi.fn> }[], uniformSystems: [] as Record<string, unknown>[], graphics: [] as { destroyed: boolean; clears: number; parent: { position: { set: ReturnType<typeof vi.fn> } } | null; stroke: ReturnType<typeof vi.fn> }[], texts: [] as { style: unknown }[], render: vi.fn(), rendererDestroy: vi.fn(), reorder: vi.fn() }));
 vi.mock("pixi.js/filters", () => ({}));
 vi.mock("pixi.js", () => {
   class Container {
@@ -22,9 +22,9 @@ vi.mock("pixi.js", () => {
   }
   class Text extends Container { text = ""; style = {}; resolution = 1; constructor() { super(); fake.texts.push(this); } }
   return { VERSION: "8.20.1", Container, Graphics, Text, TextStyle: class {}, CanvasTextMetrics: { measureText: () => ({ height: 12, lineHeight: 12, maxLineWidth: 40, fontProperties: { ascent: 10, descent: 2, fontSize: 12 } }) }, Color: class { alpha = 1; toNumber() { return 0xffffff; } },
-    BlurFilter: class { strength = 0; destroy() {} }, WebGLRenderer: class {
+    BlurFilter: class { strength = 0; blurXFilter = {destroy:vi.fn()}; blurYFilter = {destroy:vi.fn()}; destroy=vi.fn(); constructor(){fake.filters.push(this);} }, WebGLRenderer: class {
       uniformGroup: Record<string, unknown> = { _cache: { stale: () => undefined }, _uniformGroupSyncHash: { stale: () => undefined } }; constructor() { fake.uniformSystems.push(this.uniformGroup); }
-      context = { webGLVersion: 2 }; events = undefined; scheduler = { destroy: vi.fn() }; gc = { run: vi.fn() }; background = { color: "" }; init = async () => undefined; resize = vi.fn(); render = fake.render; destroy = fake.rendererDestroy;
+      shader = {bind:fake.shaderBind}; context = { webGLVersion: 2 }; events = undefined; scheduler = { destroy: vi.fn() }; gc = { run: vi.fn() }; background = { color: "" }; init = async () => undefined; resize = vi.fn(); render = fake.render; destroy = fake.rendererDestroy;
     } };
 });
 import { createPixiBackend } from "./canvas-renderer-pixi";
@@ -45,6 +45,38 @@ async function fencedBackend(){
 }
 
 describe("Pixi resource ownership (GPU calls replaced, no claim of WebGL qualification)", () => {
+  it("prepares interaction shader programs at first presentation and again after context restoration",async()=>{
+    vi.useFakeTimers();const f=await fencedBackend(),before=fake.shaderBind.mock.calls.length;
+    try{
+      expect(fake.shaderBind.mock.calls.length).toBe(before); // Backend must be installed first.
+      const first=Promise.resolve(f.backend.render(frame([item("a")]),surface));
+      const filter=fake.filters.at(-1)!;
+      expect(fake.shaderBind.mock.calls.slice(before)).toEqual([[filter.blurXFilter,true],[filter.blurYFilter,true]]);
+      expect(f.gl.getError).not.toHaveBeenCalled();
+      f.gl.clientWaitSync.mockReturnValue(f.gl.ALREADY_SIGNALED);await vi.advanceTimersByTimeAsync(0);await first;
+      const second=Promise.resolve(f.backend.render(frame([item("b")]),surface));await vi.advanceTimersByTimeAsync(0);await second;
+      expect(fake.shaderBind.mock.calls.length).toBe(before+2);
+      f.canvas.dispatchEvent(new Event("webglcontextrestored"));
+      const restored=Promise.resolve(f.backend.render(frame([item("c")]),surface));await vi.advanceTimersByTimeAsync(0);await restored;
+      expect(fake.shaderBind.mock.calls.slice(before+2)).toEqual([[filter.blurXFilter,true],[filter.blurYFilter,true]]);
+      f.backend.destroy();
+      expect(filter.blurXFilter.destroy).toHaveBeenCalledExactlyOnceWith(false);
+      expect(filter.blurYFilter.destroy).toHaveBeenCalledExactlyOnceWith(false);
+      expect(filter.destroy).toHaveBeenCalledExactlyOnceWith(false);
+    }finally{f.backend.destroy();vi.useRealTimers();}
+  });
+  for(const reason of ["exception","context loss"])it(`rejects ${reason} during initial shader preparation and retries only after restoration`,async()=>{
+    vi.useFakeTimers();const f=await fencedBackend(),renders=fake.render.mock.calls.length;
+    try{
+      fake.shaderBind.mockImplementationOnce(()=>{if(reason==="exception")throw Error("shader setup failed");f.gl.isContextLost.mockReturnValue(true);});
+      expect(()=>f.backend.render(frame([item("a")]),surface)).toThrow();
+      expect(fake.render).toHaveBeenCalledTimes(renders);expect(f.gl.fenceSync).not.toHaveBeenCalled();expect(f.gl.getError).not.toHaveBeenCalled();
+      f.gl.isContextLost.mockReturnValue(false);
+      expect(()=>f.backend.render(frame([item("b")]),surface)).toThrow();
+      f.canvas.dispatchEvent(new Event("webglcontextrestored"));f.gl.clientWaitSync.mockReturnValue(f.gl.ALREADY_SIGNALED);
+      const restored=Promise.resolve(f.backend.render(frame([item("b")]),surface));await vi.advanceTimersByTimeAsync(0);await expect(restored).resolves.toMatchObject({resources:1});
+    }finally{f.backend.destroy();vi.useRealTimers();}
+  });
   it("validates a completed fence after a background tab delays its first poll past the deadline",async()=>{
     vi.useFakeTimers();const clock=vi.spyOn(performance,"now").mockReturnValue(0),f=await fencedBackend();
     try{

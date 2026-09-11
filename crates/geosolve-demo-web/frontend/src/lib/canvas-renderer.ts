@@ -74,38 +74,44 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement, options: Rendere
     canvas.dataset.renderState = next;
     options.onState?.(next);
   }
+  function canSubmit() {
+    return !(disposed || lost || failed || !backend || !accepted || !dirty || pending !== null || inFlight || surface.width <= 0 || surface.height <= 0);
+  }
   function schedule() {
-    if (disposed || lost || failed || !backend || !accepted || !dirty || pending !== null || inFlight || surface.width <= 0 || surface.height <= 0) return;
-    pending = requestFrame(() => {
-      pending = null;
-      if (disposed || lost || !backend || !accepted) return;
-      const submission: Submission = { frame: accepted, frameId: acceptedId, surface: { ...surface }, surfaceVersion, contextEpoch, began: now() };
-      inFlight = submission;
-      const current = () => !disposed && !lost && inFlight === submission && contextEpoch === submission.contextEpoch;
-      const complete = (stats: BackendStats) => {
-        if (!current()) return;
-        inFlight = null;
-        // Publish the exact validated draw, including its submitted camera and
-        // surface. Newer input stays queued; it cannot relabel this older draw.
-        presented = submission.frame;
-        dirty = acceptedId !== submission.frameId || surfaceVersion !== submission.surfaceVersion;
-        const elapsed = now() - submission.began;
-        diagnostics = Object.freeze({ ...diagnostics, ...submission.surface, ...stats, frameCount: diagnostics.frameCount + 1, lastFrameId: submission.frameId,
-          hardware: backend!.hardware, lastRenderMilliseconds: elapsed, totalRenderMilliseconds: diagnostics.totalRenderMilliseconds + elapsed });
-        canvas.dataset.presentedFrame = String(submission.frameId);
-        state("ready");
-        schedule();
-      };
-      const fail = (error: unknown) => {
-        if (!current()) return;
-        inFlight = null; failed = true;
-        state("unavailable", error instanceof Error ? error.message : String(error));
-      };
-      try {
-        const result = backend.render(submission.frame, submission.surface);
-        if (result instanceof Promise) void result.then(complete, fail); else complete(result);
-      } catch (error) { fail(error); }
-    });
+    if (!canSubmit()) return;
+    pending = requestFrame(() => { pending = null; submit(); });
+  }
+  function submit() {
+    if (!canSubmit() || !backend || !accepted) return;
+    const submission: Submission = { frame: accepted, frameId: acceptedId, surface: { ...surface }, surfaceVersion, contextEpoch, began: now() };
+    inFlight = submission;
+    const current = () => !disposed && !lost && inFlight === submission && contextEpoch === submission.contextEpoch;
+    const complete = (stats: BackendStats, asynchronous = false) => {
+      if (!current()) return;
+      inFlight = null;
+      // Publish the exact validated draw, including its submitted camera and
+      // surface. Newer input stays queued; it cannot relabel this older draw.
+      presented = submission.frame;
+      dirty = acceptedId !== submission.frameId || surfaceVersion !== submission.surfaceVersion;
+      const elapsed = now() - submission.began;
+      diagnostics = Object.freeze({ ...diagnostics, ...submission.surface, ...stats, frameCount: diagnostics.frameCount + 1, lastFrameId: submission.frameId,
+        hardware: backend!.hardware, lastRenderMilliseconds: elapsed, totalRenderMilliseconds: diagnostics.totalRenderMilliseconds + elapsed });
+      canvas.dataset.presentedFrame = String(submission.frameId);
+      state("ready");
+      // An asynchronous validation already yields to the browser. Submit the
+      // newest queued frame now, without adding another animation-frame delay.
+      // Initial and synchronous draws retain RAF coalescing.
+      if (asynchronous) submit(); else schedule();
+    };
+    const fail = (error: unknown) => {
+      if (!current()) return;
+      inFlight = null; failed = true;
+      state("unavailable", error instanceof Error ? error.message : String(error));
+    };
+    try {
+      const result = backend.render(submission.frame, submission.surface);
+      if (result instanceof Promise) void result.then((stats) => complete(stats, true), fail); else complete(result);
+    } catch (error) { fail(error); }
   }
   function contextLost(event: Event) {
     event.preventDefault();

@@ -64,6 +64,8 @@ function sameLocalGeometry(a: DrawItem, b: DrawItem): boolean {
   }
 }
 
+function nativeBlur(strength: number) { return new BlurFilter({ strength, quality: 4 }); }
+
 function colorValue(value: string) { const color = new Color(value); return { color: color.toNumber(), alpha: color.alpha }; }
 function contour(item: Exclude<DrawItem, { kind: "text" }>, map: (p: DrawPoint) => DrawPoint, scale: number): { points: DrawPoint[]; closed: boolean } {
   if (item.kind === "polyline") return { points: item.points.map(map), closed: item.closed };
@@ -147,13 +149,15 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
   const stage = new Container({ eventMode: "none", interactiveChildren: false });
   const entries = new Map<string, Entry>();
   let surfaceKey = "";
+  let interactionShaders: BlurFilter | null = null;
+  let interactionShadersPrepared = false;
   let created = 0; let destroyed = 0; let updated = 0; let repainted = 0; let disposed = false; let restored = false;
   let cancelCompletion: ((error: Error) => void) | null = null;
   let failure: Error | null = null;
   const contextLost = () => cancelCompletion?.(new Error("WebGL2 context was lost during presentation"));
   // Registered after Pixi initialization: rebuild only on the next render, after
   // all of Pixi's own context-restoration listeners have completed.
-  const contextRestored = () => { restored = true; failure = null; };
+  const contextRestored = () => { restored = true; failure = null; interactionShadersPrepared = false; };
   canvas.addEventListener("webglcontextlost", contextLost);
   canvas.addEventListener("webglcontextrestored", contextRestored);
   function completeSubmission(stats: BackendStats): Promise<BackendStats> {
@@ -225,6 +229,18 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
           for (const entry of entries.values()) remove(entry);
           entries.clear(); surfaceKey = ""; restored = false;
         }
+        if (!interactionShadersPrepared) {
+          // First hover must not compile its blur programs on the input thread.
+          // Prepare the exact native-shadow programs during honest initial-frame
+          // readiness, after this backend has an owner that can recover loss.
+          // This binds only programs: no synthetic draw, texture or filter pass.
+          interactionShaders ??= nativeBlur(3);
+          for (const pass of [interactionShaders.blurXFilter, interactionShaders.blurYFilter]) {
+            renderer.shader.bind(pass, true); // Filter-global uniforms exist only during actual filtering.
+            if (gl.isContextLost()) throw new Error("WebGL2 context was lost during shader preparation");
+          }
+          interactionShadersPrepared = true;
+        }
         // Supersample low-DPR displays so thin CAD strokes and small dimension
         // text retain subpixel coverage comparable to the SVG baseline.
         const rasterResolution = Math.max(2, surface.pixelRatio);
@@ -283,7 +299,7 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
               if (!entry.shadow) { entry.shadow = new Graphics(); entry.container.addChildAt(entry.shadow, 0); }
               paint(entry.shadow, item, local, fit.scale, style.shadow.color);
               entry.shadow.position.set(...style.shadow.offset);
-              if (!entry.blur) entry.blur = new BlurFilter({ strength: style.shadow.blur, quality: 4 });
+              if (!entry.blur) entry.blur = nativeBlur(style.shadow.blur);
               entry.blur.strength = style.shadow.blur;
               entry.shadow.filters = style.shadow.blur ? [entry.blur] : [];
             } else if (entry.shadow) { entry.shadow.destroy(); entry.shadow = null; entry.blur?.destroy(); entry.blur = null; }
@@ -306,6 +322,11 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
       canvas.removeEventListener("webglcontextlost", contextLost);
       canvas.removeEventListener("webglcontextrestored", contextRestored);
       for (const entry of entries.values()) remove(entry);
+      // Child shaders own resources separately; shared source-cached programs
+      // remain alive for other canvases and actual native-shadow instances.
+      interactionShaders?.blurXFilter.destroy(false);
+      interactionShaders?.blurYFilter.destroy(false);
+      interactionShaders?.destroy(false); interactionShaders = null;
       entries.clear(); stage.destroy(); renderer.destroy({ removeView: false });
     },
   };

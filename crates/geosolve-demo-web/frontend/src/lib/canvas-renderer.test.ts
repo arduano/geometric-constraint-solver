@@ -22,6 +22,20 @@ function harness() {
 }
 
 describe("on-demand accepted-frame presentation", () => {
+  it("keeps synchronous reentrant input coalesced behind an animation frame",async()=>{
+    const h=harness();h.renderer.accept(frame());await h.ready();
+    vi.mocked(h.backend.render).mockImplementationOnce(()=>{h.renderer.accept(frame(14));h.renderer.accept(frame(18));return {resources:1,created:1,destroyed:0,updated:1};});
+    h.flush();expect(h.backend.render).toHaveBeenCalledTimes(1);expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());expect(h.callbacks.size).toBe(1);
+    h.flush();expect(h.backend.render).toHaveBeenCalledTimes(2);expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));h.renderer.destroy();
+  });
+  it("retains the preceding validated frame when its immediate queued successor fails",async()=>{
+    const h=harness();h.renderer.accept(frame());await h.ready();let finish!:(stats:{resources:number;created:number;destroyed:number;updated:number})=>void;
+    vi.mocked(h.backend.render).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));h.flush();h.renderer.accept(frame(18));
+    vi.mocked(h.backend.render).mockImplementationOnce(()=>{throw Error("successor failed");});
+    finish({resources:1,created:1,destroyed:0,updated:1});await Promise.resolve();
+    expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({state:"unavailable",frameCount:1,error:"successor failed"});
+    h.renderer.accept(frame(20));h.flush();expect(h.backend.render).toHaveBeenCalledTimes(2);expect(h.callbacks.size).toBe(0);h.renderer.destroy();
+  });
   it("waits for GPU validation before publishing a frame and coalesces input received while it is pending", async () => {
     const h = harness(); h.renderer.accept(frame()); await h.ready(); h.flush();
     let complete!: (stats: {resources:number;created:number;destroyed:number;updated:number}) => void;
@@ -31,9 +45,16 @@ describe("on-demand accepted-frame presentation", () => {
     expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());
     h.renderer.accept(frame(16)); h.renderer.accept(frame(18)); h.flush();
     expect(h.backend.render).toHaveBeenCalledTimes(2);
+    let completeNewest!: (stats: {resources:number;created:number;destroyed:number;updated:number}) => void;
+    vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { completeNewest = resolve; }));
     complete({resources:1,created:1,destroyed:0,updated:2}); await Promise.resolve();
+    // The next GPU submission starts immediately after validation, with no RAF
+    // between them; its public witness must still await its own completion.
+    expect(h.callbacks.size).toBe(0);
+    expect(h.backend.render).toHaveBeenLastCalledWith(frame(18), {width:1000,height:700,pixelRatio:1});
     expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
-    h.flush(); expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));
+    completeNewest({resources:1,created:1,destroyed:0,updated:3}); await Promise.resolve();
+    expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));
     expect(h.backend.render).toHaveBeenCalledTimes(3); h.renderer.destroy();
   });
   it("retains the submitted surface while newer resize and hidden input wait for completion", async () => {
@@ -64,8 +85,8 @@ describe("on-demand accepted-frame presentation", () => {
     h.renderer.accept(frame(20));h.flush();
     expect(h.backend.render).toHaveBeenCalledTimes(3);expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());
     expect(h.canvas.__geosolveRendererDiagnostics?.state).toBe("initializing");
-    newResolve(stats);await Promise.resolve();expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));
-    h.flush();expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(20));h.renderer.destroy();
+    newResolve(stats);await Promise.resolve();expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(20));
+    expect(h.callbacks.size).toBe(0);h.flush();expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(20));h.renderer.destroy();
   });
   it("latches GPU validation failure until restoration and never publishes a rejected draw",async()=>{
     const h=harness();h.renderer.accept(frame());await h.ready();h.flush();

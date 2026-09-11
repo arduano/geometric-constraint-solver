@@ -1167,3 +1167,63 @@ all four cases in 1.1 minutes with the exact isolated manifest and port 18120.
 Logs: `renderer-root-review-tests.log`, `renderer-poll-tests.log`,
 `browser-async-gpu-r4.log`, `browser-async-gpu-drag-r5.log` and
 `async-gpu-renderer-browser.log` in the coordination directory.
+
+### M98-F040 — First-hover shader compilation delays queued navigation
+
+Clean `8ac6d11` run `20260911T153007-f3ebd337` passes 49/49 ordinary browser
+workflows and 15/16 collaboration workflows, but manifold navigation p95 is
+506.9 ms against the unchanged 500 ms budget. The first sample includes a hover
+before wheel delivery. An isolated trace identifies a 169 ms main-thread task;
+native wheel replies take 8–11 ms. A shader-source diagnostic confirms that
+horizontal/vertical blur program linking and metadata queries cause the stall
+(111.7/29.5 ms for the largest two calls). Geometry and server acceptance remain
+correct. This is a browser renderer latency defect, not a solver failure.
+
+Owner: `canvas-renderer-pixi.ts` and `canvas-renderer.ts`. A queued frame also
+waited for another RAF after its predecessor completed GPU validation. Immediate
+submission of the newest coalesced input removes that gap while preserving a
+single in-flight draw, exact submitted-frame/surface witnesses, failure latching,
+hidden suspension and context epochs. This alone passes manifold at 438.5 ms but
+still misses four-editor navigation at 560.3 ms; it is insufficient by itself.
+
+The renderer now prepares the exact native-shadow horizontal/vertical blur
+programs through Pixi's public shader binding API during the first ordinary
+render, after backend installation. It repeats setup after context restoration.
+No synthetic primitive, offscreen draw, RenderTexture, visual-quality reduction
+or timing-budget change is introduced. Startup includes shader initialization;
+readiness still requires the real frame's GPU fence and error validation. Owned
+preparation shaders release their own resources without destroying shared cached
+programs. This differs from the earlier reverted synthetic-draw warmup experiment.
+
+Three focused shader setup/restoration/failure tests fail before the correction.
+All 44 focused renderer tests and TypeScript checking pass afterward, including
+synchronous reentrant input and failure of an immediate queued successor. The
+three focused collaboration workflows pass: cold/warm drag p95 450/173.9/116.5 ms,
+zero reversals, four-editor navigation 363.1 ms p95 and manifold navigation 461.8 ms
+p95 with 351.9 ms text acknowledgement. Existing budgets and all samples remain.
+All four actual-browser renderer workflows pass (56.9 s), including independent
+batch and horizontal/vertical blur shader-loss injections with line/text pixels.
+Integrated qualification and preserved preview delivery remain pending for F040.
+
+Evidence: `target/m98/coordination/tool-parity/` contains
+`immediate-frame-browser-r1.log`, `shader-profile-r1.log`,
+`shader-prepare-before.log`, `shader-prepare-after.log`,
+`renderer-schedule-review-result.md` and `hover-shader-review.md`.
+
+Focused F040 commands ran in the pinned Nix shell:
+
+```bash
+cd crates/geosolve-demo-web/frontend
+npx vitest run src/lib/canvas-renderer.test.ts src/lib/canvas-renderer-pixi.test.ts
+npm run check:types
+GEOSOLVE_BROWSER_COMPILER_HARNESS=1 GEOSOLVE_DIST=../../../target/m98/geosolve-shader-ready-r1 npx vite build
+```
+
+From the repository root,
+`GEOSOLVE_DIST=target/m98/geosolve-shader-ready-r1 GEOSOLVE_BROWSER_TRACE=1 node --test --test-name-pattern="^dense manifold|^shared circle dragging|^four real browser" scripts/collaboration-browser.test.mjs`
+passes 3/3 with no skips/retries. Renderer qualification uses
+`GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome GEOSOLVE_E2E_PORT=18120 GEOSOLVE_E2E_ARTIFACT_MANIFEST=/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/coordination/tool-parity/shader-ready-harness-r1.json npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1`
+from the frontend directory and passes 4/4. Two preceding harness-only attempts
+failed before assertions: a relative manifest path and a bundled Chromium missing
+host libraries. The final attempt uses the same installed Chrome as collaboration
+qualification; it neither rebuilds the artifact nor changes an assertion.

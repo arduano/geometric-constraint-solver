@@ -213,10 +213,12 @@ test("M94 canvas context loss retains presented evidence and restores the newest
   await expect.poll(() => presentedIdentity(canvas)).not.toBe(initial);
   expect(await savedWorkspace(page)).toBe(workspace);
   await info.attach("canvas-restored-pixels", { body: JSON.stringify(await canvasVisualWitness(canvas)), contentType: "application/json" });
-  await test.step("first-shader loss restores batched line and text pixels", async () => {
-    const fresh = await page.context().browser()!.newContext({ baseURL: new URL(".", page.url()).href });
-    try { await exerciseFirstShaderLoss(await fresh.newPage(), info); } finally { await fresh.close(); }
-  });
+  for (const shader of ["batch", "blur-horizontal-pass-filter", "blur-vertical-pass-filter"]) {
+    await test.step(`first ${shader} loss restores batched line and text pixels`, async () => {
+      const fresh = await page.context().browser()!.newContext({ baseURL: new URL(".", page.url()).href });
+      try { await exerciseFirstShaderLoss(await fresh.newPage(), info, shader); } finally { await fresh.close(); }
+    });
+  }
 });
 
 test("M94 canvas lost pointer capture cancels a preview and permits the next real gesture", async ({ page }) => {
@@ -253,8 +255,8 @@ test("M94 canvas lost pointer capture cancels a preview and permits the next rea
 });
 
 
-async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
-  await page.addInitScript(() => {
+async function exerciseFirstShaderLoss(page: Page, info: TestInfo, shaderName: string) {
+  await page.addInitScript((shaderName) => {
     const prototype = Reflect.get(globalThis, "WebGL2RenderingContext").prototype;
     const original = Reflect.get(prototype, "compileShader");
     let injected = false;
@@ -265,8 +267,8 @@ async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
       getShaderSource: (shader: unknown) => string | null;
     };
     Reflect.set(prototype, "compileShader", function (this: Context, shader: unknown) {
-      // Skip Pixi's capability probes: exercise the actual first batch program.
-      if (!injected && this.canvas.closest?.('[role="application"]') && this.getShaderSource(shader)?.includes('SHADER_NAME batch-')) {
+      // Skip capability probes: exercise the exact ordinary or interaction program.
+      if (!injected && this.canvas.closest?.('[role="application"]') && this.getShaderSource(shader)?.includes(`SHADER_NAME ${shaderName}-`)) {
         injected = true;
         const extension = this.getExtension("WEBGL_lose_context");
         if (!extension) throw Error("WebGL2 context loss extension unavailable");
@@ -280,7 +282,7 @@ async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
       }
       Reflect.apply(original, this, [shader]);
     });
-  });
+  }, shaderName);
   const canvas = await openJansen(page);
   await expect.poll(() => page.evaluate(() => Reflect.get(globalThis, "__m94FirstShaderLoss")))
     .toEqual({ injected: 1, restored: 1 });
@@ -290,7 +292,7 @@ async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
   await settlePresentation(page);
   const scene = await presentedFrame(canvas);
   const screenshot = await canvas.screenshot();
-  await info.attach("first-shader-loss-pixels", { body: screenshot, contentType: "image/png" });
+  await info.attach(`first-${shaderName}-loss-pixels`, { body: screenshot, contentType: "image/png" });
   const pixels = decodeScreenshot(screenshot);
   const box = (await canvas.boundingBox())!;
   const controls = (await page.getByRole("toolbar", { name: "Canvas view" }).boundingBox())!;
@@ -330,5 +332,5 @@ async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
     expect(count, `restored glyph ${item.text} must have actual colored text pixels`).toBeGreaterThan(2);
     return { id: item.id, count };
   });
-  await info.attach("first-shader-loss-evidence", { body: JSON.stringify({ line: line.item.id, linePixels, textPixels }), contentType: "application/json" });
+  await info.attach(`first-${shaderName}-loss-evidence`, { body: JSON.stringify({ line: line.item.id, linePixels, textPixels }), contentType: "application/json" });
 }
