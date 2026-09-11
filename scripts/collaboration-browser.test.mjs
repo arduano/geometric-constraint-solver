@@ -189,6 +189,12 @@ test("shared tool parity authors Fillet options and selected geometry roles with
   await page.getByRole("combobox",{name:"Branch target",exact:true}).selectOption("0");
   assert.equal(await page.getByLabel("Alternate arc",{exact:true}).isChecked(),false);
   await until(()=>page.getByRole("button",{name:"Finish",exact:true}).isEnabled(),"Native Fillet did not enable Finish");
+  // Tool controls and the last completed GPU frame cross separate queues.
+  // Require actual native Fillet paint before permitting durable publication.
+  await until(()=>page.locator("canvas").evaluate(canvas=>{
+    const frame=canvas.__geosolvePresentedFrame;
+    return frame?.provenance.scene==="provisional"&&frame.items.some(item=>item.className.split(/\s/u).includes("wb-computed-fillet"));
+  }),"Native Fillet geometry must be painted before publication");
   const draft=await page.locator("canvas").evaluate(canvas=>canvas.__geosolvePresentedFrame);
   assert.equal(draft.provenance.scene,"provisional");
   assert.ok(draft.items.some(item=>/fillet/u.test(item.className)),"Native Fillet geometry must be painted before publication");

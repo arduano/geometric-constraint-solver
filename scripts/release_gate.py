@@ -1127,7 +1127,11 @@ def m98_stages(root, prepared):
             dependencies += ("prepare.browser",)
         stages.append(Stage(name, (command,), inputs=release_gate_m98.SOURCE_INPUTS,
                             dependencies=dependencies, artifacts=artifacts, cases=cases,
-                            build_lock=True, resource="memory", timeout=2100))
+                            # This suite measures mandatory paint/navigation latency.
+                            # Competing browser or build stages invalidate that measurement.
+                            build_lock=True,
+                            resource="exclusive" if name == "collaboration.browser" else "memory",
+                            timeout=2100))
     return stages
 
 

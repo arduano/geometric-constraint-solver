@@ -1099,3 +1099,48 @@ an independently accepted result. A refused attempt retains the exact previous d
 editor, with its diagnostic available for correction. Forking adds no second solve.
 The regression continues through a valid retry and source preparation, preventing a
 refused relation from leaking into the later terminal. The final operation suite passes 13 tests plus its explicitly ignored fixture writer.
+
+
+### M98-F039 — Synchronous GPU completion stalls canvas input
+
+During toolbar qualification on `ec9362b`, collaboration browser run
+`20260911T133551-a403dc7b` retained zero drag reversals but exceeded existing
+500 ms budgets for cold drag (550.2 ms), server Offset resize (1199.7 ms) and
+manifold navigation (512.8 ms). The ordinary browser suite ran concurrently.
+The collaboration suite contained measured latency obligations but declared only
+a shared memory resource; a focused runner regression reproduces that missing
+isolation. It now requires exclusive gate execution, without changing thresholds.
+
+A separate Fillet browser assertion observed toolbar readiness and immediately read
+the last completed GPU frame. Those are asynchronous queues. Waiting for a genuine
+provisional `wb-computed-fillet` item before publication preserves the original paint
+requirement and passes on the exact optimized artifact. This is a harness correction.
+
+Isolated repetition still failed three timing checks: cold drag 910.4 ms, server
+Offset wheel 588.1 ms and manifold navigation 1251.6 ms. The retained drag trace
+records a synchronous `gl.getError()` call taking 455.8 ms, with subsequent calls
+at 70–111 ms. All three drags retain zero reversals. Running the same drag test
+against the prior qualified `9b64c29` frontend on this host also fails: cold
+804.8 ms, warm 225.3/266.8 ms, and a 421.5 ms error-query stall. Current host load
+therefore exposes an existing browser presentation bottleneck; the evidence does
+not establish a new toolbar or solver regression. The baseline comparison uses
+the same current isolated server and the exact previous frontend artifact.
+
+Owner: `canvas-renderer-pixi.ts` and `canvas-renderer.ts`. The renderer flushes and
+synchronously queries GL errors after every draw on the browser's input thread.
+The query waits for earlier GPU work; simply removing it or moving it into a timer
+would either weaken frame validation or relocate the same stall. The authorized
+repair will observe WebGL2 fence completion asynchronously before retaining the
+existing error check. At most one draw may be in flight, newer immutable inputs
+coalesce, and only the exact validated frame can advance presentation evidence.
+Context loss, disposal, failed fences and timeouts must not publish late frames.
+No Rust solver, numerical tolerance, draw style, shader warmup or timing threshold
+change is part of this repair. Implementation and renewed qualification are pending.
+
+Preserved evidence under `target/m98/coordination/tool-parity/`:
+`browser-isolated-r3.log`, `drag-prior-artifact-comparison.log`,
+`frontend-gate-review.md`, `browser-scheduling-review.md`, `renderer-review.md`,
+`browser-scheduling-before.log` (expected failure),
+`browser-scheduling-after.log` (17 pass) and
+`browser-scheduling-pipeline.log` (24 pass). The two failed product nominations
+remain failed; successful independent receipts may be reused only by the runner.

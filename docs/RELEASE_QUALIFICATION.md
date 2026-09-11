@@ -21,7 +21,9 @@ bundling can also overlap Cargo after its WASM preparation succeeds, under the s
 `frontend_build_overlap` program boundary. It uses a memory slot and receives queue priority while
 all dependency, worker, memory and performance limits remain enforced. Package installation and
 generation finish during preflight, before this pipeline starts.
-Measured performance remains fully exclusive. Cargo compilation uses four jobs by default, with an explicit `CARGO_BUILD_JOBS`
+Measured performance remains fully exclusive. The collaboration browser suite also runs
+exclusively because it includes mandatory event-to-paint, peer-publication and navigation
+latency budgets; other browser and build stages must finish before those measurements. Cargo compilation uses four jobs by default, with an explicit `CARGO_BUILD_JOBS`
 override recorded in the manifest. The recorded host has 64 GiB RAM; integrated qualification records the actual overlap
 and resource costs. `--jobs 1` also reduces the memory-stage limit to one.
 

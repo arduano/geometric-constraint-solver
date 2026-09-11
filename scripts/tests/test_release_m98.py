@@ -175,7 +175,11 @@ class M98ReleaseTests(unittest.TestCase):
         self.write('target/capture/prepared.json', json.dumps(metadata))
         stages = gate.m98_stages(self.root, {'m98':'target/capture','browser':'target/browser'})
         self.assertEqual({stage.id for stage in stages}, set(m98.GROUPS))
+        self.assertEqual({stage.id for stage in stages if stage.resource == 'exclusive'},
+                         {'collaboration.browser'})
         for stage in stages:
+            if stage.id != 'collaboration.browser':
+                self.assertEqual(stage.resource, 'memory')
             self.assertTrue(stage.build_lock)
             self.assertEqual(list(stage.cases), metadata['tests'][stage.id])
             self.assertIn(str(self.root/'target/capture'),stage.artifacts)
