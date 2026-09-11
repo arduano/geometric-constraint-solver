@@ -8481,6 +8481,10 @@ merge or qualify that product.
   server authority and current user document/history.
 - [ ] Obtain supervising-user acceptance and close M98.
 
+- [ ] Implement and qualify the authorized [full shared toolbar amendment](docs/M98_TOOL_PARITY.md):
+  all native geometry, constraint/dimension and modify tools, contextual controls,
+  selected-geometry roles, client/server prediction and personal history.
+
 Status: **collaboration mechanically qualified and delivered; supervising-user acceptance
 and milestone closure remain open**. The F028–F030 dragging repair from clean source
 `9b64c29` passes **288/288 obligations** in `20260910T233626-b8af5961` (34 fresh,

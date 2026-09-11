@@ -3014,3 +3014,25 @@ identity providers and full offline semantic reconciliation remain outside this 
 The original single-editor mode and previews remain available. Both new Tailscale
 previews serve byte-verified qualified artifacts. Supervising-user acceptance and
 milestone closure remain open.
+
+### M98 shared tool continuation — toolbar amendment in qualification
+
+Construction now retains all 25 native recipes. A separate engine tool-operation
+continuation delegates relation/dimension collection, Fillet and Profile Offset to
+their existing presentation-independent owners. Neither the browser nor server
+adapter duplicates geometry equations. A sequenced camera event updates native
+picking tolerances after local navigation; the command retains its original viewport
+and all intervening input for deterministic independent replay.
+
+Accepted source bindings map personal selection into the prediction engine namespace,
+including implicit curve occurrence/interval owners. Source-authoritative operations
+carry exact options, operand dependencies and resolved declarations or role writes.
+The server authenticates the original checkpoint and target lifetimes, replays against
+its current accepted state, validates genuine compiler receipts and persists before
+publishing. Existing contribution history supplies personal Undo/Redo.
+
+Detached operation presentation also carries native pending/hover/provisional states
+and Offset chain cues. This payload grants paint only. Local navigation continues to
+use its separately authenticated accepted scene while prediction or durable model work
+is pending. [Scope and qualification](docs/M98_TOOL_PARITY.md) retain precise current
+workbench capability limits and supervising-user acceptance status.

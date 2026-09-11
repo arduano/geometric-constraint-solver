@@ -2,6 +2,13 @@
 
 Current roadmap: **M97 is accepted and closed. M98 collaboration is mechanically qualified and delivered; supervising-user acceptance remains open.**
 
+The user subsequently authorized [full native toolbar parity in shared editing](docs/M98_TOOL_PARITY.md).
+That amendment is implemented and passes focused native, actual-WASM, server and browser
+checks: all geometry variants, constraint/dimension tools, Fillet/Profile Offset, contextual
+options and selected-geometry roles. Integrated clean-source qualification and preview
+replacement are pending. The completed evidence and live previews below describe
+the preceding dragging repair; retain their documents, invitations and histories.
+
 The [shared dragging repair](docs/M98_QUALIFICATION.md#qualified-shared-dragging-repair)
 passes all **288 obligations** from clean source `9b64c29` in
 `20260910T233626-b8af5961`: 34 fresh and 254 authenticated reused results in

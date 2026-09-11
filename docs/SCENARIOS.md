@@ -7503,3 +7503,38 @@ rounded channel through `(-20,0), (0,0), (0,-20), (20,-20)`, bend radius `8`,
 two caps and widths `10`, `11` and `12`, alongside the same separate bore.
 The full manifold GUI/semantic-sidecar regression exports all 18 regions at
 each width.
+
+## M98 shared toolbar parity — implementation qualification
+
+- Run all 25 construction recipes through the native draft, genuine source compiler,
+  exact terminal admission, cold reconstruction and Undo/Redo. Retain explicit sweep,
+  tangent orientation, conic/NURBS options and source-owned point seeds. Step Back and
+  Reset preserve recipe options; changing the camera updates native pixel tolerance
+  through the ordered replay trace before the next input.
+- Author all 13 constraints, five dimensions, Fillet and Profile Offset from exact
+  native selections. Options apply before full preselection; partial canvas/Explorer
+  picks preserve operand order and full curve occurrence provenance. First Escape
+  clears a pending collector; another Escape exits. Empty Reset remains usable.
+- Refuse Horizontal on a fixed skew segment, retain the complete accepted/draft
+  editor, then pick a valid horizontal segment. The retry completes with only its
+  own new declaration. Invalid Fillet options retain the prior preview and consume
+  an ordered correction step. Exhausted cumulative traces retain draft and sequence.
+- Carry compatible hover, pending operands, provisional geometry and Offset chain
+  direction/endpoints into native paint. Reproject under current camera navigation;
+  provisional items never acquire picking or publication authority. Keep the active
+  authored Offset dimension visible, including with other dimensions Hidden.
+- Resolve personal selection through the trusted accepted scene into the server
+  engine namespace. Reject foreign namespaces, altered implicit Fillet intervals,
+  replaced target lifetimes and forged compiler receipts. Directly authored role
+  changes produce ordinary source mutations.
+- Publish dimensions, Fillet and Offset after an independent peer edit, then restart
+  and repeat the original operation ID. Personal Undo/Redo preserves the peer's source
+  changes and reconstructs the exact managed model. Generated Polyline point Undo
+  retains its stable semantic member address after unrelated edits.
+- Exercise the actual browser toolbar in client/server prediction modes, including
+  advanced construction, options, preselection, tree input, selection roles and held
+  publication. Existing dragging and local-navigation responsiveness remain required.
+
+These checks qualify the authorized current-workbench parity amendment. Integrated
+qualification and delivery are recorded separately in `M98_TOOL_PARITY.md`; scenario
+inventory alone does not imply a passing or human-accepted milestone.

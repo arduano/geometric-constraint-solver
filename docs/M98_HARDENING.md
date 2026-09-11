@@ -972,3 +972,130 @@ Two ignored delivery-helper mistakes were corrected without changing the qualifi
 product; their original failed observations remain recorded in the qualification report.
 Static 18110 and the original 18108 manifold remain preserved. M98 acceptance/closure
 remains open; F028–F030 implementation, mechanical qualification and delivery are complete.
+
+### M98-F031 — Generated point history confused semantic and allocated addresses
+
+While implementing the authorized toolbar amendment, a focused domain regression reproduces
+the previously observed generated-polyline Undo failure on baseline `0af5b82`. Alice drags
+the first keyed polyline point from `[0,10]` to `[4,16]`; Bob independently changes a circle
+radius; Alice's personal Undo rejects with `Cannot read properties of undefined (reading
+'invocation')`. Classification: **DEFECT**, owned by the collaboration domain's native
+point-history adapter. No solver failure or geometry tolerance change is involved.
+
+Both a stable generated-member lens and a legacy allocation-specific native address have
+an `owner.address` field. The adapter treated either as the legacy shape. It now checks the
+native owner discriminant before retaining that legacy path; generated semantic lenses
+resolve uniquely against the current native writable point inventory and source codec.
+
+`node --test --test-name-pattern='generated polyline point history'
+scripts/collaboration-domain-properties.test.mjs` first fails with the exact error above.
+After repair, `node --test scripts/collaboration-domain-properties.test.mjs` passes all
+seven tests (45.35 s). The new regression verifies exact original point drafts after Undo,
+exact moved drafts after Redo, unchanged independently edited source and cold accepted-model
+rebuild. Existing fresh-allocation, codec mismatch, ownership and metadata checks also pass.
+Integrated qualification and refreshed previews remain pending with the toolbar amendment.
+
+### M98-F032/F033 — Complete construction source recipes
+
+The full 25-variant native construction/compiler inventory on `0af5b82` plus the
+in-progress toolbar integration reproduced two source-authoring defects. The
+ThreePointCircle clicks `[10,10]`, `[14,10]`, `[12,13]` completed natively, but source
+projection synthesized equilateral control points from its derived center/radius.
+Compiling that new triplet changed the exact native seeds and terminal validation
+correctly refused publication. The retained construction continuation now keeps the
+three native-accepted defining clicks through correction and Step Back; independent
+server replay derives the same explicit source recipe.
+
+TangentArc source insertion omitted its required center and top-level contact
+orientation. Genuine compiler admission rejected the missing center; an opposed
+contact also needed its explicit orientation retained. The source insertion owner now
+projects both from the authenticated native curve/contact state. Neither correction
+changes solver equations, primitive definitions, tolerances or terminal equality.
+
+`cargo test --locked -p geosolve-sketch-engine --test construction_parity` passes eight
+tests, including all 25 genuine compiler/native/cold/history recipes (one explicitly
+ignored fixture writer). The existing construction suite passes five tests;
+`cargo test --locked -p geosolve-sketch-code --test compact_geometry_recipe_roundtrip
+ tangent_arc_keeps_its_named_source_contact -- --exact` passes. Actual WASM
+`node --test packages/geosolve-engine/test/construction.test.mjs` passes all 32 tests,
+including all 25 recipes and opposed tangent contact. The first rational-conic WASM
+assertion expected three native DesignPoints; its representation has two endpoints and
+scalar middle controls. Correcting that count was a **HARNESS_ERROR**, with all exact
+compiler/native and geometry checks retained.
+
+### M98-F034/F035 — Source ownership and Profile Offset label projection
+
+The all-tool native compiler lifecycle fixture uses an open two-span Polyline through
+`[200,0]`, `[220,0]`, `[220,20]`, with `closed` omitted. Native Fillet/Offset authoring
+was valid, but `direct_single_curve_polyline_source` dropped this source owner because
+it required an explicit boolean. The insertion owner now recognizes the documented
+omitted-false default while continuing to reject invalid values. The fixture retains
+that omission and exercises a 2 mm Fillet and Profile Offset.
+
+Profile Offset additionally inserts a logical open-chain aggregate that has no native
+object label, and its generated distance scalar uses the exact suffix ` distance`.
+The engine terminal label projection incorrectly required native ownership for the
+aggregate and accepted only dot-prefixed label suffixes. It now admits an aggregate
+only when both sides have no native owner and exact kind, fields and inputs, with no
+reservations, operation outputs or children. The space-prefixed scalar suffix is
+restricted to matching ProfileOffset operation owners. Complete native ownership,
+geometry, branches and residual validation remain unchanged.
+
+`cargo test --locked -p geosolve-sketch-engine --test tool_operations` passes the
+complete genuine compiler/native/cold/Undo/Redo matrix for all 13 constraints, five
+dimensions, Fillet, Offset and a directly authored role change. The subsequent focused
+run passes 11 tests plus the explicitly ignored fixture writer, including ordered
+viewport changes, reset behavior and the cumulative trace regression below. These
+are development checks; integrated toolbar qualification remains pending.
+
+### M98-F036 — Operation previews omitted native operand presentation
+
+A native Parallel draft with one picked Polyline span retained a pending operand but
+its `presentation_json` returned only scene/bindings. Actual WASM independently showed
+that radius hover and point-distance pending picks left presentation byte-identical.
+Fillet/Offset geometry was present, but hover/pending styling and Offset chain cues
+were absent. Classification: **DEFECT**, owned by the engine presentation boundary.
+
+The focused `tool_presentation` regression first fails on the missing pending array.
+The repair carries native pending curves, provisional items, compatible hover,
+Offset availability and ordered chain/endpoints in a paint-only payload. The demo
+renderer consumes those states in the prediction scene's namespace and reprojects
+using the user's current camera. Every resulting item remains noninteractive;
+accepted navigation and server publication authority stay independent. Native and adapter regressions pass, including current-camera Offset chain cues and
+active provisional dimension visibility in Hidden mode. The actual-WASM tool matrix
+and focused browser Offset/Fillet workflows also pass.
+
+### M98-F037 — Cumulative operation trace exceeded its byte reservation
+
+An actual-WASM reproduction submits 140 ordered selection batches, each with 256 datum
+operands, retaining 1,299,092 serialized bytes despite a one-MiB trace reservation.
+The per-request and 4,096-sample limits did not constrain cumulative sample size.
+A public native engine regression independently reproduces the same boundary failure.
+
+Operation continuation now accounts for cumulative serialized samples before dispatch
+or sequence mutation, matching construction's existing bound. Exhaustion retains the
+previous native draft and accepted origin; callers can still cancel normally. The
+native `repeated_tool_selection_batches_cannot_exceed_the_reserved_trace_bytes`
+regression passes in the 11-test focused operation suite. WASM-adapter and integrated
+qualification follow with the toolbar amendment.
+
+### M98-F038 — Empty resets and refused relations broke native retry
+
+Actual-WASM review reproduces two operation-wrapper lifecycle failures: Reset on an
+empty Radius or PointDistance collector silently exits its native mode, and a refused
+Horizontal relation leaves its full operand list pending, blocking the next valid
+pick. The minimal genuine source fixture contains a fixed skew segment
+`[0,0] → [20,10]` and a separate horizontal segment `[0,30] → [20,30]`.
+The owning native regressions independently fail both cases in the 13-test operation
+suite before correction (11 pass, two fail; fixture writer explicitly ignored).
+
+The reusable authoring owner's cancel method intentionally treats a second Escape as
+mode exit. Tool reset now leaves an empty collector active, while the UI uses native
+pending-state capabilities to implement first-Escape clearing and second-Escape exit.
+Every Apply outcome clears terminal operands as required by the native owner.
+Furthermore, the projectional editor deliberately retains valid-but-unsolved intent;
+the operation wrapper now attempts a relation on a transient fork and installs only
+an independently accepted result. A refused attempt retains the exact previous draft
+editor, with its diagnostic available for correction. Forking adds no second solve.
+The regression continues through a valid retry and source preparation, preventing a
+refused relation from leaking into the later terminal. The final operation suite passes 13 tests plus its explicitly ignored fixture writer.

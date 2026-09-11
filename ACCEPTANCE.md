@@ -5608,6 +5608,11 @@ manifold Fit/history costs and Linux/worker/topology limitations remain explicit
 
 ## M98 multi-editor collaboration amendment — mechanically qualified and delivered
 
+The subsequent [full shared toolbar amendment](docs/M98_TOOL_PARITY.md) is authorized and
+in progress. Its native, replay/history, browser and exact-delivery checks must pass before
+claiming that broader surface qualified. The following completed evidence describes the
+preceding delivery.
+
 Clean source `513463f822083385edaccded05d8ed901e479dab` passes **288/288 obligations**
 in `20260910T204328-4a05c31a`: 32 fresh and 256 authenticated reused results in
 44m4.890s. [Final qualification](docs/M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
