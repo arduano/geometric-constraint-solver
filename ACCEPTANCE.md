@@ -5608,10 +5608,36 @@ manifold Fit/history costs and Linux/worker/topology limitations remain explicit
 
 ## M98 multi-editor collaboration amendment — mechanically qualified and delivered
 
-The subsequent [full shared toolbar amendment](docs/M98_TOOL_PARITY.md) is authorized and
-in progress. Its native, replay/history, browser and exact-delivery checks must pass before
-claiming that broader surface qualified. The following completed evidence describes the
-preceding delivery.
+The [full shared toolbar amendment](docs/M98_TOOL_PARITY.md) is implemented,
+mechanically qualified and delivered from clean `b005b9e` in `20260911T164104-576e7789`:
+**293/293 obligations** pass (20 fresh, 273 authenticated reused;
+37m48.118s). [Final evidence](docs/M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+records the exact commands, authenticated receipts and preserved preview state.
+
+All 25 geometry variants, 13 constraint tools, five dimension tools, Fillet/Profile
+Offset, contextual options/branches, native preselection, Explorer inputs and supported
+selected-geometry role changes are available to collaborative editors. Both prediction
+locations retain local navigation. Historical/latest native replay, replaced-lifetime
+rejection, genuine compilation/validation, peer-preserving personal Undo/Redo and
+durable restart/deduplication pass required verification. M98-F031 repairs generated-point
+personal history; F032–F038 preserve native source projection, operation presentation,
+bounded traces and collector recovery. F039 waits for GPU completion asynchronously
+while retaining exact frame/surface/epoch validation, context recovery and all existing
+latency/pixel assertions. F040 prepares blur shaders during initial rendering and after
+restoration, and submits coalesced input immediately after asynchronous validation.
+Batch and both blur-shader loss cases retain real line/text pixel evidence. The release
+engine's private staging build applies `wasm-opt -Oz` to satisfy the unchanged 20 MiB
+module ceiling.
+
+Both existing shared previews serve the exact qualified artifacts. Fresh preservation
+comparisons after browser verification retain current files, source/model, drafts,
+invitations, journals and personal histories. Current React toolbar parity retains
+ordinary native applicability and writable-source requirements. The archived native-
+profile Fillet output action remains outside that catalog. Supervising-user acceptance
+and M98 closure remain open.
+
+The following initial collaboration nomination is historical; its four-tool scope was
+superseded by the toolbar amendment above.
 
 Clean source `513463f822083385edaccded05d8ed901e479dab` passes **288/288 obligations**
 in `20260910T204328-4a05c31a`: 32 fresh and 256 authenticated reused results in
@@ -5623,9 +5649,10 @@ Qualification covers [the approved matrix](docs/M98_COLLABORATION.md#acceptance)
 server order and deduplication, independently validated semantic commits, concurrent
 invalid text and canvas editing, checked per-user Undo, native/WASM parity and browser
 fault recovery. Four real editors during a ten-second held solve and the eight-editor/
-24-viewer load case pass the integrated gate. GUI construction supports Segment, Polyline,
+24-viewer load case pass that integrated gate. That nomination's GUI construction supported
+Segment, Polyline,
 Center-radius Circle and Two-point aligned Rectangle, plus native point dragging;
-broader GUI authoring parity is not claimed.
+broader GUI authoring parity was not claimed at that checkpoint.
 
 Exact production and all four package archives are frozen and installed offline. New
 static port 18110 and collaborative port 18111 each pass 24 exact HTTP/MIME routes
@@ -5635,5 +5662,10 @@ previews remain preserved. Human acceptance and M98 closure remain open.
 
 - [x] Collaboration implementation and integrated authority/parity/browser/fault/load qualification.
 - [x] Exact qualified collaborative replacement preview verification.
+- [x] Full current toolbar parity, native replay/history and integrated browser qualification.
+- [x] Exact toolbar-amendment preview delivery and current document/history preservation.
+- [x] Qualify optimized release WASM, asynchronous GPU completion and startup blur-shader
+  preparation with unchanged size, latency, pixel, DPR/hidden-layout, context-loss and
+  pointer-capture requirements.
 - [ ] Supervising-user acceptance of the amended M98 scope.
 - [ ] M98 milestone closure after acceptance.

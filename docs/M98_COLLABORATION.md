@@ -2,12 +2,15 @@
 
 # M98 collaboration amendment
 
-Implementation authorized after the local canvas delivery. This amendment extends M98
+Implementation was authorized after the local canvas delivery. This amendment extends M98
 with a reusable Rust collaboration core and the existing workbench as its reference host.
-Candidate `513463f` passes all 288 obligations in `20260910T204328-4a05c31a` and is
-delivered on Tailscale ports 18110/18111. [Final qualification and preview evidence](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
-records the exact artifacts and measured limits. The single-editor preview and original
-manifold are preserved. M98 supervising-user acceptance and closure remain open.
+The full current [toolbar amendment](M98_TOOL_PARITY.md) is qualified from clean
+`b005b9e` in `20260911T164104-576e7789` and delivered to the existing shared previews on
+ports 18112/18111. [Final qualification and preview evidence](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+record the exact artifacts and measured limits. The initial `513463f` nomination and
+subsequent dragging repair below are historical evidence. Static 18110, the single-editor
+preview and original manifold remain preserved. M98 supervising-user acceptance and
+closure remain open.
 
 ## Product contract
 
@@ -91,10 +94,12 @@ are a stretch; full offline semantic reconciliation is deferred if substantially
 - [x] Fault, parity, browser and load qualification; verified replacement preview.
 - [ ] Supervising-user acceptance and milestone closure.
 
-The complete clean gate passes 288/288 obligations (32 fresh, 256 authenticated reused;
-44m4.890s), including all eight collaboration browser/fault/load scenarios. Both new
-previews pass exact served-byte and actual-WASM verification. [The final nomination](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
-records commands, coverage, timing, preserved user files and the four-tool GUI limit.
+The initial collaboration gate passed 288/288 obligations (32 fresh, 256 authenticated
+reused; 44m4.890s), including eight collaboration browser/fault/load scenarios. Its two
+previews passed exact served-byte and actual-WASM verification. [That historical nomination](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+records the original four-tool GUI limit. [The current toolbar nomination](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+supersedes it with 293 passing obligations, 16 collaboration workflows and all 45 current
+workbench tools, delivered to the preserved shared previews.
 
 ## Acceptance
 
@@ -415,13 +420,13 @@ reference paths for generated members; inverse application checks the exact prio
 activation. Explicit same-value writes retain ownership. Suppressed native geometry
 is excluded from the advertised point-drag targets by its native node state.
 
-The current collaborative construction engine supports Segment, Polyline,
-Center-radius Circle and Two-point aligned Rectangle. Their toolbar identities now
-match the native catalog. Other catalog tools remain visible with an unavailable
-reason. This availability projection does not qualify the remaining construction,
-constraint, dimension or modify authoring routes as complete; that coverage remains
-an explicit milestone limitation. Source/Inspector value edits remain available. Changing existing selected curve
-roles is likewise marked unavailable; selecting the role of new geometry remains local.
+At this initial collaboration checkpoint, native construction exposed Segment,
+Polyline, Center-radius Circle and Two-point aligned Rectangle; other catalog tools
+and selected-geometry role changes disclosed unavailable routes. That limitation is
+superseded by the [qualified full current toolbar amendment](M98_TOOL_PARITY.md),
+which adds all native construction recipes, relation/dimension/modify continuations,
+contextual controls and source-authoritative selected roles. Ordinary writable-source
+requirements remain.
 
 ## Browser recovery and coherent integration evidence
 
@@ -473,6 +478,7 @@ env -u GEOSOLVE_BROWSER_DIAGNOSTIC_NO_BACKDROP -u GEOSOLVE_BROWSER_DIAGNOSTIC_NO
 
 Final clean integrated qualification and both replacement preview verifications pass
 from `513463f` in `20260910T204328-4a05c31a`; [the nomination](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
-records exact evidence. The preceding preview is preserved. GUI construction remains
-the four native tools documented above; broader GUI tool parity is not claimed.
+records exact evidence. That initial nomination covered the four native construction
+tools documented above; the subsequent [qualified toolbar amendment](M98_TOOL_PARITY.md)
+supersedes its GUI scope. The preceding preview is preserved.
 Supervising-user acceptance and milestone closure remain open.

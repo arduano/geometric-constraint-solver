@@ -8479,39 +8479,54 @@ merge or qualify that product.
 - [x] Repair and qualify shared dragging flicker and tiny-edit publication latency
   (M98-F028/F029), including native selection/pin reconciliation (M98-F030), retaining
   server authority and current user document/history.
+- [x] Implement and qualify the authorized [full shared toolbar amendment](docs/M98_TOOL_PARITY.md):
+  all 25 geometry variants, 13 constraint tools, five dimension tools, Fillet/Profile
+  Offset, contextual options/branches, preselection and Explorer inputs, geometry roles,
+  client/server prediction and personal history. Preserve live source, drafts and journals
+  during exact qualified preview replacement.
+- [x] Qualify optimized release WASM, asynchronous GPU completion and startup blur-shader
+  preparation with unchanged size, latency, pixel, DPR/hidden-layout, context-loss and
+  pointer-capture requirements.
 - [ ] Obtain supervising-user acceptance and close M98.
 
-- [ ] Implement and qualify the authorized [full shared toolbar amendment](docs/M98_TOOL_PARITY.md):
-  all native geometry, constraint/dimension and modify tools, contextual controls,
-  selected-geometry roles, client/server prediction and personal history.
+Status: **full current workbench toolbar parity is mechanically qualified and delivered;
+supervising-user acceptance and milestone closure remain open**. Clean source
+`b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00` passes **293/293 obligations** in `20260911T164104-576e7789`
+(20 fresh, 273 authenticated reused; 37m48.118s).
+[Final qualification](docs/M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+records authenticated results, unchanged 271-case golden, exact frozen installation and
+preservation comparisons for the existing 18112 playground and 18111 shared manifold.
+All failed nomination and harness attempts remain separate evidence.
 
-Status: **collaboration mechanically qualified and delivered; supervising-user acceptance
-and milestone closure remain open**. The F028–F030 dragging repair from clean source
-`9b64c29` passes **288/288 obligations** in `20260910T233626-b8af5961` (34 fresh,
-254 authenticated reused; 36m7.710s).
-[Final qualification](docs/M98_QUALIFICATION.md#qualified-shared-dragging-repair)
-records zero backward jumps, 63–76 ms warm preview p95 and 351–383 ms warm peer
-publication. First use remains about 427 ms. The native selection/pin repair preserves
-source ownership. All failed nomination attempts remain recorded.
+All 45 current geometry/constraint/dimension/modify tools, their contextual controls,
+preselection, Explorer inputs and selected-geometry roles use native continuations and
+source-authoritative commits. Server replay authenticates original operands and target
+lifetimes against the latest accepted model; genuine compiler receipts and independent
+residual validation precede publication. Personal Undo/Redo retains concurrent peer
+contributions. M98-F031 repairs generated-point personal history; F032–F038 preserve native
+source projection, operation presentation, bounded traces and collector recovery. F039 waits
+for GPU completion asynchronously while retaining exact frame/surface/epoch validation,
+context recovery and all existing latency/pixel assertions. F040 prepares exact blur shader
+programs during the first ordinary render and after context restoration; already-coalesced
+input proceeds immediately after asynchronous validation without another RAF wait. Startup
+readiness includes that preparation and real validated paint. The release engine's private
+staging build applies `wasm-opt -Oz` to satisfy the unchanged 20 MiB module ceiling.
 
-Independent compiler/solver workers, shared raw text and personal history, immutable
-Apply, latest-model gesture replay, structural/extraction/suppression Undo, external
-mirrors/CLI and configurable native prediction are qualified. The integrated browser
-and load coverage includes four editors during a ten-second held solve, 32 clients,
-lost-ACK outbox recovery, invalid source and server restart. Browser Rust owns navigation,
-picking, selection and personal visibility; the server validates and persists edits.
-GUI construction supports Segment, Polyline, Center-radius Circle and Two-point aligned
-Rectangle, plus native point dragging; broader GUI tools disclose unavailable routes.
+Independent compiler/solver workers, shared unfinished text and personal history,
+immutable Apply, external mirrors/CLI and configurable native prediction remain
+qualified. Browser Rust owns navigation, picking, selection and personal visibility.
+Four editors navigate during a ten-second held solve at 363.4 ms p95; manifold/Gridfinity navigation measures 373.1/250.7 ms p95, with zero navigation RPCs. Eight editors and 24 viewers acknowledge text at 248.9 ms p95. Lost-acknowledgement recovery, server restart, invalid-source editing and bounded stalled-TCP recovery pass.
 
-Exact production and all four archives are frozen and installed offline. Shared
-playground port 18112 and manifold port 18111 pass 24 exact HTTP routes each and
-two-editor readiness with all three nominated WASM modules. Current revisions 6 and 1,
-all retained files, drafts, journals, invitations and personal histories are preserved.
-Private invitations and delivery receipts are linked in the final qualification report.
-Static port 18110 remains at the preceding qualified `513463f` product. The original
-manifold's seven authored files, 40 mm reservoir, 12 mm channels and preceding services
+Exact production and all four archives are frozen and installed offline. Both existing
+shared previews pass 24 exact HTTP/MIME routes each and two-editor
+readiness with all three nominated WASM modules. Fresh comparisons preserve all current
+source, drafts, models, journals, invitations and personal histories. Current private
+links and exact delivery receipts are in the qualification report. Static port 18110
+remains on `513463f`; the original 18108 manifold and its 40 mm reservoir/12 mm channels
 remain preserved. The canvas dims after 500 ms of slow work while local navigation
-continues. No supervising-user acceptance or milestone closure is implied.
+continues. Generated roles still require a writable source path; the archived native-
+profile Fillet output action is outside current React toolbar parity. No supervising-user
+acceptance or milestone closure is implied.
 
 - [x] Implement the authorized [local canvas boundary](docs/M98_LOCAL_CANVAS.md): local
   accepted-scene navigation/picking/selection, server sketch edits and exact reconciliation.

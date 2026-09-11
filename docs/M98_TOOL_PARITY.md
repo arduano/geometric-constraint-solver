@@ -2,11 +2,14 @@
 
 # M98 shared toolbar parity
 
-The supervising user authorized implementing the remaining native toolbar routes after
-reviewing why shared editing exposed only four construction tools. This amendment is
-in progress; the qualified dragging product and live documents remain the baseline.
+The supervising user authorized completing the current React workbench's shared
+authoring surface. The amendment is implemented, mechanically qualified and delivered
+from clean `b005b9e` in `20260911T164104-576e7789`;
+[qualification and exact delivery](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+record 293 passing obligations and preserved existing documents, invitations and
+personal histories. M98 supervising-user acceptance and milestone closure remain open.
 
-| Existing native surface | Shared route required |
+| Existing native surface | Implemented shared route |
 | --- | --- |
 | 25 geometry variants | Native construction, staged guides, options, explicit branches, inference cycling, Finish/Step Back |
 | 13 constraint tools | Native operand collection, preselection, applicability, options, source insertion |
@@ -38,7 +41,9 @@ contract. Navigation and provisional reprojection remain local while tools or co
 - [x] Personal Undo/Redo covers new geometry and relations, modifications and generated points.
 - [x] All existing native toolbar routes and contextual controls are reachable for editors.
 - [x] Client/server prediction preserves held-navigation responsiveness and terminal ownership.
-- [ ] Integrated clean-source qualification and exact preview replacement preserve live state.
+- [x] Integrated clean-source qualification and exact preview replacement preserve live state.
+- [x] Optimized WASM, asynchronous GPU completion and startup blur-shader preparation
+  satisfy unchanged release requirements.
 
 No new solver primitive, residual equation, tolerance, or golden expectation is authorized by
 this integration. M98 acceptance and closure remain open.
@@ -51,7 +56,8 @@ role edits require an actual writable source role path, as other generated prope
 edits do. Read-only generated output does not acquire authoring authority by selection.
 
 
-Focused development qualification on the in-progress worktree passes:
+The following focused development checks passed before clean nomination; the integrated
+record above owns release qualification:
 
 - `cargo test --locked -p geosolve-sketch-engine --test construction_parity --test
   tool_operations --test tool_presentation --test tool_selection`: 26 tests pass;
@@ -65,7 +71,8 @@ Focused development qualification on the in-progress worktree passes:
   -p geosolve-demo-web --all-targets -- -D warnings` and `cargo fmt --all`: pass.
 - `node packages/geosolve-engine/scripts/build-wasm.mjs`, engine TypeScript build,
   and `node crates/geosolve-demo-web/frontend/scripts/build-wasm.mjs --release`:
-  pass from the final native implementation (65 s engine, 31.73 s demo).
+  pass as pre-optimization focused builds (65 s engine, 31.73 s demo); these are
+  development observations, not installed final artifact identities.
 - `node --test scripts/collaboration-preview.test.mjs
   packages/geosolve-engine/test/construction.test.mjs`: 41 pass, no skips; includes
   all 25 actual-WASM construction recipes and sequenced camera/reset semantics.
@@ -77,8 +84,8 @@ Focused development qualification on the in-progress worktree passes:
 These commands run through the pinned repository Nix shell. Native tests use
 `CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG=line-tables-only`.
 The subsequent actual-WASM operation and browser results below complete focused
-development checks. Integrated clean-source nomination is pending; existing qualified
-live services are unchanged.
+development checks. The clean integrated nomination and exact preview replacement
+are recorded above; those results do not reuse ad hoc focused logs as release evidence.
 
 `node --test packages/geosolve-engine/test/tool-operations.test.mjs` also passes
 25/25 actual-WASM tests: all 21 actions independently compile, validate, publish,
@@ -87,7 +94,7 @@ through genuine compiler publication; cumulative trace exhaustion preserves draf
 and permits a smaller correction at the same sequence. No product failure remains
 in that matrix.
 
-All five focused collaboration browser workflows pass against the final isolated
+All five focused collaboration browser workflows passed against the pre-F039 isolated
 production build: full toolbar availability/advanced conic/reference dimension with
 peer history, native Parallel preselection across zoom, Fillet options and selected
 roles, and client/server Offset with Explorer input and held publication. Two initial
@@ -96,7 +103,8 @@ the nested select); role-based combobox locators corrected the harness. Native t
 confirmed the Fillet candidate was complete throughout; product behavior did not change.
 Held Offset navigation records client wheel/pan/resize at 98/66/346 ms and server
 prediction at 87/71/266 ms, with zero navigation RPCs. These are focused observations,
-not a 60 Hz or dense-model performance claim. Full integrated nomination follows.
+not a 60 Hz or dense-model performance claim. The integrated qualification report
+records current whole-suite results and measurements separately.
 
 The first integrated product attempt `20260911T130620-4b8e58fc` passed native,
 headless and optimized-WASM lifecycle checks but stopped during browser preparation:
@@ -107,7 +115,8 @@ directory reduces the focused engine artifact to 14,068,507 bytes (13.42 MiB),
 without changing the ceiling or solver source. All 66 actual-WASM construction, operation and server-preview tests pass on the
 optimized binary (`node --test packages/geosolve-engine/test/construction.test.mjs
 packages/geosolve-engine/test/tool-operations.test.mjs scripts/collaboration-preview.test.mjs`).
-A new clean integrated nomination must pass before delivery; the failed run remains failed.
+The final integrated nomination below supersedes that candidate; this failed run remains
+failed evidence.
 
 The second nomination `20260911T133551-a403dc7b` passes all 49 ordinary
 browser workflows, engine/folder/runtime/package/frontend checks and optimized
@@ -117,12 +126,24 @@ require exclusive gate execution. Isolated and previous-artifact comparisons
 expose the existing synchronous GPU stall recorded as [M98-F039](M98_HARDENING.md#m98-f039--synchronous-gpu-completion-stalls-canvas-input).
 The asynchronous fence repair retains exact validated frame evidence and error
 checks; 39 focused renderer tests, dragging and all four actual-browser
-pixel/resize/context-recovery workflows pass. Renewed integrated qualification
-and preserved live delivery remain pending.
+pixel/resize/context-recovery workflows pass. Final integrated qualification
+and preserved delivery are recorded in [the nomination](M98_QUALIFICATION.md#qualified-shared-toolbar-parity).
 
 The subsequent completed run `20260911T153007-f3ebd337` passes all 49 ordinary
 browser workflows and 15/16 collaboration workflows, but fails the unchanged
 manifold navigation budget at 506.9 ms. [M98-F040](M98_HARDENING.md#m98-f040--first-hover-shader-compilation-delays-queued-navigation)
 records first-hover blur shader compilation and queued-frame scheduling, its
-focused repair and pending browser/integrated evidence. This failed run is not
-qualification or authorization to replace the previews.
+focused repair and subsequent browser/integrated evidence. This failed run remains
+failed evidence; the final nomination below qualifies the delivered replacement.
+
+## Final toolbar qualification and delivery
+
+Clean final product `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00`, tree `5381978256660eaaf9f6bb648a36787309a9eb51`, passes
+**293/293 obligations** in `20260911T164104-576e7789`
+(20 fresh, 273 authenticated reused; 37m48.118s).
+[Final nomination and delivery](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+authenticate optimized artifacts, [F031–F040 regressions](M98_HARDENING.md#m98-f031--generated-point-history-confused-semantic-and-allocated-addresses),
+exact browser paint/navigation, all current tool routes and preserved live documents/history.
+Earlier failed and interrupted nominations remain separate evidence. Installed previews use the exact
+frozen nomination without a rebuild. Supervising-user acceptance and M98 closure remain open.
+Authenticated qualification receipt: `target/release-gate/runs/20260911T164104-576e7789/qualification.json`.

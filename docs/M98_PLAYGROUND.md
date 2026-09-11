@@ -10,9 +10,47 @@ Private editor links and exact process/folder identity are recorded in
 separate users and personal histories. Restart with the same source folder,
 invitations and journal, omitting `--initialize true`.
 
+## Qualified full toolbar amendment
+
+The existing shared playground now serves `b005b9e`, qualified in
+`20260911T164104-576e7789`. [Qualification and exact delivery](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+record all current toolbar families, options/preselection, local prediction/navigation
+and peer-preserving personal history. Existing invitation links are unchanged. Fresh
+capture, restart, exact-byte/browser verification and final preservation comparisons
+retain accepted revision 12, all 59 current
+retained files and personal histories for tab-a, tab-b, tab-c. Both shared previews pass
+24 exact HTTP/MIME routes and two-editor readiness with all three nominated
+WASM modules. The shared manifold retains revision 1,
+25 files and histories for arduano, review-editor, review-viewer. Final receipts:
+
+- `target/m98/coordination/tool-parity/playground-delivery-20260911T164104-576e7789.json`
+- `target/m98/coordination/tool-parity/playground-final-preservation-20260911T164104-576e7789.json`
+- `target/m98/coordination/tool-parity/manifold-delivery-20260911T164104-576e7789.json`
+- `target/m98/coordination/tool-parity/manifold-final-preservation-20260911T164104-576e7789.json`
+
+| Drag trial | Event-to-preview p95 | Release-to-peer | Backward jumps |
+| --- | ---: | ---: | ---: |
+| First use | 417.2 ms | 828.4 ms | 0 |
+| Warm 1 | 142.5 ms | 476.3 ms | 0 |
+| Warm 2 | 116.7 ms | 419.5 ms | 0 |
+
+Held Offset client prediction: wheel/pan/resize 142.9 / 188.0 / 294.8 ms; zero navigation RPCs.
+
+Held Offset server prediction: wheel/pan/resize 106.9 / 191.7 / 280.1 ms; zero navigation RPCs.
+
+These are bounded integrated observations, not 60 Hz or arbitrary-document-size claims.
+F031 repairs new generated-polyline Undo/Redo through the semantic source lens without
+replacing peer changes. F039 validates GPU completion asynchronously while retaining
+exact frame evidence. F040 prepares blur shaders during startup and restoration and removes
+the extra RAF wait for coalesced input after asynchronous validation. The historical failure
+and earlier delivery below stay recorded;
+the original rejected operation is not rewritten. Reload the existing tabs.
+
 ## Qualified drag repair — delivered on 2026-09-11
 
-Both existing shared previews now serve `9b64c29`, qualified by all 288 obligations in
+This historical delivery is superseded by the current toolbar amendment above.
+
+At that checkpoint, both existing shared previews served `9b64c29`, qualified by all 288 obligations in
 `20260910T233626-b8af5961`. [Qualification and delivery](M98_QUALIFICATION.md#qualified-shared-dragging-repair)
 record zero backward jumps across three drags, warm preview p95 of 63–76 ms and
 351–383 ms release-to-peer. First use remains about 427 ms locally. Retained
@@ -26,13 +64,14 @@ contexts load all three exact nominated WASM modules without page errors; all 24
 routes match the frozen artifact. Verification is read-only and a final state comparison
 also passes after browser verification. Reload the existing tabs; their links are unchanged.
 The manifold on port 18111 receives the same repair with its current revision 1 and histories
-preserved. The original generated-polyline Undo failure below remains open.
+preserved. The original generated-polyline Undo failure below remained open at that
+checkpoint; M98-F031 subsequently repairs new history operations.
 
 ## Initial playground and historical measurements
 
-The source is in
+The initial source is in
 `target/m98/installed-collaboration-preview-20260910T204328-4a05c31a/playground-simple/sketch.ts`.
-Two circles have radii constrained to 8 and 12 mm and freely movable centres,
+That initial model had two circles with radii constrained to 8 and 12 mm and freely movable centres,
 for four geometric degrees of freedom. This count follows the four free centre
 coordinates; it is not a new exported rank/DOF diagnostic. Both are ordinary managed
 SDK declarations, with source-owned overview dimensions. Drag the centre handles,
@@ -68,10 +107,12 @@ the two prior drags succeeded. The original folder and evidence remain at
 `playground/`, `target/m98/playground-verification.json` and
 `target/m98/playground-arm-preview-location.json`. Its test server was stopped before
 launching the simpler document on the same port. The precise generated-owner inverse
-repair remains unimplemented; no failed check is counted as a pass. A screenshot after
-rapid Undo also captured a stale browsing cancellation notice, while fresh editor
-sessions remain the readiness check. M98-F028 addresses that stale-cancellation
-presentation symptom; the generated-owner Undo failure remains separate.
+repair remained unimplemented at that checkpoint; no failed check is counted as a pass.
+A screenshot after rapid Undo also captured a stale browsing cancellation notice;
+M98-F028 subsequently addressed that presentation symptom. The rejected operation stays
+rejected in its original journal. M98-F031 now regression-tests and repairs new generated-
+owner Undo/Redo through the correct semantic lens, including peer changes; it does not
+rewrite old failed outcomes.
 
 The initial playground changed only authored demo data. The later drag repair above
 changes product code and has its own complete integrated qualification. Supervising-user

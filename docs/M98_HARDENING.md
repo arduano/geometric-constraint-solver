@@ -960,8 +960,9 @@ record authentication and retained failed attempts.
 Final drag trials record zero reversals, warm local p95 63.0/75.8 ms and warm
 release-to-peer 351.1/383.3 ms. First use is 426.8 ms locally; held authoring/terminal
 navigation is 59.7–166.0 ms with zero navigation RPCs in both prediction modes.
-First-use GPU latency remains an explicit limitation. The generated-polyline Undo
-finding remains separate and open.
+First-use GPU latency remained an explicit limitation at this F028–F030 delivery
+checkpoint. The generated-polyline Undo finding remained separate and open then;
+M98-F031 below records its subsequent repair.
 
 On 2026-09-11, both existing shared previews receive exact frozen/installed artifacts.
 Playground revision 6 and manifold revision 1, all 32/25 retained files, three users'
@@ -993,7 +994,8 @@ After repair, `node --test scripts/collaboration-domain-properties.test.mjs` pas
 seven tests (45.35 s). The new regression verifies exact original point drafts after Undo,
 exact moved drafts after Redo, unchanged independently edited source and cold accepted-model
 rebuild. Existing fresh-allocation, codec mismatch, ownership and metadata checks also pass.
-Integrated qualification and refreshed previews remain pending with the toolbar amendment.
+The toolbar amendment's [integrated qualification and preserved delivery](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+subsequently qualify this repair.
 
 ### M98-F032/F033 — Complete construction source recipes
 
@@ -1046,7 +1048,8 @@ complete genuine compiler/native/cold/Undo/Redo matrix for all 13 constraints, f
 dimensions, Fillet, Offset and a directly authored role change. The subsequent focused
 run passes 11 tests plus the explicitly ignored fixture writer, including ordered
 viewport changes, reset behavior and the cumulative trace regression below. These
-are development checks; integrated toolbar qualification remains pending.
+were development checks at that checkpoint; [final integrated qualification](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+subsequently covers the toolbar amendment.
 
 ### M98-F036 — Operation previews omitted native operand presentation
 
@@ -1077,7 +1080,8 @@ or sequence mutation, matching construction's existing bound. Exhaustion retains
 previous native draft and accepted origin; callers can still cancel normally. The
 native `repeated_tool_selection_batches_cannot_exceed_the_reserved_trace_bytes`
 regression passes in the 11-test focused operation suite. WASM-adapter and integrated
-qualification follow with the toolbar amendment.
+qualification were subsequent requirements at this checkpoint; the toolbar amendment's
+[final record](M98_QUALIFICATION.md#qualified-shared-toolbar-parity) records their completion.
 
 ### M98-F038 — Empty resets and refused relations broke native retry
 
@@ -1144,8 +1148,9 @@ the browser nested-timer floor of 4 ms avoids unnecessary queued-frame latency.
 The resulting cold drag is 416.2 ms; warm drags are 129.5/116.8 ms, all with zero
 reversals. Warm release-to-peer is 443.4/358.7 ms. All four real-browser renderer workflows pass on the final isolated artifact:
 pixels/idle behavior, DPR/hidden layouts, context loss including first-shader-loss
-restoration, and pointer-capture recovery. These focused observations do not replace
-the pending integrated qualification.
+restoration, and pointer-capture recovery. These focused observations preceded integrated
+qualification; [the final nomination](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+records the independently authenticated whole-suite results.
 
 Preserved evidence under `target/m98/coordination/tool-parity/`:
 `browser-isolated-r3.log`, `drag-prior-artifact-comparison.log`,
@@ -1203,7 +1208,8 @@ zero reversals, four-editor navigation 363.1 ms p95 and manifold navigation 461.
 p95 with 351.9 ms text acknowledgement. Existing budgets and all samples remain.
 All four actual-browser renderer workflows pass (56.9 s), including independent
 batch and horizontal/vertical blur shader-loss injections with line/text pixels.
-Integrated qualification and preserved preview delivery remain pending for F040.
+[The final nomination](M98_QUALIFICATION.md#qualified-shared-toolbar-parity) records
+integrated F040 qualification and preserved preview delivery.
 
 Evidence: `target/m98/coordination/tool-parity/` contains
 `immediate-frame-browser-r1.log`, `shader-profile-r1.log`,
@@ -1227,3 +1233,14 @@ from the frontend directory and passes 4/4. Two preceding harness-only attempts
 failed before assertions: a relative manifest path and a bundled Chromium missing
 host libraries. The final attempt uses the same installed Chrome as collaboration
 qualification; it neither rebuilds the artifact nor changes an assertion.
+
+### Final toolbar amendment qualification
+
+Clean final product `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00` passes **293/293 obligations** in
+`20260911T164104-576e7789` (20 fresh, 273 authenticated reused; 37m48.118s).
+[Final qualification and preserved delivery](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+authenticate F031–F040, optimized artifacts, unchanged reviewed golden, all current toolbar
+routes and exact browser paint/navigation. Both existing shared previews use the exact
+frozen artifacts without rebuilding and preserve current documents, drafts, invitations
+and personal histories. Earlier failed runs remain failed evidence. Qualification receipt:
+`target/release-gate/runs/20260911T164104-576e7789/qualification.json`. Supervising-user acceptance and M98 closure remain open.

@@ -3006,16 +3006,16 @@ Optional server prediction uses the same native semantics. Editor/viewer invitat
 trusted identities, and each client retains independent camera, tool and Inspector state.
 Browser outboxes persist pending intent and recover uncertain operation outcomes.
 
-[Integrated qualification](docs/M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
-passes all 288 obligations on `513463f`, including four-browser and 32-client fault/load
-coverage. GUI construction currently covers Segment, Polyline, Center-radius Circle and
-Two-point aligned Rectangle, plus native point dragging. Broader GUI tools, production
-identity providers and full offline semantic reconciliation remain outside this delivery.
-The original single-editor mode and previews remain available. Both new Tailscale
-previews serve byte-verified qualified artifacts. Supervising-user acceptance and
-milestone closure remain open.
+[Current integrated qualification](docs/M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+covers all 25 geometry variants, 13 constraint tools, five dimension tools, Fillet/Profile
+Offset, contextual options and source-authoritative geometry roles in the current
+React workbench. The underlying four-browser/32-client authority, recovery and load
+contracts remain required. Production identity providers and full offline semantic
+reconciliation remain outside this delivery. The original single-editor mode and
+previews remain available. Existing shared previews serve the exact qualified artifacts;
+supervising-user acceptance and milestone closure remain open.
 
-### M98 shared tool continuation — toolbar amendment in qualification
+### M98 shared tool continuation — qualified toolbar amendment
 
 Construction now retains all 25 native recipes. A separate engine tool-operation
 continuation delegates relation/dimension collection, Fillet and Profile Offset to
@@ -3031,8 +3031,34 @@ The server authenticates the original checkpoint and target lifetimes, replays a
 its current accepted state, validates genuine compiler receipts and persists before
 publishing. Existing contribution history supplies personal Undo/Redo.
 
+`beginToolOperation` returns a private prediction with `initialFrame`, ordered `advance`,
+paint-only `presentationJSON`, `finish` and `cancel`. The server's prepare/replay/resolve/
+apply lifecycle carries semantic `tool_operation` commands and optional `operation`
+previews. Options apply before preselection; current native frame capabilities govern
+Finish, Step Back, Reset and two-stage Escape. Tagged source operands retain exact
+binding/span/parameter or curve-occurrence ownership. Ordered traces have a cumulative
+1 MiB bound. A refused Apply never replaces independently accepted native authority.
+
 Detached operation presentation also carries native pending/hover/provisional states
 and Offset chain cues. This payload grants paint only. Local navigation continues to
 use its separately authenticated accepted scene while prediction or durable model work
 is pending. [Scope and qualification](docs/M98_TOOL_PARITY.md) retain precise current
 workbench capability limits and supervising-user acceptance status.
+
+Browser paint completion is separate from native scene authority. The WebGL2 backend
+submits one draw and a fence, then checks completion with zero-timeout polls scheduled
+at 4 ms. Only a completed fence followed by the existing GL error/context validation can
+advance the exact submitted frame, surface and context-epoch witness. New camera/native
+inputs coalesce while one draw is in flight; they cannot relabel older pixels as a newer
+frame. Context loss, disposal, failed waits and an unsignaled five-second deadline cannot
+publish late frames. Background-throttled tabs may still accept a signaled fence after
+the nominal deadline. Render telemetry includes submission through validation; the fence
+does not claim physical display scan-out or eliminate all driver/shader IPC costs.
+
+The first ordinary render also initializes the exact horizontal/vertical blur programs
+through Pixi's public shader binding API, after backend installation. Context restoration
+repeats that preparation. Startup readiness includes preparation and the real frame's
+fence/error validation; no synthetic offscreen draw is used. After asynchronous validation,
+the newest coalesced input can submit immediately without another RAF wait. Synchronous
+draws retain RAF coalescing. Both paths preserve one in-flight draw, immutable frame/surface
+witnesses, hidden suspension, failure latching and context epochs.

@@ -1,53 +1,46 @@
 # GeoSolve active handoff
 
-Current roadmap: **M97 is accepted and closed. M98 collaboration is mechanically qualified and delivered; supervising-user acceptance remains open.**
+Current roadmap: **M97 is accepted and closed. M98 collaboration, including the full current toolbar amendment, is mechanically qualified and delivered; supervising-user acceptance and milestone closure remain open.**
 
-The user subsequently authorized [full native toolbar parity in shared editing](docs/M98_TOOL_PARITY.md).
-That amendment is implemented and passes focused native, actual-WASM, server and browser
-checks: all geometry variants, constraint/dimension tools, Fillet/Profile Offset, contextual
-options and selected-geometry roles. Integrated clean-source qualification and preview
-replacement are pending. The completed evidence and live previews below describe
-the preceding dragging repair; retain their documents, invitations and histories.
+The [shared toolbar amendment](docs/M98_TOOL_PARITY.md) exposes all 25 geometry variants,
+13 constraint tools, five dimension tools, Fillet and Profile Offset. Contextual options,
+explicit branches, native preselection, Explorer inputs, geometry roles and personal
+Undo/Redo use source-authoritative operations. Native continuations run in either client
+or server prediction; camera, picking, selection and provisional reprojection remain local.
+The server authenticates operand lifetimes, replays against the latest accepted model and
+publishes only after genuine compiler receipts and independent residual validation.
 
-The [shared dragging repair](docs/M98_QUALIFICATION.md#qualified-shared-dragging-repair)
-passes all **288 obligations** from clean source `9b64c29` in
-`20260910T233626-b8af5961`: 34 fresh and 254 authenticated reused results in
-36m7.710s. All 49 ordinary and 11 collaboration browser workflows pass. Retained
-server workers remove repeated cold reconstruction; provisional frames retain drag
-ownership through acceptance and remain independently navigable. Native source
-bindings preserve selected geometry and dimension pins across accepted reconstruction.
-Server validation, conflict resolution, compiler authentication and durable history remain intact.
+[Qualification and delivery](docs/M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+pass **293/293 obligations** from clean `b005b9e` in `20260911T164104-576e7789`
+(20 fresh, 273 authenticated reused; 37m48.118s).
+49 ordinary and 16 collaboration browser workflows
+pass; the 271-case reviewed golden is unchanged. M98-F031 repairs generated-polyline
+personal Undo. F039 removes synchronous GPU completion waits from normal canvas submission.
+F040 prepares blur shader programs during initial rendering and removes an extra queued-frame delay
+while retaining error validation and exact completed-frame evidence. Release WASM stays
+within its unchanged size limit through the existing `wasm-opt -Oz` optimizer.
 
-Three straight drag trials show **zero backward jumps**. Warm event-to-preview p95 is
-63–76 ms and warm release-to-peer is 351–383 ms, versus 3.25–3.74 s before repair.
-First use remains about 427 ms locally. Held client/server authoring and terminal
-navigation takes 60–166 ms with zero navigation RPCs; no 60 Hz claim is made.
-
-Both existing shared previews now serve the exact qualified artifacts, installed
-offline from four authenticated archives. Playground port 18112 preserves revision 6,
-32 retained files and all three users' histories; shared manifold port 18111 preserves
-revision 1, 25 retained files and its three users' histories. Both pass all 24 HTTP/MIME
-routes and two-editor readiness with the three exact nominated WASM modules. Original
-private invitation URLs are unchanged. Current process/link records:
+The existing 18112 playground and 18111 shared manifold serve the exact frozen artifacts,
+installed offline from four authenticated archives. Both pass exact HTTP/MIME checks and
+two-editor readiness with all three nominated WASM modules. Fresh before/after comparisons
+preserve current source, drafts, models, journals, invitations and personal histories.
+Reload existing tabs; private invitation URLs are unchanged. Current process/link records:
 
 - `target/m98/playground-preview-location.json`
-- `target/m98/manifold-collaboration-preview-location-20260910T233626-b8af5961.json`
+- `target/m98/manifold-tool-parity-preview-location-20260911T164104-576e7789.json`
 
-The [lightweight playground](docs/M98_PLAYGROUND.md) has two movable circles and four
-geometric degrees of freedom. Reload the existing tabs to use the repair. Restart
-with the same folder, invitations and journal, omitting `--initialize true`.
-The original manifold folder, including the user's 40 mm reservoir and 12 mm channels,
-is preserved. Static port 18110 still serves the preceding qualified `513463f` product;
-its historical combined process record remains unchanged. The separately recorded
-generated-polyline Undo `.invocation` failure remains open.
+Restart each folder with its same invitations and journal, omitting `--initialize true`.
+Static port 18110 remains on `513463f`; the original 18108 manifold, including the user's
+40 mm reservoir and 12 mm channels, remains preserved. The canvas dims after 500 ms of
+slow work while local browsing continues. Current bounded navigation/drag measurements
+and failed qualification attempts are recorded in the report; no 60 Hz or arbitrary-size
+claim is made.
 
-The [multi-editor amendment](docs/M98_COLLABORATION.md) retains shared unfinished
-TypeScript, explicit Apply, server-ordered validated edits, personal Undo/Redo, durable
-recovery and configurable client/server authoring prediction. Camera, selection,
-visibility and tool context remain personal; ordinary navigation needs no HTTP request.
-GUI construction supports Segment, Polyline, Center-radius Circle and Two-point aligned
-Rectangle, plus native point dragging; other tools disclose unavailable routes.
-M98 supervising-user acceptance and milestone closure remain open.
+Parity covers the current React catalog and controls. Generated roles require a writable
+source role path; the archived native-profile Fillet output action remains separate work.
+The [multi-editor contract](docs/M98_COLLABORATION.md) retains shared unfinished TypeScript,
+explicit Apply, server authority, personal history and durable recovery. M98 supervising-
+user acceptance and milestone closure remain open.
 
 [M97 closure and fresh-session handoff](docs/M97_CLOSURE.md) records the supervising
 user's acceptance and unchanged qualified product. Accepted source

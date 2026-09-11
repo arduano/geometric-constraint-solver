@@ -98,7 +98,7 @@ already executing in the host cannot be interrupted by AbortSignal.
 ## Opt-in shared folder authoring
 
 M98's collaboration amendment is mechanically qualified and delivered with exact
-served-byte and browser verification. [The nomination](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
+served-byte and browser verification. [The nomination](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
 records the exact candidate and evidence. The opt-in shared host reuses the editable
 TypeScript folder and compiler; the original single-editor mode remains available.
 
@@ -135,10 +135,16 @@ notices when safe source writeback is unavailable.
 `client` enables optional server prediction while preferring the client; `server`
 prefers server prediction. The URL can override the advertised preference with
 `?collaboration=1&authoringPreview=server`. Both paths render and navigate locally.
-The current shared toolbox supports Segment, Polyline, Center-radius Circle,
-Two-point aligned Rectangle and native point dragging. Other canvas authoring tools
-show an unavailable reason. Existing source language and Inspector value/metadata,
-parameter extraction, suppression, deletion and ordering routes remain available.
+The shared toolbox exposes all 25 geometry variants, 13 constraint tools, five dimension
+tools, Fillet and Profile Offset, plus native point dragging. Select a tool to reveal its
+native options and staged guidance. Compatible preselection or Explorer inputs supply
+operands; Finish, Step Back and Escape follow native draft capabilities. With pending
+inputs, Escape clears the draft; Escape again exits. Empty tools can exit directly.
+Profile/Construction sets the new-geometry default or changes selected geometry through its writable source role path.
+Accepted edits enter the current user's Undo/Redo and preserve peer contributions.
+Source/Inspector value and metadata edits, parameter extraction, suppression, deletion
+and ordering retain the same authority. [Toolbar scope](M98_TOOL_PARITY.md) records the
+ordinary writable-source requirements and archived action exclusions.
 
 The CLI shares the same authority. Read a status checkpoint before an edit, retain
 stable `--user`/`--client` identities and supply a unique `--operation` per intent:

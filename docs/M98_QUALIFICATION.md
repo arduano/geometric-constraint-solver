@@ -2,12 +2,239 @@
 
 # M98 implementation and review candidate
 
-M98, its local canvas boundary and multi-editor collaboration amendment are mechanically
-qualified and delivered on 2026-09-10.
-Supervising-user acceptance and milestone closure remain open. Work is isolated on
-`m98/file-workspace`; accepted M97 remains unchanged.
+M98, its local canvas boundary, multi-editor collaboration and full current toolbar
+amendment are mechanically qualified and delivered. Supervising-user acceptance and
+milestone closure remain open. Work is isolated on `m98/file-workspace`; accepted M97
+remains unchanged.
+
+## Qualified shared toolbar parity
+
+Delivered on 2026-09-11 from clean source `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00`, tree
+`5381978256660eaaf9f6bb648a36787309a9eb51`. Run `20260911T164104-576e7789` passes **293/293 obligations**:
+**20 fresh, 273 authenticated reused**, **37m48.118s**. Independent
+verification authenticates every passing receipt and confirms complete release, clean
+source and unchanged source. Signed qualification: `target/release-gate/runs/20260911T164104-576e7789/qualification.json`.
+The hash-checked detailed summary is `target/m98/coordination/tool-parity/final-summary-20260911T164104-576e7789.json`.
+
+The [toolbar amendment](M98_TOOL_PARITY.md) exposes all 45 current React workbench tools:
+25 geometry variants, 13 constraints, five dimensions, Fillet and Profile Offset.
+Contextual options, explicit branches, preselection, Explorer operands and geometry roles
+use native authoring. The engine's `beginToolOperation` prediction exposes `initialFrame`,
+ordered `advance`, paint-only `presentationJSON`, `finish` and `cancel`. Server
+prepare/replay/resolve/apply APIs authenticate original operands and target lifetimes,
+replay against the latest accepted model and require genuine compiler receipts and
+independent residual validation before durable publication. Traces retain exact native
+curve occurrences and are cumulatively bounded to 1 MiB. Personal Undo/Redo preserves
+peer contributions. Camera, picking, selection and provisional reprojection remain local
+with either client or server prediction.
+
+M98-F031 repairs generated-polyline point history through its semantic source lens.
+F032–F035 preserve defining samples, explicit arc orientation and exact source projection;
+F036 adds native operation paint cues; F037 bounds traces; F038 preserves collector recovery
+and independently accepted authority after refused Apply. F039 replaces synchronous GPU
+completion waits with WebGL2 fences and scheduled zero-timeout polling. One immutable draw
+is in flight; coalesced inputs cannot relabel old pixels. Only completed work followed by
+existing GL error/context validation advances the exact frame/surface/context witness.
+Context loss, disposal, failed waits and still-unsignaled five-second deadlines cannot
+publish late frames. A signaled fence observed after background throttling may complete.
+Final polling is 4 ms. F040 submits already-coalesced input immediately after asynchronous
+validation and initializes the exact blur shader programs during the first ordinary render.
+It repeats preparation after restoration; actual batch and horizontal/vertical shader-loss
+cases retain line/text pixel evidence. No synthetic offscreen draw is used, and shader
+initialization is included in canvas readiness. Synchronous draws retain RAF coalescing;
+both paths preserve one in-flight draw, hidden suspension, failure latching and context
+epochs. The private release engine staging build applies `wasm-opt -Oz`, keeping the
+unchanged 20 MiB ceiling.
+
+No solver primitive, equation, geometric tolerance, priority semantics, implicit branch
+or reviewed golden expectation changed. Format, warnings-denied Clippy, native/headless,
+WASM, optimized lifecycle, package/license, browser, golden and performance requirements
+pass through the integrated runner:
+
+| Qualification | Outcome |
+| --- | --- |
+| Native workspace | 243 stage obligations passed |
+| Headless | 7 stage obligations passed |
+| Dedicated engine / actual WASM | 76/76 tests passed |
+| Folder Node | 111/111 tests passed |
+| Folder browser | 11/11 tests passed |
+| Generator example | 2/2 tests passed |
+| Browser example | 1/1 tests passed |
+| Offline M98 packages | 2/2 tests passed |
+| Collaboration runtime | 149/149 tests passed |
+| Collaboration package | 44/44 tests passed |
+| Collaboration frontend | 75/75 tests passed |
+| Ordinary browser | 49/49 full workflows; 17 fresh opening checks |
+| Collaboration browser | 16/16 workflows passed |
+| Golden | 271/271 clean; unchanged expected bytes |
+| Performance | Passed in 181.7 s |
+
+The reviewed golden remains **271/271 clean**, with unchanged expected bytes.
+Expected and observed SHA-256: `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+
+Final integrated browser measurements include Chromium software rendering and event
+delivery:
+
+| Drag trial | Event-to-preview p95 | Release-to-peer | Backward jumps |
+| --- | ---: | ---: | ---: |
+| First use | 417.2 ms | 828.4 ms | 0 |
+| Warm 1 | 142.5 ms | 476.3 ms | 0 |
+| Warm 2 | 116.7 ms | 419.5 ms | 0 |
+
+Held Offset client prediction: wheel/pan/resize 142.9 / 188.0 / 294.8 ms; zero navigation RPCs.
+
+Held Offset server prediction: wheel/pan/resize 106.9 / 191.7 / 280.1 ms; zero navigation RPCs.
+
+Four editors navigate during a ten-second held solve at 363.4 ms p95; manifold/Gridfinity navigation measures 373.1/250.7 ms p95, with zero navigation RPCs. Eight editors and 24 viewers acknowledge text at 248.9 ms p95. Lost-acknowledgement recovery, server restart, invalid-source editing and bounded stalled-TCP recovery pass.
+
+All five new toolbar workflows execute within the full collaboration suite: catalog
+availability with advanced conic/reference-dimension history, native Parallel preselection
+across zoom, Fillet options and selected roles, and client/server Offset with Explorer
+operands, Escape and held publication. Existing recovery, concurrent editing, dragging,
+held-solve navigation, bounded transport and load regressions remain required. These
+measurements do not establish 60 Hz, compositor scan-out timing, arbitrary document size
+or unlimited editors. GPU driver/shader IPC still contributes to latency.
+
+Exact production (**23 files**) and four archives are frozen and
+installed offline without rebuilding. All **284 installed package files**
+match authenticated archive hashes. Final nominated engine WASM: **14303000
+bytes**. Both existing previews pass **24 HTTP/MIME routes** and two-editor
+readiness with all three exact nominated WASM modules, accepted-presentation provenance
+and zero page errors. Delivery readiness visits editors sequentially; concurrent-edit
+coverage belongs to the integrated suite. Verification makes no authored edits.
+
+Fresh captures immediately before each restart and final comparisons after browser
+verification preserve source/model, shared draft text, target lifetimes, identity/epoch,
+invitations, journals, retained files and every user's text/semantic history. Only transient
+presentation point IDs and the three runtime lock/session files are excluded.
+
+| Existing preview | Preserved accepted revision | Retained files | Users |
+| --- | ---: | ---: | --- |
+| Playground, port 18112 | 12 | 59 | tab-a, tab-b, tab-c |
+| Shared manifold, port 18111 | 1 | 25 | arduano, review-editor, review-viewer |
+
+Original private invitation URLs are unchanged. Current process/link records are
+`target/m98/playground-preview-location.json` and `target/m98/manifold-tool-parity-preview-location-20260911T164104-576e7789.json`.
+The playground was completely verified before replacing the manifold. Each existing
+folder reopened with the same invitations and journal, without initialization. Static
+18110 remains on `513463f`; the original 18108 manifold and its 40 mm reservoir/12 mm
+channels remain preserved.
+
+Executed commands use the pinned environment:
+
+```sh
+nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source --run 'COMMAND'
+```
+
+The inner qualification and delivery commands were:
+
+```sh
+./scripts/release-gate.sh --since 0af5b82
+./scripts/release-gate.sh --resume 20260911T143755-117813be --since 0af5b82
+./scripts/release-gate.sh --resume 20260911T152048-7157230d --since 0af5b82
+./scripts/release-gate.sh --resume 20260911T153007-f3ebd337 --since 0af5b82
+python3 target/m98/verify-qualification.py 20260911T164104-576e7789
+python3 target/m98/coordination/tool-parity/extract-final-evidence.py 20260911T164104-576e7789 target/m98/coordination/tool-parity/final-summary-20260911T164104-576e7789.json
+python3 target/m98/freeze-preview.py 20260911T164104-576e7789
+python3 target/m98/coordination/drag-repair/install-qualified.py 20260911T164104-576e7789
+python3 target/m98/coordination/tool-parity/deliver-one.py 20260911T164104-576e7789 playground
+python3 target/m98/coordination/tool-parity/deliver-one.py 20260911T164104-576e7789 manifold
+```
+
+Per-service executed records retain every actual helper argument:
+`target/m98/coordination/tool-parity/playground-executed-20260911T164104-576e7789.json` and `target/m98/coordination/tool-parity/manifold-executed-20260911T164104-576e7789.json`. The reviewed sequence is fresh
+capture, authenticated restart, capture/comparison, exact transport/browser readiness,
+then final capture/comparison. Final receipts:
+
+- `target/m98/coordination/tool-parity/playground-delivery-20260911T164104-576e7789.json`
+- `target/m98/coordination/tool-parity/manifold-delivery-20260911T164104-576e7789.json`
+- `target/m98/coordination/tool-parity/playground-final-preservation-20260911T164104-576e7789.json`
+- `target/m98/coordination/tool-parity/manifold-final-preservation-20260911T164104-576e7789.json`
+
+The initial plain gate invocation selected documentation-only verification because its
+`HEAD^` contained only prose. That receipt was not product qualification; explicit
+`--since 0af5b82` selected the changed-product inventory.
+
+First product run `20260911T130620-4b8e58fc` on `94a24c4` failed browser preparation:
+the engine module was 21,842,414 bytes, above the unchanged 20 MiB ceiling. Native,
+headless and optimized-WASM lifecycle checks had passed. `ec9362b` added the existing
+release optimizer to private engine staging. The focused module became 14,068,507 bytes
+and all 66 actual-WASM construction/operation/preview checks passed. The failed run
+remains failed; only authenticated unchanged-input passing receipts can supply reuse.
+
+Second run `20260911T133551-a403dc7b` on `ec9362b` passed optimized preparation,
+engine/folder/runtime/package/frontend checks and all 49 ordinary browser workflows
+(1,824.8 seconds), but failed four collaboration browser checks. The Fillet check read
+paint before its asynchronous queue caught up; waiting for the actual provisional Fillet
+item retains the original assertion. Collaboration latency now runs exclusively within
+the gate, because concurrent ordinary browser work contaminated its measurements.
+No thresholds or geometric assertions were relaxed.
+
+Isolated repetition still failed cold drag, server Offset and manifold timing, exposing
+synchronous GL error-query stalls up to 455.8 ms. The previous qualified frontend also
+failed under the same host conditions, with a 421.5 ms query stall; that comparison does
+not establish a new toolbar/solver regression. F039 addresses this presentation bottleneck.
+Its 8 ms polling trial passed Fillet, server Offset and manifold but failed cold drag at
+500.8 ms. Final 4 ms polling passed focused drag at 416.2 ms cold and 129.5/116.8 ms warm,
+zero reversals, and 894.5/443.4/358.7 ms release-to-peer. All 39 renderer unit tests,
+TypeScript and four actual-renderer browser workflows passed. These focused results
+remain separate from the final integrated measurements above.
+
+Third run `20260911T143755-117813be` on `8ac6d11` was externally interrupted
+when its launcher exited with status 143. It had no reported failed assertions, but its
+ordinary browser stage lacked a completed receipt and the run never qualified. The
+orphaned browser process was terminated before resuming in a process independent of
+the terminal session. The final run reuses only runner-authenticated completed results
+and reruns the interrupted browser stage; no receipt was manufactured for unfinished work.
+
+The first resumed run `20260911T152048-7157230d` recovered completed evidence but failed
+browser startup because the interrupted run had left its separately spawned test HTTP
+server on loopback port 4173. No browser assertions ran in that attempt. After the gate
+settled, the exact orphan was authenticated by PID/start time, command, working directory
+and its original browser-context record, then terminated. The final resume retains this
+failed harness attempt and reuses only eligible completed evidence. No product, assertion
+or timeout changed to address the port collision.
+
+Run `20260911T153007-f3ebd337` on `8ac6d11` passed 49/49 ordinary browser workflows and 15/16
+collaboration workflows but failed manifold navigation at 506.9 ms against the unchanged
+500 ms budget. F040's immediate queued submission alone passed manifold at 438.5 ms but
+failed four-editor navigation at 560.3 ms. Exact shader-source traces identified blur
+program compilation before wheel delivery; startup preparation removed that input-time
+compilation. Three focused shader setup/restoration/failure regressions failed before the
+repair; all 44 renderer unit tests and TypeScript checking passed afterward. The final
+focused three-workflow run passed: cold/warm drag p95 450/173.9/116.5 ms with zero reversals,
+four-editor navigation 363.1 ms p95, and manifold navigation 461.8 ms p95 with 351.9 ms text
+acknowledgement. All four actual-browser renderer workflows passed in 56.9 seconds,
+including independent batch and horizontal/vertical blur shader-loss injections with
+line/text pixel evidence. These focused measurements remain separate from the final
+integrated measurements above. Two preceding renderer harness attempts failed before
+assertions because of a relative manifest path and missing bundled-Chromium host libraries;
+the passing attempt used the existing artifact and the same installed Chrome as collaboration
+qualification. No assertion or artifact was changed for those harness corrections.
+
+The final integrated nomination `20260911T164104-576e7789` on `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00` resumes only eligible
+results from `20260911T153007-f3ebd337`; all failed attempts remain failed evidence.
+
+Two earlier focused toolbar attempts had locator errors: Dimension matched a toolbar
+button and Branch target missed a nested select. Exact combobox locators fixed only
+those queries; native traces already showed a complete candidate. The failed observations
+remain recorded under `target/m98/coordination/tool-parity/`, including the failed/interrupted product
+logs and authenticated resume, isolated/prior-artifact comparisons, renderer before/after and final focused logs.
+
+Parity covers the current React catalog and controls. The archived native-profile Fillet
+output action remains separate work; generated role changes require a writable source
+role path. Trusted invitation identities and no full offline semantic reconciliation
+remain protocol limits. Supervising-user acceptance and M98 closure remain open.
+
+Documentation-only handoff uses
+`./scripts/release-gate.sh --docs-only --since b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00`.
+It preserves this exact qualified product and installed bytes; no rebuild or milestone
+acceptance follows documentation changes.
 
 ## Qualified shared dragging repair
+
+The following historical qualification and delivery describe the preceding product. The
+toolbar amendment above supersedes its current-service and restricted-tool statements.
 
 Delivered on 2026-09-11 from clean source
 `9b64c29e188b1e74f5802d170ca40ced107b28b1`, tree
@@ -112,9 +339,10 @@ The interrupted `20260910T224255-cf8bbde7` and failed `20260910T224940-a860c18d`
 nomination attempts remain historical, with only authenticated unchanged-input successes
 eligible for reuse.
 
-The generated-polyline Undo `.invocation` failure remains separately open; broader GUI
-authoring, production identity providers and full offline reconciliation retain their
-previous scope limits. **M98 supervising-user acceptance and closure remain open.**
+At this preceding checkpoint, generated-polyline Undo `.invocation` and broader GUI
+authoring remained open. F031 and the qualified full current toolbar amendment above
+supersede those limits. Production identity providers and full offline reconciliation
+remain separate work. **M98 supervising-user acceptance and closure remain open.**
 Documentation-only closeout uses `./scripts/release-gate.sh --docs-only --since 9b64c29`
 and preserves the qualified product and installed bytes.
 
@@ -223,11 +451,11 @@ standalone scene provenance `accepted`; local presentation intentionally reports
 `accepted-presentation`. Correcting only the ignored helper makes the same bytes pass;
 the failed receipt remains preserved. No qualified product changes followed nomination.
 
-GUI construction supports Segment, Polyline, Center-radius Circle and Two-point aligned
-Rectangle, plus native point dragging. Other GUI tools explicitly report unavailable
-routes; full source and supported Inspector authoring remain available. Trusted invitation
-roles are the reference identity boundary; production identity providers and full offline
-semantic reconciliation remain outside this milestone. Restart the shared folder with
+At this initial collaboration checkpoint, GUI construction supported Segment, Polyline,
+Center-radius Circle and Two-point aligned Rectangle, plus native point dragging. Other
+GUI routes disclosed unavailable actions. The full current toolbar qualification above
+supersedes that limit. Trusted invitation roles remain the reference identity boundary;
+production identity providers and full offline semantic reconciliation remain separate work. Restart the shared folder with
 its existing invitations and journal, omitting the first-launch `--initialize true`.
 **Supervising-user acceptance and M98 closure remain open.**
 
