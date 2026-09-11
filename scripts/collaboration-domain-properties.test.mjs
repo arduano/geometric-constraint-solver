@@ -9,9 +9,9 @@ import { createTrustedSemanticHost } from "../packages/geosolve-collaboration/di
 const source = '"use geosolve sketch";import{sketch,mm}from"@geosolve/sketch-code";export default sketch(($)=>{const bore=$.geometry.centerRadiusCircle("bore",{center:[0,0],radius:mm(2),label:"Base"});const other=$.geometry.centerRadiusCircle("other",{center:[30,0],radius:mm(3)});return{bore,other};});';
 const operation = (userId, requestId) => ({ userId, clientId: `tab-${userId}`, requestId });
 const number = (value) => ({ kind: "number", value }), pair = (x, y) => ({ kind: "array", value: [number(x), number(y)] });
-async function fixture(t) {
+async function fixture(t, text = source) {
   const folder = await mkdtemp(join(tmpdir(), "geosolve-domain-properties-")); t.after(() => rm(folder, { recursive: true, force: true }));
-  const files = { "geosolve.json": JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "editable" }), "sketch.ts": source };
+  const files = { "geosolve.json": JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "editable" }), "sketch.ts": text };
   let accepted = await job({ kind: "initialize", folder, files });
   const host = await createTrustedSemanticHost({ configuration: { documentEpoch: "doc", serverEpoch: "one", objects: accepted.inventory.objects.map(({ object, dependencies }) => ({ object, dependencies })) } }); t.after(() => host.dispose());
   async function domain(kind, extra) { accepted = await job({ kind, folder, files: accepted.candidateFiles, model: accepted.model, ...extra }); return accepted; }
@@ -66,6 +66,27 @@ test("older point history resolves exact semantic lens after deletion Undo alloc
   const lens = JSON.parse(moved.propertyChanges[0].property)[1]; lens.codec.builder = ["geometry", "sketchPoint"];
   await assert.rejects(job({ kind: "point_properties", folder: f.folder, files: undone.candidateFiles, model: undone.model,
     writes: [{ address: lens, expected: null, value: null }] }), /replaced|absent|ambiguous/u);
+});
+
+test("generated polyline point history resolves its semantic owner through personal Undo and Redo", async (t) => {
+  const text = source.replace("return{bore,other};", 'const path=$.geometry.polyline("path",{vertices:[{key:"a",position:[0,10]},{key:"b",position:[10,10]},{key:"c",position:[10,20]}],closed:false});return{bore,other,path};');
+  const f = await fixture(t, text), initial = f.accepted;
+  const target = initial.pointTargets.find(item => item.target.address?.owner.address.owner === "generated_member" && item.position[0] === 0 && item.position[1] === 10)?.target;
+  assert.ok(target, "fixture exposes the exact generated polyline point owner");
+  const moved = await f.domain("point_gesture", { command: { basis: initial.model.sourceDesignDigest, gesture_id: 31, target,
+    viewport: { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 }, samples: [{ sequence: 1, position: [4, 16] }] } });
+  await f.record("alice", "move-path", moved);
+  const changed = await f.values("bob", "independent-radius", ["radius"], { kind: "unit", value: { unit: "mm", value: 7 } });
+  const undone = await f.undo("alice", "undo-path");
+  assert.deepEqual(undone.model.design.overrides.drafts, initial.model.design.overrides.drafts);
+  assert.equal(undone.candidateFiles["sketch.ts"], changed.candidateFiles["sketch.ts"]);
+  const inverse = f.host.prepareRedo("alice");
+  const redone = await f.domain("structural_inverse", { inverse });
+  f.host.commitStage(f.host.stageValidatedInverse(inverse, operation("alice", "redo-path"), f.host.snapshot().revision + 1));
+  assert.deepEqual(redone.model.design.overrides.drafts, moved.model.design.overrides.drafts);
+  assert.equal(redone.candidateFiles["sketch.ts"], changed.candidateFiles["sketch.ts"]);
+  const cold = await job({ kind: "rebuild", folder: f.folder, files: redone.candidateFiles, model: redone.model });
+  assert.equal(cold.acceptedInput, redone.acceptedInput);
 });
 
 test("canonical source shape changes undo only their owned keys and preserve a newer sibling", async (t) => {

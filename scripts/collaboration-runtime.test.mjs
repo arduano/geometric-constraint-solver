@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -9,6 +9,7 @@ import { openCollaborationRuntime } from "./collaboration-runtime.mjs";
 import { createSharedText } from "../packages/geosolve-collaboration/dist/index.js";
 import { createEngine } from "../packages/geosolve-engine/dist/index.js";
 import { CollaborationClient } from "../packages/geosolve-collaboration/dist/client.js";
+import { demoBindingsUrl, demoWasmPath } from "./workspace-runtime-paths.mjs";
 const source = `"use geosolve sketch";
 import {sketch,mm} from "@geosolve/sketch-code";
 export default sketch(($)=>{
@@ -17,9 +18,9 @@ export default sketch(($)=>{
  return {bore,other};
 });\n`;
 const invitations = new Map([["alice", { userId: "alice", role: "editor" }], ["bob", { userId: "bob", role: "editor" }]]);
-async function fixture(t, options = {}) {
+async function fixture(t, options = {}, initialSource = source) {
   const folder = await mkdtemp(join(tmpdir(), "geosolve-collab-runtime-")), handles = [], clients = [];
-  await writeFile(join(folder, "geosolve.json"), JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "editable" })); await writeFile(join(folder, "sketch.ts"), source);
+  await writeFile(join(folder, "geosolve.json"), JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "editable" })); await writeFile(join(folder, "sketch.ts"), initialSource);
   t.after(async () => { for (const client of clients) client.dispose(); for (const runtime of handles.reverse()) await runtime.close(); await rm(folder, { force: true, recursive: true }); });
   async function open(initialize) {
     const runtime = await openCollaborationRuntime(folder, { initialize, invitations, ...options }); handles.push(runtime);
@@ -120,6 +121,134 @@ test("concurrent constructions replay their immutable original basis and retain 
   assert.deepEqual((await restored.request("commands", rejoined.token, { requestId: "create-b", command: b })).receipt, outcomes[1]);
   assert.deepEqual((await restored.request("result?requestId=create-b", rejoined.token)).result, mappingB);
   assert.equal((await restored.state(rejoined)).authority.acceptedInput, before);
+});
+
+async function operationCommand(t, document, tool = "radius") {
+  const engine = await createEngine(); t.after(() => engine.dispose());
+  const local = engine.openEditableSession(document.model.project, { design: document.model.design }); t.after(() => local.dispose());
+  const geometry = local.accepted.geometry;
+  const circle = geometry.curves.find(({ curve }) => curve.definition.kind === "circle" && geometry.scalars.some(scalar => JSON.stringify(scalar.id) === JSON.stringify(curve.definition.radius) && scalar.value === 2));
+  assert.ok(circle, "the fixture's bore has a two-unit radius");
+  const [operand] = local.toolOperationOperands({ items: [{ Curve: { curve: circle.curve.id, segment: 0 } }], curve_picks: [] });
+  const prediction = local.beginToolOperation(tool, { expected: local.token, gestureId: 301, viewport: { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 }, selection: tool === "toggle_geometry_role" ? [operand] : [] });
+  if (tool !== "toggle_geometry_role") {
+    prediction.advance({ sequence: 1, input: { event: "authoring_options", options: { ...prediction.initialFrame.authoring_options, dimension_mode: "reference" } } });
+    assert.equal(prediction.advance({ sequence: 2, input: { event: "pick", operand } }).completed, true);
+  } else assert.equal(prediction.initialFrame.completed, true);
+  return { kind: "semantic", basisRevision: document.accepted.modelRevision, payload: { action: "tool_operation", gesture: prediction.finish() } };
+}
+
+test("shared native tool operations rebase disjoint edits and preserve personal history through restart", async t => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob"), initial = (await app.state(alice)).document;
+  const command = await operationCommand(t, initial);
+  assert.equal((await app.send(bob, "resize-before-dimension", value(initial.targets["sketch.ts#other"], "other", 7))).outcome.status, "accepted");
+  const created = await app.send(alice, "create-dimension", command);
+  assert.equal(created.outcome.status, "accepted", JSON.stringify(created));
+  const current = (await app.state(alice)).document;
+  assert.match(current.accepted.files["sketch.ts"], /isKeyConstraint:\s*true/u);
+  assert.match(current.accepted.files["sketch.ts"], /mm\(7\)/u);
+  assert.equal(current.inventory.objects.length, initial.inventory.objects.length + 1);
+  const result = (await app.request("result?requestId=create-dimension", alice.token)).result;
+  assert.equal(result.createdDeclarations.length, 1);
+  await app.runtime.close();
+  const restored = await f.open(false), rejoined = await restored.connect("alice");
+  assert.deepEqual((await restored.request("commands", rejoined.token, { requestId: "create-dimension", command })).receipt, created);
+  const undone = await restored.send(rejoined, "undo-dimension", { kind: "undo", basisRevision: 0, payload: {} });
+  assert.equal(undone.outcome.status, "accepted", JSON.stringify(undone));
+  const afterUndo = (await restored.state(rejoined)).document;
+  assert.equal(afterUndo.inventory.objects.length, initial.inventory.objects.length);
+  assert.match(afterUndo.accepted.files["sketch.ts"], /mm\(7\)/u);
+  const redone = await restored.send(rejoined, "redo-dimension", { kind: "redo", basisRevision: 0, payload: {} });
+  assert.equal(redone.outcome.status, "accepted", JSON.stringify(redone));
+  const afterRedo = (await restored.state(rejoined)).document;
+  assert.equal(JSON.parse(afterRedo.model.project).managed.source, JSON.parse(current.model.project).managed.source);
+  assert.equal(afterRedo.accepted.files["sketch.ts"].slice(0, afterRedo.accepted.files["sketch.ts"].indexOf("const dimension1")).trimEnd(), current.accepted.files["sketch.ts"].slice(0, current.accepted.files["sketch.ts"].indexOf("const dimension1")).trimEnd());
+});
+
+for (const tool of ["fillet", "offset"]) test(`shared native ${tool} preserves concurrent edits through restart and personal history`, async t => {
+  const featureSource = source.replace("return {bore,other};", 'const corner=$.geometry.polyline("corner",{vertices:[{key:"start",position:[200,0]},{key:"corner",position:[220,0]},{key:"end",position:[220,20]}]});return {bore,other,corner};');
+  const f = await fixture(t, {}, featureSource), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob"), initial = (await app.state(alice)).document;
+  const engine = await createEngine(); t.after(() => engine.dispose());
+  const local = engine.openEditableSession(initial.model.project, { design: initial.model.design }); t.after(() => local.dispose());
+  const curve = local.accepted.geometry.curves.find(({curve}) => curve.definition.kind === "polyline").curve;
+  const selection = tool === "fillet" ? [{Point:curve.definition.points[1]}] : [{Curve:{curve:curve.id,segment:0}}];
+  const operands = local.toolOperationOperands({items:selection,curve_picks:[]});
+  const prediction = local.beginToolOperation(tool, {expected:local.token,gestureId:501,viewport:{screen_size:[800,600],model_center:[210,10],pixels_per_model_unit:10},selection:operands});
+  const frame = prediction.advance({sequence:1,input:tool === "fillet" ? {event:"fillet_radius",radius:2} : {event:"offset_distance",distance:2}});
+  assert.equal(frame.diagnostic,null); assert.equal(frame.can_finish,true);
+  assert.equal(prediction.advance({sequence:2,input:{event:"complete"}}).completed,true);
+  const command = {kind:"semantic",basisRevision:0,payload:{action:"tool_operation",gesture:prediction.finish()}};
+  assert.equal((await app.send(bob, "concurrent-resize",value(initial.targets["sketch.ts#other"],"other",7))).outcome.status,"accepted");
+  const created = await app.send(alice,"create-feature",command);
+  assert.equal(created.outcome.status,"accepted",JSON.stringify(created));
+  const current = (await app.state(alice)).document;
+  assert.match(current.accepted.files["sketch.ts"], tool === "fillet" ? /computed\.filletSet/u : /profileOffset/u);
+  assert.match(current.accepted.files["sketch.ts"], /mm\(7\)/u);
+  assert.ok(current.inventory.objects.length > initial.inventory.objects.length);
+  await app.runtime.close(); const restored = await f.open(false), rejoined = await restored.connect("alice");
+  assert.deepEqual((await restored.request("commands",rejoined.token,{requestId:"create-feature",command})).receipt,created);
+  const undo = await restored.send(rejoined,"undo-feature",{kind:"undo",basisRevision:0,payload:{}});
+  assert.equal(undo.outcome.status,"accepted",JSON.stringify(undo));
+  const afterUndo = (await restored.state(rejoined)).document;
+  assert.equal(afterUndo.inventory.objects.length,initial.inventory.objects.length);
+  assert.match(afterUndo.accepted.files["sketch.ts"], /mm\(7\)/u);
+  const redo = await restored.send(rejoined,"redo-feature",{kind:"redo",basisRevision:0,payload:{}});
+  assert.equal(redo.outcome.status,"accepted",JSON.stringify(redo));
+  const afterRedo = (await restored.state(rejoined)).document;
+  assert.equal(JSON.parse(afterRedo.model.project).managed.source,JSON.parse(current.model.project).managed.source);
+});
+
+test("server tool activation maps personal selection using its trusted accepted scene", async t => {
+  const f = await fixture(t, { workbenchScenes: true, authoringPreview: { enabled: true, preferred: "server" } });
+  const app = f.first, alice = await app.connect("alice"), initial = await app.state(alice);
+  const pair = await app.request("scene", alice.token);
+  const wasm = await import(demoBindingsUrl); await wasm.default({ module_or_path: await readFile(demoWasmPath) });
+  const local = new wasm.InteractionHandle(JSON.stringify(pair.seed)); t.after(() => local.free());
+  const detached = JSON.parse(pair.seed.scene), curve = detached.curves[0];
+  const point = curve.screen_polyline[Math.floor(curve.screen_polyline.length / 4)];
+  local.pointer(JSON.stringify({ version: 2, phase: "down", pointerId: 401, x: point.x, y: point.y, buttons: 1, modifiers: { alt: false, ctrl: false, meta: false, shift: false } }));
+  const state = JSON.parse(local.state());
+  assert.ok(state.selection.some(item => item.Curve));
+  const basis = { documentEpoch: alice.connection.documentEpoch, revision: initial.authority.acceptedRevision, sourceDesignDigest: initial.document.model.sourceDesignDigest };
+  const options = { authoring_options: { tangent_orientation: "aligned", curvature_relation: "signed", continuity: { kind: "g1" }, dimension_mode: "reference", angle_orientation: "counter_clockwise" } };
+  const opened = await app.request("authoring-preview", alice.token, { action: "begin", kind: "operation", tool: "radius", gestureId: 402, basis, viewport: state.viewport, options, view: { state } });
+  assert.equal(opened.operation.completed, true);
+  assert.equal((await app.state(alice)).authority.acceptedInput, initial.authority.acceptedInput);
+  const terminal = await app.request("authoring-preview", alice.token, { action: "finish", ticket: opened.ticket });
+  const accepted = await app.send(alice, "native-preselected-radius", { kind: "semantic", basisRevision: 0, payload: { action: "tool_operation", gesture: terminal.command } });
+  assert.equal(accepted.outcome.status, "accepted", JSON.stringify(accepted));
+});
+
+test("shared tool replay rejects an operand restored under a new semantic lifetime", async t => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob"), initial = (await app.state(alice)).document;
+  const command = await operationCommand(t, initial), target = initial.targets["sketch.ts#bore"];
+  const deletion = { kind: "semantic", basisRevision: 0, payload: { action: "mutation", targets: [target], deletion: { roots: [target], closure: [target] }, mutation: { mutation: "delete", target: { target: "declaration", declaration: "bore" } } } };
+  assert.equal((await app.send(bob, "delete-operand", deletion)).outcome.status, "accepted");
+  assert.equal((await app.send(bob, "restore-operand", { kind: "undo", basisRevision: 0, payload: {} })).outcome.status, "accepted");
+  const before = await app.state(alice);
+  assert.ok(before.document.targets["sketch.ts#bore"].generation > target.generation);
+  const rejected = await app.send(alice, "stale-dimension", command);
+  assert.equal(rejected.outcome.status, "rejected", JSON.stringify(rejected));
+  assert.equal((await app.state(alice)).authority.acceptedInput, before.authority.acceptedInput);
+  assert.equal(app.runtime.host.snapshot().needsRecovery, false);
+});
+
+test("shared selected geometry roles publish source changes with personal Undo and Redo", async t => {
+  const f = await fixture(t), app = f.first, alice = await app.connect("alice"), bob = await app.connect("bob"), initial = (await app.state(alice)).document;
+  const command = await operationCommand(t, initial, "toggle_geometry_role");
+  assert.equal((await app.send(bob, "resize-before-role", value(initial.targets["sketch.ts#other"], "other", 7))).outcome.status, "accepted");
+  const changed = await app.send(alice, "toggle-role", command);
+  assert.equal(changed.outcome.status, "accepted", JSON.stringify(changed));
+  const current = (await app.state(alice)).document;
+  assert.match(current.accepted.files["sketch.ts"], /role:\s*"construction"/u);
+  assert.equal(current.inventory.objects.length, initial.inventory.objects.length);
+  const undone = await app.send(alice, "undo-role", { kind: "undo", basisRevision: 0, payload: {} });
+  assert.equal(undone.outcome.status, "accepted", JSON.stringify(undone));
+  assert.doesNotMatch((await app.state(alice)).document.accepted.files["sketch.ts"], /role:/u);
+  assert.match((await app.state(alice)).document.accepted.files["sketch.ts"], /mm\(7\)/u);
+  const redone = await app.send(alice, "redo-role", { kind: "redo", basisRevision: 0, payload: {} });
+  assert.equal(redone.outcome.status, "accepted", JSON.stringify(redone));
+  assert.equal((await app.state(alice)).document.accepted.files["sketch.ts"], current.accepted.files["sketch.ts"]);
 });
 
 test("stale point gestures retain disjoint source edits and later same-point writes win without borrowing a replacement lifetime", async t => {

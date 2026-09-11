@@ -70,6 +70,56 @@ test("server construction preview preserves native samples, inference and exact 
   sameAuthority(f.native, before);
 });
 
+test("server advanced construction traces preserve staged geometry and explicit branch options", async t => {
+  const f = await fixture(t), before = frozenAuthority(f.native);
+  for (const [tool, points] of [
+    ["center_arc", [[30, 30], [34, 30], [32, 33]]],
+    ["center_axes_elliptical_arc", [[30, 30], [34, 30], [30, 32], [34, 30], [30, 32]]],
+    ["open_control_nurbs", [[30, 30], [34, 30], [34, 34], [30, 34]]],
+  ]) {
+    const local = f.native.beginConstruction(tool, { expected: f.native.token, gestureId: 21, viewport });
+    const start = await f.api.request(f.alice, { action: "begin", basis: f.basis, kind: "construction", gestureId: 21, viewport, tool });
+    assert.deepEqual(start.construction, local.initialFrame);
+    let sequence = 0;
+    for (const [index, position] of points.entries()) {
+      const samples = ["move", "click"].map(event => ({ sequence: ++sequence, input: { event, position, suppressed: true, regularized: false } }));
+      let frame; for (const sample of samples) frame = local.advance(sample);
+      const remote = await f.api.request(f.alice, { action: "advance", ticket: start.ticket, samples });
+      assert.deepEqual(remote.construction, frame, tool);
+      if (tool === "center_arc" && index === 1) {
+        const sample = { sequence: ++sequence, input: { event: "flip_branch" } };
+        assert.deepEqual((await f.api.request(f.alice, { action: "advance", ticket: start.ticket, samples: [sample] })).construction, local.advance(sample));
+      }
+    }
+    if (tool.endsWith("nurbs")) {
+      const sample = { sequence: ++sequence, input: { event: "complete" } };
+      assert.deepEqual((await f.api.request(f.alice, { action: "advance", ticket: start.ticket, samples: [sample] })).construction, local.advance(sample));
+    }
+    const terminal = await f.api.request(f.alice, { action: "finish", ticket: start.ticket });
+    assert.deepEqual(terminal.command, local.finish(), tool);
+    sameAuthority(f.native, before);
+  }
+});
+
+test("server relation activation preserves preselected operands, native options and terminal intent", async t => {
+  const f = await fixture(t), before = frozenAuthority(f.native);
+  const curve = f.native.accepted.geometry.curves[0];
+  assert.ok(curve);
+  const selection = f.native.toolOperationOperands({ items: [{ Curve: { curve: curve.curve.id, segment: 0 } }], curve_picks: [] });
+  const defaults = f.native.beginToolOperation("segment_length", { expected: f.native.token, gestureId: 25, viewport, selection: [] });
+  const options = { authoring_options: { ...defaults.initialFrame.authoring_options, dimension_mode: "reference" } };
+  defaults.cancel();
+  const local = f.native.beginToolOperation("segment_length", { expected: f.native.token, gestureId: 26, viewport, selection, options });
+  const started = await f.api.request(f.alice, { action: "begin", basis: f.basis, kind: "operation", tool: "segment_length", gestureId: 26, viewport, selection, options });
+  assert.equal(started.operation.completed, true);
+  assert.equal(started.operation.authoring_options.dimension_mode, "reference");
+  assert.deepEqual(started.operation, local.initialFrame);
+  const finished = await f.api.request(f.alice, { action: "finish", ticket: started.ticket });
+  assert.equal(finished.kind, "operation");
+  assert.deepEqual(finished.command, local.finish());
+  sameAuthority(f.native, before);
+});
+
 test("server preview refuses stale, forged, viewer and cross-session input before native work", async t => {
   const f = await fixture(t), before = frozenAuthority(f.native);
   await assert.rejects(f.api.request(f.alice, { ...f.begin, basis: { ...f.basis, revision: 1 } }), error => error.code === "preview_stale_basis");

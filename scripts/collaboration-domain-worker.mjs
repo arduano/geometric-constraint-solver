@@ -149,7 +149,7 @@ async function reopen(engine, folder, files, model, { writable = false } = {}) {
 async function openReplayBasis(engine, input) {
   if (input.replayBasis && input.replayCheckpoint) fail("invalid_input", "Expected one trusted replay basis");
   if (!input.replayBasis && !input.replayCheckpoint) return undefined;
-  if (!["point_gesture", "construction"].includes(input.kind)) fail("invalid_input", "Historical replay is only available to semantic gestures");
+  if (!["point_gesture", "construction", "tool_operation"].includes(input.kind)) fail("invalid_input", "Historical replay is only available to semantic gestures");
   let source, semantic, historical;
   try {
     let basis = input.replayBasis;
@@ -206,7 +206,9 @@ const pointOwnerDeclaration = (address) => address.owner.address.owner === "dire
 const addressKey = (address) => JSON.stringify(sorted(address));
 const pointTargetAddresses = (target) => target.target === "point" ? [target.address] : [target.lower_left, target.upper_right];
 function currentPointAddress(session, compiled, lens) {
-  if (lens?.owner?.address) return lens; // Legacy exact-generation address.
+  // A semantic generated-member lens also has owner.address, but that is its
+  // member address rather than the allocation-stamped native owner wrapper.
+  if (lens?.owner?.address?.owner === "direct_declaration" || lens?.owner?.address?.owner === "generated_member") return lens; // Legacy exact-generation address.
   const observed = inventory(compiled, session.exportProject()), candidates = session.pointGestureTargets().flatMap(({ target }) => pointTargetAddresses(target));
   const matching = candidates.filter((address) => equal(semanticPointLens(address, pointCodec(observed, address)), lens));
   const distinct = new Map(matching.map((address) => [addressKey(address), address]));
@@ -444,11 +446,13 @@ async function evaluate(input) {
     }
     return result;
   }
-  if (["values", "mutation", "construction"].includes(input.kind)) {
+  if (["values", "mutation", "construction", "tool_operation"].includes(input.kind)) {
     const highWater = projectValue(input.model.project).managed.declaration_name_high_water ?? 0;
     const extraction = input.kind === "mutation" && input.mutation?.mutation === "extract_parameter";
     const prepared = input.kind === "construction" ? replay ? session.prepareConstructionReplay(replay.session, input.command, { expected: session.token })
       : session.prepareConstruction(input.command, { expected: session.token })
+      : input.kind === "tool_operation" ? replay ? session.prepareToolOperationReplay(replay.session, input.command, { expected: session.token })
+      : session.prepareToolOperation(input.command, { expected: session.token })
       : session.prepareAuthoring(extraction ? { kind: "extract_parameter", declaration: input.mutation.declaration, path: input.mutation.path, presentation: input.mutation.presentation }
         : input.kind === "values" ? { kind: "values", writes: input.writes }
         : { kind: "mutation", mutation: input.mutation, candidate_name_high_water: input.candidateNameHighWater ?? highWater }, { expected: session.token });
@@ -457,16 +461,17 @@ async function evaluate(input) {
     const canonical = managed.applyManagedSketchMutation(current, mutation, { patches: input.model.patches });
     if (canonical.compiled.canonicalIrJson !== receipt.compiled.canonicalIrJson || canonical.compiled.canonicalArtifactJson !== receipt.compiled.canonicalArtifactJson) fail("invalid_receipt", "Localized source differs from canonical native mutation");
     let update;
-    if (input.kind === "construction") {
-      const candidate = session.resolveConstruction(prepared, { ticketDigest: prepared.request.ticket.ticketDigest, ...canonical });
-      update = checkedUpdate(await sessions.change(session, () => session.applyConstructionCommit(candidate)));
-      if (session.sourceDesignDigest() !== candidate.source_design_digest) fail("invalid_result", "Construction installation differs from its native candidate");
+    if (["construction", "tool_operation"].includes(input.kind)) {
+      const receipt = { ticketDigest: prepared.request.ticket.ticketDigest, ...canonical };
+      const candidate = input.kind === "construction" ? session.resolveConstruction(prepared, receipt) : session.resolveToolOperation(prepared, receipt);
+      update = checkedUpdate(await sessions.change(session, () => input.kind === "construction" ? session.applyConstructionCommit(candidate) : session.applyToolOperationCommit(candidate)));
+      if (session.sourceDesignDigest() !== candidate.source_design_digest) fail("invalid_result", "Tool installation differs from its native candidate");
     } else update = checkedUpdate(await sessions.change(session, () => session.applyAuthoring(prepared, { ticketDigest: prepared.request.ticket.ticketDigest, ...canonical })));
     const files = { ...input.files, [entry]: receipt.source }, compiled = { ...reopened.compiled, compiled: receipt.compiled };
-    const result = output(session, compiled, files, { valueChanges: update.valueChanges ?? [], ...(input.kind === "construction" ? { createdDeclarations: prepared.declarations } : {}),
+    const result = output(session, compiled, files, { valueChanges: update.valueChanges ?? [], ...(["construction", "tool_operation"].includes(input.kind) ? { createdDeclarations: prepared.declarations } : {}),
       patches: [{ path: entry, patch: receipt.patch }], preparedContribution: { kind: "values", entry, current, mutation, acceptedSource: input.files[entry], patch: receipt.patch, patches: input.model.patches } });
     if (replay) {
-      if (!prepared.replay) fail("invalid_result", "Native construction replay omitted its original dependency witness");
+      if (!prepared.replay) fail("invalid_result", "Native tool replay omitted its original dependency witness");
       result.requiredStableDeclarations = prepared.replay.requiredStableDeclarations;
       result.requiredStableTargets = replay.stableTargets(prepared.replay.requiredStableDeclarations);
       result.allocationMapping = prepared.replay.allocationMapping;

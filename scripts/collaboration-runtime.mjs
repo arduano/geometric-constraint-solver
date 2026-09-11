@@ -160,7 +160,7 @@ export async function openCollaborationRuntime(folder, {
       finally { source.release(capture); }
     }
     async function captureSemantic(_connection, command) {
-      if (!["point_gesture", "construction"].includes(command.payload?.action)) return {};
+      if (!["point_gesture", "construction", "tool_operation"].includes(command.payload?.action)) return {};
       const captured = await host.acceptedCheckpoint(command.basisRevision);
       const model = restoreModelCheckpoint(captured.checkpoints.model);
       if (command.payload.gesture?.basis !== model.sourceDesignDigest) throw Error("Gesture basis differs from the historical accepted model revision");
@@ -238,9 +238,9 @@ export async function openCollaborationRuntime(folder, {
             }
             result = await domain({ kind: "point_gesture", folder, files: basis.files, model: accepted.model, command: payload.gesture,
               replayCheckpoint: replayCheckpoint(prepared.command, attachments), originalTargets: payload.targets });
-          } else if (prepared.command.payload?.action === "construction") {
+          } else if (["construction", "tool_operation"].includes(prepared.command.payload?.action)) {
             exact(prepared.command.payload, ["action", "gesture"]);
-            result = await domain({ kind: "construction", folder, files: basis.files, model: accepted.model, command: prepared.command.payload.gesture,
+            result = await domain({ kind: prepared.command.payload.action, folder, files: basis.files, model: accepted.model, command: prepared.command.payload.gesture,
               replayCheckpoint: replayCheckpoint(prepared.command, attachments) });
           } else if (prepared.command.payload?.action === "mutation") {
             const payload = prepared.command.payload;
@@ -365,7 +365,7 @@ export async function openCollaborationRuntime(folder, {
     previews = createCollaborationPreviewService({ enabled: authoringPreview.enabled ?? false, limits: authoringPreview.limits,
       authenticate(connection) { host.resume(connection, host.snapshot().latestSequence); },
       captureBasis() { return { documentEpoch: host.configuration.documentEpoch, revision: host.snapshot().acceptedRevision,
-        sourceDesignDigest: accepted.model.sourceDesignDigest, project: accepted.model.project, design: accepted.model.design }; },
+        sourceDesignDigest: accepted.model.sourceDesignDigest, project: accepted.model.project, design: accepted.model.design, viewSeed: acceptedScene?.seed }; },
     });
     const documentSnapshot = (connection) => ({ ...source.snapshot(), targets: generationSnapshot(), documentTarget: semantic.current(documentObject(accepted.model)), inventory: accepted.inventory, sourceProjection: accepted.sourceProjection,
       authoringPreview: { server: previews.enabled, preferred: previewMode },

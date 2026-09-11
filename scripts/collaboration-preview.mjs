@@ -22,7 +22,8 @@ function finiteJson(value, limit, description) {
 /** Opt-in server authoring compute. Trusted callbacks own admission; immutable
  * accepted model snapshots are never taken from network request bodies.
  * Every native operation runs in a bounded, terminable worker distinct from the
- * ordered commit worker. No browser camera, selection or picking runs here.
+ * ordered commit worker. Browsing navigation remains local; operation activation
+ * can map submitted personal selection through a trusted accepted scene.
  */
 export function createCollaborationPreviewService({ enabled = false, authenticate, captureBasis, limits: overrides = {} } = {}) {
   if (typeof enabled !== "boolean" || typeof authenticate !== "function" || typeof captureBasis !== "function") throw TypeError("Preview service requires trusted authentication and basis capture callbacks");
@@ -55,7 +56,8 @@ export function createCollaborationPreviewService({ enabled = false, authenticat
     if (model?.then) { void Promise.resolve(model).catch(() => {}); throw TypeError("Preview accepted basis capture must be synchronous"); }
     if (!model || model.documentEpoch !== request.basis.documentEpoch || model.revision !== request.basis.revision
       || model.sourceDesignDigest !== request.basis.sourceDesignDigest) throw previewFault("preview_stale_basis", "Authoring preview basis is no longer accepted", 409);
-    const encoded = finiteJson({ basis: request.basis, model: { project: model.project, design: model.design, sourceDesignDigest: model.sourceDesignDigest } }, limits.maxBasisBytes, "Accepted preview basis");
+    const encoded = finiteJson({ basis: request.basis, model: { project: model.project, design: model.design, sourceDesignDigest: model.sourceDesignDigest },
+      ...(request.kind === "operation" ? { viewSeed: model.viewSeed } : {}) }, limits.maxBasisBytes, "Accepted preview basis");
     const bytes = Buffer.byteLength(encoded);
     if (totalBytes + bytes > limits.maxTotalBasisBytes) throw previewFault("preview_backpressure", "Retained preview memory budget is full", 429);
     const ticket = randomBytes(32).toString("hex");
@@ -79,7 +81,7 @@ export function createCollaborationPreviewService({ enabled = false, authenticat
         const expectedKind = active.action === "finish" ? entry.kind : "preview";
         if (!result || result.kind !== expectedKind || JSON.stringify(result.basis) !== JSON.stringify(entry.basis)
           || result.kind === "preview" && typeof result.presentation !== "string"
-          || result.kind === "point" && !result.terminal?.command || result.kind === "construction" && !result.command) throw Error("Native preview response has foreign basis or operation");
+          || result.kind === "point" && !result.terminal?.command || ["construction", "operation"].includes(result.kind) && !result.command) throw Error("Native preview response has foreign basis or operation");
         authorize(active.connection);
       } catch (error) { void destroy(entry, error); return; }
       clearTimeout(active.timer); active.signal?.removeEventListener("abort", active.abort); entry.active = undefined;
