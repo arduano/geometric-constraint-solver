@@ -8,7 +8,7 @@ export interface CanvasSurface { width: number; height: number; pixelRatio: numb
 export interface BackendStats { resources: number; created: number; destroyed: number; updated: number; repainted?: number; rasterResolution?: number }
 export interface CanvasBackend {
   readonly hardware: Readonly<Record<string, string>>;
-  render(frame: DrawFrame, surface: CanvasSurface): BackendStats;
+  render(frame: DrawFrame, surface: CanvasSurface): BackendStats | Promise<BackendStats>;
   destroy(): void;
 }
 interface Entry { container: Container; content: Graphics | Text; shadow: Graphics | null; blur: BlurFilter | null; item: DrawItem | null; kind: DrawItem["kind"]; scale: number; resolution: number; position: DrawPoint | null }
@@ -126,8 +126,9 @@ function paint(graphics: Graphics, item: Exclude<DrawItem, { kind: "text" }>, ma
 
 export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<CanvasBackend> {
   // Request precisely WebGL2. Never silently fall back to software Canvas2D or WebGL1.
-  const gl = canvas.getContext("webgl2", { alpha: false, antialias: true, stencil: true, preserveDrawingBuffer: true, premultipliedAlpha: true });
-  if (!gl) throw new Error("WebGL2 is unavailable");
+  const context = canvas.getContext("webgl2", { alpha: false, antialias: true, stencil: true, preserveDrawingBuffer: true, premultipliedAlpha: true });
+  if (!context) throw new Error("WebGL2 is unavailable");
+  const gl = context;
   const renderer = new WebGLRenderer();
   try {
     await renderer.init({ canvas, context: gl, width: 1, height: 1, resolution: 1, antialias: true, backgroundAlpha: 1, clearBeforeRender: true, manageImports: false, gcActive: false, eventMode: "none", eventFeatures: { move: false, globalMove: false, click: false, wheel: false } });
@@ -147,10 +148,63 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
   const entries = new Map<string, Entry>();
   let surfaceKey = "";
   let created = 0; let destroyed = 0; let updated = 0; let repainted = 0; let disposed = false; let restored = false;
+  let cancelCompletion: ((error: Error) => void) | null = null;
+  let failure: Error | null = null;
+  const contextLost = () => cancelCompletion?.(new Error("WebGL2 context was lost during presentation"));
   // Registered after Pixi initialization: rebuild only on the next render, after
   // all of Pixi's own context-restoration listeners have completed.
-  const contextRestored = () => { restored = true; };
+  const contextRestored = () => { restored = true; failure = null; };
+  canvas.addEventListener("webglcontextlost", contextLost);
   canvas.addEventListener("webglcontextrestored", contextRestored);
+  function completeSubmission(stats: BackendStats): Promise<BackendStats> {
+    if (gl.isContextLost()) throw new Error("WebGL2 context was lost during presentation");
+    const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+    if (!sync) throw new Error("WebGL2 could not create a presentation fence");
+    return new Promise((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let finished = false;
+      const deadline = performance.now() + 5_000;
+      const finish = (error?: Error) => {
+        if (finished) return;
+        finished = true;
+        if (timer !== undefined) clearTimeout(timer);
+        if (cancelCompletion === cancel) cancelCompletion = null;
+        try { gl.deleteSync(sync); } catch (cleanupError) { error ??= cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)); }
+        // A deleted fence does not cancel submitted GPU work. A failed wait
+        // retires this context until restoration, preventing an unbounded queue.
+        if (error) failure = error;
+        if (error) reject(error); else resolve(stats);
+      };
+      const cancel = (error: Error) => finish(error);
+      cancelCompletion = cancel;
+      const poll = () => {
+        if (finished) return;
+        timer = undefined;
+        try {
+          if (disposed || gl.isContextLost()) throw new Error("WebGL2 context is unavailable for presentation");
+          const status = gl.clientWaitSync(sync, 0, 0);
+          if (status === gl.TIMEOUT_EXPIRED) {
+            if (performance.now() >= deadline) throw new Error("WebGL2 presentation did not complete within 5 seconds");
+            // Match browsers' nested-timer floor without an extra half-frame
+            // delay before releasing the newest queued interaction frame.
+            timer = setTimeout(poll, 4);
+            return;
+          }
+          if (status !== gl.ALREADY_SIGNALED && status !== gl.CONDITION_SATISFIED) throw new Error(`WebGL2 presentation fence failed with status ${status}`);
+          // Error flags remain authoritative. Reading them only after the fence
+          // completes avoids synchronously waiting for queued GPU work here.
+          const error = gl.getError();
+          if (error !== gl.NO_ERROR) throw new Error(`WebGL2 presentation failed with error ${error}`);
+          if (gl.isContextLost()) throw new Error("WebGL2 context was lost during presentation");
+          finish();
+        } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
+      };
+      try {
+        gl.flush(); // Submit the fence too; never busy-wait or use a nonzero wait timeout.
+        timer = setTimeout(poll, 0);
+      } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
+    });
+  }
   function remove(entry: Entry) {
     entry.blur?.destroy();
     entry.container.destroy({ children: true, texture: true, textureSource: true });
@@ -160,91 +214,96 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
     hardware,
     render(frame, surface) {
       if (disposed || gl.isContextLost()) throw new Error("WebGL2 context is unavailable for presentation");
-      if (restored) {
-        invalidateRestoredUniformUploads(renderer);
-        // Textures rasterized during a failed first draw can also be incomplete.
-        // Retire retained presentation resources once; native frame authority and
-        // ordinary translation/resource reuse remain unchanged.
-        for (const entry of entries.values()) remove(entry);
-        entries.clear(); surfaceKey = ""; restored = false;
-      }
-      // Supersample low-DPR displays so thin CAD strokes and small dimension
-      // text retain subpixel coverage comparable to the SVG baseline.
-      const rasterResolution = Math.max(2, surface.pixelRatio);
-      const nextSurface = `${surface.width}:${surface.height}:${surface.pixelRatio}`;
-      if (nextSurface !== surfaceKey) { renderer.resize(surface.width, surface.height, rasterResolution); surfaceKey = nextSurface; }
-      renderer.background.color = frame.background;
-      const fit = fitDrawing(frame.viewBox, surface.width, surface.height);
-      const map = (p: DrawPoint): DrawPoint => [fit.x + p[0] * fit.scale, fit.y + p[1] * fit.scale];
-      const present = new Set(frame.items.map((item) => item.id));
-      for (const [id, entry] of entries) if (!present.has(id)) { remove(entry); entries.delete(id); }
-      frame.items.forEach((item, index) => {
-        let entry = entries.get(item.id);
-        if (entry && entry.kind !== item.kind) { remove(entry); entries.delete(item.id); entry = undefined; }
-        if (!entry) {
-          const container = new Container({ eventMode: "none", interactiveChildren: false });
-          const content = item.kind === "text" ? new Text({ text: "", resolution: rasterResolution }) : new Graphics();
-          container.addChild(content); stage.addChild(container);
-          entry = { container, content, shadow: null, blur: null, item: null, kind: item.kind, scale: 0, resolution: 0, position: null };
-          entries.set(item.id, entry); created++;
+      if (failure) throw failure;
+      if (cancelCompletion) throw new Error("WebGL2 presentation is already in flight");
+      try {
+        if (restored) {
+          invalidateRestoredUniformUploads(renderer);
+          // Textures rasterized during a failed first draw can also be incomplete.
+          // Retire retained presentation resources once; native frame authority and
+          // ordinary translation/resource reuse remain unchanged.
+          for (const entry of entries.values()) remove(entry);
+          entries.clear(); surfaceKey = ""; restored = false;
         }
-        // Paint order is explicitly native-authored; semantic keys do not reorder anything.
-        // Pixi's setChildIndex searches twice even when the child is already in place.
-        if (stage.children[index] !== entry.container) stage.setChildIndex(entry.container, index);
-        const { style } = item;
-        const anchor = origin(item); const position = map(anchor);
-        const previous = entry.item;
-        const paintChanged = !previous || entry.scale !== fit.scale || !sameStyle(previous.style, style)
-          || !sameLocalGeometry(previous, item) || item.kind === "text" && entry.resolution !== rasterResolution;
-        const positionChanged = !entry.position || entry.position[0] !== position[0] || entry.position[1] !== position[1];
-        const rotationChanged = item.kind === "text" && (!previous || previous.kind !== "text" || previous.rotation !== item.rotation);
-        entry.item = item;
-        if (!paintChanged && !positionChanged && !rotationChanged) return;
-        // Keep CSS stroke widths, glyph sizes and shadow offsets in their original units;
-        // only translation is delegated to the container transform.
-        if (positionChanged) entry.container.position.set(...position);
-        entry.container.alpha = style.opacity;
-        if (item.kind === "text" && entry.content instanceof Text) {
-          const text = entry.content;
-          if (paintChanged) {
-            const textStyle = new TextStyle({ fontFamily: style.fontFamily.split(",").map((font) => font.trim().replace(/^['"]|['"]$/g, "")), fontSize: style.fontSize * fit.scale,
-              fontWeight: String(style.fontWeight) as "400", fill: style.fill ? colorValue(style.fill) : { color: 0, alpha: 0 },
-              stroke: style.stroke ? { ...colorValue(style.stroke), width: style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale), join: style.lineJoin } : undefined,
-              textBaseline: "alphabetic", letterSpacing: style.letterSpacing * fit.scale, padding: Math.max(style.strokeWidth, style.shadow?.blur ?? 0) * 2,
-              dropShadow: style.shadow ? { ...colorValue(style.shadow.color), blur: style.shadow.blur, distance: Math.hypot(...style.shadow.offset), angle: Math.atan2(style.shadow.offset[1], style.shadow.offset[0]) } : false });
-            text.text = item.text; text.style = textStyle; text.resolution = rasterResolution;
-            text.anchor.set(0, 0);
-            const metrics = CanvasTextMetrics.measureText(item.text, textStyle);
-            const origin = textRasterOrigin(metrics, style.textAnchor, style.textBaseline, style.stroke ? style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale) : 0);
-            text.pivot.set(origin.x, origin.y);
+        // Supersample low-DPR displays so thin CAD strokes and small dimension
+        // text retain subpixel coverage comparable to the SVG baseline.
+        const rasterResolution = Math.max(2, surface.pixelRatio);
+        const nextSurface = `${surface.width}:${surface.height}:${surface.pixelRatio}`;
+        if (nextSurface !== surfaceKey) { renderer.resize(surface.width, surface.height, rasterResolution); surfaceKey = nextSurface; }
+        renderer.background.color = frame.background;
+        const fit = fitDrawing(frame.viewBox, surface.width, surface.height);
+        const map = (p: DrawPoint): DrawPoint => [fit.x + p[0] * fit.scale, fit.y + p[1] * fit.scale];
+        const present = new Set(frame.items.map((item) => item.id));
+        for (const [id, entry] of entries) if (!present.has(id)) { remove(entry); entries.delete(id); }
+        frame.items.forEach((item, index) => {
+          let entry = entries.get(item.id);
+          if (entry && entry.kind !== item.kind) { remove(entry); entries.delete(item.id); entry = undefined; }
+          if (!entry) {
+            const container = new Container({ eventMode: "none", interactiveChildren: false });
+            const content = item.kind === "text" ? new Text({ text: "", resolution: rasterResolution }) : new Graphics();
+            container.addChild(content); stage.addChild(container);
+            entry = { container, content, shadow: null, blur: null, item: null, kind: item.kind, scale: 0, resolution: 0, position: null };
+            entries.set(item.id, entry); created++;
           }
-          text.rotation = item.rotation;
-        } else if (paintChanged && item.kind !== "text" && entry.content instanceof Graphics) {
-          const local = (point: DrawPoint): DrawPoint => [(point[0] - anchor[0]) * fit.scale, (point[1] - anchor[1]) * fit.scale];
-          paint(entry.content, item, local, fit.scale);
-          if (style.shadow) {
-            if (!entry.shadow) { entry.shadow = new Graphics(); entry.container.addChildAt(entry.shadow, 0); }
-            paint(entry.shadow, item, local, fit.scale, style.shadow.color);
-            entry.shadow.position.set(...style.shadow.offset);
-            if (!entry.blur) entry.blur = new BlurFilter({ strength: style.shadow.blur, quality: 4 });
-            entry.blur.strength = style.shadow.blur;
-            entry.shadow.filters = style.shadow.blur ? [entry.blur] : [];
-          } else if (entry.shadow) { entry.shadow.destroy(); entry.shadow = null; entry.blur?.destroy(); entry.blur = null; }
-        }
-        entry.scale = fit.scale; entry.resolution = rasterResolution; entry.position = position; updated++;
-        if (paintChanged) repainted++;
-      });
-      renderer.render({ container: stage });
-      renderer.gc.run();
-      gl.flush();
-      const error = gl.getError();
-      if (error !== gl.NO_ERROR) throw new Error(`WebGL2 presentation failed with error ${error}`);
-      if (gl.isContextLost()) throw new Error("WebGL2 context was lost during presentation");
-      return { resources: entries.size, created, destroyed, updated, repainted, rasterResolution };
+          // Paint order is explicitly native-authored; semantic keys do not reorder anything.
+          // Pixi's setChildIndex searches twice even when the child is already in place.
+          if (stage.children[index] !== entry.container) stage.setChildIndex(entry.container, index);
+          const { style } = item;
+          const anchor = origin(item); const position = map(anchor);
+          const previous = entry.item;
+          const paintChanged = !previous || entry.scale !== fit.scale || !sameStyle(previous.style, style)
+            || !sameLocalGeometry(previous, item) || item.kind === "text" && entry.resolution !== rasterResolution;
+          const positionChanged = !entry.position || entry.position[0] !== position[0] || entry.position[1] !== position[1];
+          const rotationChanged = item.kind === "text" && (!previous || previous.kind !== "text" || previous.rotation !== item.rotation);
+          entry.item = item;
+          if (!paintChanged && !positionChanged && !rotationChanged) return;
+          // Keep CSS stroke widths, glyph sizes and shadow offsets in their original units;
+          // only translation is delegated to the container transform.
+          if (positionChanged) entry.container.position.set(...position);
+          entry.container.alpha = style.opacity;
+          if (item.kind === "text" && entry.content instanceof Text) {
+            const text = entry.content;
+            if (paintChanged) {
+              const textStyle = new TextStyle({ fontFamily: style.fontFamily.split(",").map((font) => font.trim().replace(/^['"]|['"]$/g, "")), fontSize: style.fontSize * fit.scale,
+                fontWeight: String(style.fontWeight) as "400", fill: style.fill ? colorValue(style.fill) : { color: 0, alpha: 0 },
+                stroke: style.stroke ? { ...colorValue(style.stroke), width: style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale), join: style.lineJoin } : undefined,
+                textBaseline: "alphabetic", letterSpacing: style.letterSpacing * fit.scale, padding: Math.max(style.strokeWidth, style.shadow?.blur ?? 0) * 2,
+                dropShadow: style.shadow ? { ...colorValue(style.shadow.color), blur: style.shadow.blur, distance: Math.hypot(...style.shadow.offset), angle: Math.atan2(style.shadow.offset[1], style.shadow.offset[0]) } : false });
+              text.text = item.text; text.style = textStyle; text.resolution = rasterResolution;
+              text.anchor.set(0, 0);
+              const metrics = CanvasTextMetrics.measureText(item.text, textStyle);
+              const origin = textRasterOrigin(metrics, style.textAnchor, style.textBaseline, style.stroke ? style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale) : 0);
+              text.pivot.set(origin.x, origin.y);
+            }
+            text.rotation = item.rotation;
+          } else if (paintChanged && item.kind !== "text" && entry.content instanceof Graphics) {
+            const local = (point: DrawPoint): DrawPoint => [(point[0] - anchor[0]) * fit.scale, (point[1] - anchor[1]) * fit.scale];
+            paint(entry.content, item, local, fit.scale);
+            if (style.shadow) {
+              if (!entry.shadow) { entry.shadow = new Graphics(); entry.container.addChildAt(entry.shadow, 0); }
+              paint(entry.shadow, item, local, fit.scale, style.shadow.color);
+              entry.shadow.position.set(...style.shadow.offset);
+              if (!entry.blur) entry.blur = new BlurFilter({ strength: style.shadow.blur, quality: 4 });
+              entry.blur.strength = style.shadow.blur;
+              entry.shadow.filters = style.shadow.blur ? [entry.blur] : [];
+            } else if (entry.shadow) { entry.shadow.destroy(); entry.shadow = null; entry.blur?.destroy(); entry.blur = null; }
+          }
+          entry.scale = fit.scale; entry.resolution = rasterResolution; entry.position = position; updated++;
+          if (paintChanged) repainted++;
+        });
+        renderer.render({ container: stage });
+        renderer.gc.run();
+        return completeSubmission({ resources: entries.size, created, destroyed, updated, repainted, rasterResolution });
+      } catch (error) {
+        failure = error instanceof Error ? error : new Error(String(error));
+        throw failure;
+      }
     },
     destroy() {
       if (disposed) return;
       disposed = true;
+      cancelCompletion?.(new Error("WebGL2 renderer was disposed during presentation"));
+      canvas.removeEventListener("webglcontextlost", contextLost);
       canvas.removeEventListener("webglcontextrestored", contextRestored);
       for (const entry of entries.values()) remove(entry);
       entries.clear(); stage.destroy(); renderer.destroy({ removeView: false });

@@ -265,7 +265,7 @@ test("shared circle dragging paints continuously through pending acceptance and 
     await context.addInitScript(()=>{
       window.geosolveDragGpu=[];window.geosolveDragLongTasks=[];
       new PerformanceObserver(list=>{for(const e of list.getEntries())if(window.geosolveDragLongTasks.length<128)window.geosolveDragLongTasks.push({at:e.startTime,duration:e.duration});}).observe({type:"longtask",buffered:true});
-      for(const method of ["compileShader","linkProgram","getProgramParameter","drawElements","drawArrays","getError","flush","checkFramebufferStatus","getShaderParameter"]){
+      for(const method of ["compileShader","linkProgram","getProgramParameter","drawElements","drawArrays","getError","flush","fenceSync","clientWaitSync","checkFramebufferStatus","getShaderParameter"]){
         const original=WebGL2RenderingContext.prototype[method];
         WebGL2RenderingContext.prototype[method]=function(...args){const at=performance.now();try{return Reflect.apply(original,this,args);}finally{const elapsed=performance.now()-at;if(elapsed>5&&window.geosolveDragGpu.length<128)window.geosolveDragGpu.push({method,at,elapsed});}};
       }

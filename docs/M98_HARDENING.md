@@ -1129,13 +1129,23 @@ the same current isolated server and the exact previous frontend artifact.
 Owner: `canvas-renderer-pixi.ts` and `canvas-renderer.ts`. The renderer flushes and
 synchronously queries GL errors after every draw on the browser's input thread.
 The query waits for earlier GPU work; simply removing it or moving it into a timer
-would either weaken frame validation or relocate the same stall. The authorized
-repair will observe WebGL2 fence completion asynchronously before retaining the
-existing error check. At most one draw may be in flight, newer immutable inputs
+would either weaken frame validation or relocate the same stall. The repair
+observes WebGL2 fence completion asynchronously before retaining the existing
+error check. Zero-timeout polls yield through scheduled 4 ms tasks; a still-unsignaled
+fence after five seconds fails explicitly. Completed fences remain valid when a
+background tab delays its first poll. At most one draw may be in flight, newer immutable inputs
 coalesce, and only the exact validated frame can advance presentation evidence.
 Context loss, disposal, failed fences and timeouts must not publish late frames.
 No Rust solver, numerical tolerance, draw style, shader warmup or timing threshold
-change is part of this repair. Implementation and renewed qualification are pending.
+change is part of this repair. All 39 focused renderer tests and TypeScript checking pass. The first browser
+trial passed Fillet, server Offset navigation and manifold navigation, but cold
+drag narrowly missed 500 ms at 500.8 ms. Reducing the polling delay from 8 ms to
+the browser nested-timer floor of 4 ms avoids unnecessary queued-frame latency.
+The resulting cold drag is 416.2 ms; warm drags are 129.5/116.8 ms, all with zero
+reversals. Warm release-to-peer is 443.4/358.7 ms. All four real-browser renderer workflows pass on the final isolated artifact:
+pixels/idle behavior, DPR/hidden layouts, context loss including first-shader-loss
+restoration, and pointer-capture recovery. These focused observations do not replace
+the pending integrated qualification.
 
 Preserved evidence under `target/m98/coordination/tool-parity/`:
 `browser-isolated-r3.log`, `drag-prior-artifact-comparison.log`,
@@ -1144,3 +1154,16 @@ Preserved evidence under `target/m98/coordination/tool-parity/`:
 `browser-scheduling-after.log` (17 pass) and
 `browser-scheduling-pipeline.log` (24 pass). The two failed product nominations
 remain failed; successful independent receipts may be reused only by the runner.
+
+Final focused commands use the pinned Nix shell.
+`npx tsc -b --pretty false` and
+`npx vitest run --no-cache src/lib/canvas-renderer.test.ts src/lib/canvas-renderer-pixi.test.ts`
+pass in the frontend directory (39 tests). An isolated compiler-harness
+`npm run build:ui` preserves the existing three WASM modules.
+`node --test --test-concurrency=1 --test-name-pattern="shared circle dragging"
+scripts/collaboration-browser.test.mjs` passes on that artifact.
+`npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1` passes
+all four cases in 1.1 minutes with the exact isolated manifest and port 18120.
+Logs: `renderer-root-review-tests.log`, `renderer-poll-tests.log`,
+`browser-async-gpu-r4.log`, `browser-async-gpu-drag-r5.log` and
+`async-gpu-renderer-browser.log` in the coordination directory.

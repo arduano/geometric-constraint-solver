@@ -55,8 +55,13 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement, options: Rendere
   let pending: number | null = null;
   let disposed = false;
   let lost = false;
+  let failed = false;
   let dirty = false;
   let surface: CanvasSurface = { width: 0, height: 0, pixelRatio: 1 };
+  let surfaceVersion = 0;
+  let contextEpoch = 0;
+  type Submission = { frame: DrawFrame; frameId: number; surface: CanvasSurface; surfaceVersion: number; contextEpoch: number; began: number };
+  let inFlight: Submission | null = null;
   let diagnostics: Readonly<RendererDiagnostics> = Object.freeze({ ...surface, backend: "webgl2", state: "initializing", frameCount: 0, lastFrameId: null,
     lastRenderMilliseconds: 0, totalRenderMilliseconds: 0, hardware: null, error: null, resources: 0, created: 0, destroyed: 0, updated: 0 });
   Object.defineProperties(canvas, {
@@ -70,32 +75,42 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement, options: Rendere
     options.onState?.(next);
   }
   function schedule() {
-    if (disposed || lost || !backend || !accepted || !dirty || pending !== null || surface.width <= 0 || surface.height <= 0) return;
+    if (disposed || lost || failed || !backend || !accepted || !dirty || pending !== null || inFlight || surface.width <= 0 || surface.height <= 0) return;
     pending = requestFrame(() => {
       pending = null;
       if (disposed || lost || !backend || !accepted) return;
-      const input = accepted; const frameId = acceptedId;
-      const began = now();
-      try {
-        const stats = backend.render(input, surface);
-        if (disposed || lost) return;
-        const elapsed = now() - began;
-        // Commit evidence only after the GPU renderer completed its submission successfully.
-        presented = input;
-        dirty = false;
-        diagnostics = Object.freeze({ ...diagnostics, ...surface, ...stats, frameCount: diagnostics.frameCount + 1, lastFrameId: frameId,
-          hardware: backend.hardware, lastRenderMilliseconds: elapsed, totalRenderMilliseconds: diagnostics.totalRenderMilliseconds + elapsed });
-        canvas.dataset.presentedFrame = String(frameId);
+      const submission: Submission = { frame: accepted, frameId: acceptedId, surface: { ...surface }, surfaceVersion, contextEpoch, began: now() };
+      inFlight = submission;
+      const current = () => !disposed && !lost && inFlight === submission && contextEpoch === submission.contextEpoch;
+      const complete = (stats: BackendStats) => {
+        if (!current()) return;
+        inFlight = null;
+        // Publish the exact validated draw, including its submitted camera and
+        // surface. Newer input stays queued; it cannot relabel this older draw.
+        presented = submission.frame;
+        dirty = acceptedId !== submission.frameId || surfaceVersion !== submission.surfaceVersion;
+        const elapsed = now() - submission.began;
+        diagnostics = Object.freeze({ ...diagnostics, ...submission.surface, ...stats, frameCount: diagnostics.frameCount + 1, lastFrameId: submission.frameId,
+          hardware: backend!.hardware, lastRenderMilliseconds: elapsed, totalRenderMilliseconds: diagnostics.totalRenderMilliseconds + elapsed });
+        canvas.dataset.presentedFrame = String(submission.frameId);
         state("ready");
-      } catch (error) {
-        state(lost ? "lost" : "unavailable", error instanceof Error ? error.message : String(error));
-      }
+        schedule();
+      };
+      const fail = (error: unknown) => {
+        if (!current()) return;
+        inFlight = null; failed = true;
+        state("unavailable", error instanceof Error ? error.message : String(error));
+      };
+      try {
+        const result = backend.render(submission.frame, submission.surface);
+        if (result instanceof Promise) void result.then(complete, fail); else complete(result);
+      } catch (error) { fail(error); }
     });
   }
   function contextLost(event: Event) {
     event.preventDefault();
     if (disposed) return;
-    lost = true; dirty = true;
+    lost = true; dirty = true; contextEpoch++; inFlight = null;
     if (pending !== null) { cancelFrame(pending); pending = null; }
     state("lost");
   }
@@ -103,7 +118,7 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement, options: Rendere
     if (disposed) return;
     // Pixi's context-restored listener rebuilds GPU systems in the same event dispatch.
     // The next RAF runs after every restoration listener and presents the newest retained input.
-    lost = false; dirty = true; state("initializing"); schedule();
+    lost = false; failed = false; dirty = true; state("initializing"); schedule();
   }
   canvas.addEventListener("webglcontextlost", contextLost);
   canvas.addEventListener("webglcontextrestored", contextRestored);
@@ -135,13 +150,13 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement, options: Rendere
       if (![next.width, next.height].every((value) => Number.isFinite(value) && value >= 0)
         || !Number.isFinite(next.pixelRatio) || next.pixelRatio <= 0) return;
       if (next.width === surface.width && next.height === surface.height && next.pixelRatio === surface.pixelRatio) return;
-      surface = { ...next }; dirty = true;
+      surface = { ...next }; surfaceVersion++; dirty = true;
       if ((next.width === 0 || next.height === 0) && pending !== null) { cancelFrame(pending); pending = null; }
       schedule();
     },
     destroy() {
       if (disposed) return;
-      disposed = true;
+      disposed = true; contextEpoch++; inFlight = null;
       if (pending !== null) cancelFrame(pending);
       canvas.removeEventListener("webglcontextlost", contextLost);
       canvas.removeEventListener("webglcontextrestored", contextRestored);

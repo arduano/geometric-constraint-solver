@@ -108,3 +108,14 @@ without changing the ceiling or solver source. All 66 actual-WASM construction, 
 optimized binary (`node --test packages/geosolve-engine/test/construction.test.mjs
 packages/geosolve-engine/test/tool-operations.test.mjs scripts/collaboration-preview.test.mjs`).
 A new clean integrated nomination must pass before delivery; the failed run remains failed.
+
+The second nomination `20260911T133551-a403dc7b` passes all 49 ordinary
+browser workflows, engine/folder/runtime/package/frontend checks and optimized
+artifact preparation, but fails four collaboration browser assertions. A bounded
+Fillet paint wait fixes one harness race; collaboration latency measurements now
+require exclusive gate execution. Isolated and previous-artifact comparisons
+expose the existing synchronous GPU stall recorded as [M98-F039](M98_HARDENING.md#m98-f039--synchronous-gpu-completion-stalls-canvas-input).
+The asynchronous fence repair retains exact validated frame evidence and error
+checks; 39 focused renderer tests, dragging and all four actual-browser
+pixel/resize/context-recovery workflows pass. Renewed integrated qualification
+and preserved live delivery remain pending.

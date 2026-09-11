@@ -22,6 +22,68 @@ function harness() {
 }
 
 describe("on-demand accepted-frame presentation", () => {
+  it("waits for GPU validation before publishing a frame and coalesces input received while it is pending", async () => {
+    const h = harness(); h.renderer.accept(frame()); await h.ready(); h.flush();
+    let complete!: (stats: {resources:number;created:number;destroyed:number;updated:number}) => void;
+    const pending = new Promise<{resources:number;created:number;destroyed:number;updated:number}>(resolve => { complete = resolve; });
+    vi.mocked(h.backend.render).mockImplementationOnce(() => pending);
+    h.renderer.accept(frame(14)); h.flush();
+    expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());
+    h.renderer.accept(frame(16)); h.renderer.accept(frame(18)); h.flush();
+    expect(h.backend.render).toHaveBeenCalledTimes(2);
+    complete({resources:1,created:1,destroyed:0,updated:2}); await Promise.resolve();
+    expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
+    h.flush(); expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));
+    expect(h.backend.render).toHaveBeenCalledTimes(3); h.renderer.destroy();
+  });
+  it("retains the submitted surface while newer resize and hidden input wait for completion", async () => {
+    const h=harness();h.renderer.accept(frame());await h.ready();h.flush();
+    let resolve!:(value:{resources:number;created:number;destroyed:number;updated:number})=>void;
+    vi.mocked(h.backend.render).mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
+    h.renderer.accept(frame(14));h.flush();
+    h.renderer.resize({width:1200,height:800,pixelRatio:2});h.renderer.accept(frame(18));
+    h.renderer.resize({width:0,height:0,pixelRatio:2});h.flush();
+    expect(h.backend.render).toHaveBeenCalledTimes(2);
+    resolve({resources:1,created:1,destroyed:0,updated:2});await Promise.resolve();
+    expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
+    expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({width:1000,height:700,pixelRatio:1});
+    expect(h.callbacks.size).toBe(0);
+    h.renderer.resize({width:1200,height:800,pixelRatio:2});h.flush();
+    expect(h.backend.render).toHaveBeenLastCalledWith(frame(18),{width:1200,height:800,pixelRatio:2});
+    expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));h.renderer.destroy();
+  });
+  for(const rejected of [false,true])it(`ignores a ${rejected?"rejected":"successful"} old-context completion after restored drawing starts`,async()=>{
+    const h=harness();h.renderer.accept(frame());await h.ready();h.flush();
+    const stats={resources:1,created:1,destroyed:0,updated:2};
+    let oldResolve!:(value:typeof stats)=>void,oldReject!:(error:Error)=>void,newResolve!:(value:typeof stats)=>void;
+    vi.mocked(h.backend.render).mockImplementationOnce(()=>new Promise((yes,no)=>{oldResolve=yes;oldReject=no;}));
+    h.renderer.accept(frame(14));h.flush();h.canvas.dispatchEvent(new Event("webglcontextlost",{cancelable:true}));
+    h.renderer.accept(frame(18));h.canvas.dispatchEvent(new Event("webglcontextrestored"));
+    vi.mocked(h.backend.render).mockImplementationOnce(()=>new Promise(yes=>{newResolve=yes;}));h.flush();
+    if(rejected)oldReject(new Error("stale GPU failure"));else oldResolve(stats);await Promise.resolve();
+    h.renderer.accept(frame(20));h.flush();
+    expect(h.backend.render).toHaveBeenCalledTimes(3);expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());
+    expect(h.canvas.__geosolveRendererDiagnostics?.state).toBe("initializing");
+    newResolve(stats);await Promise.resolve();expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));
+    h.flush();expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(20));h.renderer.destroy();
+  });
+  it("latches GPU validation failure until restoration and never publishes a rejected draw",async()=>{
+    const h=harness();h.renderer.accept(frame());await h.ready();h.flush();
+    let reject!:(error:Error)=>void;
+    vi.mocked(h.backend.render).mockImplementationOnce(()=>new Promise((_,no)=>{reject=no;}));
+    h.renderer.accept(frame(14));h.flush();reject(new Error("GPU timeout"));await Promise.resolve();
+    h.renderer.accept(frame(18));h.renderer.resize({width:1200,height:800,pixelRatio:2});h.flush();
+    expect(h.backend.render).toHaveBeenCalledTimes(2);expect(h.callbacks.size).toBe(0);
+    expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({state:"unavailable",frameCount:1,error:"GPU timeout"});
+    h.canvas.dispatchEvent(new Event("webglcontextlost",{cancelable:true}));h.canvas.dispatchEvent(new Event("webglcontextrestored"));h.flush();
+    expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));h.renderer.destroy();
+  });
+  for(const rejected of [false,true])it(`does not revive destroyed presentation after ${rejected?"rejection":"completion"}`,async()=>{
+    const h=harness();await h.ready();let resolve!:(value:{resources:number;created:number;destroyed:number;updated:number})=>void,reject!:(error:Error)=>void;
+    vi.mocked(h.backend.render).mockImplementationOnce(()=>new Promise((yes,no)=>{resolve=yes;reject=no;}));h.renderer.accept(frame());h.flush();h.renderer.destroy();
+    if(rejected)reject(new Error("disposed"));else resolve({resources:1,created:1,destroyed:0,updated:1});await Promise.resolve();
+    expect(h.canvas.__geosolvePresentedFrame).toBeUndefined();expect(h.canvas.__geosolveRendererDiagnostics).toBeUndefined();expect(h.callbacks.size).toBe(0);expect(h.canvas.dataset.presentedFrame).toBeUndefined();
+  });
   it("coalesces camera/hover frame changes even when semantic revision is unchanged", async () => {
     const h = harness(); h.renderer.accept(frame()); h.renderer.accept(frame(12));
     expect(h.canvas.__geosolvePresentedFrame).toBeNull();
