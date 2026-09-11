@@ -97,3 +97,14 @@ confirmed the Fillet candidate was complete throughout; product behavior did not
 Held Offset navigation records client wheel/pan/resize at 98/66/346 ms and server
 prediction at 87/71/266 ms, with zero navigation RPCs. These are focused observations,
 not a 60 Hz or dense-model performance claim. Full integrated nomination follows.
+
+The first integrated product attempt `20260911T130620-4b8e58fc` passed native,
+headless and optimized-WASM lifecycle checks but stopped during browser preparation:
+the expanded engine module was 21,842,414 bytes, exceeding its existing 20 MiB
+ceiling. The engine release script had omitted the `wasm-opt -Oz` step already
+used by the demo release script. Applying that optimizer inside the private staging
+directory reduces the focused engine artifact to 14,068,507 bytes (13.42 MiB),
+without changing the ceiling or solver source. All 66 actual-WASM construction, operation and server-preview tests pass on the
+optimized binary (`node --test packages/geosolve-engine/test/construction.test.mjs
+packages/geosolve-engine/test/tool-operations.test.mjs scripts/collaboration-preview.test.mjs`).
+A new clean integrated nomination must pass before delivery; the failed run remains failed.

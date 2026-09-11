@@ -20,6 +20,12 @@ mkdirSync(resolve(packageRoot, "dist"), { recursive: true });
 const stage = mkdtempSync(resolve(packageRoot, ".wasm-"));
 try {
   run("wasm-bindgen", ["--target", "web", "--out-dir", stage, "--out-name", "geosolve_sketch_engine_wasm", resolve(metadata.target_directory, "wasm32-unknown-unknown", release ? "release" : "debug", "geosolve_sketch_engine_wasm.wasm")]);
+  if (release) {
+    const wasm = resolve(stage, "geosolve_sketch_engine_wasm_bg.wasm");
+    const optimized = resolve(stage, "geosolve_sketch_engine_wasm_bg.optimized.wasm");
+    run("wasm-opt", ["-Oz", wasm, "-o", optimized]);
+    renameSync(optimized, wasm);
+  }
   const declarations = readFileSync(resolve(stage, "geosolve_sketch_engine_wasm.d.ts"), "utf8");
   for (const method of ["editableToolOperationContext(", "editableToolOperationOperands(", "beginEditableToolOperation(", "advanceEditableToolOperation(", "editableToolOperationPresentation(", "finishEditableToolOperation(", "cancelEditableToolOperation(", "prepareEditableToolOperation(", "prepareEditableToolOperationReplay(", "resolveEditableToolOperation(", "applyEditableToolOperationCommit(", "releaseEditableToolOperation("]) {
     if (!declarations.includes(method)) throw Error(`Missing native tool contract: ${method}`);
