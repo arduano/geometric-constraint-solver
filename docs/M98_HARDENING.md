@@ -1375,3 +1375,12 @@ curve. Full selection, local navigation, held-edit and source/authority retentio
 assertions remain. The focused case passes in `folder-focus-r2.log` (1/1); an
 earlier full-frame wait experiment also passed in `folder-focus-r1.log`.
 No product change or new release claim follows from these helper corrections.
+
+The complete frame/worker/fence diagnostic `manifold-draw-r3.log` passes its
+unchanged dense-manifold assertions: navigation p95 465.7 ms, text ACK 468.2 ms,
+zero navigation RPCs and successful held-edit publication. Its captured
+`manifold-draw-r3.json` confirms a hover submission precedes the wheel submission;
+local Rust wheel replies remain fast while software-rendered frames serialize.
+Earlier failed timing measurements remain evidence of host/presentation variability;
+this instrumented pass does not replace integrated qualification or establish a
+performance improvement. No rendering behavior, resolution or timing budget changed.
