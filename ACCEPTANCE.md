@@ -5672,3 +5672,13 @@ previews remain preserved. Human acceptance and M98 closure remain open.
   twelve human scenarios. Human dispositions remain **Not run**.
 - [ ] Supervising-user acceptance of the amended M98 scope.
 - [ ] M98 milestone closure after acceptance.
+
+
+### M98-F041 UAT repair — qualification pending
+
+The supervising user reports U02 failing on 2026-09-12: free polyline corners
+preview movement but snap back on release until the connected endpoint moves
+first. Exact native and installed-domain replay reproduce the accepted-continuation
+branch-reference mismatch. [Finding and focused evidence](docs/M98_HARDENING.md#m98-f041--free-polyline-corner-rejected-after-valid-drag-preview)
+record the repair. Replacement qualification, preserved preview delivery and
+human U02 recheck remain pending; M98 acceptance and closure remain open.

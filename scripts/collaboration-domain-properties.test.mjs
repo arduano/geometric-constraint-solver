@@ -89,6 +89,65 @@ test("generated polyline point history resolves its semantic owner through perso
   assert.equal(cold.acceptedInput, redone.acceptedInput);
 });
 
+for (const explicitBranches of [false, true]) test(`M98-F041 cold polyline corner crossing with ${explicitBranches ? "explicit" : "source-derived"} branches survives server replay, personal Undo/Redo and cold restore`, async (t) => {
+  const text = source.replace("return{bore,other};", 'const corner=$.geometry.polyline("corner",{vertices:[{key:"start",position:[-50,-20]},{key:"corner",position:[-25,-20]},{key:"end",position:[-25,0]}]BRANCHES});return{bore,other,corner};').replace("BRANCHES", explicitBranches ? ",branchDirections:[[1,0],[0,1]]" : "");
+  const f = await fixture(t, text), initial = f.accepted;
+  const handle = initial.pointTargets.find(item => item.position[0] === -25 && item.position[1] === -20);
+  assert.equal(handle?.target.address?.owner.address.owner, "generated_member");
+  const target = handle.target, identity = JSON.stringify(target);
+  function validated(result, corner) {
+    assert.equal(result.result.validation.hard_residuals_validated, true);
+    assert.ok(Number.isFinite(result.result.validation.maximum_normalized_hard_residual)
+      && result.result.validation.maximum_normalized_hard_residual <= 1e-9);
+    assert.equal(result.result.validation.all_active_features_current, true);
+    assert.ok(result.result.geometry.points.every(point => point.position.every(Number.isFinite)));
+    assert.equal(result.pointTargets.length, initial.pointTargets.length);
+    for (const before of initial.pointTargets) {
+      const after = result.pointTargets.find(item => JSON.stringify(item.target) === JSON.stringify(before.target));
+      assert.ok(after, "point identity survives replay and restoration");
+      const expected = JSON.stringify(before.target) === identity ? corner : before.position;
+      assert.ok(Math.hypot(after.position[0] - expected[0], after.position[1] - expected[1]) <= 1e-9,
+        "only the selected free corner moves; connected endpoints and unrelated points remain fixed");
+    }
+  }
+  const moved = await f.domain("point_gesture", { command: {
+    basis: initial.model.sourceDesignDigest, gesture_id: 41, target,
+    viewport: { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 },
+    // The outgoing segment rotates past its initial vertical direction without
+    // collapsing. No endpoint move should be needed to admit this valid path.
+    samples: Array.from({ length: 4 }, (_, index) => {
+      const sequence = index + 1;
+      return { sequence, position: [-25 - 5 * sequence / 4, -20 + 21 * sequence / 4] };
+    }),
+  } });
+  validated(moved, [-30, 1]);
+  const branches = moved.result.geometry.curves.find(item => item.curve.definition.kind === "polyline").curve.definition.branch_directions;
+  if (explicitBranches) assert.deepEqual(branches, [[1, 0], [0, 1]], "authored dormant branch references remain exact");
+  else assert.ok(branches[1][0] > 0 && branches[1][1] < 0, "source-derived outgoing reference follows the actual rotated span");
+  assert.equal(moved.pointChanges.length, 1);
+  assert.equal(moved.model.project, initial.model.project);
+  assert.deepEqual(moved.candidateFiles, initial.candidateFiles);
+  await f.record("alice", "cross-corner", moved);
+  const restored = await f.domain("rebuild", {});
+  assert.equal(restored.acceptedInput, moved.acceptedInput);
+  validated(restored, [-30, 1]);
+  const peer = await f.values("bob", "independent-radius", ["radius"], { kind: "unit", value: { unit: "mm", value: 7 } });
+  validated(peer, [-30, 1]);
+  const undone = await f.undo("alice", "undo-corner");
+  validated(undone, [-25, -20]);
+  assert.equal(undone.candidateFiles["sketch.ts"], peer.candidateFiles["sketch.ts"]);
+  assert.deepEqual(undone.model.design.overrides.drafts, initial.model.design.overrides.drafts);
+  const inverse = f.host.prepareRedo("alice");
+  const redone = await f.domain("structural_inverse", { inverse });
+  f.host.commitStage(f.host.stageValidatedInverse(inverse, operation("alice", "redo-corner"), f.host.snapshot().revision + 1));
+  validated(redone, [-30, 1]);
+  assert.equal(redone.candidateFiles["sketch.ts"], peer.candidateFiles["sketch.ts"]);
+  assert.deepEqual(redone.model.design.overrides.drafts, moved.model.design.overrides.drafts);
+  const cold = await f.domain("rebuild", {});
+  assert.equal(cold.acceptedInput, redone.acceptedInput);
+  validated(cold, [-30, 1]);
+});
+
 test("canonical source shape changes undo only their owned keys and preserve a newer sibling", async (t) => {
   const f = await fixture(t);
   // A source Apply changes array membership; this records only changed nodes,

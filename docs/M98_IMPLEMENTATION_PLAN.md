@@ -9,7 +9,10 @@ and closed; M98 supervising-user acceptance and milestone closure remain open.
 The [approved collaboration amendment](M98_COLLABORATION.md) extends this baseline with
 concurrent editors and shared TypeScript authoring. The current [full toolbar candidate](M98_TOOL_PARITY.md)
 is qualified on `b005b9e` with 293/293 obligations and delivered with exact served-byte and
-browser verification. [Final signoff UAT](M98_UAT.md) covers the complete amended scope.
+browser verification. [Final signoff UAT](M98_UAT.md) covers the complete amended scope;
+U02 has opened M98-F041 (cold free-corner release). Its source-reference transport
+repair passes focused native/WASM checks; replacement qualification and recheck
+remain pending.
 The original single-editor implementation remains available alongside the opt-in shared host.
 
 ## Approved product

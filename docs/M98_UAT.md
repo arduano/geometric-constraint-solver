@@ -3,8 +3,8 @@
 # M98 final signoff UAT
 
 This runbook covers the complete M98 authoring/embedding milestone and its collaboration,
-local-canvas and full-toolbar amendments. **Human UAT has not run; acceptance and closure
-remain open.** Product `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00` passes 293/293 mechanical
+local-canvas and full-toolbar amendments. **Human UAT is in progress: U02 reports M98-F041; repair/recheck, acceptance and
+closure remain open.** Product `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00` passes 293/293 mechanical
 obligations in `20260911T164104-576e7789`. [Qualification](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
 records authenticated tests and delivered artifacts. Those results do not supply human passes.
 
@@ -41,7 +41,8 @@ manifold copy for export checks.
 
 ## Readiness evidence
 
-**Ready for human review as of 2026-09-12.** Product source, solver mathematics, branches,
+**Initial readiness as of 2026-09-12; subsequently U02 opened M98-F041.**
+The following describes the prior preparation. Product source, solver mathematics, branches,
 tolerances and the 271-case golden are unchanged. This preparation adds documentation and
 ignored UAT fixtures/helpers, with no public API or implementation changes.
 
@@ -120,7 +121,7 @@ separate, including cases where a fast operation prevents observing a loading in
 | ID | Review | Human result |
 | --- | --- | --- |
 | U01 | Join, roles and independent context | Not run |
-| U02 | Drag continuity and local navigation | Not run |
+| U02 | Drag continuity and local navigation | Fail — supervising user, 2026-09-12; M98-F041 corner release snaps back; repair/recheck pending |
 | U03 | Complete catalog and staged construction | Not run |
 | U04 | Constraint/dimension preselection | Not run |
 | U05 | Fillet, Offset and geometry roles | Not run |
@@ -133,8 +134,8 @@ separate, including cases where a fast operation prevents observing a loading in
 | U12 | Complete project and profile export | Not run |
 
 Start with U01–U05, then collaboration/source U06–U09. Finish with folder/embedding/export
-U10–U12. Human pass/fail, subjective latency and any timing-dependent observations remain
-unrecorded until the supervising user performs them.
+U10–U12. U02 records the reported corner-drag failure. Other human outcomes, subjective latency
+and timing-dependent observations remain unrecorded until performed.
 
 ## Scenarios
 
@@ -150,6 +151,11 @@ browse with mutation controls unavailable. A peer publication does not move your
 steal selection or change the code cursor. Restore A's visibility before continuing.
 
 ### U02 — Drag continuity and local navigation
+
+**Open finding M98-F041:** the user reports an interior corner snapping back on release
+until its connected endpoint moves first. Native Rust and exact journal replay independently
+reproduce the rejection. Recheck cold interior-corner rotation across the outgoing leg’s
+original direction hemisphere after repair; preserve the current shared source and history.
 
 In A, drag a free endpoint of `first` slowly, stop, reverse direction and release. Repeat
 once warm. B observes the accepted update. Pan/zoom before and after release. Move a keyed

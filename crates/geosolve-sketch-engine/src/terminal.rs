@@ -17,7 +17,7 @@ use geosolve_sketch_code::{
     ExpandedCodeProject, ExpandedPort, ExpandedSemanticTarget, ExpandedWritablePoint,
     KeyedReconcileState, MaterializedCodeProject, SemanticSymbol,
     materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited,
-    stage_point_drags,
+    stage_point_drags, transport_code_point_terminal_branches,
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
@@ -1716,6 +1716,20 @@ pub(super) fn materialize_terminal(
         .accepted_state_for_current_input()
         .ok_or_else(|| "terminal has no accepted continuation".to_owned())?
         .document();
+    let seeded_design = terminal_seeded_design_document(
+        preview,
+        &bundle.placements,
+        &bundle.rectangle_projections,
+    )?;
+    let transported = transport_code_point_terminal_branches(
+        editor,
+        &previous.expansion,
+        continuation,
+        &seeded_design,
+    )?;
+    let continuation = transported
+        .as_ref()
+        .map_or(continuation, |(accepted, _)| accepted);
     let materialized =
         materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited(
             previous,
@@ -1832,18 +1846,35 @@ fn validate_terminal_parity(
         &bundle.placements,
         &bundle.rectangle_projections,
     )?;
+    // Construction has a separate authenticated relabel/topology projection;
+    // only a real point gesture can transport an origin's dormant references.
+    let transported = (!bundle.placements.is_empty())
+        .then(|| {
+            transport_code_point_terminal_branches(
+                terminal.editor,
+                expansion,
+                terminal_accepted,
+                &terminal_design,
+            )
+        })
+        .transpose()?
+        .flatten();
+    let (terminal_accepted, terminal_design) = transported.as_ref().map_or(
+        (terminal_accepted, &terminal_design),
+        |(accepted, design)| (accepted, design),
+    );
     let declaration_object_relabels = authenticated_declaration_object_relabels(
         terminal.editor,
         staged,
         expansion,
         declaration_label_projections,
-        &terminal_design,
+        terminal_design,
         staged_authority.session.design_document(),
     )?;
     let design = documents_match_for_terminal_parity(
         terminal.editor,
         staged,
-        &terminal_design,
+        terminal_design,
         staged_authority.session.design_document(),
         &bundle.rectangle_projections,
         &recomputable,

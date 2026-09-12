@@ -18,11 +18,14 @@ mod managed;
 mod managed_control;
 mod model;
 mod overlay;
+mod point_terminal;
 mod prepared_mutation;
 mod project;
 mod reconcile;
 mod session;
 mod work_receipt;
+
+pub use point_terminal::transport_code_point_terminal_branches;
 
 pub use artifact::{
     ArtifactValidationError, CollectionRule, PATCH_ARTIFACT_FORMAT, PatchModuleArtifact,

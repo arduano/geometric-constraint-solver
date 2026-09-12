@@ -7538,3 +7538,21 @@ each width.
 These checks qualify the authorized current-workbench parity amendment. Integrated
 qualification and delivery are recorded separately in `M98_TOOL_PARITY.md`; scenario
 inventory alone does not imply a passing or human-accepted milestone.
+
+
+## M98-F041 — Free polyline corner crosses a dormant reference hemisphere
+
+In the unconstrained Shared playground, move an interior corner `[-25,-20]`
+to `[-30,1]` in four equal samples while the end stays `[-25,0]`. Every preview
+and release must accept the finite, noncollapsing geometry without needing an
+endpoint-first workaround. Keep all other points stationary, source identities
+exact, hard residuals independently validated at most `1e-9`, and cold restore
+and personal Undo/Redo exact after a peer's independent radius edit.
+
+Transport only the dormant reference of a source-derived, unenforced span,
+authenticated against its accepted origin. Preserve authored `branchDirections`,
+axis-plus-driving-length and sided-Fillet branch enforcement. Reject forged
+metadata, changed durable fields, collapsed named spans, NaN and infinity.
+Ordinary same-cell and unrelated-point releases require no branch transport.
+The focused sketch owner, engine, standalone workbench and shared-domain
+regressions retain this case; the broad golden remains unchanged.

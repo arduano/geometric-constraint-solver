@@ -50,7 +50,8 @@ use geosolve_sketch_code::{
     materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited,
     prepare_editor_declaration_insertions, prepare_managed_mutation, prepare_managed_source,
     rehydrate_materialized_code_project, required_generated_members,
-    validate_prepared_managed_mutation, validate_prepared_managed_source,
+    transport_code_point_terminal_branches, validate_prepared_managed_mutation,
+    validate_prepared_managed_source,
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
@@ -2246,11 +2247,24 @@ impl CodeProjectWorkbench {
                 "terminal code point has no current accepted numerical continuation".to_owned()
             })?
             .document();
+        let seeded_design =
+            terminal_seeded_design_document(preview, placements, rectangle_projections)?;
+        let current = self
+            .materialized
+            .as_deref()
+            .ok_or_else(|| "code project has no warm native authority".to_owned())?;
+        let transported = transport_code_point_terminal_branches(
+            preview.editor,
+            &current.expansion,
+            accepted_continuation,
+            &seeded_design,
+        )?;
+        let accepted_continuation = transported
+            .as_ref()
+            .map_or(accepted_continuation, |(accepted, _)| accepted);
         let audited =
             materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited(
-                self.materialized
-                    .as_deref()
-                    .ok_or_else(|| "code project has no warm native authority".to_owned())?,
+                current,
                 &self.project,
                 &self.session.snapshot().generated,
                 &overlay,
@@ -6915,18 +6929,32 @@ fn validate_terminal_preview_native_parity_with_trace(
         .document();
     let terminal_design =
         terminal_seeded_design_document(terminal, terminal_seed_placements, rectangle_projections)?;
+    let transported = if terminal_seed_placements.is_empty() {
+        None
+    } else {
+        transport_code_point_terminal_branches(
+            terminal.editor,
+            expansion,
+            terminal_accepted,
+            &terminal_design,
+        )?
+    };
+    let (terminal_accepted, terminal_design) = transported.as_ref().map_or(
+        (terminal_accepted, &terminal_design),
+        |(accepted, design)| (accepted, design),
+    );
     let declaration_object_relabels = authenticated_declaration_object_relabels(
         terminal.editor,
         staged,
         expansion,
         declaration_label_projections,
-        &terminal_design,
+        terminal_design,
         staged_authority.session.design_document(),
     )?;
     let design_document_parity = documents_match_for_terminal_parity(
         terminal.editor,
         staged,
-        &terminal_design,
+        terminal_design,
         staged_authority.session.design_document(),
         rectangle_projections,
         &recomputable,
@@ -7544,6 +7572,126 @@ fn escape_attribute(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one adapter regression keeps the cold corner gesture, publication, locality and history witnesses together"
+    )]
+    fn m98_f041_cold_corner_publication_preserves_native_terminal_and_history() {
+        use geosolve_constraint_editor::{EditorEffect, Modifiers, PointerInput, Viewport};
+
+        let compiled = CompiledManagedSource::from_json(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../geosolve-sketch-engine/tests/fixtures/tool-operation-feature.json"
+        )))
+        .unwrap();
+        let (mut workbench, mut editor) =
+            CodeProjectWorkbench::open_managed_test_compiled("m98-f041-web", compiled).unwrap();
+        let source_before = workbench.managed_source().to_owned();
+        let project_before = workbench.project.to_canonical_json().unwrap();
+        let accepted_document = |editor: &ProjectionalEditorSession| {
+            let accepted = editor.coordinator().accepted_materialization().unwrap();
+            assert!(accepted.validation.hard_residuals_validated);
+            assert!(accepted.validation.all_active_features_current);
+            assert!(
+                accepted
+                    .validation
+                    .maximum_normalized_hard_residual
+                    .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+            );
+            accepted
+                .session
+                .accepted_state_for_current_input()
+                .unwrap()
+                .document()
+                .clone()
+        };
+        let document_before = accepted_document(&editor);
+        let corner = document_before
+            .points()
+            .iter()
+            .find(|point| pair_bits(point.position) == pair_bits([220.0, 0.0]))
+            .unwrap()
+            .id;
+        let viewport = Viewport::new([800.0, 600.0], [220.0, 10.0], 10.0).unwrap();
+        let input = |position| PointerInput {
+            pointer_id: 98_041,
+            position: viewport.model_to_screen(position),
+            modifiers: Modifiers::default(),
+        };
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(&editor, 98_041, corner, None, &[])
+                .unwrap()
+                .is_none()
+        );
+        let scene = editor.scene(viewport, 0.25).unwrap();
+        editor
+            .pointer_down_exact_point(&scene, input([220.0, 0.0]), corner)
+            .unwrap();
+        for step in 1..=4 {
+            let ratio = f64::from(step) / 4.0;
+            let scene = editor.scene(viewport, 0.25).unwrap();
+            let effects = editor
+                .pointer_move(&scene, input([220.0 - 5.0 * ratio, 21.0 * ratio]))
+                .unwrap();
+            assert!(effects.iter().any(|effect| matches!(
+                effect,
+                EditorEffect::PreviewPointMove { point, .. } if *point == corner
+            )));
+        }
+        let scene = editor.scene(viewport, 0.25).unwrap();
+        let proposal = editor
+            .pointer_up_delegated_point(&scene, input([215.0, 21.0]))
+            .unwrap()
+            .proposal
+            .unwrap();
+        assert_eq!(
+            pair_bits(proposal.accepted_position),
+            pair_bits([215.0, 21.0])
+        );
+        assert!(
+            !workbench.can_undo(),
+            "preview cannot create source history"
+        );
+        let publication = workbench
+            .publish_delegated_point_terminal(98_041, &editor, &proposal, "Move corner")
+            .expect("cold corner release must retain its independently accepted preview")
+            .unwrap();
+        let document_after = accepted_document(&publication.editor);
+        for point in document_after.points() {
+            assert!(point.position.into_iter().all(f64::is_finite));
+            let expected = if point.id == corner {
+                [215.0, 21.0]
+            } else {
+                document_before.point(point.id).unwrap().position
+            };
+            assert_eq!(pair_bits(point.position), pair_bits(expected));
+        }
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(
+            workbench.project.to_canonical_json().unwrap(),
+            project_before
+        );
+        assert!(!workbench.has_any_pending_semantic_point_drag());
+
+        let persisted = workbench.to_persistence_json().unwrap();
+        let mut restored = CodeProjectWorkbench::from_persistence_json(&persisted).unwrap();
+        assert_eq!(
+            accepted_document(&restored.restore_accepted_editor().unwrap()),
+            document_after
+        );
+        let undone = restored.step_history(true).unwrap().unwrap();
+        assert_eq!(accepted_document(&undone.editor), document_before);
+        assert!(
+            !restored.can_undo(),
+            "one release creates exactly one history entry"
+        );
+        let redone = restored.step_history(false).unwrap().unwrap();
+        assert_eq!(accepted_document(&redone.editor), document_after);
+        assert!(!restored.can_redo());
+    }
 
     #[test]
     fn detached_point_cancel_restores_exact_selected_items_and_consumer_owner() {

@@ -8491,6 +8491,9 @@ merge or qualify that product.
   original folder/CLI and both generator hosts, exact-artifact/browser readiness, pristine
   profile export and guarded restart instructions. All twelve human dispositions remain
   **Not run**; automated readiness does not close the milestone.
+- [ ] Repair and qualify M98-F041: cold free polyline corners preview correctly but snap back
+  on release after crossing a dormant source-derived direction hemisphere. Preserve explicit
+  branches, current shared source/history and independent accepted validation; recheck U02.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Status: **full current workbench toolbar parity is mechanically qualified and delivered;

@@ -4414,6 +4414,111 @@ impl SketchDocument {
         Ok(projected)
     }
 
+    /// Transports dormant line-branch references for an authenticated source edit.
+    ///
+    /// The caller must authenticate `origin` as this continuation's accepted basis
+    /// and each named span as source-derived rather than an explicitly authored
+    /// branch. `source_seed` carries the candidate's exact source point seeds with
+    /// the same retained branch metadata. Only a free span whose new source direction
+    /// leaves its old positive reference cell is transported. Every other field and
+    /// every continuous value remains owned by `self`.
+    ///
+    /// This produces a numerical witness, not accepted publication authority. The
+    /// source owner must still cold-materialize the candidate and independently
+    /// validate its residuals and complete terminal parity. The ordinary branch
+    /// comparison and numerical-continuation APIs remain strict.
+    ///
+    /// # Errors
+    ///
+    /// Rejects changed durable schema, unauthenticated branch metadata, missing or
+    /// degenerate spans, nonfinite geometry, an enforced branch-cell transition, or
+    /// a source reference that does not contain the terminal span's orientation.
+    pub fn transport_unenforced_source_line_branches(
+        &self,
+        origin: &Self,
+        source_seed: &Self,
+        source_derived: &BTreeSet<CurveSpan>,
+    ) -> Result<Self, DocumentError> {
+        // These exact continuous-only projections validate their candidate
+        // geometry as well as the durable schema; do not repeat three complete
+        // document validations before them.
+        origin.project_accepted_numerical_continuation(self)?;
+        self.project_accepted_numerical_continuation(source_seed)?;
+        let origin_activity = origin.effective_activity();
+        let terminal_activity = self.effective_activity();
+        let source_activity = source_seed.effective_activity();
+        let mut transported = self.clone();
+        for span in source_derived {
+            let retained =
+                self.curve_branch_direction(*span)
+                    .ok_or_else(|| DocumentError::InvalidField {
+                        field: "source branch transport",
+                        message: "named span has no line-branch metadata".into(),
+                    })?;
+            if [origin, source_seed].into_iter().any(|document| {
+                document
+                    .curve_branch_direction(*span)
+                    .map(|value| value.map(f64::to_bits))
+                    != Some(retained.map(f64::to_bits))
+            }) {
+                return invalid(
+                    "source branch transport",
+                    "terminal and source branch metadata must match the accepted origin exactly",
+                );
+            }
+            // Also validate a free Polyline's original/terminal leg: their dormant
+            // references do not otherwise require a nonzero endpoint direction.
+            origin.current_curve_span_direction(*span)?;
+            let terminal_direction = self.current_curve_span_direction(*span)?;
+            let replacement = source_seed.current_curve_span_direction(*span)?;
+            if directions_share_positive_cell(retained, replacement) {
+                continue;
+            }
+            if origin.curve_branch_is_enforced_with_activity(*span, &origin_activity)
+                || self.curve_branch_is_enforced_with_activity(*span, &terminal_activity)
+                || source_seed.curve_branch_is_enforced_with_activity(*span, &source_activity)
+            {
+                return invalid(
+                    "source branch transport",
+                    "an enforced line branch cannot leave its retained positive cell",
+                );
+            }
+            // The same orientation requirement as set_curve_branch, batched so
+            // several transported spans need only one clone and final validation.
+            if !directions_share_positive_cell(terminal_direction, replacement) {
+                return invalid(
+                    "source branch transport",
+                    "source reference must contain the terminal line orientation",
+                );
+            }
+            match &mut transported
+                .curve_mut(span.curve)
+                .ok_or_else(|| unknown("curve", span.curve.0))?
+                .definition
+            {
+                CurveDefinition::Line {
+                    branch_direction, ..
+                } if span.segment == 0 => {
+                    *branch_direction = replacement;
+                }
+                CurveDefinition::Polyline {
+                    branch_directions, ..
+                } => {
+                    let direction = branch_directions
+                        .get_mut(span.segment as usize)
+                        .ok_or_else(|| DocumentError::InvalidField {
+                            field: "source branch transport",
+                            message: "named span is outside the Polyline".into(),
+                        })?;
+                    *direction = replacement;
+                }
+                _ => return invalid("source branch transport", "named span is not a line"),
+            }
+        }
+        transported.validate()?;
+        Ok(transported)
+    }
+
     /// Returns one curve's persistent profile/construction role.
     #[must_use]
     pub fn geometry_role(&self, curve: CurveId) -> Option<GeometryRole> {
@@ -15298,6 +15403,225 @@ mod projectional_branch_audit_tests {
                 .project_accepted_numerical_continuation(&flipped)
                 .is_err(),
         );
+    }
+
+    fn polyline_corner(fixture: &BranchAuditFixture) -> DesignPointId {
+        let CurveDefinition::Polyline { points, .. } =
+            &fixture.document.curve(fixture.polyline).unwrap().definition
+        else {
+            panic!("polyline fixture");
+        };
+        points[1]
+    }
+
+    #[test]
+    fn source_branch_transport_rotates_only_named_free_references_and_preserves_values() {
+        let fixture = branch_audit_fixture();
+        let line = CurveSpan::line(fixture.line);
+        let outgoing = CurveSpan {
+            curve: fixture.polyline,
+            segment: 1,
+        };
+        let selected = BTreeSet::from([line, outgoing]);
+        let mut continuation = fixture.document.clone();
+        continuation
+            .set_point_position(fixture.line_end, [-3.0, 2.0])
+            .unwrap();
+        continuation
+            .set_point_position(polyline_corner(&fixture), [1.0, 6.0])
+            .unwrap();
+        let source_seed = continuation.clone();
+        continuation
+            .set_point_position(fixture.unrelated_point, [8.5, 8.25])
+            .unwrap();
+        continuation.set_scalar_value(fixture.scalar, 5.0).unwrap();
+        let mut cold = source_seed.clone();
+        cold.reselect_curve_branch(line).unwrap();
+        cold.reselect_curve_branch(outgoing).unwrap();
+        assert!(
+            cold.project_accepted_numerical_continuation(&continuation)
+                .is_err()
+        );
+        let transported = continuation
+            .transport_unenforced_source_line_branches(&fixture.document, &source_seed, &selected)
+            .unwrap();
+        let mut restored_references = transported.clone();
+        for (span, direction) in [(line, [-3.0_f64, 2.0]), (outgoing, [2.0_f64, -1.0])] {
+            let actual = transported.curve_branch_direction(span).unwrap();
+            let length = direction[0].hypot(direction[1]);
+            for axis in 0..2 {
+                assert!((actual[axis] - direction[axis] / length).abs() < 1e-14);
+            }
+            replace_branch_without_geometry(
+                &mut restored_references,
+                span,
+                fixture.document.curve_branch_direction(span).unwrap(),
+            );
+        }
+        assert_eq!(
+            restored_references, continuation,
+            "only named branch metadata changed"
+        );
+        let projected = cold
+            .project_accepted_numerical_continuation(&transported)
+            .unwrap();
+        assert_eq!(
+            projected
+                .point(fixture.unrelated_point)
+                .unwrap()
+                .position
+                .map(f64::to_bits),
+            [8.5_f64, 8.25].map(f64::to_bits)
+        );
+        assert_eq!(
+            projected.scalar(fixture.scalar).unwrap().value.to_bits(),
+            5.0_f64.to_bits()
+        );
+        assert_eq!(
+            continuation
+                .transport_unenforced_source_line_branches(
+                    &fixture.document,
+                    &source_seed,
+                    &BTreeSet::new(),
+                )
+                .unwrap(),
+            continuation,
+            "an unnamed source span receives no transport authority",
+        );
+    }
+
+    #[test]
+    fn source_branch_transport_rejects_forged_metadata_and_durable_changes() {
+        let fixture = branch_audit_fixture();
+        let span = CurveSpan::line(fixture.line);
+        let selected = BTreeSet::from([span]);
+        let mut continuation = fixture.document.clone();
+        continuation
+            .set_point_position(fixture.line_end, [-3.0, 2.0])
+            .unwrap();
+        let (sine, cosine) = 0.1_f64.sin_cos();
+        for forged_direction in [[cosine, sine], [-1.0, 0.0]] {
+            let mut forged = continuation.clone();
+            replace_branch_without_geometry(&mut forged, span, forged_direction);
+            assert!(
+                forged
+                    .transport_unenforced_source_line_branches(
+                        &fixture.document,
+                        &continuation,
+                        &selected,
+                    )
+                    .is_err()
+            );
+            assert!(
+                continuation
+                    .transport_unenforced_source_line_branches(
+                        &fixture.document,
+                        &forged,
+                        &selected,
+                    )
+                    .is_err()
+            );
+            let mut forged_origin = fixture.document.clone();
+            replace_branch_without_geometry(&mut forged_origin, span, forged_direction);
+            assert!(
+                continuation
+                    .transport_unenforced_source_line_branches(
+                        &forged_origin,
+                        &continuation,
+                        &selected,
+                    )
+                    .is_err()
+            );
+        }
+        let mut renamed = continuation.clone();
+        renamed.point_mut(fixture.unrelated_point).unwrap().label = "foreign".into();
+        assert!(
+            renamed
+                .transport_unenforced_source_line_branches(
+                    &fixture.document,
+                    &continuation,
+                    &selected,
+                )
+                .is_err()
+        );
+        assert!(
+            continuation
+                .transport_unenforced_source_line_branches(&fixture.document, &renamed, &selected,)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn source_branch_transport_rejects_enforced_opposite_branch_and_degenerate_spans() {
+        let fixture = branch_audit_fixture();
+        let span = CurveSpan::line(fixture.line);
+        let selected = BTreeSet::from([span]);
+        let mut origin = fixture.document.clone();
+        origin
+            .add_constraint(
+                "axis",
+                DocumentConstraintDefinition::Horizontal { line: span },
+            )
+            .unwrap();
+        origin
+            .add_dimension(
+                "length",
+                DocumentDimensionDefinition::CurveLength {
+                    curve: span,
+                    target: fixture.scalar,
+                },
+                DocumentDimensionMode::Driving,
+            )
+            .unwrap();
+        assert!(origin.curve_branch_is_enforced_with_activity(span, &origin.effective_activity()));
+        let mut opposite = origin.clone();
+        opposite.point_mut(fixture.line_end).unwrap().position = [-3.0, 0.0];
+        assert!(
+            opposite
+                .transport_unenforced_source_line_branches(&origin, &opposite, &selected,)
+                .is_err()
+        );
+        let outgoing = CurveSpan {
+            curve: fixture.polyline,
+            segment: 1,
+        };
+        let selected = BTreeSet::from([outgoing]);
+        for position in [[3.0, 5.0], [f64::NAN, 5.0], [f64::INFINITY, 5.0]] {
+            let mut invalid = fixture.document.clone();
+            invalid
+                .point_mut(polyline_corner(&fixture))
+                .unwrap()
+                .position = position;
+            assert!(
+                invalid
+                    .transport_unenforced_source_line_branches(
+                        &fixture.document,
+                        &invalid,
+                        &selected,
+                    )
+                    .is_err()
+            );
+            assert!(
+                fixture
+                    .document
+                    .transport_unenforced_source_line_branches(
+                        &invalid,
+                        &fixture.document,
+                        &selected,
+                    )
+                    .is_err()
+            );
+            assert!(
+                fixture
+                    .document
+                    .transport_unenforced_source_line_branches(
+                        &fixture.document,
+                        &invalid,
+                        &selected,
+                    )
+                    .is_err()
+            );
+        }
     }
 }
 

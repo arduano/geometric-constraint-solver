@@ -1244,3 +1244,99 @@ routes and exact browser paint/navigation. Both existing shared previews use the
 frozen artifacts without rebuilding and preserve current documents, drafts, invitations
 and personal histories. Earlier failed runs remain failed evidence. Qualification receipt:
 `target/release-gate/runs/20260911T164104-576e7789/qualification.json`. Supervising-user acceptance and M98 closure remain open.
+
+
+## M98-F041 — Free polyline corner rejected after valid drag preview
+
+The supervising user reported U02 failing in Shared playground on 2026-09-12:
+interior corners snap back on release; moving the connected endpoint first permits
+the next corner drag. Source `f94b09a` serves qualified product `b005b9e`. Exact
+read-only capture of the live journal authenticates 31 records and 29 attachment
+blobs; all fifteen admitted point gestures replay identically through the installed
+domain (nine rejections, six accepted operations). Accepted outputs match historical
+model/input identities and rejected attempts preserve accepted state. The captured
+playground source SHA-256 is
+`1b8c71b049bce988371449eb8bfc0f32aeb38bb73ebcca87169d98357dd6bdbd`.
+
+Public Rust `EditableSession` and installed engine WASM reproduce a cold corner
+`[-25,-20]` to `[-30,1]` over four accepted samples. Finish succeeds, but commit
+reports `candidate evaluation rejected and policy requires accepted publication`.
+Stopping at `[-30,-1]` passes. Moving the end `[-25,0]` to `[-23,2]` first allows
+the same corner destination. Moving the start first does not.
+
+Classification: **DEFECT**, accepted continuation/branch transport. Free native
+segments use their current geometric direction while retaining dormant branch
+metadata. Source recompilation derives a new reference vector; the unchanged
+positive-cell audit then rejects a rotation past 90 degrees. This is independent
+of browser, network and solver convergence. Explicit branches and active branch
+constraints must retain strict validation.
+
+The exact owning regression
+`a_cold_polyline_corner_can_rotate_past_its_original_segment_hemisphere` in
+`geosolve-sketch-engine/tests/point_gesture.rs` fails at cold publication (endpoint-first
+control passes). It checks stationary endpoints, finite geometry, exact restoration
+and Undo/Redo. Pinned command:
+
+```bash
+cargo test --locked -p geosolve-sketch-engine --test point_gesture a_cold_polyline_corner_can_rotate_past_its_original_segment_hemisphere -- --exact --nocapture
+```
+
+Before repair: exit 101, 0 passed/1 failed/14 filtered.
+`node target/m98/coordination/corner-drag/exact-replay.mjs` exits 0 and reproduces
+all fifteen historical outcomes. Evidence is retained under
+`target/m98/coordination/corner-drag/`, including `native/diagnosis.md` and
+`exact-replay/REPORT.md`. Repair, replacement qualification and U02 human recheck
+remain pending; existing user previews are unchanged.
+
+
+### F041 repair and focused qualification
+
+The sketch owner adds `transport_unenforced_source_line_branches`: an explicit
+three-document projection from trusted origin, native terminal and exact new source
+seeds. Named branch bits must match the origin exactly; only an unenforced reference
+may follow a finite endpoint rotation outside its old hemisphere. Batched changes
+retain every coordinate, scalar and unrelated durable field. Generic branch-cell
+comparison remains strict, and cold materialization still independently validates
+residuals before publication. No residual equation, solver tolerance, wire format,
+source schema or golden value changes.
+
+`geosolve-sketch-code::transport_code_point_terminal_branches` authenticates source
+Polyline ownership and excludes authored `branchDirections`. It selects only spans
+with changed source endpoints and an actual hemisphere crossing; ordinary drags
+return no transport documents. This addresses review feedback about unconditional
+whole-document validation and unrelated dormant spans. Engine and standalone
+workbench publication/parity use this shared source-owner seam.
+
+Focused commands ran in the pinned Nix shell:
+
+```bash
+cargo test --locked -p geosolve-sketch --lib projectional_branch_audit_tests
+cargo test --locked -p geosolve-sketch-engine --test point_gesture
+cargo test --locked -p geosolve-demo-web --lib m98_f041_cold_corner_publication_preserves_native_terminal_and_history
+cargo test --locked -p geosolve-sketch-code --lib ordinary_point_terminals_do_not_allocate_branch_transport_documents
+node packages/geosolve-engine/scripts/build-wasm.mjs
+node --test --test-name-pattern=M98-F041 scripts/collaboration-domain-properties.test.mjs
+cargo clippy --locked -p geosolve-sketch-code -p geosolve-sketch-engine -p geosolve-demo-web --all-targets --all-features -- -D warnings
+cargo fmt --all
+```
+
+All pass: 11 sketch branch audits, 15 engine point-gesture tests, one standalone
+workbench regression, one no-transport-path test and two actual-WASM shared-domain
+regressions. The two shared cases use source-derived and explicitly authored
+branch vectors; both verify peer edits, personal Undo/Redo and exact cold rebuild.
+Explicit vectors remain `[[1,0],[0,1]]` while the free geometry rotates. Logs under
+`target/m98/coordination/corner-drag/`: `focused-native-after-r2.log`,
+`focused-wasm-build.log`, `domain-after.log`, `focused-clippy.log`.
+
+These focused results do not yet qualify a replacement preview or close U02/M98.
+
+The replacement domain also passes
+`node target/m98/coordination/corner-drag/exact-replay-after.mjs`: all fifteen
+original gestures independently replay from their authenticated historical bases.
+All nine formerly rejected corners accept; all six formerly accepted models/input
+identities remain exact. Every result has finite points, zero independently
+validated hard residual, stationary unrelated points and exact cold restoration.
+Receipt: `target/m98/coordination/corner-drag/exact-replay-after-r4/report.json`.
+Three preceding harness attempts remain recorded (JSON property-order equality,
+existing scratch directory and per-folder worker binding); those are harness
+errors and caused no product changes or alteration of the original captures.

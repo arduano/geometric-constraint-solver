@@ -3062,3 +3062,15 @@ fence/error validation; no synthetic offscreen draw is used. After asynchronous 
 the newest coalesced input can submit immediately without another RAF wait. Synchronous
 draws retain RAF coalescing. Both paths preserve one in-flight draw, immutable frame/surface
 witnesses, hidden suspension, failure latching and context epochs.
+
+
+### Source-derived free Polyline references at a point terminal (M98-F041)
+
+Native free spans may rotate continuously while retaining dormant branch vectors.
+Before source publication, the code owner can explicitly transport only an
+unenforced, source-derived reference using authenticated origin/terminal/source
+documents. Authored `branchDirections` and enforced branches remain source-owned.
+The sketch owner verifies exact origin branch metadata, unchanged durable schema
+and finite nonzero span directions. Ordinary terminal parity, cold reconstruction
+and independent residual validation still gate publication. This seam is shared
+by the headless engine and standalone workbench and adds no protocol authority.

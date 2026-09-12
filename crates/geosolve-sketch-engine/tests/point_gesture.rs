@@ -565,3 +565,82 @@ fn explicitly_suppressed_geometry_has_no_advertised_point_gesture_targets() {
         active.point_gesture_targets().unwrap().len()
     );
 }
+
+#[test]
+fn a_cold_polyline_corner_can_rotate_past_its_original_segment_hemisphere() {
+    let json = CodeProject::managed(
+        ProjectKey("cold-polyline-corner".into()),
+        CompiledManagedSource::from_json(include_str!("fixtures/tool-operation-feature.json"))
+            .unwrap(),
+    )
+    .unwrap()
+    .to_canonical_json()
+    .unwrap();
+    // Exercise the observed workaround first, then the same corner gesture on
+    // a cold document. Every leg remains nonzero throughout both paths.
+    for move_endpoint_first in [true, false] {
+        let mut session = EditableSession::open(&json, None).unwrap();
+        if move_endpoint_first {
+            let endpoint = command(&session, [220.0, 20.0], [222.0, 22.0]);
+            session.commit_point_gesture(&endpoint).unwrap();
+        }
+        let before = session.state();
+        let before_handles = session.point_gesture_targets().unwrap();
+        let corner = before_handles
+            .iter()
+            .find(|handle| handle.position == [220.0, 0.0])
+            .unwrap();
+        let mut gesture = session
+            .begin_point_gesture(corner.target.clone(), 71, viewport())
+            .unwrap();
+        for sequence in 1..=4 {
+            let ratio = f64::from(sequence) / 4.0;
+            let target = [220.0 - 5.0 * ratio, 21.0 * ratio];
+            let frame = gesture.advance(71, sample(sequence, target)).unwrap();
+            assert!(frame.accepted);
+            assert_near(frame.accepted_position, target);
+            let scene = EditorScene::from_detached_json(&gesture.scene_json().unwrap()).unwrap();
+            assert!(
+                scene
+                    .points
+                    .iter()
+                    .all(|point| { point.model_position.into_iter().all(f64::is_finite) })
+            );
+        }
+        let terminal = gesture.finish(71).unwrap();
+        assert_near(terminal.accepted_position(), [215.0, 21.0]);
+        assert_eq!(session.state(), before);
+        let prepared = session
+            .prepare_point_gesture_commit(terminal.command())
+            .unwrap_or_else(|error| panic!("endpoint-first={move_endpoint_first}: {error}"));
+        assert!(prepared.result().validation.hard_residuals_validated);
+        assert_eq!(session.state(), before);
+        let accepted = session.apply_point_gesture_commit(prepared).unwrap();
+        for handle in session.point_gesture_targets().unwrap() {
+            let expected = if handle.target == corner.target {
+                [215.0, 21.0]
+            } else {
+                before_handles
+                    .iter()
+                    .find(|previous| previous.target == handle.target)
+                    .unwrap()
+                    .position
+            };
+            assert_near(handle.position, expected);
+        }
+        assert_eq!(session.export_project_json().unwrap(), json);
+        let restored = EditableSession::open(
+            &json,
+            Some(&serde_json::to_string(&session.design()).unwrap()),
+        )
+        .unwrap();
+        assert_eq!(
+            positions(&restored.state().result),
+            positions(accepted.result())
+        );
+        let token = session.token().clone();
+        assert_eq!(session.undo(&token).unwrap().result(), &before.result);
+        let token = session.token().clone();
+        assert_eq!(session.redo(&token).unwrap().result(), accepted.result());
+    }
+}
