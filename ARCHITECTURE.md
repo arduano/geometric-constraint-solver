@@ -3055,13 +3055,26 @@ publish late frames. Background-throttled tabs may still accept a signaled fence
 the nominal deadline. Render telemetry includes submission through validation; the fence
 does not claim physical display scan-out or eliminate all driver/shader IPC costs.
 
-The first ordinary render also initializes the exact horizontal/vertical blur programs
-through Pixi's public shader binding API, after backend installation. Context restoration
-repeats that preparation. Startup readiness includes preparation and the real frame's
-fence/error validation; no synthetic offscreen draw is used. After asynchronous validation,
-the newest coalesced input can submit immediately without another RAF wait. Synchronous
-draws retain RAF coalescing. Both paths preserve one in-flight draw, immutable frame/surface
+The first ordinary render prepares the exact horizontal/vertical blur programs and
+their actual filter draws, after backend installation. A small private target and
+final-canvas composition exercise both GPU pipelines; the real native scene clears
+preparation pixels in the same submission. All temporary resources are released.
+Context restoration repeats preparation. Startup readiness includes preparation and
+the real frame's fence/error validation. After asynchronous validation, the newest
+coalesced input can submit immediately without another RAF wait. Synchronous draws
+retain RAF coalescing. Both paths preserve one in-flight draw, immutable frame/surface
 witnesses, hidden suspension, failure latching and context epochs.
+
+Changing frames use display DPR, including delayed native predictions and peer updates.
+Text textures retain minimum 2× resolution. After 1.5 seconds of quiet following
+completed rendering, low-DPR canvases regain minimum 2× supersampling. New input
+cancels only unsubmitted refinement; submitted work retains its exact frame, surface,
+quality and context identity. Idle Select hover paint coalesces for at most 32 ms;
+queued wheel input suppresses unsubmitted hover until its native response or queue
+completion. Native point setup remains validated but its unchanged origin need not
+paint ahead of the already-queued movement. These F042 presentation changes do not
+alter native geometry, picking, input order or publication authority; replacement
+qualification is recorded separately in `docs/M98_HARDENING.md`.
 
 
 ### Source-derived free Polyline references at a point terminal (M98-F041)

@@ -135,11 +135,27 @@ export function decodeScreenshot(png: Buffer) {
   }
   return { width, height, channels, pixels };
 }
-export async function canvasVisualWitness(canvas: Locator) {
+export async function canvasVisualWitness(canvas: Locator, active = false) {
+  await expect.poll(async () => {
+    const diagnostics = await rendererDiagnostics(canvas);
+    return diagnostics.hasPendingDraw === false && (active || diagnostics.isSettled === true)
+      && diagnostics.rasterResolution === (active ? diagnostics.pixelRatio : Math.max(2, Number(diagnostics.pixelRatio)));
+  }, { message: "pixel witness requires its completed raster quality" }).toBe(true);
+  const completion = () => canvas.evaluate((element) => {
+    const diagnostics = Reflect.get(element, "__geosolveRendererDiagnostics");
+    const { frameCount, lastFrameId, width, height, pixelRatio, rasterResolution, state, backend, hardware, hasPendingDraw, isSettled } = diagnostics;
+    return { frame: Reflect.get(element, "__geosolvePresentedFrame"), frameCount, lastFrameId, width, height,
+      pixelRatio, rasterResolution, state, backend, hardware, hasPendingDraw, isSettled, bounds: element.getBoundingClientRect().toJSON() };
+  });
+  const before = await completion();
+  expect(before.hasPendingDraw).toBe(false);
+  if (!active) expect(before.isSettled).toBe(true);
   const scene = await presentedFrame(canvas);
+  expect(scene).toEqual(before.frame);
   const screenshot = await canvas.screenshot();
-  const decoded = decodeScreenshot(screenshot); const box = await canvas.boundingBox();
-  if (!box) throw Error("Canvas must be visible for pixel qualification");
+  expect(await completion(), "pixels must belong to one unchanged completed frame and surface").toEqual(before);
+  const decoded = decodeScreenshot(screenshot); const box = before.bounds;
+  if (box.width <= 0 || box.height <= 0) throw Error("Canvas must be visible for pixel qualification");
   const points = scene.items.filter((item): item is DrawItem & { kind: "circle" } => item.layer === "points" && item.kind === "circle");
   expect(points.length).toBeGreaterThan(0);
   // Native paint order permits later filled markers and annotation masks to
@@ -159,7 +175,10 @@ export async function canvasVisualWitness(canvas: Locator) {
   const sampled = exposed.filter((_, index) => index % Math.max(1, Math.floor(exposed.length / 8)) === 0).slice(0, 8);
   const samples = [];
   for (const point of sampled) {
-    const client = await logicalToClient(canvas, { x: point.center[0], y: point.center[1] });
+    const [left, top, width, height] = scene.viewBox;
+    const scale = Math.min(box.width / width, box.height / height);
+    const client = { x: box.x + (box.width - width * scale) / 2 + (point.center[0] - left) * scale,
+      y: box.y + (box.height - height * scale) / 2 + (point.center[1] - top) * scale };
     const x = Math.round((client.x - box.x) * decoded.width / box.width); const y = Math.round((client.y - box.y) * decoded.height / box.height);
     const radius = Math.ceil(8 * decoded.width / box.width); let brightPixels = 0;
     for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
@@ -186,7 +205,7 @@ export async function canvasVisualWitness(canvas: Locator) {
     expect(ringSectors, `presented point ${point.id} must paint its circular marker`).toBeGreaterThanOrEqual(7);
     samples.push({ itemId: point.id, x, y, brightPixels, ringSectors });
   }
-  const { backend, state, width, height, pixelRatio, rasterResolution, hardware } = await rendererDiagnostics(canvas);
+  const { backend, hardware, state, width, height, pixelRatio, rasterResolution } = before;
   // Timings/resource counters are observed separately; the initial-state witness
   // retains every stable drawing, pixel, surface and execution-environment input.
   return { format: "geosolve-canvas-visual-v1", screenshotSha256: createHash("sha256").update(screenshot).digest("hex"), width: decoded.width, height: decoded.height, samples,

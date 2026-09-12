@@ -116,8 +116,38 @@ test("M94 canvas presents actual WebGL2 pixels and remains idle without redrawin
   });
   expect(observer).toMatchObject({ getter: "function", setter: "undefined" });
   expect(observer.webglVersion).toContain("WebGL 2.0");
+
+  // A held pan keeps the display-resolution path observable without racing its
+  // idle refinement. Native geometry must follow the real CSS displacement at
+  // either raster resolution, and both draws must contain visible point pixels.
+  const workspace = await savedWorkspace(page);
+  await expect.poll(async () => (await rendererDiagnostics(canvas)).rasterResolution).toBe(2);
+  const points = drawItems(canvas, { layer: "points", kind: "circle", interactive: true });
+  const initialPoints = await points.all();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(box.x + box.width / 2 + 16, box.y + box.height / 2 + 12, { steps: 3 });
+  const displacementError = async () => {
+    const moved = await points.all();
+    expect(moved.length).toBe(initialPoints.length);
+    return Math.max(...moved.map((point, index) => {
+      const initial = initialPoints[index];
+      if (point.kind !== "circle" || initial.kind !== "circle") throw Error("Expected point markers");
+      expect(point.metadata.persistentId).toBe(initial.metadata.persistentId);
+      return Math.hypot(point.center[0] - initial.center[0] - 16, point.center[1] - initial.center[1] - 12);
+    }));
+  };
+  await expect.poll(displacementError).toBeLessThan(0.01);
+  await expect.poll(async () => (await rendererDiagnostics(canvas)).rasterResolution).toBe(1);
+  await expectFullCanvas(canvas, 1);
+  await info.attach("canvas-active-dpr1-pixels", { body: JSON.stringify(await canvasVisualWitness(canvas, true)), contentType: "application/json" });
+  await page.mouse.up({ button: "middle" });
   await page.mouse.move(0, 0);
   await settlePresentation(page);
+  await expect.poll(async () => (await rendererDiagnostics(canvas)).rasterResolution).toBe(2);
+  expect(await displacementError()).toBeLessThan(0.01);
+  expect(await savedWorkspace(page)).toBe(workspace);
   const visual = await canvasVisualWitness(canvas);
   await info.attach("canvas-gpu-pixels", { body: JSON.stringify(visual), contentType: "application/json" });
   const before = await rendererDiagnostics(canvas);
@@ -290,8 +320,16 @@ async function exerciseFirstShaderLoss(page: Page, info: TestInfo, shaderName: s
   await page.getByRole("button", { name: "Center on origin", exact: true }).click();
   await page.mouse.move(0, 0);
   await settlePresentation(page);
+  await expect.poll(async () => {
+    const diagnostics = await rendererDiagnostics(canvas);
+    return diagnostics.isSettled === true && diagnostics.hasPendingDraw === false
+      && diagnostics.rasterResolution === Math.max(2, Number(diagnostics.pixelRatio));
+  }).toBe(true);
+  const before = await rendererDiagnostics(canvas);
   const scene = await presentedFrame(canvas);
   const screenshot = await canvas.screenshot();
+  expect(await rendererDiagnostics(canvas)).toEqual(before);
+  expect(await presentedFrame(canvas)).toEqual(scene);
   await info.attach(`first-${shaderName}-loss-pixels`, { body: screenshot, contentType: "image/png" });
   const pixels = decodeScreenshot(screenshot);
   const box = (await canvas.boundingBox())!;

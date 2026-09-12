@@ -8,7 +8,7 @@ import { MockWorkbenchAdapter } from "../lib/mock-adapter";
 import { createCanvasRenderer } from "../lib/canvas-renderer";
 import { WorkbenchActivity } from "../lib/workbench-activity";
 
-vi.mock("../lib/canvas-renderer", () => ({ createCanvasRenderer: vi.fn(() => ({ accept: vi.fn(), resize: vi.fn(), destroy: vi.fn() })) }));
+vi.mock("../lib/canvas-renderer", () => ({ createCanvasRenderer: vi.fn(() => ({ accept: vi.fn(), resize: vi.fn(), setInteractionActive: vi.fn(), destroy: vi.fn() })) }));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 async function setup(activeTool = "select", strict = false) {
@@ -20,6 +20,53 @@ async function setup(activeTool = "select", strict = false) {
   return { adapter, snapshot, onCaptureChange, onSnapshot, onError, view, host: view.getByRole("application") };
 }
 describe("canvas host lifecycle", () => {
+  it("signals interaction before native input and holds it through capture and queued release", async () => {
+    vi.useFakeTimers(); const h = await setup();
+    const renderer = vi.mocked(createCanvasRenderer).mock.results.at(-1)!.value;
+    vi.mocked(renderer.setInteractionActive).mockClear();
+    let release!: (snapshot: WorkbenchSnapshot | null) => void;
+    vi.spyOn(h.adapter, "pointer").mockImplementation(async sample => {
+      expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(true);
+      if (sample.phase === "up") return new Promise(resolve => { release = resolve; });
+      return null;
+    });
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(renderer.setInteractionActive).not.toHaveBeenCalledWith(false);
+    pointerEvent(h.host, "pointerup"); pointerEvent(h.host, "lostpointercapture");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(h.onCaptureChange).toHaveBeenLastCalledWith(false);
+    expect(renderer.setInteractionActive).not.toHaveBeenCalledWith(false);
+    await act(async () => { release(null); });
+    expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(false);
+  });
+  it("holds wheel activity through the asynchronous native batch and retires discarded hover", async () => {
+    vi.useFakeTimers(); const nextFrame = animationFrames(); const h = await setup();
+    const renderer = vi.mocked(createCanvasRenderer).mock.results.at(-1)!.value;
+    let finish!: (snapshot: WorkbenchSnapshot | null) => void;
+    vi.spyOn(h.adapter, "wheel").mockImplementation(() => {
+      expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(true, { supersedeHover: true });
+      return new Promise(resolve => { finish = resolve; });
+    });
+    fireEvent.wheel(h.host, { deltaY: -90 }); await nextFrame();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(true, { supersedeHover: true });
+    await act(async () => { finish(null); });
+    expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(false);
+    pointerEvent(h.host, "pointermove");
+    expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(true);
+    pointerEvent(h.host, "pointerout");
+    expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(false);
+  });
+  it("does not let a late captured response rearm interaction after focus loss", async () => {
+    const h = await setup(); const renderer = vi.mocked(createCanvasRenderer).mock.results.at(-1)!.value;
+    let finish!: (snapshot: WorkbenchSnapshot | null) => void;
+    vi.spyOn(h.adapter, "pointer").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    pointerEvent(h.host, "pointerdown", { buttons: 1 }); fireEvent(window, new Event("blur"));
+    expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(false);
+    await act(async () => { finish(null); });
+    expect(renderer.setInteractionActive).toHaveBeenLastCalledWith(false);
+  });
   it("busy feedback retains the canvas and lets captured gestures terminate while blocking new input", async () => {
     vi.useFakeTimers();
     const h = await setup();
@@ -494,11 +541,22 @@ describe("canvas input scheduling", () => {
     pointerEvent(h.host, "pointermove", { clientX: 60 }); await frame();
     expect(h.onSnapshot).toHaveBeenCalledExactlyOnceWith(full);
     expect(vi.mocked(renderer.accept).mock.calls.at(-1)?.[0]).toBe(delta.frame.scene);
+    expect(renderer.accept).toHaveBeenLastCalledWith(delta.frame.scene, "hover");
     h.view.rerender(<CanvasViewport adapter={h.adapter} snapshot={full} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
     expect(vi.mocked(renderer.accept).mock.calls.at(-1)?.[0]).toBe(delta.frame.scene);
+    expect(renderer.accept).toHaveBeenLastCalledWith(delta.frame.scene, "hover");
     const external = { ...full, frame: { ...full.frame, scene: structuredClone(full.frame.scene) } };
     h.view.rerender(<CanvasViewport adapter={h.adapter} snapshot={external} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
     expect(vi.mocked(renderer.accept).mock.calls.at(-1)?.[0]).toBe(external.frame.scene);
+    expect(renderer.accept).toHaveBeenLastCalledWith(external.frame.scene);
+    const editing = markCanvasOnlySnapshot(structuredClone(external));
+    vi.mocked(h.adapter.pointer).mockResolvedValueOnce(editing);
+    pointerEvent(h.host, "pointerdown", { buttons: 1 }); await frame();
+    expect(renderer.accept).toHaveBeenLastCalledWith(editing.frame.scene);
+    const navigation = markCanvasOnlySnapshot(structuredClone(external));
+    vi.spyOn(h.adapter, "wheel").mockResolvedValueOnce(navigation);
+    fireEvent.wheel(h.host, { deltaY: -90 }); await frame();
+    expect(renderer.accept).toHaveBeenLastCalledWith(navigation.frame.scene);
   });
 
   it("rejects stale external full frames and late input results using adapter decode order", async () => {

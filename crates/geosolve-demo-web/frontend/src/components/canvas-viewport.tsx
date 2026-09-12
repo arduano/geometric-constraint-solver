@@ -31,8 +31,9 @@ class CanvasInputQueue {
 
   constructor(
     private readonly adapter: WorkbenchAdapter,
-    private readonly accept: (snapshot: WorkbenchSnapshot) => void,
+    private readonly accept: (snapshot: WorkbenchSnapshot, isIdleHover: boolean) => void,
     private readonly fail: (error: unknown) => void,
+    private readonly idle: () => void,
   ) {}
 
   pointer(sample: PointerSample, coalesce: boolean) {
@@ -87,10 +88,12 @@ class CanvasInputQueue {
 
   discardHover() {
     this.operations = this.operations.filter((operation) => operation.kind !== "move" || operation.sample.buttons !== 0);
-    if (this.pending?.kind !== "move" || this.pending.sample.buttons !== 0) return;
-    if (this.frame !== null) cancelAnimationFrame(this.frame);
-    this.frame = null;
-    this.pending = null;
+    if (this.pending?.kind === "move" && this.pending.sample.buttons === 0) {
+      if (this.frame !== null) cancelAnimationFrame(this.frame);
+      this.frame = null;
+      this.pending = null;
+    }
+    this.notifyIdle();
   }
 
   discardTransient() {
@@ -99,6 +102,7 @@ class CanvasInputQueue {
     this.frame = null;
     this.pending = null;
     this.operations = this.operations.filter((operation) => !operation.transient);
+    this.notifyIdle();
   }
 
   activate() { this.disposed = false; }
@@ -171,7 +175,7 @@ class CanvasInputQueue {
   private drain() {
     if (this.running || this.disposed) return;
     const operation = this.operations.shift();
-    if (!operation) return;
+    if (!operation) { this.notifyIdle(); return; }
     this.running = true;
     const generation = this.generation;
     let result: Promise<WorkbenchSnapshot | null>;
@@ -181,7 +185,7 @@ class CanvasInputQueue {
     }
     catch (error) { result = Promise.reject(error); }
     void result.then((next) => {
-      if (next && !this.disposed && generation === this.generation) this.accept(next);
+      if (next && !this.disposed && generation === this.generation) this.accept(next, operation.kind === "move" && operation.sample.buttons === 0);
     }).catch((error: unknown) => {
       if (!this.disposed && generation === this.generation) this.fail(error);
     }).finally(() => {
@@ -189,6 +193,10 @@ class CanvasInputQueue {
       this.running = false;
       this.drain();
     });
+  }
+
+  private notifyIdle() {
+    if (!this.disposed && !this.running && !this.pending && this.operations.length === 0) this.idle();
   }
 }
 
@@ -215,25 +223,35 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
   const [renderState, setRenderState] = useState<RendererState>("initializing");
   const capturedPointer = useRef<number | null>(null);
   const capturedButton = useRef<number | null>(null);
+  const inputSuspended = useRef(false);
   const callbacks = useRef({ adapter, onSnapshot, onCaptureChange, onError });
   callbacks.current = { adapter, onSnapshot, onCaptureChange, onError };
   const acceptedFrames = useMemo(() => ({
     latest: null as WorkbenchSnapshot["frame"]["scene"] | null,
+    latestIsIdleHover: false,
     sequence: undefined as number | undefined,
     forwarded: new WeakSet<WorkbenchSnapshot["frame"]["scene"]>(),
   }), [adapter]);
-  const input = useMemo(() => new CanvasInputQueue(adapter, (next) => {
+  const input = useMemo(() => new CanvasInputQueue(adapter, (next, isIdleHover) => {
     if (callbacks.current.adapter !== adapter) return;
     const sequence = getCanvasSnapshotSequence(next);
     if (sequence !== undefined && acceptedFrames.sequence !== undefined && sequence < acceptedFrames.sequence) return;
     if (sequence !== undefined) acceptedFrames.sequence = sequence;
     acceptedFrames.latest = next.frame.scene;
-    if (isCanvasOnlySnapshot(next)) renderer.current?.accept(next.frame.scene);
+    acceptedFrames.latestIsIdleHover = isIdleHover;
+    if (isCanvasOnlySnapshot(next)) {
+      if (isIdleHover) renderer.current?.accept(next.frame.scene, "hover");
+      else renderer.current?.accept(next.frame.scene);
+    }
     else {
       acceptedFrames.forwarded.add(next.frame.scene);
       callbacks.current.onSnapshot(next);
     }
-  }, (error) => callbacks.current.onError(error)), [adapter, acceptedFrames]);
+  }, (error) => callbacks.current.onError(error), () => {
+    // Releasing capture happens immediately at pointerup, but raster quality
+    // stays interactive until the native release and all queued input finish.
+    renderer.current?.setInteractionActive(!inputSuspended.current && capturedPointer.current !== null);
+  }), [adapter, acceptedFrames]);
 
   const retireCapture = (pointerId: number) => {
     if (capturedPointer.current !== pointerId) return false;
@@ -245,6 +263,7 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
 
   const cancelCapturedPointer = (pointerId: number) => {
     if (!retireCapture(pointerId)) return;
+    renderer.current?.setInteractionActive(true);
     input.clearDimensionHover();
     input.flush();
     input.dispatch(() => adapter.cancel({ version: 2, reason: "lost-capture" }));
@@ -260,6 +279,8 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
     // of turning a context-menu gesture into semantic sketch input.
     if ((phase === "down" || phase === "up") && typeof event.button === "number" && event.button !== 0 && event.button !== 1) return;
     if (phase === "move" && ((event.buttons ?? 0) & 2) !== 0) return;
+    inputSuspended.current = false;
+    renderer.current?.setInteractionActive(true);
     const bounds = event.currentTarget.getBoundingClientRect();
     const coalesce = phase === "move" && (
       (event.buttons === 0 && capturedPointer.current === null && snapshot.presentation.activeTool === "select")
@@ -311,12 +332,13 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
     const frame = forwarded && acceptedFrames.latest ? acceptedFrames.latest : snapshot.frame.scene;
     acceptedFrames.latest = frame;
     acceptedFrames.forwarded.delete(snapshot.frame.scene);
-    renderer.current?.accept(frame);
+    if (forwarded && acceptedFrames.latestIsIdleHover) renderer.current?.accept(frame, "hover");
+    else renderer.current?.accept(frame);
   }, [acceptedFrames, input, snapshot]);
 
   useEffect(() => {
     input.activate();
-    const discardBlurred = () => { input.discardTransient(); input.clearDimensionHover(); };
+    const discardBlurred = () => { inputSuspended.current = true; input.discardTransient(); input.clearDimensionHover(); renderer.current?.setInteractionActive(false); };
     const discardHidden = () => { if (document.hidden) discardBlurred(); };
     const flushBeforeCommand = () => { input.cancelDimensionTimer(); input.flush(); };
     // Menu, project and keyboard actions may change the Rust workbench without
@@ -337,6 +359,7 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
       if (capturedPointer.current !== null) callbacks.current.onCaptureChange(false);
       capturedPointer.current = null;
       capturedButton.current = null;
+      renderer.current?.setInteractionActive(false);
     };
   }, [input]);
 
@@ -387,7 +410,7 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
       onPointerLeave={() => { input.clearDimensionHover(); if (capturedPointer.current === null) input.discardHover(); }}
       onPointerCancel={(event) => cancelCapturedPointer(event.pointerId)}
       onLostPointerCapture={(event) => cancelCapturedPointer(event.pointerId)}
-      onWheel={(event) => { if (busy && !adapter.responsiveCanvas) return; const bounds = event.currentTarget.getBoundingClientRect(); input.wheel({ version: 2, x: event.clientX - bounds.left, y: event.clientY - bounds.top, deltaX: event.deltaX, deltaY: event.deltaY, ctrl: event.ctrlKey }); }}
+      onWheel={(event) => { if (busy && !adapter.responsiveCanvas) return; inputSuspended.current = false; renderer.current?.setInteractionActive(true, { supersedeHover: true }); const bounds = event.currentTarget.getBoundingClientRect(); input.wheel({ version: 2, x: event.clientX - bounds.left, y: event.clientY - bounds.top, deltaX: event.deltaX, deltaY: event.deltaY, ctrl: event.ctrlKey }); }}
     >
       <canvas ref={canvas} className="geosolve-canvas" aria-hidden="true" />
       {renderState !== "ready" && <div className="geosolve-render-status" role="status">

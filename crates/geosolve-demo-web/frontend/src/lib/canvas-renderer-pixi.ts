@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import "pixi.js/filters";
-import { BlurFilter, CanvasTextMetrics, Color, Container, Graphics, Text, TextStyle, VERSION, WebGLRenderer } from "pixi.js";
+import { BlurFilter, CanvasTextMetrics, Color, Container, Graphics, RenderTexture, Text, TextStyle, VERSION, WebGLRenderer } from "pixi.js";
 import type { DrawFrame, DrawItem, DrawPoint, DrawStyle } from "./canvas-scene";
 import { dashedSegments, fitDrawing, textRasterOrigin } from "./canvas-renderer-geometry";
 
 export interface CanvasSurface { width: number; height: number; pixelRatio: number }
+export type CanvasRenderQuality = "interactive" | "settled";
 export interface BackendStats { resources: number; created: number; destroyed: number; updated: number; repainted?: number; rasterResolution?: number }
 export interface CanvasBackend {
   readonly hardware: Readonly<Record<string, string>>;
-  render(frame: DrawFrame, surface: CanvasSurface): BackendStats | Promise<BackendStats>;
+  render(frame: DrawFrame, surface: CanvasSurface, quality?: CanvasRenderQuality): BackendStats | Promise<BackendStats>;
   destroy(): void;
 }
 interface Entry { container: Container; content: Graphics | Text; shadow: Graphics | null; blur: BlurFilter | null; item: DrawItem | null; kind: DrawItem["kind"]; scale: number; resolution: number; position: DrawPoint | null }
@@ -214,9 +215,42 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
     entry.container.destroy({ children: true, texture: true, textureSource: true });
     destroyed++;
   }
+  function prepareInteractionPipeline() {
+    interactionShaders ??= nativeBlur(3);
+    for (const pass of [interactionShaders.blurXFilter, interactionShaders.blurYFilter]) {
+      renderer.shader.bind(pass, true); // Filter-global uniforms exist only during actual filtering.
+      if (gl.isContextLost()) throw new Error("WebGL2 context was lost during shader preparation");
+    }
+    // Compiling programs alone leaves the driver's first filter draw expensive.
+    // Exercise both private filter targets and the final canvas composition:
+    // their framebuffer formats/sample counts can select different GPU pipelines.
+    // The real scene clears all preparation pixels in this same submission and
+    // its final fence validates the complete work before native publication.
+    const preparation = new Container({ eventMode: "none", interactiveChildren: false });
+    let target: RenderTexture | null = null;
+    try {
+      const shape = new Graphics();
+      preparation.addChild(shape);
+      shape.circle(32, 32, 4).fill(0xffffff);
+      shape.filters = [interactionShaders];
+      target = RenderTexture.create({ width: 64, height: 64, resolution: 1, antialias: true });
+      renderer.render({ container: preparation, target, clear: true });
+      if (gl.isContextLost()) throw new Error("WebGL2 context was lost during pipeline preparation");
+      // The initial canvas is only 1 × 1. Keep the small shape intersecting it
+      // so Pixi executes the final filter pass instead of culling it entirely.
+      shape.position.set(-31.5, -31.5);
+      renderer.render({ container: preparation, clear: true });
+      if (gl.isContextLost()) throw new Error("WebGL2 context was lost during canvas pipeline preparation");
+    } finally {
+      // WebGL keeps submitted resource references alive until their work ends.
+      // Pixi's filter and shader caches stay owned by the renderer/backend.
+      try { preparation.destroy({ children: true, context: true }); } finally { target?.destroy(true); }
+    }
+    interactionShadersPrepared = true;
+  }
   return {
     hardware,
-    render(frame, surface) {
+    render(frame, surface, quality = "settled") {
       if (disposed || gl.isContextLost()) throw new Error("WebGL2 context is unavailable for presentation");
       if (failure) throw failure;
       if (cancelCompletion) throw new Error("WebGL2 presentation is already in flight");
@@ -230,21 +264,16 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
           entries.clear(); surfaceKey = ""; restored = false;
         }
         if (!interactionShadersPrepared) {
-          // First hover must not compile its blur programs on the input thread.
-          // Prepare the exact native-shadow programs during honest initial-frame
-          // readiness, after this backend has an owner that can recover loss.
-          // This binds only programs: no synthetic draw, texture or filter pass.
-          interactionShaders ??= nativeBlur(3);
-          for (const pass of [interactionShaders.blurXFilter, interactionShaders.blurYFilter]) {
-            renderer.shader.bind(pass, true); // Filter-global uniforms exist only during actual filtering.
-            if (gl.isContextLost()) throw new Error("WebGL2 context was lost during shader preparation");
-          }
-          interactionShadersPrepared = true;
+          // Run only after backend installation so loss has a presentation owner.
+          prepareInteractionPipeline();
         }
-        // Supersample low-DPR displays so thin CAD strokes and small dimension
-        // text retain subpixel coverage comparable to the SVG baseline.
-        const rasterResolution = Math.max(2, surface.pixelRatio);
-        const nextSurface = `${surface.width}:${surface.height}:${surface.pixelRatio}`;
+        // Native display resolution keeps navigation responsive. At rest,
+        // supersample thin CAD strokes while preserving the same CSS geometry.
+        // Keep text textures at static quality across both modes to avoid
+        // rerasterizing every label at each interaction boundary.
+        const textResolution = Math.max(2, surface.pixelRatio);
+        const rasterResolution = quality === "interactive" ? surface.pixelRatio : textResolution;
+        const nextSurface = `${surface.width}:${surface.height}:${rasterResolution}`;
         if (nextSurface !== surfaceKey) { renderer.resize(surface.width, surface.height, rasterResolution); surfaceKey = nextSurface; }
         renderer.background.color = frame.background;
         const fit = fitDrawing(frame.viewBox, surface.width, surface.height);
@@ -256,7 +285,7 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
           if (entry && entry.kind !== item.kind) { remove(entry); entries.delete(item.id); entry = undefined; }
           if (!entry) {
             const container = new Container({ eventMode: "none", interactiveChildren: false });
-            const content = item.kind === "text" ? new Text({ text: "", resolution: rasterResolution }) : new Graphics();
+            const content = item.kind === "text" ? new Text({ text: "", resolution: textResolution }) : new Graphics();
             container.addChild(content); stage.addChild(container);
             entry = { container, content, shadow: null, blur: null, item: null, kind: item.kind, scale: 0, resolution: 0, position: null };
             entries.set(item.id, entry); created++;
@@ -268,7 +297,7 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
           const anchor = origin(item); const position = map(anchor);
           const previous = entry.item;
           const paintChanged = !previous || entry.scale !== fit.scale || !sameStyle(previous.style, style)
-            || !sameLocalGeometry(previous, item) || item.kind === "text" && entry.resolution !== rasterResolution;
+            || !sameLocalGeometry(previous, item) || item.kind === "text" && entry.resolution !== textResolution;
           const positionChanged = !entry.position || entry.position[0] !== position[0] || entry.position[1] !== position[1];
           const rotationChanged = item.kind === "text" && (!previous || previous.kind !== "text" || previous.rotation !== item.rotation);
           entry.item = item;
@@ -285,7 +314,7 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
                 stroke: style.stroke ? { ...colorValue(style.stroke), width: style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale), join: style.lineJoin } : undefined,
                 textBaseline: "alphabetic", letterSpacing: style.letterSpacing * fit.scale, padding: Math.max(style.strokeWidth, style.shadow?.blur ?? 0) * 2,
                 dropShadow: style.shadow ? { ...colorValue(style.shadow.color), blur: style.shadow.blur, distance: Math.hypot(...style.shadow.offset), angle: Math.atan2(style.shadow.offset[1], style.shadow.offset[0]) } : false });
-              text.text = item.text; text.style = textStyle; text.resolution = rasterResolution;
+              text.text = item.text; text.style = textStyle; text.resolution = textResolution;
               text.anchor.set(0, 0);
               const metrics = CanvasTextMetrics.measureText(item.text, textStyle);
               const origin = textRasterOrigin(metrics, style.textAnchor, style.textBaseline, style.stroke ? style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale) : 0);
@@ -304,7 +333,7 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
               entry.shadow.filters = style.shadow.blur ? [entry.blur] : [];
             } else if (entry.shadow) { entry.shadow.destroy(); entry.shadow = null; entry.blur?.destroy(); entry.blur = null; }
           }
-          entry.scale = fit.scale; entry.resolution = rasterResolution; entry.position = position; updated++;
+          entry.scale = fit.scale; entry.resolution = textResolution; entry.position = position; updated++;
           if (paintChanged) repainted++;
         });
         renderer.render({ container: stage });

@@ -1384,3 +1384,281 @@ local Rust wheel replies remain fast while software-rendered frames serialize.
 Earlier failed timing measurements remain evidence of host/presentation variability;
 this instrumented pass does not replace integrated qualification or establish a
 performance improvement. No rendering behavior, resolution or timing budget changed.
+
+The third nomination, `20260912T205123-b192bffb` on `3d39e35`, passes both
+readiness corrections but fails collaboration browser qualification at 13/16.
+First circle-drag event-to-paint p95 is 520.5 ms, four-editor navigation is
+650.5 ms and manifold navigation is 670.4 ms, each against the unchanged 500 ms
+limit. Manifold text acknowledgement passes at 440.9 ms; Gridfinity navigation
+passes at 343.0 ms. The failed nomination remains preserved in
+`target/m98/coordination/corner-drag/release-gate-r3.log` and its run's
+`stages/collaboration.browser/scratch/m98/node.tap`. No preview replacement or
+new qualification follows from the passing corner regressions alone.
+
+## M98-F042 — Interactive supersampling serializes expensive canvas draws
+
+The F041 qualification failures above independently reproduce delayed first-use
+dragging and navigation on clean `3d39e35`. The complete manifold trace shows
+an old-camera hover draw beginning around 45 ms, followed by the local wheel
+reply around 61.5 ms; GPU completion takes 232 ms for hover and another 181.4 ms
+for zoom. Local wheel work takes 12–47 ms. At display DPR 1 the backend always
+uses a 2× framebuffer, approximately 3.4 million pixels for this canvas, with
+antialiasing and native shadow filters. This is a presentation cost; F041 branch
+transport does not run during navigation.
+
+The presentation repair uses the actual display DPR for changing frames,
+including peer updates and delayed native previews, and holds that quality while
+pointer/wheel input is queued or a pointer remains captured. It restores the existing minimum 2×
+supersampling after 1.5 s of idle time following completed rendering. Activity
+alone does not submit another old-camera frame. Each GPU submission retains its
+own quality, frame, surface and context identity; only validated completion
+publishes its witness. Text textures retain their original supersampled quality
+across framebuffer changes. DPR 2 and higher require no quality-only redraw.
+Native geometry, CSS sizes, input ordering, branch policy, server authority and
+all existing performance budgets remain unchanged.
+
+The extended existing browser pixel/idle case fails on the previous prepared
+artifact at the intended active-resolution assertion (`2` versus expected `1`),
+after its independent 16 × 12 px pan translation passes. Baseline log:
+`target/m98/coordination/corner-drag/active-raster-before.log`. The case also
+requires real point pixels during a held pan, exact geometry and source retention,
+restored static quality and the unchanged no-redraw assertion. Pixel captures
+bind one completed frame/surface identity across the screenshot and use that
+captured scene for every sample coordinate. Replacement checks and integrated
+qualification are pending; no preview has been upgraded.
+
+The first local-input-only raster prototype passes 93 focused renderer/Pixi/
+viewport tests and TypeScript checking, but its isolated browser measurement
+still fails all four existing latency cases. Cold circle preview p95 is
+549.2 ms (zero reversals), four-editor navigation 750.1 ms, manifold first
+navigation 561.4 ms and Gridfinity first navigation 625.3 ms. Subsequent dense
+navigation is 219–361 ms and 197–272 ms respectively; text acknowledgement
+passes. Inputs, isolated build and all measurements remain in
+`target/m98/coordination/corner-drag/interaction-raster-{inputs,build,performance}-r1.*`.
+This failed prototype is not a qualified improvement. Review additionally
+found a queued idle-refinement draw surviving restarted input and shared
+authoring work outliving the viewport queue. The follow-up policy covers all
+changing accepted frames without awaiting shared authoring on the navigation
+path, cancels only unsubmitted refinement work, and exposes pending/settled
+presentation status for exact pixel capture barriers.
+
+The revised policy passes
+`npm test -- --no-cache src/lib/canvas-renderer.test.ts src/lib/canvas-renderer-pixi.test.ts src/components/canvas-viewport.test.tsx`
+(98 tests), `npm run check:types` and `git diff --check`. Its isolated harness
+passes all four existing `canvas-renderer.spec.ts` browser workflows in 1.2 min,
+including the extended active/static pixel witness, the unchanged idle assertion,
+DPR/hidden layouts, exact picking and CSS displacement, context restoration and
+first-use shader-loss text/stroke pixels, and lost-capture recovery. The command
+uses the pinned Nix shell and Chrome, `GEOSOLVE_E2E_PORT=18126`,
+`GEOSOLVE_E2E_ARTIFACT_MANIFEST=…/interaction-raster-harness-r2.json`, and
+`npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1` with a fresh
+output directory. Full output and browser evidence are retained in
+`target/m98/coordination/corner-drag/interaction-raster-pixels-r2{.log,/}`.
+These focused passes do not yet establish the required latency or integrated
+release qualification.
+
+The r2 performance run passes circle dragging (483.9 ms cold, 120.5/127.4 ms
+warm, zero reversals), manifold navigation (485.5 ms), Gridfinity navigation
+(349.2 ms) and all text acknowledgements. Four-editor navigation still fails at
+842.7 ms. Its first wheel API call spends 506.9 ms before returning; the local
+wheel reply takes only a few milliseconds. The retained diagnostic
+`four-raster-trace-r3.json` shows all four documents remain visible, disproving
+the proposed hidden-tab activation explanation. Three peer canvases submit
+2× idle refinements just after the first pointer move, while the originating
+canvas finishes its own 2× draw. Those submissions precede the interactive
+hover and zoom draws.
+
+Both instrumented four-editor copies time out later in their browser flow;
+their partial timings are diagnostic only. The second copy checkpoints each
+navigation's GPU/visibility data before that later failure. The uninstrumented
+r2 suite retains its successful typing/model assertions and failed latency
+assertion separately. The final policy extends the quiet interval from 500 ms
+to 1.5 s to avoid competing refinements during short pauses between editors.
+Its added four-renderer regression and the complete focused suite pass 99/99,
+with TypeScript checking passing in `interaction-raster-owner-r3.log`.
+Original latency limits, input sequences and static pixel assertions remain
+unchanged; r3 browser validation and integrated qualification are pending.
+
+The uninstrumented r3 run passes four-editor navigation (416.4 ms), Gridfinity
+(201.4 ms), warm circle dragging and text acknowledgement, but cold circle
+dragging (583.5 ms) and first manifold navigation (521.8 ms) remain over budget.
+No unchanged retry or new nomination follows from those partial passes.
+
+Two additional presentation regressions fail on that implementation:
+`point-begin-paint-before.log` proves the controller paints the unchanged native
+point-begin pose before the first queued movement, and `hover-paint-before.log`
+proves idle hover immediately schedules a full draw. The controller now awaits
+and validates native point setup, preserving every movement and terminal sample,
+then paints the first advanced pose. Idle Select hover may coalesce paint for
+at most 32 ms; repeated hover does not extend the window, and a changed navigation,
+editing or source frame replaces it immediately. The viewport carries this hint
+through both direct canvas replies and delayed React commits. Picking, native
+input evaluation and server replay are unchanged. Pending/settled diagnostics
+include deferred hover; resize, loss and disposal retire that work.
+
+All 118 focused renderer/Pixi/viewport/controller tests and TypeScript checking
+pass in `interaction-raster-owner-r4.log`. The exact isolated r4 bundle retains
+the previously prepared native modules. Final pixel checks and integrated
+qualification remain pending.
+
+
+The r4 original performance run passes only Gridfinity. Cold circle preview
+is 635.8 ms (warm 158.1/83.4 ms, zero reversals). Manifold navigation improves
+to 437.7 ms, but its text acknowledgement fails at 677.0 ms. Four-editor
+navigation samples remain below 500 ms, then the workflow times out before
+its text acknowledgement. These results remain unqualified in
+`interaction-raster-performance-r4.log`.
+
+Two isolated diagnostic copies preserve the original circle assertions and add
+worker/submission timestamps. `cold-worker-trace-r4.json` measures native first
+prediction ready at 217.6 ms after initial hover, while first moved paint occurs
+at 580.7 ms (535.7 ms event-to-paint, fail). `cold-gpu-trace-r4.json` measures
+322.7 ms for the first actual hover/blur draw, then 94.8 ms and approximately
+26 ms for later draws at the same native DPR. That instrumented run happens to
+pass at 452.1 ms; it is diagnostic evidence, not a replacement qualification.
+The first hover uses eight blur passes on a small 25 × 24 target. Existing
+startup `shader.bind` preparation does not eliminate this first actual pipeline
+cost. Offscreen pipeline preparation before the first native scene is being
+investigated, retaining one final GPU fence/error validation and truthful
+completed native pixels. Static review of r4 finds no blocking correctness
+regression; `render-review-current-result.md` records its scope and minor
+identical-frame hover-priority observation. No live preview has been upgraded.
+
+The separate four-editor diagnostic `four-click-trace-r4b.log` completes all
+original navigation, typing, held-solve and reload assertions (472.1 ms navigation,
+124.2 ms text). Additional step markers and a bounded click timeout did not
+reproduce the prior workflow stall; no production or qualification-harness
+change is inferred from that pass. An earlier diagnostic copy failed import
+resolution before opening a browser; both outputs are retained.
+
+The startup follow-up renders the existing strength-3/quality-4 blur through a
+private 64 × 64 antialiased target before the first native scene, and repeats
+only after context restoration. Program preparation remains explicit. Temporary
+graphics (including their owned contexts), target and texture source are cleaned
+up on success or failure; the final native scene fence/error validation covers
+all submitted work. No warm-up pixels or synthetic frame are published as native
+presentation. Allocation/submission/context-loss failures remain unavailable
+until restoration. Five resource-owner regressions cover this path; the original
+four fail before implementation. `npm test -- --no-cache
+src/lib/canvas-renderer-pixi.test.ts` passes all 28 tests and
+`npm run check:types`/`git diff --check` pass. Full command details and before/after
+outcomes are in `target/m98/coordination/corner-drag/gpu-warm-result.md`.
+The isolated r5 build and actual-browser checks remain pending.
+
+
+R5 passes the original circle (416.6 ms cold, 100.9/109.5 ms warm, no reversals),
+manifold (346.3 ms navigation, 456.0 ms text) and Gridfinity (239.6/343.0 ms)
+performance workflows. Four-editor navigation still fails one sample at
+532.2 ms; text 134.8 ms and all functional assertions pass. The same isolated
+artifact passes all four real canvas pixel/DPR/layout/context/capture workflows
+in 1.4 minutes (`interaction-raster-pixels-r5.log` and its evidence directory).
+These focused results do not qualify the release.
+
+Further cross-tab traces establish a narrower scheduling defect. The first r5
+trace passes all original four-editor assertions (diagnostic only); the second
+checkpoints all navigation evidence then times out later in the workflow.
+In `four-frames-trace-r5.json`, wheel input arrives at 0 ms, an unsubmitted
+old-camera hover draw starts at 11.2 ms, native wheel sends/replies at
+12.6/16.3 ms, and the old camera still paints at 152.2 ms before the zoom draw
+completes at 260.1 ms. All those surfaces are already at display DPR. This is
+redundant pending hover work, independent of static refinement.
+
+Five focused assertions fail in `wheel-hover-before-r6.log`. The viewport now
+marks wheel input as superseding hover as soon as its DOM event arrives. The
+renderer retains but suppresses only unsubmitted hover (timer, queued RAF or
+late reply) until an immediate native response or input-queue completion.
+A no-change/clamped response releases the same retained scene; queue completion
+also releases it after a null/error response. Immediate scene/surface work and
+already-submitted GPU draws remain intact. Native pointer/zoom evaluation and
+ordered wheel anchors are unchanged; the ordinary 32 ms hover window and
+1.5-second static refinement policy remain unchanged. All 82 renderer/viewport
+focused tests and TypeScript checking pass in `wheel-hover-after-r6.log`.
+Final r6 browser validation and integrated nomination remain pending.
+
+
+R6 original performance passes four-editor navigation (336.2 ms, text204.7 ms),
+manifold (350.3/478.7 ms) and Gridfinity (217.7/290.9 ms). Cold circle dragging
+fails at668.0 ms while warm99.0/116.9 ms and zero reversals pass. All original
+limits remain unchanged. A separate cold GPU diagnostic (`cold-gpu-trace-r6.json`)
+passes at399.7 ms but still measures309.5 ms in the first hover draw, followed
+by44.5 ms and approximately26 ms. The framebuffer was already display DPR.
+Private offscreen preparation does not remove that first canvas composition cost.
+
+An added owning assertion fails in `canvas-pipeline-before-r7.log`: preparation
+never exercises blur output on the actual canvas framebuffer. Startup now covers
+both the private filter target and final canvas composition, whose framebuffer
+format/sample count can require a different driver pipeline. The initial1×1
+canvas intersects a small preparatory shape; the final native scene clears the
+canvas in the same submission. Only the final native fence/error validation
+publishes readiness/frame evidence. Thus R7 supersedes R5's strictly-offscreen
+warm-up wording: temporary canvas preparation is cleared, never published as a
+native completed frame. Both preparation-target failure paths retain cleanup
+and restoration-only retry. Identical-frame priority promotion remains scoped
+to hover actually suppressed by wheel input. All130 renderer/Pixi/viewport/
+controller tests and TypeScript checking pass in `canvas-pipeline-after-r7.log`.
+R7 isolated build and actual-browser validation are pending; no new integrated
+gate or live-service replacement has run.
+
+
+R7 original performance completes 2/4 workflows: circle 389.9 ms cold and
+86.0/83.9 ms warm with zero reversals, and Gridfinity 225.4 ms navigation and
+337.3 ms text pass. All four-editor and manifold navigation samples complete
+within 500 ms, but both workflows time out at 180 seconds before a text acknowledgement. Their complete
+runs fail; partial navigation measurements do not replace the failed workflow.
+An action-level four-editor trace with early exception/cleanup markers is now
+prepared to locate this intermittent stall, which predates R7. No integrated
+nomination follows from these partial results. The pixel witness additionally
+uses its already-captured bounds when sampling pixels, removing a post-capture
+layout reread without altering any pixel assertion; final browser validation
+of this helper was subsequently completed below.
+
+### R7 final focused review and pixel evidence
+
+Independent read-only review finds no blocking correctness issue in the twelve
+F042 files (`review-f042-result.md`). The original browser source, actions and
+assertions also pass all four selected performance workflows with `DEBUG=pw:api`
+in `original-debug-r7.log` (165.3 s): circle 440.4 ms cold and 118.6/100 ms warm,
+zero reversals; four-editor navigation/text 359.5/140.8 ms; manifold
+421.4/397.9 ms; Gridfinity 232.5/315.6 ms. These diagnostic passes do not explain
+the prior intermittent cancellations. Read-only harness review notes that the
+original click timeout is 30 seconds; an earlier body error followed by stalled
+cleanup can also produce the outer 180-second cancellation. No cause or repair
+is inferred from that observation gap (`stall-review-result.md`).
+
+The final captured-bounds pixel helper and R7 artifact pass all four existing
+canvas workflows in 1.4 min, using the pinned Nix shell and Chrome:
+`python3 target/m98/coordination/corner-drag/measure-pixels-r7.py` invokes
+`npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1 --reporter=list,json`
+with the R7 harness manifest, port 18126 and fresh report/output paths.
+Active/static point pixels, exact pan displacement and unchanged source, DPR 2
+resize and picking, hidden layouts, genuine context restoration including
+first-use batch/blur losses, and lost-capture recovery all pass. The JSON report
+retains all passing witnesses and three actual restored-canvas PNG attachments;
+copies are under `interaction-raster-pixels-r7-attachments`. Restored line,
+point and dimension text pixels were also visually inspected. All logs here
+are under `target/m98/coordination/corner-drag/`.
+
+The subsequent untraced original run (`original-final-r7.log`) passes circle and
+four-editor workflows, but manifold navigation totals about 7.6 seconds and
+typing starts just 40.9 ms before the held solve resumes. It fails the retained
+`released === 0` assertion; its 794.2 ms text ACK overlaps active solving and
+does not independently establish a text-owner regression. Gridfinity navigation
+completes, then its workflow reaches the outer timeout before ACK. Both failures
+remain unresolved by the passing diagnostic runs.
+
+A temporary diagnostic copy retains all actions/assertions and adds early body
+errors, cleanup markers and late shutdown statistics. Its run
+(`flow-observed-r7.log`) completes all actions and cleanup without a stall. Circle
+599.9 ms cold and four-editor 601.5 ms navigation fail their unchanged budgets;
+later manifold 275.7/384.2 ms and Gridfinity 149.0/228.7 ms navigation/text pass.
+The accompanying `/proc` observations (`flow-observed-r7-host.jsonl`) establish
+competing Rust compilation in another repository consuming approximately 5–10
+cores during the early cases, with CPU scheduling pressure at 20–35 percent.
+That compilation has ended by the later cases. These loaded measurements do
+not justify another speculative product change or qualify the candidate. The
+independent text-path review (`text-latency-review-result.md`) also separates
+the expired solve hold from an isolated text-owner measurement.
+
+No diagnostic changed the production artifact or existing latency/semantic
+assertions. Clean-source integrated qualification must still establish the
+complete original workflows; every live preview upgrade remains pending.

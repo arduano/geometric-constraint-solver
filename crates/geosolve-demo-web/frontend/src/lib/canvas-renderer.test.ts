@@ -21,6 +21,268 @@ function harness() {
   return { canvas, callbacks, backend, renderer, flush, ready, reject };
 }
 
+describe("interaction raster quality", () => {
+  it("coalesces idle hover within a bounded window and lets navigation replace it immediately", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      h.renderer.accept(frame()); await h.ready(); h.flush();
+      h.renderer.accept(frame(12), "hover");
+      expect(h.callbacks.size).toBe(0);
+      expect(h.canvas.__geosolveRendererDiagnostics?.hasPendingDraw).toBe(true);
+      await vi.advanceTimersByTimeAsync(16);
+      h.renderer.accept(frame(14), "hover");
+      await vi.advanceTimersByTimeAsync(15); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1); h.flush();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
+      h.renderer.accept(frame(16), "hover");
+      await vi.advanceTimersByTimeAsync(8);
+      h.renderer.accept(frame(18)); h.flush();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));
+      expect(h.backend.render).toHaveBeenCalledTimes(3);
+      await vi.advanceTimersByTimeAsync(32); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(3);
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  for (const timing of ["timer", "queued RAF", "late reply"] as const) it(`lets wheel input supersede hover before its ${timing} draws`, async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      h.renderer.accept(frame()); await h.ready(); h.flush();
+      if (timing !== "late reply") h.renderer.accept(frame(12), "hover");
+      if (timing === "queued RAF") await vi.advanceTimersByTimeAsync(32);
+      h.renderer.setInteractionActive(true, { supersedeHover: true });
+      if (timing === "late reply") h.renderer.accept(frame(12), "hover");
+      await vi.advanceTimersByTimeAsync(64); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(1);
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ hasPendingDraw: true, isSettled: false });
+      h.renderer.accept(frame(14)); h.flush();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
+      expect(h.backend.render).toHaveBeenCalledTimes(2);
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("releases retained hover when navigation ends without a changed frame and preserves immediate surface work", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      h.renderer.accept(frame()); await h.ready(); h.flush();
+      h.renderer.setInteractionActive(true, { supersedeHover: true });
+      h.renderer.accept(frame(12), "hover");
+      await vi.advanceTimersByTimeAsync(64); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(1);
+      h.renderer.setInteractionActive(false); h.flush();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(12));
+      h.renderer.accept(frame(14), "hover");
+      h.renderer.resize({ width: 900, height: 600, pixelRatio: 1 });
+      h.renderer.setInteractionActive(true, { supersedeHover: true }); h.flush();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(14), { width: 900, height: 600, pixelRatio: 1 }, "interactive");
+      h.renderer.accept(frame(16), "hover");
+      h.renderer.accept(frame(16)); h.flush();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(16));
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("retires deferred hover on resize, context loss and disposal", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      h.renderer.accept(frame()); await h.ready(); h.flush();
+      h.renderer.accept(frame(12), "hover");
+      h.renderer.resize({ width: 900, height: 600, pixelRatio: 1 }); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(2);
+      h.renderer.accept(frame(14), "hover");
+      h.canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+      await vi.advanceTimersByTimeAsync(32); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(2);
+      h.canvas.dispatchEvent(new Event("webglcontextrestored")); h.flush();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
+      h.renderer.accept(frame(16), "hover"); h.renderer.destroy();
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(h.callbacks.size).toBe(0); expect(vi.getTimerCount()).toBe(0);
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("keeps short pauses between four changing editors free of competing refinements", async () => {
+    vi.useFakeTimers(); const editors = Array.from({ length: 4 }, harness);
+    try {
+      for (const h of editors) {
+        h.renderer.accept(frame()); await h.ready(); h.flush();
+        h.renderer.accept(frame(12)); h.flush();
+      }
+      for (let step = 0; step < 12; step++) {
+        await vi.advanceTimersByTimeAsync(300);
+        for (const h of editors) h.flush();
+        const active = editors[step % editors.length];
+        active.renderer.accept(frame(14 + step)); active.flush();
+        for (const h of editors) {
+          expect(vi.mocked(h.backend.render).mock.calls.slice(1).every((call) => call[2] === "interactive")).toBe(true);
+        }
+      }
+      await vi.advanceTimersByTimeAsync(1_500);
+      for (const h of editors) {
+        h.flush();
+        expect(vi.mocked(h.backend.render).mock.lastCall?.[2]).toBe("settled");
+        expect(h.canvas.__geosolveRendererDiagnostics?.isSettled).toBe(true);
+      }
+    } finally { for (const h of editors) h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  for (const pendingWork of ["none", "frame", "surface"] as const) it(`cancels a queued idle refinement while preserving ${pendingWork} work when input restarts`, async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      h.renderer.setInteractionActive(true); h.renderer.accept(frame()); await h.ready(); h.flush();
+      h.renderer.setInteractionActive(false); await vi.advanceTimersByTimeAsync(1_500);
+      expect(h.callbacks.size).toBe(1); expect(h.canvas.__geosolveRendererDiagnostics?.hasPendingDraw).toBe(true);
+      if (pendingWork === "frame") h.renderer.accept(frame(12));
+      if (pendingWork === "surface") h.renderer.resize({ width: 900, height: 600, pixelRatio: 1 });
+      h.renderer.setInteractionActive(true); h.flush();
+      if (pendingWork === "none") {
+        expect(h.backend.render).toHaveBeenCalledTimes(1);
+        expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ hasPendingDraw: false, isSettled: false, frameCount: 1 });
+        h.renderer.accept(frame(14)); h.flush();
+        expect(h.backend.render).toHaveBeenLastCalledWith(frame(14), { width: 1000, height: 700, pixelRatio: 1 }, "interactive");
+      } else {
+        expect(h.backend.render).toHaveBeenCalledTimes(2);
+        expect(h.backend.render).toHaveBeenLastCalledWith(pendingWork === "frame" ? frame(12) : frame(),
+          pendingWork === "surface" ? { width: 900, height: 600, pixelRatio: 1 } : { width: 1000, height: 700, pixelRatio: 1 }, "interactive");
+      }
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("keeps the first frame static and presents later unsolicited changes at native DPR before refining", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      h.renderer.accept(frame()); await h.ready(); h.flush();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(), { width: 1000, height: 700, pixelRatio: 1 }, "settled");
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: true, hasPendingDraw: false });
+      await vi.advanceTimersByTimeAsync(2_000); h.renderer.accept(frame()); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+      h.renderer.accept(frame(12)); h.flush();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(12), { width: 1000, height: 700, pixelRatio: 1 }, "interactive");
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: false, hasPendingDraw: false });
+      await vi.advanceTimersByTimeAsync(400); h.renderer.accept(frame(12));
+      await vi.advanceTimersByTimeAsync(1_100); h.flush(); // Identical publications do not defer refinement.
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(12), { width: 1000, height: 700, pixelRatio: 1 }, "settled");
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: true, lastFrameId: 2, frameCount: 3 });
+      await vi.advanceTimersByTimeAsync(2_000); h.renderer.accept(frame(14)); h.flush();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(14), { width: 1000, height: 700, pixelRatio: 1 }, "interactive");
+      await vi.advanceTimersByTimeAsync(1_500); h.flush();
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: true, frameCount: 5, lastFrameId: 3 });
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("samples readonly quiescence separately from completed frame authority through async refinement and loss", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: false, hasPendingDraw: true, frameCount: 0 });
+      h.renderer.accept(frame()); await h.ready(); h.flush();
+      const staticStatus = h.canvas.__geosolveRendererDiagnostics!;
+      expect(staticStatus).toMatchObject({ isSettled: true, hasPendingDraw: false, frameCount: 1 });
+      expect(Object.isFrozen(staticStatus)).toBe(true);
+      expect(Reflect.set(staticStatus, "isSettled", false)).toBe(false);
+      h.renderer.accept(frame(12));
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: false, hasPendingDraw: true, frameCount: 1 });
+      let complete!: (stats: { resources: number; created: number; destroyed: number; updated: number }) => void;
+      vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; })); h.flush();
+      await vi.advanceTimersByTimeAsync(1_600);
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: false, hasPendingDraw: true, frameCount: 1 });
+      complete({ resources: 1, created: 0, destroyed: 0, updated: 1 }); await Promise.resolve();
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: false, hasPendingDraw: false, frameCount: 2 });
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: false, hasPendingDraw: true, frameCount: 2 });
+      vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; })); h.flush();
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: false, hasPendingDraw: true, frameCount: 2 });
+      complete({ resources: 1, created: 0, destroyed: 0, updated: 0 }); await Promise.resolve();
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ isSettled: true, hasPendingDraw: false, frameCount: 3 });
+      h.canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ state: "lost", isSettled: false, hasPendingDraw: true, frameCount: 3 });
+      h.canvas.dispatchEvent(new Event("webglcontextrestored")); h.flush();
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ state: "ready", isSettled: true, hasPendingDraw: false, frameCount: 4 });
+      expect(staticStatus).toMatchObject({ isSettled: true, hasPendingDraw: false, frameCount: 1 });
+      h.renderer.destroy(); expect(h.canvas.__geosolveRendererDiagnostics).toBeUndefined();
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("uses native resolution for input, holds it through queued draws, and validates the settled redraw", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      h.renderer.accept(frame()); await h.ready(); h.flush();
+      h.renderer.setInteractionActive(true);
+      // Activity alone must not insert an old-camera redraw ahead of input.
+      expect(h.callbacks.size).toBe(0);
+      h.renderer.accept(frame(12)); h.flush();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(12), { width: 1000, height: 700, pixelRatio: 1 }, "interactive");
+      await vi.advanceTimersByTimeAsync(2_000); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(2);
+      h.renderer.setInteractionActive(false);
+      await vi.advanceTimersByTimeAsync(400);
+      h.renderer.accept(frame(14)); h.flush();
+      await vi.advanceTimersByTimeAsync(1_499); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(3);
+      let complete!: (stats: { resources: number; created: number; destroyed: number; updated: number }) => void;
+      vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+      await vi.advanceTimersByTimeAsync(1); h.flush();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(14), { width: 1000, height: 700, pixelRatio: 1 }, "settled");
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ frameCount: 3, lastFrameId: 3 });
+      complete({ resources: 1, created: 0, destroyed: 0, updated: 0 }); await Promise.resolve();
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ frameCount: 4, lastFrameId: 3 });
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("waits for the final interactive GPU draw before starting the idle interval", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      await h.ready(); h.renderer.setInteractionActive(true); h.renderer.accept(frame());
+      let complete!: (stats: { resources: number; created: number; destroyed: number; updated: number }) => void;
+      vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; })); h.flush();
+      h.renderer.setInteractionActive(false); await vi.advanceTimersByTimeAsync(3_000); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(1);
+      complete({ resources: 1, created: 1, destroyed: 0, updated: 1 }); await Promise.resolve();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());
+      await vi.advanceTimersByTimeAsync(1_499); h.flush(); expect(h.backend.render).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1); h.flush();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(), { width: 1000, height: 700, pixelRatio: 1 }, "settled");
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("keeps submitted surface and quality exact across DPR changes and context loss", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      await h.ready(); h.renderer.setInteractionActive(true); h.renderer.accept(frame());
+      let complete!: (stats: { resources: number; created: number; destroyed: number; updated: number; rasterResolution: number }) => void;
+      vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; })); h.flush();
+      h.renderer.resize({ width: 900, height: 600, pixelRatio: 3 });
+      let completeResize!: typeof complete;
+      vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { completeResize = resolve; }));
+      complete({ resources: 1, created: 1, destroyed: 0, updated: 1, rasterResolution: 1 }); await Promise.resolve();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(), { width: 900, height: 600, pixelRatio: 3 }, "interactive");
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ width: 1000, height: 700, pixelRatio: 1, rasterResolution: 1, frameCount: 1 });
+      completeResize({ resources: 1, created: 0, destroyed: 0, updated: 1, rasterResolution: 3 }); await Promise.resolve();
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ pixelRatio: 3, rasterResolution: 3, lastFrameId: 1 });
+      h.renderer.setInteractionActive(false); await vi.advanceTimersByTimeAsync(1_500); h.flush();
+      expect(h.backend.render).toHaveBeenCalledTimes(2); // Native DPR already meets static quality.
+      h.canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+      h.renderer.resize({ width: 900, height: 600, pixelRatio: 1 }); h.renderer.setInteractionActive(true);
+      h.canvas.dispatchEvent(new Event("webglcontextrestored")); h.flush();
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(), { width: 900, height: 600, pixelRatio: 1 }, "interactive");
+      h.renderer.setInteractionActive(false); h.renderer.destroy();
+      await vi.advanceTimersByTimeAsync(3_000); expect(h.callbacks.size).toBe(0); expect(vi.getTimerCount()).toBe(0);
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+  it("publishes the submitted settled draw without relabeling input queued behind it", async () => {
+    vi.useFakeTimers(); const h = harness();
+    try {
+      await h.ready(); h.renderer.setInteractionActive(true); h.renderer.accept(frame()); h.flush();
+      h.renderer.setInteractionActive(false);
+      let completeStatic!: (stats: { resources: number; created: number; destroyed: number; updated: number; rasterResolution: number }) => void;
+      vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { completeStatic = resolve; }));
+      await vi.advanceTimersByTimeAsync(1_500); h.flush();
+      h.renderer.setInteractionActive(true); h.renderer.accept(frame(14));
+      let completeInput!: typeof completeStatic;
+      vi.mocked(h.backend.render).mockImplementationOnce(() => new Promise(resolve => { completeInput = resolve; }));
+      completeStatic({ resources: 1, created: 0, destroyed: 0, updated: 0, rasterResolution: 2 }); await Promise.resolve();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ lastFrameId: 1, rasterResolution: 2 });
+      expect(h.backend.render).toHaveBeenLastCalledWith(frame(14), { width: 1000, height: 700, pixelRatio: 1 }, "interactive");
+      completeInput({ resources: 1, created: 0, destroyed: 0, updated: 1, rasterResolution: 1 }); await Promise.resolve();
+      expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
+      expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({ lastFrameId: 2, rasterResolution: 1 });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { h.renderer.destroy(); vi.useRealTimers(); }
+  });
+});
+
 describe("on-demand accepted-frame presentation", () => {
   it("keeps synchronous reentrant input coalesced behind an animation frame",async()=>{
     const h=harness();h.renderer.accept(frame());await h.ready();
@@ -51,7 +313,7 @@ describe("on-demand accepted-frame presentation", () => {
     // The next GPU submission starts immediately after validation, with no RAF
     // between them; its public witness must still await its own completion.
     expect(h.callbacks.size).toBe(0);
-    expect(h.backend.render).toHaveBeenLastCalledWith(frame(18), {width:1000,height:700,pixelRatio:1});
+    expect(h.backend.render).toHaveBeenLastCalledWith(frame(18), {width:1000,height:700,pixelRatio:1}, "interactive");
     expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(14));
     completeNewest({resources:1,created:1,destroyed:0,updated:3}); await Promise.resolve();
     expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));
@@ -70,7 +332,7 @@ describe("on-demand accepted-frame presentation", () => {
     expect(h.canvas.__geosolveRendererDiagnostics).toMatchObject({width:1000,height:700,pixelRatio:1});
     expect(h.callbacks.size).toBe(0);
     h.renderer.resize({width:1200,height:800,pixelRatio:2});h.flush();
-    expect(h.backend.render).toHaveBeenLastCalledWith(frame(18),{width:1200,height:800,pixelRatio:2});
+    expect(h.backend.render).toHaveBeenLastCalledWith(frame(18),{width:1200,height:800,pixelRatio:2}, "interactive");
     expect(h.canvas.__geosolvePresentedFrame).toEqual(frame(18));h.renderer.destroy();
   });
   for(const rejected of [false,true])it(`ignores a ${rejected?"rejected":"successful"} old-context completion after restored drawing starts`,async()=>{
@@ -160,7 +422,7 @@ describe("on-demand accepted-frame presentation", () => {
     await h.ready(); expect(h.callbacks.size).toBe(0);
     h.canvas.dispatchEvent(new Event("webglcontextrestored")); h.flush();
     h.renderer.resize({ width: 1000, height: 700, pixelRatio: 2 }); h.flush();
-    expect(h.backend.render).toHaveBeenLastCalledWith(frame(), { width: 1000, height: 700, pixelRatio: 2 });
+    expect(h.backend.render).toHaveBeenLastCalledWith(frame(), { width: 1000, height: 700, pixelRatio: 2 }, "settled");
     expect(h.canvas.__geosolveRendererDiagnostics?.frameCount).toBe(2);
     expect(h.canvas.__geosolveRendererDiagnostics?.lastFrameId).toBe(1);
     h.renderer.destroy();

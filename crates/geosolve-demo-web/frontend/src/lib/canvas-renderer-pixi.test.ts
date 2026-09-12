@@ -2,29 +2,31 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DrawFrame, DrawItem, DrawStyle } from "./canvas-scene";
 
-const fake = vi.hoisted(() => ({ shaderBind: vi.fn(), filters: [] as { blurXFilter: {destroy: ReturnType<typeof vi.fn>}; blurYFilter: {destroy: ReturnType<typeof vi.fn>}; destroy: ReturnType<typeof vi.fn> }[], uniformSystems: [] as Record<string, unknown>[], graphics: [] as { destroyed: boolean; clears: number; parent: { position: { set: ReturnType<typeof vi.fn> } } | null; stroke: ReturnType<typeof vi.fn> }[], texts: [] as { style: unknown }[], render: vi.fn(), rendererDestroy: vi.fn(), reorder: vi.fn() }));
+const fake = vi.hoisted(() => ({ shaderBind: vi.fn(), filters: [] as { blurXFilter: {destroy: ReturnType<typeof vi.fn>}; blurYFilter: {destroy: ReturnType<typeof vi.fn>}; destroy: ReturnType<typeof vi.fn> }[], uniformSystems: [] as Record<string, unknown>[], graphics: [] as { destroyed: boolean; destroyOptions?: unknown; clears: number; filters: unknown[]; parent: { position: { set: ReturnType<typeof vi.fn> } } | null; stroke: ReturnType<typeof vi.fn> }[], texts: [] as { style: unknown; resolution: number }[], shapeFill: vi.fn(), textureCreate: vi.fn(), textures: [] as { destroy: ReturnType<typeof vi.fn> }[], resize: vi.fn(), render: vi.fn(), rendererDestroy: vi.fn(), reorder: vi.fn() }));
 vi.mock("pixi.js/filters", () => ({}));
 vi.mock("pixi.js", () => {
   class Container {
     children: Container[] = []; destroyed = false; alpha = 1; rotation = 0;
+    destroyOptions?: { children?: boolean; context?: boolean };
     parent: Container | null = null; position = { set: vi.fn() }; anchor = { set: vi.fn() }; pivot = { y: 0, set: vi.fn() };
     addChild(child: Container) { this.children.push(child); child.parent = this; return child; }
     addChildAt(child: Container, index: number) { this.children.splice(index, 0, child); child.parent = this; return child; }
     setChildIndex(child: Container, index: number) { fake.reorder(); const old = this.children.indexOf(child); this.children.splice(old, 1); this.children.splice(index, 0, child); }
-    destroy(options?: { children?: boolean }) { this.destroyed = true; if (options?.children) [...this.children].forEach((child) => child.destroy()); if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this), 1); }
+    destroy(options?: { children?: boolean; context?: boolean }) { this.destroyed = true; this.destroyOptions = options; if (options?.children) [...this.children].forEach((child) => child.destroy(options)); if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this), 1); }
   }
   class Graphics extends Container {
     clears = 0; filters = []; context = { translate: () => this.context, rotate: () => this.context, ellipse: () => this.context, resetTransform: () => this.context };
     constructor() { super(); fake.graphics.push(this); }
     clear() { this.clears++; return this; }
     moveTo() { return this; } lineTo() { return this; } closePath() { return this; }
-    circle() { return this; } roundRect() { return this; } fill() { return this; } stroke = vi.fn(() => this);
+    circle() { return this; } roundRect() { return this; } fill() { fake.shapeFill(); return this; } stroke = vi.fn(() => this);
   }
   class Text extends Container { text = ""; style = {}; resolution = 1; constructor() { super(); fake.texts.push(this); } }
-  return { VERSION: "8.20.1", Container, Graphics, Text, TextStyle: class {}, CanvasTextMetrics: { measureText: () => ({ height: 12, lineHeight: 12, maxLineWidth: 40, fontProperties: { ascent: 10, descent: 2, fontSize: 12 } }) }, Color: class { alpha = 1; toNumber() { return 0xffffff; } },
+  class RenderTexture { destroy = vi.fn(); static create(options: unknown) { fake.textureCreate(options); const texture = new RenderTexture(); fake.textures.push(texture); return texture; } }
+  return { VERSION: "8.20.1", Container, Graphics, Text, RenderTexture, TextStyle: class {}, CanvasTextMetrics: { measureText: () => ({ height: 12, lineHeight: 12, maxLineWidth: 40, fontProperties: { ascent: 10, descent: 2, fontSize: 12 } }) }, Color: class { alpha = 1; toNumber() { return 0xffffff; } },
     BlurFilter: class { strength = 0; blurXFilter = {destroy:vi.fn()}; blurYFilter = {destroy:vi.fn()}; destroy=vi.fn(); constructor(){fake.filters.push(this);} }, WebGLRenderer: class {
       uniformGroup: Record<string, unknown> = { _cache: { stale: () => undefined }, _uniformGroupSyncHash: { stale: () => undefined } }; constructor() { fake.uniformSystems.push(this.uniformGroup); }
-      shader = {bind:fake.shaderBind}; context = { webGLVersion: 2 }; events = undefined; scheduler = { destroy: vi.fn() }; gc = { run: vi.fn() }; background = { color: "" }; init = async () => undefined; resize = vi.fn(); render = fake.render; destroy = fake.rendererDestroy;
+      shader = {bind:fake.shaderBind}; context = { webGLVersion: 2 }; events = undefined; scheduler = { destroy: vi.fn() }; gc = { run: vi.fn() }; background = { color: "" }; init = async () => undefined; resize = fake.resize; render = fake.render; destroy = fake.rendererDestroy;
     } };
 });
 import { createPixiBackend } from "./canvas-renderer-pixi";
@@ -45,6 +47,112 @@ async function fencedBackend(){
 }
 
 describe("Pixi resource ownership (GPU calls replaced, no claim of WebGL qualification)", () => {
+  it("prepares blur composition for the actual canvas target before clearing it with the native scene", async () => {
+    const canvas = document.createElement("canvas");
+    vi.spyOn(canvas, "getContext").mockReturnValue(readyGl() as never);
+    const backend = await createPixiBackend(canvas), before = fake.render.mock.calls.length;
+    try {
+      await backend.render(frame([item("a")]), surface);
+      const draws = fake.render.mock.calls.slice(before).map(([options]) => options);
+      expect(draws).toHaveLength(3);
+      expect(draws[0].target).toBeDefined();
+      expect(draws[1]).toMatchObject({ container: draws[0].container, clear: true });
+      expect(draws[1].target).toBeUndefined();
+      expect(draws[2].container).not.toBe(draws[1].container);
+      expect(draws[2].target).toBeUndefined();
+    } finally { backend.destroy(); }
+  });
+  it("draws blur preparation offscreen once per context and validates it together with the native frame", async () => {
+    vi.useFakeTimers(); const f = await fencedBackend(), before = fake.render.mock.calls.length;
+    const graphicsBefore = fake.graphics.length, texturesBefore = fake.textures.length;
+    try {
+      expect(fake.textures).toHaveLength(texturesBefore);
+      const outcome = Promise.resolve(f.backend.render(frame([item("a")]), surface));
+      void outcome.catch(() => undefined); // Cleanup may reject after an earlier assertion failure.
+      const draws = fake.render.mock.calls.slice(before);
+      expect(draws).toHaveLength(3);
+      const [warm, canvasWarm, native] = draws.map(([options]) => options);
+      expect(warm.target).toBe(fake.textures.at(-1)); expect(warm.clear).toBe(true);
+      expect(canvasWarm.target).toBeUndefined(); expect(canvasWarm.container).toBe(warm.container);
+      expect(native.target).toBeUndefined(); expect(native.container).not.toBe(warm.container);
+      expect(warm.container.destroyed).toBe(true); expect(native.container.destroyed).toBe(false);
+      const preparatoryShape = fake.graphics[graphicsBefore];
+      expect(preparatoryShape.filters).toEqual([fake.filters.at(-1)]); expect(preparatoryShape.destroyed).toBe(true);
+      expect(preparatoryShape.destroyOptions).toMatchObject({ context: true });
+      expect(fake.textures.at(-1)!.destroy).toHaveBeenCalledExactlyOnceWith(true);
+      expect(f.gl.fenceSync).toHaveBeenCalledOnce(); expect(f.gl.getError).not.toHaveBeenCalled();
+      let resolved = false; void outcome.then(() => { resolved = true; });
+      await vi.advanceTimersByTimeAsync(20); expect(resolved).toBe(false);
+      f.gl.clientWaitSync.mockReturnValue(f.gl.ALREADY_SIGNALED); await vi.advanceTimersByTimeAsync(4);
+      await expect(outcome).resolves.toMatchObject({ resources: 1, created: 1, destroyed: 0 });
+      const ordinary = Promise.resolve(f.backend.render(frame([item("b")]), surface));
+      await vi.advanceTimersByTimeAsync(0); await ordinary;
+      expect(fake.render.mock.calls.length - before).toBe(4); expect(fake.textures.length - texturesBefore).toBe(1);
+      f.canvas.dispatchEvent(new Event("webglcontextrestored"));
+      const restored = Promise.resolve(f.backend.render(frame([item("c")]), surface));
+      await vi.advanceTimersByTimeAsync(0); await restored;
+      expect(fake.render.mock.calls.length - before).toBe(7); expect(fake.textures.length - texturesBefore).toBe(2);
+      expect(fake.textures.at(-1)!.destroy).toHaveBeenCalledExactlyOnceWith(true);
+    } finally { f.backend.destroy(); vi.useRealTimers(); }
+  });
+  for (const reason of ["geometry", "allocation", "draw", "context loss", "canvas draw", "canvas context loss"] as const) it(`cleans offscreen preparation after ${reason} failure and retries only after restoration`, async () => {
+    vi.useFakeTimers(); const f = await fencedBackend();
+    const graphicsBefore = fake.graphics.length, texturesBefore = fake.textures.length;
+    try {
+      if (reason === "geometry") fake.shapeFill.mockImplementationOnce(() => { throw Error("geometry preparation failed"); });
+      else if (reason === "allocation") fake.textureCreate.mockImplementationOnce(() => { throw Error("target allocation failed"); });
+      else {
+        if (reason.startsWith("canvas")) fake.render.mockImplementationOnce(() => undefined);
+        fake.render.mockImplementationOnce(() => {
+          if (reason.endsWith("draw")) throw Error("preparation draw failed");
+          f.gl.isContextLost.mockReturnValue(true);
+        });
+      }
+      expect(() => {
+        const result = f.backend.render(frame([item("a")]), surface);
+        if (result instanceof Promise) void result.catch(() => undefined);
+      }).toThrow();
+      expect(fake.graphics[graphicsBefore].destroyed).toBe(true);
+      expect(fake.graphics[graphicsBefore].destroyOptions).toMatchObject({ context: true });
+      if (reason !== "geometry" && reason !== "allocation") expect(fake.textures.at(-1)!.destroy).toHaveBeenCalledExactlyOnceWith(true);
+      expect(f.gl.fenceSync).not.toHaveBeenCalled(); expect(f.gl.getError).not.toHaveBeenCalled();
+      const draws = fake.render.mock.calls.length; f.gl.isContextLost.mockReturnValue(false);
+      expect(() => f.backend.render(frame([item("a")]), surface)).toThrow(); expect(fake.render).toHaveBeenCalledTimes(draws);
+      f.canvas.dispatchEvent(new Event("webglcontextrestored")); f.gl.clientWaitSync.mockReturnValue(f.gl.ALREADY_SIGNALED);
+      const restored = Promise.resolve(f.backend.render(frame([item("a")]), surface));
+      await vi.advanceTimersByTimeAsync(0); await expect(restored).resolves.toMatchObject({ resources: 1 });
+      expect(fake.render.mock.calls.length - draws).toBe(3);
+      expect(fake.textures.length - texturesBefore).toBe(reason === "allocation" || reason === "geometry" ? 1 : 2);
+      expect(fake.textures.at(-1)!.destroy).toHaveBeenCalledExactlyOnceWith(true);
+    } finally { f.backend.destroy(); vi.useRealTimers(); }
+  });
+  it("changes only the raster surface during interaction and retains static text textures and CSS strokes", async () => {
+    const canvas = document.createElement("canvas");
+    vi.spyOn(canvas, "getContext").mockReturnValue(readyGl() as never);
+    const backend = await createPixiBackend(canvas);
+    try {
+      const text: DrawItem = { ...item("label"), kind: "text", position: [10, 10], text: "12 mm", rotation: 0 };
+      const drawing = frame([item("a"), text]);
+      expect(await backend.render(drawing, surface)).toMatchObject({ rasterResolution: 2, repainted: 2 });
+      const graphic = fake.graphics.at(-1)!, label = fake.texts.at(-1)!, rasterStyle = label.style;
+      expect(fake.resize).toHaveBeenLastCalledWith(1000, 700, 2); expect(label.resolution).toBe(2);
+      expect(await backend.render(drawing, surface, "interactive")).toMatchObject({ rasterResolution: 1, repainted: 2, updated: 2 });
+      expect(fake.resize).toHaveBeenLastCalledWith(1000, 700, 1);
+      expect(label.style).toBe(rasterStyle); expect(label.resolution).toBe(2); expect(graphic.clears).toBe(1);
+      expect(graphic.stroke).toHaveBeenLastCalledWith(expect.objectContaining({ width: 2 }));
+      expect(await backend.render(drawing, surface, "settled")).toMatchObject({ rasterResolution: 2, repainted: 2, updated: 2 });
+      expect(fake.resize).toHaveBeenLastCalledWith(1000, 700, 2);
+      expect(label.style).toBe(rasterStyle); expect(label.resolution).toBe(2); expect(graphic.clears).toBe(1);
+      const highDpr = { ...surface, pixelRatio: 3 };
+      expect(await backend.render(drawing, highDpr, "interactive")).toMatchObject({ rasterResolution: 3, repainted: 3 });
+      expect(label.resolution).toBe(3); const highStyle = label.style, resizes = fake.resize.mock.calls.length;
+      expect(await backend.render(drawing, highDpr, "settled")).toMatchObject({ rasterResolution: 3, repainted: 3 });
+      expect(fake.resize).toHaveBeenCalledTimes(resizes); expect(label.style).toBe(highStyle);
+      canvas.dispatchEvent(new Event("webglcontextrestored"));
+      expect(await backend.render(drawing, surface, "interactive")).toMatchObject({ rasterResolution: 1, resources: 2, created: 4, destroyed: 2 });
+      expect(fake.resize).toHaveBeenLastCalledWith(1000, 700, 1); expect(fake.texts.at(-1)!.resolution).toBe(2);
+    } finally { backend.destroy(); }
+  });
   it("prepares interaction shader programs at first presentation and again after context restoration",async()=>{
     vi.useFakeTimers();const f=await fencedBackend(),before=fake.shaderBind.mock.calls.length;
     try{
@@ -90,6 +198,7 @@ describe("Pixi resource ownership (GPU calls replaced, no claim of WebGL qualifi
   for(const reason of ["exception","context loss"])it(`retains failure after ${reason} during Pixi submission before a fence exists`,async()=>{
     vi.useFakeTimers();const f=await fencedBackend();
     try{
+      fake.render.mockImplementationOnce(() => undefined).mockImplementationOnce(() => undefined); // Both preparation targets succeed first.
       fake.render.mockImplementationOnce(()=>{if(reason==="exception")throw Error("submission failed");f.gl.isContextLost.mockReturnValue(true);});
       expect(()=>f.backend.render(frame([item("a")]),surface)).toThrow();
       expect(f.gl.fenceSync).not.toHaveBeenCalled();expect(f.gl.getError).not.toHaveBeenCalled();
@@ -174,7 +283,8 @@ describe("Pixi resource ownership (GPU calls replaced, no claim of WebGL qualifi
     const backend = await createPixiBackend(canvas);
     const before = fake.graphics.length;
     expect(await backend.render(frame([item("a"), item("b")]), surface)).toMatchObject({ resources: 2, created: 2, destroyed: 0, updated: 2 });
-    const [a, b] = fake.graphics.slice(before);
+    const [preparation, a, b] = fake.graphics.slice(before);
+    expect(preparation.destroyed).toBe(true);
     expect(await backend.render(frame([item("b"), item("a", 9)]), surface)).toMatchObject({ resources: 2, created: 2, destroyed: 0, updated: 3 });
     expect(a.clears).toBe(2); expect(b.clears).toBe(1);
     expect(await backend.render(frame([item("b")]), surface)).toMatchObject({ resources: 1, created: 2, destroyed: 1 });
@@ -227,7 +337,8 @@ describe("Pixi resource ownership (GPU calls replaced, no claim of WebGL qualifi
       { ...item("ellipse"), kind: "ellipse", center: [20, 30], radii: [4, 8], rotation: 0.2 },
       { ...item("rect"), kind: "rect", x: 20, y: 30, width: 40, height: 20, radius: 3 }];
     await backend.render(frame(shapes), surface);
-    const graphics = fake.graphics.slice(before);
+    const [preparation, ...graphics] = fake.graphics.slice(before);
+    expect(preparation.destroyed).toBe(true);
     const translated = shapes.map((shape): DrawItem => {
       if (shape.kind === "circle" || shape.kind === "ellipse") return { ...shape, center: [67, 9] };
       if (shape.kind === "rect") return { ...shape, x: 67, y: 9 };
@@ -257,7 +368,8 @@ describe("Pixi resource ownership (GPU calls replaced, no claim of WebGL qualifi
     const before = fake.graphics.length;
     const glowing: DrawItem = { ...item("glow"), style: { ...style, dash: [3, 2], shadow: { color: "#ffffff", blur: 3, offset: [2, -4] } } };
     await backend.render(frame([glowing]), surface);
-    const [content, shadow] = fake.graphics.slice(before);
+    const [preparation, content, shadow] = fake.graphics.slice(before);
+    expect(preparation.destroyed).toBe(true);
     expect(await backend.render(frame([{ ...glowing, center: [30.125, 40.25] } as DrawItem]), surface)).toMatchObject({ repainted: 1 });
     expect(content.clears).toBe(1); expect(shadow.clears).toBe(1);
     expect(content.parent?.position.set).toHaveBeenLastCalledWith(30.125, 40.25);
