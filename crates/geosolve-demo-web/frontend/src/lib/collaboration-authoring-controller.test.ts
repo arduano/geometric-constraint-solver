@@ -37,6 +37,19 @@ it("returns from pointer routing while prediction is held and preserves terminal
   expect(vi.mocked(f.worker.advancePoint).mock.calls.map(([sample])=>sample)).toEqual([{sequence:1,position:[1,0]},{sequence:2,position:[2,0]},{sequence:3,position:[3,0]}]);
   expect(f.worker.finishPoint).toHaveBeenCalledOnce();expect(f.callbacks.error).not.toHaveBeenCalled();f.controller.dispose();
 });
+it("waits for native movement instead of painting the unchanged point-begin pose",async()=>{
+  const f=await fixture(),advance=deferred<AuthoringPreview>();
+  f.worker.advancePoint=vi.fn(()=>advance.promise);
+  f.controller.pointer(pointer("down",0),projection,view);
+  f.controller.pointer(pointer("move",5),{...projection,position:[1,0]},view);
+  await vi.waitFor(()=>expect(f.worker.advancePoint).toHaveBeenCalledWith({sequence:1,position:[1,0]},view));
+  expect(f.worker.beginPoint).toHaveBeenCalledOnce();
+  expect(f.callbacks.paint).not.toHaveBeenCalled();
+  expect(f.callbacks.commit).not.toHaveBeenCalled();
+  advance.resolve(f.preview);
+  await vi.waitFor(()=>expect(f.callbacks.paint).toHaveBeenCalledExactlyOnceWith(f.preview));
+  expect(f.callbacks.error).not.toHaveBeenCalled();f.controller.dispose();
+});
 it("uses native construction completion and retires queued events from its finished gesture",async()=>{
   const f=await fixture();
   f.worker.advanceConstruction=vi.fn(async()=>({...f.preview,construction:{sequence:1,completed:true,can_finish:false,has_pending:false,can_reset:false,can_step_back:false,can_cycle_inference:false,can_flip_branch:false,stage:null,conic_options:{minor_axis_ratio:0.5,arc_start:0,arc_end:1,arc_sweep:"counter_clockwise" as const,middle_weight:1,trim_start:-1,trim_end:1,semi_conjugate:1,hyperbola_branch:"positive" as const},nurbs_options:{form:"clamped" as const,degree:3,weights:[],gauge_index:0},preview:null,inference_guides:[],adjusted_position:null,diagnostic:null}}));
@@ -97,7 +110,7 @@ it("batches queued point painting while preserving the exact terminal sequence",
   await vi.waitFor(()=>expect(f.worker.beginPoint).toHaveBeenCalledOnce());hold.resolve(f.preview);
   await vi.waitFor(()=>expect(f.callbacks.commit).toHaveBeenCalledOnce());
   expect(vi.mocked(f.worker.advancePoint).mock.calls.map(([sample])=>sample)).toEqual(Array.from({length:22},(_,index)=>({sequence:index+1,position:[index+4,0]})));
-  expect(f.callbacks.paint).toHaveBeenCalledTimes(2); // Begin plus the batched final frame.
+  expect(f.callbacks.paint).toHaveBeenCalledTimes(1); // The batched moved frame, without the unchanged origin.
   f.controller.dispose();
 });
 

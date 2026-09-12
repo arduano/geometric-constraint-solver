@@ -80,7 +80,12 @@ export class CollaborationAuthoringController {
       if(!captured||captured.kind!=="point"||captured.pointerId!==input.pointerId)return;
       if(input.phase==="move"&&!captured.started&&Math.hypot(input.x-captured.origin[0],input.y-captured.origin[1])<3)return;
       if(input.phase==="up"&&!captured.started){this.gesture=undefined;return;}
-      if(!captured.started){captured.started=true;this.enqueue(captured,()=>this.worker.beginPoint({target:captured.projection.target!,gestureId:captured.id,viewport:captured.projection.viewport,view}));}
+      if(!captured.started){
+        captured.started=true;
+        // The first movement is already queued below. Await native setup and
+        // validation without painting its unchanged origin ahead of that move.
+        this.enqueue(captured,async()=>{await this.worker.beginPoint({target:captured.projection.target!,gestureId:captured.id,viewport:captured.projection.viewport,view});});
+      }
       if(input.phase==="move"||input.phase==="up"){
         const sequence=++captured.sequence;
         this.advancePoint(captured,{sequence,position:projection.position},view);
