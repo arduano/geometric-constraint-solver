@@ -5,8 +5,9 @@ Current roadmap: **M97 is accepted and closed. M98 collaboration, including the 
 [Final M98 UAT](docs/M98_UAT.md) covers twelve human scenarios across shared editing,
 the complete toolbar, manifold intent/loading, folder/CLI recovery, generator embedding and
 profile export. The [Tailscale UAT launch page](http://100.94.63.83:18120/) provides isolated
-fixtures and distinct editor/viewer invitations. U02 now records the supervising user’s **M98-F041 corner-drag failure**; repair and human
-recheck are pending. Other human results remain **Not run**; readiness evidence is separate
+fixtures and distinct editor/viewer invitations. The **M98-F041 corner-drag repair** is qualified
+and delivered. U02 retains the reported failure pending human recheck. Other human results
+remain **Not run**; readiness evidence is separate
 from acceptance. Existing user previews and histories remain preserved.
 
 The [shared toolbar amendment](docs/M98_TOOL_PARITY.md) exposes all 25 geometry variants,
@@ -17,15 +18,27 @@ or server prediction; camera, picking, selection and provisional reprojection re
 The server authenticates operand lifetimes, replays against the latest accepted model and
 publishes only after genuine compiler receipts and independent residual validation.
 
-[Qualification and delivery](docs/M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
-pass **293/293 obligations** from clean `b005b9e` in `20260911T164104-576e7789`
-(20 fresh, 273 authenticated reused; 37m48.118s).
-49 ordinary and 16 collaboration browser workflows
+[Qualification and delivery](docs/M98_QUALIFICATION.md#qualified-uat-repairs)
+pass **293/293 obligations** from clean `b49e339` in `20260913T020232-eaefaaaf`
+(44 fresh, 249 authenticated reused; 42m41.084s).
+49 ordinary and 17 collaboration browser workflows
 pass; the 271-case reviewed golden is unchanged. M98-F031 repairs generated-polyline
 personal Undo. F039 removes synchronous GPU completion waits from normal canvas submission.
 F040 prepares blur shader programs during initial rendering and removes an extra queued-frame delay
 while retaining error validation and exact completed-frame evidence. Release WASM stays
 within its unchanged size limit through the existing `wasm-opt -Oz` optimizer.
+
+M98-F041 repairs cold free-corner release through authenticated transport of source-derived
+direction references; explicit branches and independent validation remain strict. All fifteen
+original gestures and installed client/server cold-corner, peer, Undo/Redo and reload checks
+pass. F042 reduces interaction rendering work; F043 avoids encoding unchanged text ownership
+cursors. Integrated manifold typing/navigation measures 314.6/296.8 ms; warm drag preview
+p95 is about 83 ms with zero reversals. These are bounded software-rendered measurements.
+
+The UAT shared, folder and generator services at 18121–18125 and the launcher at 18120
+now use this replacement. Fresh captures preserve existing source, drafts, models, invitations
+and histories. Reopen folder links from the launcher because their session tokens rotated.
+The retained pristine profile export remains explicitly labelled as historical `b005b9e` evidence.
 
 The existing 18112 playground and 18111 shared manifold serve the exact frozen artifacts,
 installed offline from four authenticated archives. Both pass exact HTTP/MIME checks and

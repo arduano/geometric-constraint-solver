@@ -7,6 +7,130 @@ amendment are mechanically qualified and delivered. Supervising-user acceptance 
 milestone closure remain open. Work is isolated on `m98/file-workspace`; accepted M97
 remains unchanged.
 
+## Qualified UAT repairs
+
+Delivered on 2026-09-13 from clean source `b49e339e4fbeeebf8b0d513de109875983f2cb58`, tree
+`9b977c33b298a08e6336d23f2592ca382fb377f7`. Run `20260913T020232-eaefaaaf` passes
+**293/293 obligations: 44 fresh, 249 authenticated reused, 42m41.084s**. Every receipt is
+independently authenticated; complete release, clean source and unchanged source all pass.
+This replacement supersedes the earlier `b005b9e` delivery below. U02 remains **Fail pending
+human recheck**; supervising-user acceptance and M98 closure remain open.
+
+F041 adds `SketchDocument::transport_unenforced_source_line_branches` and
+`geosolve-sketch-code::transport_code_point_terminal_branches`. They authenticate native
+origin/terminal and source-derived free Polyline references before transporting dormant
+directions. Explicit/enforced branches, finite geometry, independent residual validation,
+exact source/terminal identity and cold restoration remain strict. All fifteen original
+gestures pass: nine formerly rejected corners now accept; six previously accepted model/input
+identities remain exact. Hard residuals are zero and unrelated points remain stationary.
+F042 reduces interactive raster and redundant hover/GPU preparation work while retaining
+static supersampling, exact completed-frame evidence and recovery. F043's private
+`SequenceAtom`/`derive_text_spans` path compares native operation IDs before encoding only
+changed characters and Undo anchors; imported nonstandard text keeps the original fallback.
+Complete span and checkpoint parity pass across Unicode, concurrency and restoration.
+No solver equation, geometric tolerance, wire/schema, priority or golden expectation changed.
+
+| Qualification | Outcome |
+| --- | --- |
+| Native workspace / headless | 243 / 7 stage obligations passed |
+| Engine / folder Node / folder browser | 76 / 111 / 11 tests passed |
+| Generator example / browser / offline packages | 2 / 1 / 2 tests passed |
+| Collaboration runtime / package / frontend | 151 / 44 / 76 tests passed |
+| Ordinary browser | 49 full workflows and 17 fresh opening checks; no skips or flakiness |
+| Collaboration browser | 17/17 workflows; no failures, cancellations or skips |
+| Golden | 271/271 clean; unchanged SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` |
+| Performance | Passed in 222.7s with the original limits |
+
+| Integrated browser case | Navigation p95 | Actual durable typing ACK |
+| --- | ---: | ---: |
+| Four editors, held solve | 273.7 ms | 88.6 ms |
+| Manifold, held solve | 296.8 ms | 314.6 ms |
+| Gridfinity, held solve | 143.0 ms | 200.1 ms |
+
+The original 500 ms budgets and ten-second solve holds pass; navigation uses zero RPCs.
+The eight-editor/24-viewer load case measures 319.3 ms typing ACK p95. First-use/warm drag
+preview p95 is 351.1/83.3/83.1 ms, release-to-peer is 817.2/442.9/339.9 ms, and every
+trial has zero reversals. The ACK observer records committed application events on the
+same browser clock; observer-return intervals remain separate (100.2/466.3/292.9 ms).
+Held Offset client/server navigation, recovery and negative ACK controls pass. These bounded
+software-rendered measurements do not establish 60 Hz, arbitrary-size or unlimited-client scaling.
+
+Signed qualification is `target/release-gate/runs/20260913T020232-eaefaaaf/qualification.json`.
+Hash-checked summary: `target/m98/coordination/corner-drag/final-summary-20260913T020232-eaefaaaf.json`.
+The failed prior nominations and focused attempts remain in [hardening](M98_HARDENING.md).
+No independent harness failure was converted into a release pass or used to relax a budget.
+
+All four authenticated archives are frozen and installed offline; all **284 installed files**
+match. Production retains **23 exact files** and all three WASM modules; engine WASM is
+**14,311,142 bytes**. Installation: `target/m98/installed-drag-preview-20260913T020232-eaefaaaf/installation.json`.
+The installed cold-corner browser regression passes **2/2 in 53.689s**, including client/server
+prediction, actual DOM terminal agreement, stationary other points, source retention, peer
+visibility, personal Undo/Redo and reload. Its initial nominal-pointer and capture-target
+helper failures remain documented separately; no production artifact changed for their repair.
+
+| Shared service | Preserved revision | Durable files | Invited histories |
+| --- | ---: | ---: | ---: |
+| UAT playground 18121 | 6 | 36 | 4 |
+| UAT manifold 18122 | 0 | 19 | 4 |
+| Existing playground 18112 | 12 | 59 | 3 |
+| Existing manifold 18111 | 1 | 25 | 3 |
+
+Each shared service passes 24 exact HTTP/MIME routes, two real editor canvases and all three
+nominated WASMs. Fresh captures immediately before each restart, after restart and after
+browser readiness preserve exact source, drafts, accepted models, journals, invitations and
+personal histories. No live journal was initialized, reset or restored from backup. Receipt
+index: `target/m98/coordination/corner-drag/20260913T020232-eaefaaaf-shared-delivery.json`.
+
+Folder 18123 and generator-folder 18125 preserve source and retained state, pass 24 transport
+checks each and show accepted real-browser geometry. Their recorded HTML UUID compatibility
+shim is retained and session-token links rotate. The generator website at 18124 is a new
+bundle from **395 authenticated inputs**, with a fresh 1/1 browser workflow (7.171s), ten
+exact served files, three denied routes and the exact engine WASM. Its default footprint is
+125.5 × 83.5 mm with 24 bores. It is not described as a retained prior stage distribution.
+The facilitator now authenticates the current CLI; the launcher passes 18 links, five allowed
+routes and three denied routes. The pristine profile JSON/SVG remains explicitly historical
+`b005b9e` evidence. [Reload the UAT launcher](http://100.94.63.83:18120/); shared invitations
+are unchanged. Ports 18108/18110, older M97 services and all worktrees remain preserved.
+
+Exact commands ran from the M98 worktree. Node/build/browser commands used the pinned shell:
+
+```bash
+nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source --run './scripts/release-gate.sh --resume 20260913T001723-3bb4f88c'
+python3 target/m98/verify-qualification.py 20260913T020232-eaefaaaf
+python3 target/m98/coordination/tool-parity/extract-final-evidence.py 20260913T020232-eaefaaaf target/m98/coordination/corner-drag/final-summary-20260913T020232-eaefaaaf.json
+python3 target/m98/freeze-preview.py 20260913T020232-eaefaaaf
+python3 target/m98/coordination/drag-repair/install-qualified.py 20260913T020232-eaefaaaf
+GEOSOLVE_REPAIR_INSTALLATION="$PWD/target/m98/installed-drag-preview-20260913T020232-eaefaaaf/installation.json" node --test --test-concurrency=1 target/m98/coordination/corner-drag/browser-after.test.mjs
+python3 target/m98/coordination/corner-drag/deliver-shared-r13.py 20260913T020232-eaefaaaf
+```
+
+The shared orchestrator records the exact capture → restart → compare → HTTP/browser → final
+capture/compare invocations in `deliver-shared-r13.log`, without overlapping service upgrades.
+The remaining executed helper commands, using the same installation and fresh receipt paths:
+
+```bash
+repair_installation=target/m98/installed-drag-preview-20260913T020232-eaefaaaf/installation.json
+python3 target/m98/coordination/corner-drag/upgrade-uat-folder.py "$repair_installation" folder
+node target/m98/coordination/corner-drag/verify-folder-delivery.mjs target/m98/uat-20260912/folder-location.json target/m98/coordination/corner-drag/20260913T020232-eaefaaaf-folder-delivery.json
+python3 target/m98/coordination/corner-drag/upgrade-uat-folder.py "$repair_installation" generator-folder
+node target/m98/coordination/corner-drag/verify-folder-delivery.mjs target/m98/uat-20260912/generator-folder-location.json target/m98/coordination/corner-drag/20260913T020232-eaefaaaf-generator-folder-delivery.json
+python3 target/m98/coordination/corner-drag/prepare-generator.py 20260913T020232-eaefaaaf
+node --test --test-concurrency=1 target/m98/uat-20260912/generator-staging-20260913T020232-eaefaaaf/examples/generator-website/scripts/browser.test.mjs
+python3 target/m98/coordination/corner-drag/freeze-generator.py 20260913T020232-eaefaaaf
+python3 target/m98/coordination/corner-drag/upgrade-generator-server.py "$PWD/target/m98/uat-20260912/generator-artifact-20260913T020232-eaefaaaf.json"
+node target/m98/coordination/corner-drag/verify-generator.mjs
+python3 target/m98/coordination/corner-drag/refresh-facilitator.py "$repair_installation"
+python3 target/m98/coordination/corner-drag/refresh-launcher.py "$repair_installation" 293
+node target/m98/coordination/corner-drag/verify-launcher.mjs target/m98/coordination/corner-drag/20260913T020232-eaefaaaf-launcher-delivery.json
+```
+
+All complete successfully. Logs `deliver-{shared,folders,generator,launcher}-r13.log` and
+run-prefixed preservation/delivery/readiness JSONs under `target/m98/coordination/corner-drag`
+retain the exact outcomes. U02's human Fail is not overwritten by these mechanical passes.
+Generated roles still need writable source paths; archived native-profile Fillet output,
+production identity providers, hostile-code isolation, multi-server scale and manufacturing
+depths remain outside the accepted scope. M98 awaits human recheck and supervising acceptance.
+
 ## Qualified shared toolbar parity
 
 Delivered on 2026-09-11 from clean source `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00`, tree

@@ -5609,9 +5609,9 @@ manifold Fit/history costs and Linux/worker/topology limitations remain explicit
 ## M98 multi-editor collaboration amendment — mechanically qualified and delivered
 
 The [full shared toolbar amendment](docs/M98_TOOL_PARITY.md) is implemented,
-mechanically qualified and delivered from clean `b005b9e` in `20260911T164104-576e7789`:
-**293/293 obligations** pass (20 fresh, 273 authenticated reused;
-37m48.118s). [Final evidence](docs/M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+mechanically qualified and delivered with the F041–F043 repairs from clean `b49e339` in `20260913T020232-eaefaaaf`:
+**293/293 obligations** pass (44 fresh, 249 authenticated reused;
+42m41.084s). [Final evidence](docs/M98_QUALIFICATION.md#qualified-uat-repairs)
 records the exact commands, authenticated receipts and preserved preview state.
 
 All 25 geometry variants, 13 constraint tools, five dimension tools, Fillet/Profile
@@ -5669,16 +5669,32 @@ previews remain preserved. Human acceptance and M98 closure remain open.
   pointer-capture requirements.
 - [x] Prepare [complete M98 signoff UAT](docs/M98_UAT.md), including isolated fixtures,
   verified served artifacts, actual browser readiness, CLI/recovery/export evidence and
-  twelve human scenarios. Human dispositions remain **Not run**.
+  twelve human scenarios. U02 remains **Fail pending human recheck** after the delivered repair;
+  other human dispositions remain **Not run**.
 - [ ] Supervising-user acceptance of the amended M98 scope.
 - [ ] M98 milestone closure after acceptance.
 
 
-### M98-F041 UAT repair — qualification pending
+### M98-F041–F043 UAT repairs — mechanically qualified and delivered
 
 The supervising user reports U02 failing on 2026-09-12: free polyline corners
 preview movement but snap back on release until the connected endpoint moves
 first. Exact native and installed-domain replay reproduce the accepted-continuation
 branch-reference mismatch. [Finding and focused evidence](docs/M98_HARDENING.md#m98-f041--free-polyline-corner-rejected-after-valid-drag-preview)
-record the repair. Replacement qualification, preserved preview delivery and
-human U02 recheck remain pending; M98 acceptance and closure remain open.
+record the repair. Clean `b49e339` passes all 293 integrated obligations, including 49
+ordinary and 17 collaboration browser workflows and the unchanged 271-case golden.
+All fifteen original gestures pass; both installed cold-corner prediction modes pass with
+unchanged unrelated points, peer visibility, personal Undo/Redo and reload. Four shared
+services preserve exact source/model/drafts/journals/invitations/history through replacement;
+folder and generator services, facilitator and launcher are also verified.
+
+F042 reduces interactive raster/hover/GPU preparation work while retaining static quality,
+exact completed-frame evidence and the original latency requirements. F043 compares native
+text-operation identities before encoding changed ownership cursors; exact checkpoint/span
+parity and Unicode/concurrent personal history pass. Integrated manifold typing ACK is
+314.6 ms and navigation p95 is 296.8 ms, below the unchanged 500 ms budgets. Explicit
+branches, independent residual validation, equations, tolerances and wire/schema remain strict.
+
+- [x] F041–F043 owning regressions, complete qualification and preserved preview delivery.
+- [ ] Human U02 recheck; retain the reported Fail until the supervising user records a result.
+- [ ] Supervising-user acceptance and M98 closure.

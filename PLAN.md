@@ -8492,20 +8492,21 @@ merge or qualify that product.
   profile export and guarded restart instructions. U02 records the reported corner-drag
   **Fail pending recheck**; the other human cases remain **Not run**. Automated readiness
   does not close the milestone.
-- [ ] Repair and qualify M98-F041: cold free polyline corners preview correctly but snap back
+- [x] Repair and qualify M98-F041: cold free polyline corners preview correctly but snap back
   on release after crossing a dormant source-derived direction hemisphere. Preserve explicit
-  branches, current shared source/history and independent accepted validation; recheck U02.
-- [ ] Repair and qualify M98-F042: reduce canvas rendering cost during interaction while
+  branches, current shared source/history and independent accepted validation.
+- [ ] Obtain human U02 recheck; the original Fail remains recorded after mechanical repair.
+- [x] Repair and qualify M98-F042: reduce canvas rendering cost during interaction while
   retaining static supersampling, exact completed-frame evidence and existing latency budgets.
-- [ ] Repair and qualify M98-F043: reduce per-keystroke personal-history work for dense
+- [x] Repair and qualify M98-F043: reduce per-keystroke personal-history work for dense
   source while preserving exact character ownership, durable ACKs and the 500 ms typing budget.
 - [ ] Obtain supervising-user acceptance and close M98.
 
-Status: **full current workbench toolbar parity is mechanically qualified and delivered;
-supervising-user acceptance and milestone closure remain open**. Clean source
-`b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00` passes **293/293 obligations** in `20260911T164104-576e7789`
-(20 fresh, 273 authenticated reused; 37m48.118s).
-[Final qualification](docs/M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+Status: **full toolbar parity and F041–F043 repairs are mechanically qualified and delivered;
+human U02 recheck, supervising-user acceptance and milestone closure remain open**. Clean source
+`b49e339e4fbeeebf8b0d513de109875983f2cb58` passes **293/293 obligations** in `20260913T020232-eaefaaaf`
+(44 fresh, 249 authenticated reused; 42m41.084s).
+[Final qualification](docs/M98_QUALIFICATION.md#qualified-uat-repairs)
 records authenticated results, unchanged 271-case golden, exact frozen installation and
 preservation comparisons for the existing 18112 playground and 18111 shared manifold.
 All failed nomination and harness attempts remain separate evidence.
@@ -8527,7 +8528,7 @@ staging build applies `wasm-opt -Oz` to satisfy the unchanged 20 MiB module ceil
 Independent compiler/solver workers, shared unfinished text and personal history,
 immutable Apply, external mirrors/CLI and configurable native prediction remain
 qualified. Browser Rust owns navigation, picking, selection and personal visibility.
-Four editors navigate during a ten-second held solve at 363.4 ms p95; manifold/Gridfinity navigation measures 373.1/250.7 ms p95, with zero navigation RPCs. Eight editors and 24 viewers acknowledge text at 248.9 ms p95. Lost-acknowledgement recovery, server restart, invalid-source editing and bounded stalled-TCP recovery pass.
+Four editors navigate during a ten-second held solve at 273.7 ms p95; manifold/Gridfinity navigation measures 296.8/143.0 ms p95, with zero navigation RPCs. Their actual durable typing ACKs are 88.6/314.6/200.1 ms respectively. Eight editors and 24 viewers acknowledge text at 319.3 ms p95. Lost-acknowledgement recovery, server restart, invalid-source editing and bounded stalled-TCP recovery pass.
 
 Exact production and all four archives are frozen and installed offline. Both existing
 shared previews pass 24 exact HTTP/MIME routes each and two-editor
@@ -8556,6 +8557,13 @@ projects, a headless Node/browser TypeScript engine, editable/generator modes,
 source-declared inputs, Linux filesystem qualification and an inspectable design sidecar.
 Its original single-editor bridge remains available alongside opt-in collaboration.
 [Implementation findings](docs/M98_HARDENING.md) record exact reproductions and repairs.
+
+Completed on 2026-09-13: fifteen exact original gesture replays, both installed cold-corner
+prediction modes, peer publication, personal Undo/Redo and reload pass. F042 preserves static
+supersampling/pixel contracts; F043 retains exact Unicode/concurrent ownership and checkpoint
+bytes. All seven active UAT/user services and the launcher were upgraded with preservation
+and exact transport/browser checks. No equation, tolerance, wire/schema or golden change.
+U02 remains **Fail pending human recheck**; M98 is not closed.
 
 ### Historical fast-track prototype
 

@@ -8,11 +8,12 @@ and closed; M98 supervising-user acceptance and milestone closure remain open.
 
 The [approved collaboration amendment](M98_COLLABORATION.md) extends this baseline with
 concurrent editors and shared TypeScript authoring. The current [full toolbar candidate](M98_TOOL_PARITY.md)
-is qualified on `b005b9e` with 293/293 obligations and delivered with exact served-byte and
-browser verification. [Final signoff UAT](M98_UAT.md) covers the complete amended scope;
-U02 has opened M98-F041 (cold free-corner release). Its source-reference transport
-repair passes focused native/WASM checks; replacement qualification and recheck
-remain pending.
+and F041–F043 repairs are qualified on `b49e339` with 293/293 obligations and delivered
+with exact served-byte, browser and preservation verification. [Final signoff UAT](M98_UAT.md)
+covers the complete amended scope. The cold free-corner source-reference transport repair
+passes all fifteen original gestures and both installed client/server prediction workflows,
+including peer visibility, personal Undo/Redo and reload. U02 remains Fail pending human
+recheck; acceptance and closure remain open.
 The original single-editor implementation remains available alongside the opt-in shared host.
 
 ## Approved product
@@ -67,6 +68,9 @@ The original single-editor implementation remains available alongside the opt-in
 - [x] Verify exact qualified static and collaborative replacement previews.
 - [x] Prepare isolated [final UAT](M98_UAT.md) with served-artifact/browser readiness,
   folder/CLI and generator workflows, complete exports and a human result ledger.
+- [x] Repair and qualify F041 cold corners, F042 interactive rendering and F043 dense typing;
+  replace shared, folder and generator previews while preserving their source and histories.
+- [ ] Obtain human U02 recheck; retain its reported Fail until then.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 The historical collaboration candidate `513463f` passed all 288 obligations in
@@ -74,9 +78,11 @@ The historical collaboration candidate `513463f` passed all 288 obligations in
 [Its qualification](M98_QUALIFICATION.md#qualified-multi-editor-collaboration) records
 signed evidence. Exact production and four archives are frozen and installed offline;
 the then-new static port 18110 and collaborative port 18111 passed exact served-byte and
-browser verification. The [current nomination](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
-supersedes that shared candidate: `b005b9e`, 293/293 obligations in
-`20260911T164104-576e7789`, with the existing 18111/18112 shared documents preserved.
+browser verification. The [current nomination](M98_QUALIFICATION.md#qualified-uat-repairs)
+supersedes that shared candidate: `b49e339`, 293/293 obligations in
+`20260913T020232-eaefaaaf` (44 fresh, 249 authenticated reused; 42m41.084s).
+All 49 ordinary and 17 collaboration browser workflows pass. Existing 18111/18112 shared
+documents and all UAT source, drafts, invitations and histories remain preserved.
 Static port 18110 retains the older artifact and is not the final toolbar UAT endpoint.
 The original manifold's seven authored files and preceding previews remain preserved.
 Human acceptance and milestone closure remain open.
@@ -141,10 +147,12 @@ bytes; do not promise atomic CAS against uncooperative external writers holding 
 ## Evidence ledger
 
 [Focused hardening](M98_HARDENING.md) records reproductions, owning-layer repairs and
-nomination harness corrections. [Final qualification](M98_QUALIFICATION.md#qualified-multi-editor-collaboration)
-records clean collaboration source `513463f` with all 288 obligations passing and both
-replacement previews verified. Supervising-user acceptance remains open. The early checkpoints
-below preserve historical baseline evidence.
+nomination harness corrections. [Final qualification](M98_QUALIFICATION.md#qualified-uat-repairs)
+records clean `b49e339` with all 293 obligations passing and preserved shared, folder,
+generator and launcher delivery. Source-derived branch transport, interactive raster work
+and native text ownership improvements retain strict authority and all original budgets.
+Supervising-user acceptance remains open. The early checkpoints below preserve historical
+baseline evidence.
 
 
 Merge `1584a5a` integrates M97 `3152f33` with the earlier M98 prototype. It resolves additive

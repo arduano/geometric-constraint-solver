@@ -2,9 +2,12 @@
 
 # M98 implementation findings
 
-M98 remains in implementation; these are focused owner results, not integrated
-qualification or milestone acceptance. The hardening skill routes these findings to
-folder persistence/transport because the existing Rust workbench retains its contracts.
+M98 and the F041–F043 repairs are mechanically qualified and delivered from `b49e339`;
+[the complete qualification and delivery record](M98_QUALIFICATION.md#qualified-uat-repairs)
+passes 293/293 obligations. U02 remains Fail pending human recheck; milestone acceptance
+and closure remain open. The records below preserve focused findings and earlier failed
+attempts separately from that final result. The hardening skill routes each defect to
+its owning Rust, interaction, persistence or presentation boundary.
 
 ## M98-F001 — observed disk state authorized an undisplayed Undo
 
@@ -1248,6 +1251,9 @@ and personal histories. Earlier failed runs remain failed evidence. Qualificatio
 
 ## M98-F041 — Free polyline corner rejected after valid drag preview
 
+**Current disposition, 2026-09-13:** repaired, qualified and delivered in `b49e339`.
+The focused/pending checkpoints below are historical. See [final evidence](M98_QUALIFICATION.md#qualified-uat-repairs).
+
 The supervising user reported U02 failing in Shared playground on 2026-09-12:
 interior corners snap back on release; moving the connected endpoint first permits
 the next corner drag. Source `f94b09a` serves qualified product `b005b9e`. Exact
@@ -1396,6 +1402,9 @@ passes at 343.0 ms. The failed nomination remains preserved in
 new qualification follows from the passing corner regressions alone.
 
 ## M98-F042 — Interactive supersampling serializes expensive canvas draws
+
+**Current disposition, 2026-09-13:** repaired, qualified and delivered in `b49e339`.
+The focused/pending checkpoints below are historical. See [final evidence](M98_QUALIFICATION.md#qualified-uat-repairs).
 
 The F041 qualification failures above independently reproduce delayed first-use
 dragging and navigation on clean `3d39e35`. The complete manifold trace shows
@@ -1787,6 +1796,9 @@ latency. Replacement qualification remains blocked on reducing that cost.
 
 ## M98-F043 — Dense typing eagerly encodes unchanged character ownership
 
+**Current disposition, 2026-09-13:** repaired, qualified and delivered in `b49e339`.
+The focused/pending checkpoints below are historical. See [final evidence](M98_QUALIFICATION.md#qualified-uat-repairs).
+
 R12b independently reproduces a 568.5 ms actual durable manifold text ACK while
 its model edit remains held and navigation passes. The Rust text-history owner
 constructs cursor bytes for every visible character before and after each edit,
@@ -1861,3 +1873,38 @@ It selects the original four-editor/dense/ACK-control tests, using the newly
 built server WASM and the unchanged earlier browser artifact. The integrated
 runner must still qualify and freeze the complete final artifact; this focused
 result is not a preview-delivery claim.
+
+
+## R13 final qualification and installed corner witness
+
+Clean `b49e339e4fbeeebf8b0d513de109875983f2cb58` passes all 293 obligations in
+`20260913T020232-eaefaaaf` (44 fresh, 249 authenticated reused; 42m41.084s).
+All 49 ordinary and 17 collaboration browser workflows pass; performance passes in
+222.7s and the 271-case golden is unchanged. Integrated four-editor/manifold/Gridfinity
+ACKs are 88.6/314.6/200.1 ms and navigation p95 is 273.7/296.8/143.0 ms. Cold/warm
+drag preview p95 is 351.1/83.3/83.1 ms, with zero reversals. Original budgets remain intact.
+
+The subsequent ignored installed cold-corner helper initially failed both nominal-coordinate
+assertions: Chromium rounded the requested fractional pointer position, producing the actual
+terminal `[-29.999997128420954, 4.999997538646531]`; the accepted position differs only in
+the last floating-point digits. `browser-after-r13.log` and
+`browser-after-diagnostic-r13.log` retain those failures and the observed native gesture. The first DOM
+witness attempt listened on the canvas, while the viewport parent owns pointer capture;
+`browser-after-input-witness-r13.log` retains that helper failure. The corrected observer
+listens during window capture and independently projects the actual DOM terminal through
+the unchanged accepted scene scale. It requires input within 0.001 CSS pixel of the requested
+target, unchanged canvas bounds, native sample agreement within 1e-9 and accepted movement
+within the original 1e-6 model-space limit. No production code, release artifact or gate
+assertion changed, so the integrated gate was not rerun for this isolated helper repair.
+
+`browser-after-capture-witness-r13.log` passes both installed client/server prediction cases
+in 53.689s: cold release, stationary unrelated points, unchanged source, peer visibility,
+personal Undo/Redo and exact reload. `browser-after-{client,server}.{json,png}` retain the
+observed DOM events, native gesture and accepted point; the client image was visually reviewed.
+The original fifteen exact native gestures remain their separate unrounded owning oracle.
+
+The four shared services, both folder services, generator website and launcher now serve the
+qualified replacement. Fresh preservation checks retain all current human work; exact
+HTTP/MIME and real-browser readiness pass. The old pristine profile export stays labelled
+as `b005b9e` evidence. The final report records every command and receipt. U02 remains
+**Fail pending human recheck** and M98 is open.

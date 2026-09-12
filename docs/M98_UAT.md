@@ -3,9 +3,10 @@
 # M98 final signoff UAT
 
 This runbook covers the complete M98 authoring/embedding milestone and its collaboration,
-local-canvas and full-toolbar amendments. **Human UAT is in progress: U02 reports M98-F041; repair/recheck, acceptance and
-closure remain open.** Product `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00` passes 293/293 mechanical
-obligations in `20260911T164104-576e7789`. [Qualification](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+local-canvas and full-toolbar amendments. **F041–F043 repairs are qualified and delivered;
+U02 remains Fail pending human recheck. Acceptance and closure remain open.** Product
+`b49e339e4fbeeebf8b0d513de109875983f2cb58` passes 293/293 mechanical obligations in
+`20260913T020232-eaefaaaf`. [Qualification](M98_QUALIFICATION.md#qualified-uat-repairs)
 records authenticated tests and delivered artifacts. Those results do not supply human passes.
 
 ## Review setup
@@ -40,6 +41,30 @@ not reset its source. Use new disposable geometry for conflict tests and preserv
 manifold copy for export checks.
 
 ## Readiness evidence
+
+### Repair readiness — 2026-09-13
+
+All 49 ordinary and 17 collaboration browser workflows pass the complete 293-obligation
+qualification. Installed cold-corner checks pass in client/server prediction, with unchanged
+other points, peer visibility, personal Undo/Redo and reload. Integrated manifold typing
+ACK/navigation p95 is 314.6/296.8 ms; warm drag preview p95 is about 83 ms with zero reversals.
+These are bounded automated results, not human acceptance or a 60 Hz claim.
+
+| Replacement readiness | Outcome |
+| --- | --- |
+| Exact installation | Four authenticated archives; all 284 installed files match; 23 production files retained |
+| Shared UAT playground/manifold | 24 exact HTTP/MIME routes each; two real editors and all three WASMs; revisions 6/0, 36/19 files and four invited histories preserved |
+| Existing user playground/manifold | Same checks; revisions 12/1, 59/25 files and three invited histories preserved |
+| Folder and generator workbench | Source/retained state preserved; 24 transport checks each, recorded HTML compatibility shim, accepted browser geometry |
+| Generator website | Fresh bundle from 395 authenticated inputs; focused browser 1/1, ten served files, three denied routes and exact engine WASM pass |
+| Launcher and facilitator | Current invitations/folder links, 18 links, five allowed routes and three denied routes verified; current installed CLI authenticated |
+
+Reload the launcher and existing shared tabs. Shared invitations are unchanged. The two
+single-editor folder tokens rotated; reopen their links from the launcher and use the ordinary
+**Take over editing** handoff if needed. No fixture was reset. The pristine manifold export
+remains historical `b005b9e` evidence; its geometry/provenance is not relabelled as a new export.
+
+### Initial readiness — 2026-09-12
 
 **Initial readiness as of 2026-09-12; subsequently U02 opened M98-F041.**
 The following describes the prior preparation. Product source, solver mathematics, branches,
@@ -121,7 +146,7 @@ separate, including cases where a fast operation prevents observing a loading in
 | ID | Review | Human result |
 | --- | --- | --- |
 | U01 | Join, roles and independent context | Not run |
-| U02 | Drag continuity and local navigation | Fail — supervising user, 2026-09-12; M98-F041 corner release snaps back; repair/recheck pending |
+| U02 | Drag continuity and local navigation | Fail — supervising user, 2026-09-12; M98-F041 corner release snapped back; repair delivered, human recheck pending |
 | U03 | Complete catalog and staged construction | Not run |
 | U04 | Constraint/dimension preselection | Not run |
 | U05 | Fillet, Offset and geometry roles | Not run |
@@ -152,10 +177,10 @@ steal selection or change the code cursor. Restore A's visibility before continu
 
 ### U02 — Drag continuity and local navigation
 
-**Open finding M98-F041:** the user reports an interior corner snapping back on release
-until its connected endpoint moves first. Native Rust and exact journal replay independently
-reproduce the rejection. Recheck cold interior-corner rotation across the outgoing leg’s
-original direction hemisphere after repair; preserve the current shared source and history.
+**M98-F041 repair delivered; human recheck pending:** the reported interior-corner
+snap-back is reproduced and repaired. Recheck an interior corner before moving its endpoints,
+including rotation through the outgoing leg’s original direction hemisphere. The installed
+client/server checks pass. Preserve current source/history and record the human outcome here.
 
 In A, drag a free endpoint of `first` slowly, stop, reverse direction and release. Repeat
 once warm. B observes the accepted update. Pan/zoom before and after release. Move a keyed
@@ -321,8 +346,9 @@ single-editor restart helper. Browser readiness can leave that mode's lease with
 test tab; **Take over editing** is the ordinary handoff. Single-editor restart rotates its
 session token; reopen the updated launch link. Shared invitations remain stable on restart.
 
-The following actual installed CLI commands passed for the pristine export. Choose a new
-output filename for a later human run, keeping exports outside the watched source folder:
+The following historical `b005b9e` CLI commands produced the retained pristine export.
+The facilitator link supplies the current installed CLI. Choose a new output filename
+for a later human run, keeping exports outside the watched source folder:
 
 ```bash
 uat_cli="$PWD/target/m98/installed-drag-preview-20260911T164104-576e7789/node_modules/.bin/geosolve"
@@ -333,24 +359,24 @@ uat_cli="$PWD/target/m98/installed-drag-preview-20260911T164104-576e7789/node_mo
 
 For U09, stop typing/dragging and let pending work settle. The scoped helper verifies process
 identity, captures a private backup, restarts only port 18121 or 18122, omits initialization,
-and refuses changed inputs. These exact restart arguments passed on the pristine playground;
-for a later restart use a fresh capture filename in both commands:
+and refuses changed inputs. Use the current product below and a fresh capture filename
+in both commands; the example destination must not already exist:
 
 ```bash
 node target/m98/coordination/drag-repair/capture-preview.mjs \
   target/m98/uat-20260912/playground-location.json \
-  target/m98/uat-20260912/playground-after-readiness.json
+  target/m98/uat-20260912/playground-human-restart-before.json
 python3 target/m98/coordination/uat-readiness/restart-uat-shared.py \
-  target/m98/installed-drag-preview-20260911T164104-576e7789/installation.json \
+  target/m98/installed-drag-preview-20260913T020232-eaefaaaf/installation.json \
   target/m98/uat-20260912/playground-location.json \
   target/m98/uat-20260912/playground-location.json \
-  target/m98/uat-20260912/playground-after-readiness.json
+  target/m98/uat-20260912/playground-human-restart-before.json
 ```
 
-Fresh read-only capture/compare after that restart passed, preserving revision 0 and all
-four invited histories. Human U09 still needs edits and an unapplied draft before its own
-restart observation. The single-editor restart helper is syntax-checked; its separate
-disposable CLI smoke exercised recovery, while the human folder itself has not been restarted.
+The replacement restart preserved playground revision 6 and all four invited histories;
+read-only capture/compare also passed after browser readiness. Both single-editor UAT
+folders were upgraded with source/state preservation and new token links. Human U09
+still needs edits and an unapplied draft before its separate restart observation.
 
 ## Failure reporting and signoff limits
 
