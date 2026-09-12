@@ -1694,3 +1694,93 @@ Playwright on `m92-sample-audit.spec.ts` and `canvas-renderer.spec.ts`, selectin
 `target/m98/coordination/corner-drag/capture-scroll-after{.log,.json,/}`.
 `git diff --check` passes. Qualification and preserved preview delivery remain
 pending; the runner must authenticate any reused unaffected successes.
+
+### Collaboration ACK completion witness repair
+
+Clean `e6070c968f1fbfd38f88b802a9280709ea3e40a8` reaches 291 passing obligations
+in `20260913T001723-3bb4f88c`: ordinary browser **49/49 passes**; collaboration
+browser **15/16 passes**, with the manifold cancelled at 180 seconds. Final
+performance does not run. No replacement is qualified or delivered by that run.
+
+The R8 full-order diagnostic independently locates both a four-editor cancellation
+and a manifold timeout at `Response.finished()`, after keyboard insertion and
+HTTP 200 headers. Cleanup completes promptly. A minimal real-Chromium HTTP fixture
+using the actual collaboration client reproduces the same indefinite wait on its
+second text request: `writeText()` returns the complete parsed ACK, then Playwright
+reports `requestfailed: net::ERR_ABORTED`. Its `Response.finished()` promise remains
+unsettled until page closure. This is a completion-observer failure, not a solver
+or source-editor stall. Evidence under `target/m98/coordination/corner-drag/`:
+`suite-stall-r8c.log`, `text-http-r9c.log` and `typing-stall-review-result.md`.
+
+Skipping cancellation of a completed reader does not fix the reproduction
+(`text-http-r9d.log`). The isolated 30-request-per-mode matrix also reproduces
+post-body aborts with a plain streaming `fetch` reader and no GeoSolve client:
+client 3/30, reader 2/30, retained response 1/30. All application reads and parsed
+ACKs succeed; these counts describe this diagnostic, not a frequency guarantee.
+Other modes show no abort in that bounded run (`text-http-matrix-r9a.log`).
+Instrumented original suites R9 and R10 each pass 14/14; neither passing run is
+used to dismiss the independently reproduced failure. No production cancellation,
+fetch, timeout, solver, protocol or canvas code changes for this harness repair.
+
+`collaboration-browser-ack.mjs` observes the final outbox write per key only after
+the IndexedDB transaction commits. Matched HTTP 200 plus the same text request
+being present then absent in later committed snapshots proves that the ordinary
+client drained and parsed its response and durably removed its pending request.
+The observer binds the actual endpoint, current tab, outbox key, document/epoch
+and user; it retains bounded IDs rather than source bytes. It neither changes
+writes nor replaces the application's response stream. Both latency workflows
+wait at most three seconds for this stronger application acknowledgement. Their
+original keyboard actions, 500 ms budgets, source/peer checks, accepted revision
+and ten-second solve-hold assertions remain unchanged.
+
+The added browser regression uses the real packaged collaboration client and real
+HTTP/IndexedDB. Complete ACKs pass; held, truncated and malformed HTTP-200 bodies
+cannot acknowledge; an aborted removal transaction cannot acknowledge. A transient
+removal overwritten within the same transaction also cannot acknowledge. Releasing
+the held body then produces a valid witness. Pinned command:
+
+```bash
+node --test --test-concurrency=1 --test-name-pattern="shared text ACK witness" scripts/collaboration-browser.test.mjs
+```
+
+It passes **1/1**, with five controls, in 3.0 seconds (`ack-witness-r11a.log`).
+The amended complete original suite and integrated qualification remain pending.
+
+The first amended full suite (`suite-stall-r11a.log`) completes **14/15** with no
+cancellation. Only manifold ACK latency fails: **502.85 ms**, above its unchanged
+500 ms limit; navigation is 296.22 ms p95. Four-editor navigation/ACK is
+246.75/168.58 ms. The observer initially retrieved a remote JSHandle's value and
+then disposed it, adding two separate browser calls to the measured path. It now
+returns its complete witness in one bounded browser evaluation, with both browser
+and Node deadlines. The measured start/end and all correctness predicates remain
+unchanged; there is no timing subtraction or relaxed budget. The five-control
+regression passes again in 3.0 seconds (`ack-witness-r11b.log`).
+
+R11b completes 14/15 without cancellation, but its manifold fails the still-held
+solve assertion; the ten-second deadline already expired. No cause is inferred
+from that missing timing data, and failure diagnostics now retain the job and
+navigation timeline before asserting. The subsequent R12 timing diagnostic
+(`suite-stall-r12a.log`) completes 3/4 selected tests. Its manifold reaches all
+concurrency/source assertions, then fails the observer-inclusive ACK measurement:
+545.43 ms. The actual committed browser timestamp is **402.00 ms** after the
+pre-keyboard browser marker; response headers arrive at about 393 ms. Thus even
+one browser evaluation can return the observation well after the event it records.
+Passive host pressure is retained in `r12a-host.jsonl`; no unrelated job was stopped.
+
+The final ACK measurement uses two timestamps from the same browser clock: the
+marker before keyboard dispatch and the observed native outbox transaction commit.
+The marker is earlier than the prior Node-side start, and durable removal follows
+complete response drain/parse. This retains the 500 ms requirement at the actual
+application boundary without adding measurement-extraction delay. The original
+Node elapsed interval remains explicit `textObservationMs` telemetry. Both raw
+clock values and the complete identity witness are retained; queued time must
+follow this typing marker and acknowledged time must follow the queued write.
+Navigation budgets, the ten-second hold assertion, input actions, source/peer
+checks and accepted-state checks remain unchanged. This is a browser measurement
+correction, not a claim that the expired R11b hold passed.
+
+R12b (`suite-stall-r12b.log`) completes 3/4 selected tests with the corrected
+measurement. Four-editor ACK/navigation pass at 106.0/289.4 ms; manifold navigation
+passes at 278.4 ms, but its **actual committed ACK is 568.5 ms**, still above the
+unchanged budget. This is an independently measured text-path cost, not observer
+latency. Replacement qualification remains blocked on reducing that cost.

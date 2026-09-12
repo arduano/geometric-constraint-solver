@@ -11,6 +11,8 @@ import { openCollaborationRuntime } from "./collaboration-runtime.mjs";
 import { inventory, mediaType, hash } from "../crates/geosolve-demo-web/frontend/scripts/release-artifact-lib.mjs";
 import { CollaborationClient } from "../packages/geosolve-collaboration/dist/client.js";
 import { createSharedText } from "../packages/geosolve-collaboration/dist/index.js";
+import { trackCommittedTextOutbox, waitForCommittedTextAck } from "./collaboration-browser-ack.mjs";
+import { checkTextAckWitness } from "./collaboration-browser-ack-checks.mjs";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return {promise,resolve}; };
 function afterMinimum(ms,run){
@@ -117,6 +119,7 @@ export default sketch(($) => {
 });
 `;
 async function traceNavigation(context){
+  await trackCommittedTextOutbox(context);
   await context.addInitScript(()=>{
     window.geosolveNavigationTrace=[];window.geosolveTextTrace=[];window.geosolveLongTasks=[];
     new PerformanceObserver(list=>{for(const entry of list.getEntries())window.geosolveLongTasks.push({at:entry.startTime,duration:entry.duration});}).observe({type:"longtask",buffered:true});
@@ -457,11 +460,15 @@ test("four real browser editors retain independent navigation and typing during 
   }
   assert.equal(requests.filter(item=>/\/(?:commands|authoring-preview|scene)$/u.test(item.path)).length,commandCount,"Navigation must issue zero model, preview or scene RPCs");
   await pages[1].bringToFront();await editor.click();await pages[1].keyboard.press("Control+Home");
+  const pageTextStart=await pages[1].evaluate(()=>performance.now());
   const textResponse=pages[1].waitForResponse(response=>new URL(response.url()).pathname.endsWith("/text")&&response.request().method()==="POST",{timeout:3000});
   const textStarted=performance.now();await pages[1].keyboard.insertText("// concurrent typing 😀\n");
-  const acknowledged=await textResponse;assert.equal(acknowledged.status(),200);await acknowledged.finished();
-  const textAck=performance.now()-textStarted;
-  progress("simple-text-ack",{textAck});
+  const acknowledged=await textResponse;assert.equal(acknowledged.status(),200);const textWitness=await waitForCommittedTextAck(pages[1],acknowledged);
+  // One browser clock spans before keyboard dispatch through the actual durable
+  // ACK. Keep the later test-observer round trip as separate telemetry.
+  const textAck=textWitness.acknowledgedAt-pageTextStart,textObservationMs=performance.now()-textStarted;
+  assert.ok(textWitness.queuedAt>=pageTextStart&&textWitness.acknowledgedAt>=textWitness.queuedAt,"ACK must follow this typing action and its committed pending write");
+  progress("simple-text-ack",{textAck,textObservationMs,pageTextStart,textWitness});
   assert.match(f.runtime.source().snapshot().working.files["sketch.ts"],/concurrent typing 😀/u);
   await until(async()=>(await peerEditor.innerText()).includes("concurrent typing 😀"),"Remote CodeMirror did not receive typing before solve release",3000);
   assert.equal(released,0,"Shared text must synchronize before ten-second solve release");
@@ -476,7 +483,7 @@ test("four real browser editors retain independent navigation and typing during 
   progress("simple-reloaded");
   assert.equal(await pages[1].evaluate(()=>Object.entries(sessionStorage).find(([key])=>key.endsWith(".client"))?.[1]),ids[1]);
   assert.ok(beforeOther);assert.equal(errors.length,0,errors.join("\n"));
-  t.diagnostic(JSON.stringify({editors:4,diagnosticNoBackdrop:process.env.GEOSOLVE_BROWSER_DIAGNOSTIC_NO_BACKDROP==="1",diagnosticNoToolbarBackdrop:process.env.GEOSOLVE_BROWSER_DIAGNOSTIC_NO_TOOLBAR_BACKDROP==="1",navigationMs:navigation,navigationStages,heldSolveMs:released-started,navigationP95Ms:p95(navigation),textAckMs:textAck,navigationRpc:0,transport:f.runtime.transport.stats(),rssBytes:process.memoryUsage().rss}));
+  t.diagnostic(JSON.stringify({editors:4,diagnosticNoBackdrop:process.env.GEOSOLVE_BROWSER_DIAGNOSTIC_NO_BACKDROP==="1",diagnosticNoToolbarBackdrop:process.env.GEOSOLVE_BROWSER_DIAGNOSTIC_NO_TOOLBAR_BACKDROP==="1",navigationMs:navigation,navigationStages,heldSolveMs:released-started,navigationP95Ms:p95(navigation),textAckMs:textAck,textObservationMs,pageTextStart,textWitness,navigationRpc:0,transport:f.runtime.transport.stats(),rssBytes:process.memoryUsage().rss}));
   assert.ok(p95(navigation)<500,`p95 local navigation ${p95(navigation)} ms`);
   assert.ok(textAck<500,`shared text ACK ${textAck} ms`);
 });
@@ -697,12 +704,14 @@ for(const sample of [
   const pageTextStart=await page.evaluate(()=>performance.now());
   const textResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith("/text")&&response.request().method()==="POST",{timeout:3000});
   const textStarted=performance.now();await page.keyboard.insertText("// dense concurrent typing 😀\n");const keyboardFinished=performance.now();
-  const acknowledged=await textResponse;assert.equal(acknowledged.status(),200);await acknowledged.finished();
-  const textAck=performance.now()-textStarted;
+  const acknowledged=await textResponse;assert.equal(acknowledged.status(),200);const textWitness=await waitForCommittedTextAck(page,acknowledged);
+  const textAck=textWitness.acknowledgedAt-pageTextStart,textObservationMs=performance.now()-textStarted;
+  assert.ok(textWitness.queuedAt>=pageTextStart&&textWitness.acknowledgedAt>=textWitness.queuedAt,"ACK must follow this typing action and its committed pending write");
   progress("dense-text-ack",{sample:sample.name,textAckMs:textAck,keyboardMs:keyboardFinished-textStarted,requests:textRequests.map(request=>({...request,delayMs:request.at-textStarted})),httpTiming:acknowledged.request().timing(),httpRequestDelayMs:acknowledged.request().timing().startTime+acknowledged.request().timing().requestStart-(performance.timeOrigin+textStarted),pageTextStart,workerTrace:await page.evaluate(()=>window.geosolveTextTrace),longTasks:await page.evaluate(start=>window.geosolveLongTasks.filter(task=>task.at+task.duration>=start),pageTextStart),sourceTimings:sourceTimings.filter(timing=>timing.at>=textStarted).map(timing=>({...timing,delayMs:timing.at-textStarted}))});
   assert.match(f.runtime.source().snapshot().working.files["sketch.ts"],/dense concurrent typing 😀/u);
   assert.equal(commands.length,commandCount,"Dense navigation/typing cannot submit a model command");
   assert.equal(computationRequests.length,computationCount,"Dense navigation/typing cannot request server preview or scene computation");
+  if(released!==0)t.diagnostic(JSON.stringify({stage:"dense-hold-expired",sample:sample.name,started,released,jobs,navigationMs:navigation,textAckMs:textAck,textObservationMs,pageTextStart,textWitness}));
   assert.equal(released,0);assert.equal(f.runtime.host.snapshot().acceptedRevision,0);assert.deepEqual(f.runtime.source().snapshot().accepted,before.accepted);
   await release.promise;assert.ok(released-started>=10_000);
   try{await until(()=>f.runtime.host.snapshot().acceptedRevision===1||authorityEvents.some(record=>record.event.event==="finished"&&record.event.outcome.status!=="accepted"),`${sample.name} dimension edit did not publish`,90_000);assert.equal(f.runtime.host.snapshot().acceptedRevision,1,"Dense edit reached a terminal rejection");}
@@ -712,7 +721,9 @@ for(const sample of [
   if(sample.name==="Gridfinity")assert.match(after.accepted.files["sketch.ts"],/areKeyConstraintsByDefault: true/u);
   assert.deepEqual(Object.keys(after.accepted.files).sort(),Object.keys(before.accepted.files).sort());
   for(const path of Object.keys(before.accepted.files).filter(path=>path!=="sketch.ts"))assert.equal(after.accepted.files[path],before.accepted.files[path]);
-  t.diagnostic(JSON.stringify({sample:sample.name,geometryCount,heldSolveMs:released-started,navigationMs:navigation,navigationP95Ms:p95(navigation),textAckMs:textAck,navigationRpc:0,sourceFiles:Object.keys(after.accepted.files).length}));
+  t.diagnostic(JSON.stringify({sample:sample.name,geometryCount,heldSolveMs:released-started,navigationMs:navigation,navigationP95Ms:p95(navigation),textAckMs:textAck,textObservationMs,pageTextStart,textWitness,navigationRpc:0,sourceFiles:Object.keys(after.accepted.files).length}));
   assert.ok(p95(navigation)<500,`dense ${sample.name} navigation p95 ${p95(navigation)} ms`);assert.ok(textAck<500,`dense ${sample.name} text ACK ${textAck} ms`);
   assert.deepEqual(errors,[]);
 });
+
+test("shared text ACK witness requires a complete parsed response and committed outbox removal",{timeout:30_000},checkTextAckWitness);
