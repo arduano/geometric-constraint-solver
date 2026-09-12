@@ -8497,6 +8497,8 @@ merge or qualify that product.
   branches, current shared source/history and independent accepted validation; recheck U02.
 - [ ] Repair and qualify M98-F042: reduce canvas rendering cost during interaction while
   retaining static supersampling, exact completed-frame evidence and existing latency budgets.
+- [ ] Repair and qualify M98-F043: reduce per-keystroke personal-history work for dense
+  source while preserving exact character ownership, durable ACKs and the 500 ms typing budget.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Status: **full current workbench toolbar parity is mechanically qualified and delivered;

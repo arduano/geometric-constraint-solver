@@ -54,7 +54,7 @@ struct Atom {
     id: Vec<u8>,
     scalar: char,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct Span {
     file: String,
     expected: Vec<Atom>,
@@ -728,12 +728,7 @@ fn derive_delta(
                 });
             }
             if touched.contains(file) {
-                derive_spans(
-                    file,
-                    &atoms(before, path)?,
-                    &atoms(after, current)?,
-                    &mut delta.spans,
-                )?;
+                derive_text_spans(file, before, path, after, current, &mut delta.spans)?;
             }
         } else {
             delta.files.push(FileInverse::Create {
@@ -756,6 +751,120 @@ fn derive_delta(
     }
     Ok(delta)
 }
+
+struct SequenceAtom {
+    id: ObjId,
+    scalar: char,
+}
+
+fn scalar_sequence(
+    document: &SharedTextDocument,
+    path: &str,
+) -> Result<Option<Vec<SequenceAtom>>, SharedTextError> {
+    let object = text_object(&document.document, &files_object(&document.document)?, path)?;
+    let mut sequence = Vec::new();
+    for item in document.document.list_range(&object, ..) {
+        if sequence.len() >= document.limits.max_file_bytes {
+            return Err(SharedTextError::ResourceLimit("text scalar count"));
+        }
+        let ValueRef::Scalar(ScalarValueRef::Str(value)) = &item.value else {
+            return Ok(None);
+        };
+        let mut scalars = value.chars();
+        let Some(scalar) = scalars.next() else {
+            return Ok(None);
+        };
+        if scalars.next().is_some() {
+            return Ok(None);
+        }
+        let id = item.id();
+        if matches!(id, ObjId::Root) {
+            return Ok(None);
+        }
+        sequence.push(SequenceAtom { id, scalar });
+    }
+    Ok(Some(sequence))
+}
+
+fn cursor_atom(atom: &SequenceAtom) -> Result<Atom, SharedTextError> {
+    Ok(Atom {
+        id: Cursor::try_from(atom.id.to_string())?.to_bytes(),
+        scalar: atom.scalar,
+    })
+}
+
+/// Compare native operation identities first. Only changed spans and their
+/// anchors need the retained cursor encoding; unchanged characters do not.
+/// Imported non-scalar operations keep the complete historical cursor path.
+fn derive_text_spans(
+    file: &str,
+    before_document: &SharedTextDocument,
+    before_path: &str,
+    after_document: &SharedTextDocument,
+    after_path: &str,
+    output: &mut Vec<Span>,
+) -> Result<(), SharedTextError> {
+    let (Some(before), Some(after)) = (
+        scalar_sequence(before_document, before_path)?,
+        scalar_sequence(after_document, after_path)?,
+    ) else {
+        return derive_spans(
+            file,
+            &atoms(before_document, before_path)?,
+            &atoms(after_document, after_path)?,
+            output,
+        );
+    };
+    let indices = before
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| (&atom.id, index))
+        .collect::<BTreeMap<_, _>>();
+    let mut old_start = 0;
+    let mut new_start = 0;
+    for new_index in 0..=after.len() {
+        let old_index = if new_index == after.len() {
+            Some(before.len())
+        } else {
+            indices.get(&after[new_index].id).copied()
+        };
+        let Some(old_index) = old_index else {
+            continue;
+        };
+        if old_index < old_start {
+            return Err(SharedTextError::RangeConflict);
+        }
+        if old_index > old_start || new_index > new_start {
+            if old_index - old_start > MAX_SPAN_SCALARS || new_index - new_start > MAX_SPAN_SCALARS
+            {
+                return Err(SharedTextError::ResourceLimit("personal text span scalars"));
+            }
+            output.push(Span {
+                file: file.into(),
+                expected: after[new_start..new_index]
+                    .iter()
+                    .map(cursor_atom)
+                    .collect::<Result<_, _>>()?,
+                restore: before[old_start..old_index]
+                    .iter()
+                    .map(cursor_atom)
+                    .collect::<Result<_, _>>()?,
+                left: new_start
+                    .checked_sub(1)
+                    .map(|index| cursor_atom(&after[index]).map(|atom| atom.id))
+                    .transpose()?,
+                right: after
+                    .get(new_index)
+                    .map(|atom| cursor_atom(atom).map(|atom| atom.id))
+                    .transpose()?,
+            });
+        }
+        old_start = old_index + 1;
+        new_start = new_index + 1;
+    }
+    Ok(())
+}
+
 fn derive_spans(
     file: &str,
     before: &[Atom],
@@ -1113,6 +1222,110 @@ mod atom_iteration_tests {
     use crate::SharedTextLimits;
     use automerge::transaction::Transactable;
     use std::time::Instant;
+
+    #[test]
+    fn dense_typing_span_witnesses_retain_exact_ownership_and_unicode() {
+        let mut before = SharedTextDocument::new(&[17; 32], SharedTextLimits::default()).unwrap();
+        before
+            .create_file(
+                "main.ts",
+                include_str!("../../../../examples/file-workspace-manifold/sketch.ts"),
+            )
+            .unwrap();
+        let mut after = before.fork(&[29; 32]).unwrap();
+        after
+            .splice("main.ts", 0, 0, "// dense concurrent typing 😀\n")
+            .unwrap();
+        let started = Instant::now();
+        let old_atoms = atoms(&before, "main.ts").unwrap();
+        let new_atoms = atoms(&after, "main.ts").unwrap();
+        let conversion = started.elapsed();
+        let started = Instant::now();
+        let mut spans = vec![];
+        derive_spans("file", &old_atoms, &new_atoms, &mut spans).unwrap();
+        eprintln!(
+            "dense text witnesses: {} prior scalars, cursor conversion {:?}, span derivation {:?}",
+            old_atoms.len(),
+            conversion,
+            started.elapsed()
+        );
+        let started = Instant::now();
+        let mut native = vec![];
+        derive_text_spans("file", &before, "main.ts", &after, "main.ts", &mut native).unwrap();
+        eprintln!("dense native span derivation: {:?}", started.elapsed());
+        assert_eq!(native, spans);
+        assert_eq!(spans.len(), 1);
+        assert!(spans[0].restore.is_empty());
+        assert!(spans[0].left.is_none());
+        assert_eq!(spans[0].right.as_ref(), Some(&old_atoms[0].id));
+        assert_eq!(
+            spans[0]
+                .expected
+                .iter()
+                .map(|atom| atom.scalar)
+                .collect::<String>(),
+            "// dense concurrent typing 😀\n"
+        );
+    }
+
+    fn assert_span_parity(before: &SharedTextDocument, after: &SharedTextDocument) {
+        let mut expected = vec![];
+        let expected_result = derive_spans(
+            "file",
+            &atoms(before, "main.ts").unwrap(),
+            &atoms(after, "main.ts").unwrap(),
+            &mut expected,
+        );
+        let mut actual = vec![];
+        let actual_result =
+            derive_text_spans("file", before, "main.ts", after, "main.ts", &mut actual);
+        assert_eq!(actual_result, expected_result);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn native_span_identity_preserves_concurrency_replacement_and_imported_fallbacks() {
+        for actor_bytes in [1, 16, 32, 64] {
+            let mut before =
+                SharedTextDocument::new(&vec![17; actor_bytes], SharedTextLimits::default())
+                    .unwrap();
+            before
+                .create_file("main.ts", "a😀e\u{301}\r\nbeta終")
+                .unwrap();
+            assert_span_parity(&before, &before);
+            for (offset, delete, text) in [(0, 0, "prefix"), (1, 2, "🐟"), (0, 1, "a"), (7, 4, "")]
+            {
+                let mut after = before.fork(&vec![29; actor_bytes]).unwrap();
+                after.splice("main.ts", offset, delete, text).unwrap();
+                assert_span_parity(&before, &after);
+                assert_span_parity(&after, &before);
+            }
+            let mut alice = before.fork(b"alice").unwrap();
+            let mut bob = before.fork(b"bob").unwrap();
+            alice.splice("main.ts", 1, 2, "🐟").unwrap();
+            bob.splice("main.ts", 7, 4, "B").unwrap();
+            alice.merge(&bob).unwrap();
+            assert_span_parity(&before, &alice);
+            let restored =
+                SharedTextDocument::load(&alice.save(), b"restored", before.limits).unwrap();
+            assert_span_parity(&before, &restored);
+
+            // Imported multiscalar operations and conflicting replacements use
+            // the established cursor interpretation, including its rejection.
+            let object = text_object(
+                &before.document,
+                &files_object(&before.document).unwrap(),
+                "main.ts",
+            )
+            .unwrap();
+            let mut transaction = before.document.transaction();
+            transaction.insert(&object, 1, "multi😀").unwrap();
+            transaction.commit();
+            let mut after = before.fork(b"import-editor").unwrap();
+            after.splice("main.ts", 0, 0, "x").unwrap();
+            assert_span_parity(&before, &after);
+        }
+    }
 
     fn assert_cursor_identity(document: &SharedTextDocument) {
         let object = text_object(

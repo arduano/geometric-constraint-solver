@@ -7556,3 +7556,21 @@ metadata, changed durable fields, collapsed named spans, NaN and infinity.
 Ordinary same-cell and unrelated-point releases require no branch transport.
 The focused sketch owner, engine, standalone workbench and shared-domain
 regressions retain this case; the broad golden remains unchanged.
+
+## M98-F043 — Dense typing retains exact personal-history witnesses
+
+Prepend `// dense concurrent typing 😀\n` to the manifold's 27,353-scalar source
+using an authenticated 32-byte actor while a model edit remains held. Require
+the same complete committed source checkpoint, changed-character ownership and
+Undo anchors as the full cursor-derived reference, with a real durable text ACK
+below 500 ms. Record the pre-keyboard and committed-outbox timestamps on the same
+browser clock; retain later observer latency separately. Navigation stays below
+its existing 500 ms p95 limit and issues no model/preview/scene RPCs.
+
+The owning regressions compare full inverse spans for Unicode, same-value
+replacement, disjoint concurrent edits, actor lengths 1/16/32/64, reverse
+comparisons, cold restoration and imported multiscalar operations. Public native
+operation IDs may defer cursor encoding until changed spans and anchors are
+retained; imported representations keep the established full cursor path.
+Authentication, source limits, personal history, failure retention and durable
+publication remain unchanged. Qualification and delivery remain pending.

@@ -1784,3 +1784,80 @@ measurement. Four-editor ACK/navigation pass at 106.0/289.4 ms; manifold navigat
 passes at 278.4 ms, but its **actual committed ACK is 568.5 ms**, still above the
 unchanged budget. This is an independently measured text-path cost, not observer
 latency. Replacement qualification remains blocked on reducing that cost.
+
+## M98-F043 — Dense typing eagerly encodes unchanged character ownership
+
+R12b independently reproduces a 568.5 ms actual durable manifold text ACK while
+its model edit remains held and navigation passes. The Rust text-history owner
+constructs cursor bytes for every visible character before and after each edit,
+then retains only the changed span and its anchors. For the manifold's
+27,353-scalar file, a short prepended comment therefore converts over 54,000
+operation IDs through formatted text, cursor parsing and byte allocation.
+
+An isolated actual-WASM benchmark uses five fresh identical five-file manifold
+bases, 32-byte session actors, the same Unicode comment and genuine authenticated
+`stageUserTextChanges`. Before repair, native server staging takes 119–178 ms;
+checkpoint serialization is only 0.15–0.65 ms, so the proposed checkpoint-cache
+optimization is rejected. The benchmark retains source sizes, every component
+measurement and exact client/source-stage SHA-256 identities in
+`target/m98/coordination/corner-drag/text-owner-before-r13c.{json,log}`.
+Its initial wrong-operation-shape harness error and the earlier short-actor
+measurement remain separate records, not production findings.
+
+The focused Rust owner measures cursor conversion at 511 ms and span derivation
+at 43 ms in the unoptimized debug build (`text-witness-before-r13.log`). The
+repair compares public native operation IDs first, then runs the unchanged public
+cursor encoder only for changed characters and retained anchors. It introduces
+no cache, custom cursor codec, public API, wire/schema, solver equation, tolerance,
+branch, source-authority or golden change. Imported multiscalar/nonstandard
+operations retain the original complete cursor path and limits.
+
+Two new owner regressions freeze the exact complete span witnesses, including
+Unicode, same-value foreign ownership, disjoint concurrent edits, four actor
+lengths, reverse comparisons, cold restoration and imported multiscalar fallback.
+The existing full cursor path remains an independent exact oracle. In the focused
+run its reference conversion/derivation is 566/47 ms and the new complete path
+is 94 ms; all five atom/span tests pass. These are debug-owner measurements,
+not browser latency claims.
+
+Pinned commands completed:
+
+```bash
+cargo test --locked -p geosolve-collaboration --lib dense_typing_span_witnesses_retain_exact_ownership_and_unicode -- --nocapture
+cargo fmt --all
+cargo test --locked -p geosolve-collaboration --lib atom_iteration_tests -- --nocapture
+cargo test --locked -p geosolve-collaboration
+cargo clippy --locked -p geosolve-collaboration --all-targets --all-features -- -D warnings
+```
+
+All pass: one baseline owner characterization, five focused atom/span tests,
+92 complete collaboration tests and warnings-denied Clippy. Logs:
+`text-witness-{before,after}-r13.log`, `text-native-after-r13.log`,
+`text-clippy-r13.log`. WASM parity/performance, complete replacement qualification
+and preserved preview delivery remain pending. Human U02 is still Fail pending
+recheck, and M98 is open.
+
+`node packages/geosolve-collaboration/scripts/build-wasm.mjs` passes. Repeating
+the exact five-base benchmark against that new WASM preserves both the complete
+client checkpoint and source-stage SHA-256 in every trial. Median server staging
+falls from **140.86 to 95.32 ms (32.3%)**; individual new trials are
+156.80/116.82/90.96/91.57/95.32 ms. This is isolated owner evidence with explicit
+cold/warm variation, not a browser guarantee. Evidence:
+`text-owner-after-r13.{json,log}` and `text-owner-parity-r13.json`.
+`node --test --test-concurrency=1 packages/geosolve-collaboration/test/*.test.mjs`
+also passes **44/44** in 9.1 seconds (`text-wasm-tests-r13.log`), including genuine
+native-WASM personal-history restoration, Unicode concurrency, 520 edits across
+the retained Undo horizon, bounded transport and durable source publication.
+
+Focused original browser workflows now pass **4/4** in
+`suite-stall-r13a.log`: four-editor ACK/navigation is **108.8/226.9 ms**,
+manifold **372.1/320.1 ms**, and Gridfinity **216.2/167.3 ms**. Navigation is
+p95, all ACKs are genuine committed client events, and all unchanged 500 ms and
+ten-second concurrency assertions pass. The fourth case proves all five ACK
+failure controls. The measured observer intervals remain visible separately
+(122.5/514.1/300.2 ms), rather than being confused with the committed events.
+Pinned command: `python3 target/m98/coordination/corner-drag/measure-ack-focused-r12.py r13a`.
+It selects the original four-editor/dense/ACK-control tests, using the newly
+built server WASM and the unchanged earlier browser artifact. The integrated
+runner must still qualify and freeze the complete final artifact; this focused
+result is not a preview-delivery claim.
