@@ -1365,3 +1365,13 @@ its extra observations are diagnostic, not qualification. Neither timing limits
 nor first-use samples were weakened. Logs remain in
 `target/m98/coordination/corner-drag/{release-gate.log,manifold-focus-r1.log,manifold-diagnostic-r2.log,recovery-after-r1.log}`.
 Replacement qualification and human U02 recheck remain open.
+
+The resumed nomination `20260912T202633-ed209d3a` on `55faa24` preserves
+unchanged native/WASM/browser evidence but fails the folder-browser selection
+check at 10/11. The test chose click coordinates immediately after middle-button
+pan, before that pan was painted. It now independently requires the requested
+18 × 12 px translation within the existing one-second limit before sampling the
+curve. Full selection, local navigation, held-edit and source/authority retention
+assertions remain. The focused case passes in `folder-focus-r2.log` (1/1); an
+earlier full-frame wait experiment also passed in `folder-focus-r1.log`.
+No product change or new release claim follows from these helper corrections.

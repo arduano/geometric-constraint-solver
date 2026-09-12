@@ -121,8 +121,13 @@ test("M98-F016/F017 folder canvas navigates and selects locally during a stalled
     await expect.poll(async()=>curveWidth(await geometry(page))/curveWidth(beforeGeometry),{timeout:1000}).toBeGreaterThan(1.1);
     const localZoomMs=performance.now()-start;
     box=await host.boundingBox();assert.ok(box);
+    const beforePan=await presentedCurve();
     await page.mouse.move(box.x+40,box.y+40);await page.mouse.down({button:"middle"});
     await page.mouse.move(box.x+58,box.y+52);await page.mouse.up({button:"middle"});
+    await expect.poll(async()=>{
+      const after=await presentedCurve();
+      return Math.hypot(after.points[0][0]-beforePan.points[0][0]-18,after.points[0][1]-beforePan.points[0][1]-12);
+    },{timeout:1000}).toBeLessThan(1e-9);
     const curve=await presentedCurve(),point=curve.points[Math.floor(curve.points.length/8)];
     await page.mouse.move(box.x+point[0],box.y+point[1]);
     await expect.poll(async()=>(await presentedCurve()).style.stroke,{timeout:1000}).not.toBe(curve.style.stroke);
