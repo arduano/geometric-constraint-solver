@@ -1662,3 +1662,35 @@ the expired solve hold from an isolated text-owner measurement.
 No diagnostic changed the production artifact or existing latency/semantic
 assertions. Clean-source integrated qualification must still establish the
 complete original workflows; every live preview upgrade remains pending.
+
+### F042 integrated nomination and screenshot scrolling
+
+Clean `c7d4d03221a8563efc2667b2b8a3359eaee74de5` passes preflight in
+`20260912T233433-3b1ff566`. Integrated run `20260912T233651-9fd8a6d4`
+retains 290 passing obligations, then fails the ordinary browser stage:
+48/49 workflows pass, with no skips or retries. Collaboration browser and final
+performance do not execute, so this run does not qualify a replacement product.
+
+The manifold's initial pixel witness fails its strict before/after capture
+comparison. The complete frame, completed surface and raster quality remain
+identical; only canvas page coordinates change from y = -17 to y = 0.
+Playwright's ordinary locator screenshot scrolls its target into view after
+the helper has frozen those bounds. The retained error and trace are under
+`target/release-gate/runs/20260912T233651-9fd8a6d4/stages/browser/scratch/browser/full/`.
+This is a capture-harness ordering error, with no demonstrated native scene or
+renderer failure.
+
+The helper now completes `scrollIntoViewIfNeeded()` before waiting for settled
+quality and freezing frame, surface and bounds. The complete before/after
+comparison, captured-bound coordinate sampling and every pixel assertion remain
+unchanged. Focused verification uses the exact failed-run harness artifact and
+the original full manifold workflow plus all four canvas workflows; no product
+rebuild or solver change is needed for this correction. All **5/5 pass in
+5.5 min**, including the full 4.2-minute manifold edit/history/reload workflow.
+The pinned Nix command is
+`python3 target/m98/coordination/corner-drag/measure-capture-scroll.py`; it invokes
+Playwright on `m92-sample-audit.spec.ts` and `canvas-renderer.spec.ts`, selecting
+`pc-water-manifold|M94 canvas`, with one worker and list/JSON reports. Evidence:
+`target/m98/coordination/corner-drag/capture-scroll-after{.log,.json,/}`.
+`git diff --check` passes. Qualification and preserved preview delivery remain
+pending; the runner must authenticate any reused unaffected successes.

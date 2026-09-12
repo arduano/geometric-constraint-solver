@@ -136,6 +136,9 @@ export function decodeScreenshot(png: Buffer) {
   return { width, height, channels, pixels };
 }
 export async function canvasVisualWitness(canvas: Locator, active = false) {
+  // Locator screenshots scroll their target into view. Complete that layout
+  // change before freezing the frame/surface/bounds used by the pixel witness.
+  await canvas.scrollIntoViewIfNeeded();
   await expect.poll(async () => {
     const diagnostics = await rendererDiagnostics(canvas);
     return diagnostics.hasPendingDraw === false && (active || diagnostics.isSettled === true)
