@@ -1340,3 +1340,28 @@ Receipt: `target/m98/coordination/corner-drag/exact-replay-after-r4/report.json`
 Three preceding harness attempts remain recorded (JSON property-order equality,
 existing scratch directory and per-folder worker binding); those are harness
 errors and caused no product changes or alteration of the original captures.
+
+
+### F041 first integrated nomination and browser readiness repair
+
+Clean `a37a8be` nomination `20260912T191359-ad253e32` retains 278 passing
+obligations, including 49/49 ordinary browser workflows with no retries/skips and
+the unchanged 271-case golden, but fails collaboration browser qualification at
+14/16. It is not a qualified replacement and no preview was upgraded.
+
+The invalid-Apply drawing check captured a stale frame before Split layout
+finished presenting its resized viewport; the failed coordinates differ by a
+282 px horizontal translation. The browser helper now waits for the accepted
+frame and renderer dimensions to match the actual canvas, retaining the complete
+before/after geometry equality. The focused invalid-draft/Apply/peer-typing case
+passes on the same prepared product in `recovery-after-r1.log`.
+
+The same run exceeds the unchanged 500 ms dense-manifold budgets: first
+navigation 608.9 ms and text acknowledgement 745.6 ms. A focused unchanged-artifact
+trace reproduces first-navigation 545.7 ms, subsequent moves 342.7–419.0 ms and
+text acknowledgement 458.6 ms. An additional instrumented trace locates most
+navigation delay after the local wheel reply (12–47 ms), during presentation;
+its extra observations are diagnostic, not qualification. Neither timing limits
+nor first-use samples were weakened. Logs remain in
+`target/m98/coordination/corner-drag/{release-gate.log,manifold-focus-r1.log,manifold-diagnostic-r2.log,recovery-after-r1.log}`.
+Replacement qualification and human U02 recheck remain open.

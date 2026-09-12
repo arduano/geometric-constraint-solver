@@ -106,6 +106,15 @@ async function editor(page) {
   await page.getByRole("group", { name: "Workspace layout", exact: true }).getByRole("button", { name: "split", exact: true }).click();
   const content = page.locator(".cm-content[contenteditable=true]");
   await content.waitFor();
+  // Split layout changes the viewport asynchronously. A visible CodeMirror
+  // does not prove that the canvas has presented its matching native frame.
+  await until(() => page.locator("canvas").evaluate(canvas => {
+    const bounds = canvas.getBoundingClientRect();
+    const frame = canvas.__geosolvePresentedFrame, renderer = canvas.__geosolveRendererDiagnostics;
+    return frame && renderer && frame.provenance.scene === "accepted-presentation"
+      && Math.abs(frame.viewBox[2] - bounds.width) < .1 && Math.abs(frame.viewBox[3] - bounds.height) < .1
+      && Math.abs(renderer.width - bounds.width) < .1 && Math.abs(renderer.height - bounds.height) < .1;
+  }), "Split layout must present its resized native canvas before capturing accepted geometry");
   return content;
 }
 async function replaceText(page, content, text) {
