@@ -2,6 +2,12 @@
 
 Current roadmap: **M97 is accepted and closed. M98 collaboration, including the full current toolbar amendment, is mechanically qualified and delivered; supervising-user acceptance and milestone closure remain open.**
 
+[Final M98 UAT](docs/M98_UAT.md) covers twelve human scenarios across shared editing,
+the complete toolbar, manifold intent/loading, folder/CLI recovery, generator embedding and
+profile export. The [Tailscale UAT launch page](http://100.94.63.83:18120/) provides isolated
+fixtures and distinct editor/viewer invitations. Human results remain **Not run**; readiness
+evidence is separate from acceptance. Existing user previews and histories remain preserved.
+
 The [shared toolbar amendment](docs/M98_TOOL_PARITY.md) exposes all 25 geometry variants,
 13 constraint tools, five dimension tools, Fillet and Profile Offset. Contextual options,
 explicit branches, native preselection, Explorer inputs, geometry roles and personal

@@ -7,9 +7,10 @@ its fast-track limits; original handoffs remain historical evidence. M97 is acce
 and closed; M98 supervising-user acceptance and milestone closure remain open.
 
 The [approved collaboration amendment](M98_COLLABORATION.md) extends this baseline with
-concurrent editors and shared TypeScript authoring. It is mechanically qualified on
-`513463f` and delivered with exact served-byte and browser verification. The original single-editor
-implementation remains available alongside the opt-in shared host.
+concurrent editors and shared TypeScript authoring. The current [full toolbar candidate](M98_TOOL_PARITY.md)
+is qualified on `b005b9e` with 293/293 obligations and delivered with exact served-byte and
+browser verification. [Final signoff UAT](M98_UAT.md) covers the complete amended scope.
+The original single-editor implementation remains available alongside the opt-in shared host.
 
 ## Approved product
 
@@ -61,14 +62,19 @@ implementation remains available alongside the opt-in shared host.
 - [x] Implement and qualify the [multi-editor amendment](M98_COLLABORATION.md), including
   shared draft/accepted separation, checked personal history, durable recovery and browser/load proof.
 - [x] Verify exact qualified static and collaborative replacement previews.
+- [x] Prepare isolated [final UAT](M98_UAT.md) with served-artifact/browser readiness,
+  folder/CLI and generator workflows, complete exports and a human result ledger.
 - [ ] Obtain supervising-user acceptance and close M98.
 
-Collaboration candidate `513463f` passes all 288 obligations in
+The historical collaboration candidate `513463f` passed all 288 obligations in
 `20260910T204328-4a05c31a` (32 fresh, 256 authenticated reused; 44m4.890s).
-[Final qualification](M98_QUALIFICATION.md#qualified-multi-editor-collaboration) records
+[Its qualification](M98_QUALIFICATION.md#qualified-multi-editor-collaboration) records
 signed evidence. Exact production and four archives are frozen and installed offline;
-the new static port 18110 and collaborative port 18111 pass exact served-byte and
-browser verification.
+the then-new static port 18110 and collaborative port 18111 passed exact served-byte and
+browser verification. The [current nomination](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
+supersedes that shared candidate: `b005b9e`, 293/293 obligations in
+`20260911T164104-576e7789`, with the existing 18111/18112 shared documents preserved.
+Static port 18110 retains the older artifact and is not the final toolbar UAT endpoint.
 The original manifold's seven authored files and preceding previews remain preserved.
 Human acceptance and milestone closure remain open.
 

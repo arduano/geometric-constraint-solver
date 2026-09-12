@@ -8487,6 +8487,10 @@ merge or qualify that product.
 - [x] Qualify optimized release WASM, asynchronous GPU completion and startup blur-shader
   preparation with unchanged size, latency, pixel, DPR/hidden-layout, context-loss and
   pointer-capture requirements.
+- [x] Prepare [final signoff UAT](docs/M98_UAT.md): isolated shared/editor/viewer fixtures,
+  original folder/CLI and both generator hosts, exact-artifact/browser readiness, pristine
+  profile export and guarded restart instructions. All twelve human dispositions remain
+  **Not run**; automated readiness does not close the milestone.
 - [ ] Obtain supervising-user acceptance and close M98.
 
 Status: **full current workbench toolbar parity is mechanically qualified and delivered;

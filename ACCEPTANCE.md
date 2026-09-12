@@ -5667,5 +5667,8 @@ previews remain preserved. Human acceptance and M98 closure remain open.
 - [x] Qualify optimized release WASM, asynchronous GPU completion and startup blur-shader
   preparation with unchanged size, latency, pixel, DPR/hidden-layout, context-loss and
   pointer-capture requirements.
+- [x] Prepare [complete M98 signoff UAT](docs/M98_UAT.md), including isolated fixtures,
+  verified served artifacts, actual browser readiness, CLI/recovery/export evidence and
+  twelve human scenarios. Human dispositions remain **Not run**.
 - [ ] Supervising-user acceptance of the amended M98 scope.
 - [ ] M98 milestone closure after acceptance.
