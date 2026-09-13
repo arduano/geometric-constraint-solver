@@ -13,6 +13,10 @@
       "types": "./dist/src/compiler.d.ts",
       "default": "./dist/src/compiler.js"
     },
+    "./managed": {
+      "types": "./dist/src/managed.d.ts",
+      "default": "./dist/src/managed.js"
+    },
     "./control": {
       "types": "./dist/src/control.d.ts",
       "default": "./dist/src/control.js"

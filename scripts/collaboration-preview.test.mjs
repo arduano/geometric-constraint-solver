@@ -4,8 +4,8 @@ import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { createEngine } from "../packages/geosolve-engine/dist/index.js";
-import { createCollaborationPreviewService } from "./collaboration-preview.mjs";
-import { createCollaborationPreviewRoute } from "./collaboration-preview-route.mjs";
+import { createCollaborationPreviewService } from "../packages/geosolve-cli/runtime/collaboration-preview.mjs";
+import { createCollaborationPreviewRoute } from "../packages/geosolve-cli/runtime/collaboration-preview-route.mjs";
 const viewport = { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 };
 const connection = (sessionId = "alice-1", role = "editor") => ({ documentEpoch: "document-life", serverEpoch: "server-life", sessionId, userId: sessionId, clientId: `${sessionId}-tab`, role });
 async function fixture(t, options = {}) {

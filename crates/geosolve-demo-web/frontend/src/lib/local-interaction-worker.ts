@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import initializeWasm, * as wasm from "../generated/geosolve_demo_web.js";
+import type { WorkspaceViewPresentation } from "../../../../../packages/geosolve-engine/src/index";
 import type { WorkbenchSnapshot } from "./adapter";
 
 /** Opaque, versioned Rust-owned transport; JavaScript never interprets geometry or selection IDs. */
@@ -12,9 +13,9 @@ export interface LocalInteractionUpdate {
   /** Rust verified the authoritative preview matches this exact camera and selection. */
   serverFrameCompatible: boolean;
 }
-export type LocalInteractionMethod = "projectPrediction" | "authoringPointer" | "restoreSelection" | "presence" | "construct" | "replace" | "dispatch" | "pointer" | "wheel" | "resize" | "cancel" | "state";
+export type LocalInteractionMethod = "exportPresentation" | "projectPrediction" | "authoringPointer" | "restoreSelection" | "presence" | "construct" | "replace" | "dispatch" | "pointer" | "wheel" | "resize" | "cancel" | "state";
 export interface LocalInteractionRequest { id: number; method: LocalInteractionMethod; input?: unknown; }
-export type LocalInteractionResponse = { id: number; result: LocalInteractionUpdate | InteractionState | null } | { id: number; error: string };
+export type LocalInteractionResponse = { id: number; result: LocalInteractionUpdate | InteractionState | WorkspaceViewPresentation | null } | { id: number; error: string };
 export interface InteractionHandle {
   replace(input: string): string;
   dispatch(input: string): string;
@@ -26,6 +27,7 @@ export interface InteractionHandle {
   restoreSelection(input: string): string;
   presence(input: string): string;
   state(): string;
+  exportPresentation?(): string;
   free(): void;
 }
 export type InteractionConstructor = new (seed: string) => InteractionHandle;
@@ -51,6 +53,10 @@ export function createLocalInteractionHandler(
         } else {
           if (!handle) throw Error("Local interaction has not been initialized");
           if (data.method === "state") result = handle.state();
+          else if (data.method === "exportPresentation") {
+            if (!handle.exportPresentation) throw Error("Native personal presentation export is unavailable");
+            result = handle.exportPresentation();
+          }
           else if (data.method === "projectPrediction") {
             if(!renderPrediction)throw Error("Native prediction reprojection is unavailable");
             const input=data.input as {presentation:string;view:{state:InteractionState};construction?:unknown};

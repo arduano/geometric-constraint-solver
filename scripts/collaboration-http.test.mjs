@@ -9,8 +9,8 @@ import { join } from "node:path";
 import { EventEmitter } from "node:events";
 import { request as httpRequest } from "node:http";
 import { setImmediate as immediate } from "node:timers/promises";
-import { openDurableCollaborationHost } from "./collaboration-host.mjs";
-import { createCollaborationHttpServer, subscriber } from "./collaboration-http.mjs";
+import { openDurableCollaborationHost } from "../packages/geosolve-cli/runtime/collaboration-host.mjs";
+import { createCollaborationHttpServer, subscriber } from "../packages/geosolve-cli/runtime/collaboration-http.mjs";
 
 const configuration = { documentId: "http-drawing", documentEpoch: "http-drawing-life", initialInput: "independently-rebuilt-fixture" };
 const bytes = (value) => Buffer.from(JSON.stringify(value));

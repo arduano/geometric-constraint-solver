@@ -5,15 +5,17 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import App from "./App";
 import { WorkerWorkbenchAdapter } from "./lib/worker-workbench-adapter";
 import { FolderWorkbenchAdapter } from "./lib/folder-adapter";
+import { createBrowserWorkbenchSession } from "./lib/browser-workbench-session";
+import { createFolderWorkbenchSession } from "./lib/folder-workbench-session";
+import type { WorkbenchSession } from "./lib/workbench-session";
+import { MockWorkbenchAdapter } from "./lib/mock-adapter";
 import "./styles.css";
 
 async function mount() {
-  let adapter;
-  let folder;
-  let collaboration;
+  let session: WorkbenchSession;
   if (new URLSearchParams(location.search).get("collaboration") === "1") {
-    const [{CollaborativeWorkbenchAdapter},{acquireCollaborationTabIdentity},{CollaborationPendingStore},{CollaborationRawRecovery}]=await Promise.all([
-      import("./lib/collaboration-adapter"),import("./lib/collaboration-tab-identity"),import("./lib/collaboration-storage"),import("./lib/collaboration-raw-recovery"),
+    const [{CollaborativeWorkbenchAdapter},{acquireCollaborationTabIdentity},{CollaborationPendingStore},{CollaborationRawRecovery},{createCollaborativeWorkbenchSession}]=await Promise.all([
+      import("./lib/collaboration-adapter"),import("./lib/collaboration-tab-identity"),import("./lib/collaboration-storage"),import("./lib/collaboration-raw-recovery"),import("./lib/collaborative-workbench-session"),
     ]);
     const baseUrl=new URL("./api/collaboration/",location.href).href;
     const key=`geosolve.collaboration.${baseUrl}`;
@@ -36,7 +38,7 @@ async function mount() {
     const previousActive=activeRaw.read();
     const recovery=[...recovered,...previousActive];if(recovery.length)raw.write(recovery);
     activeRaw.write([]);
-    collaboration=new CollaborativeWorkbenchAdapter({baseUrl,inviteToken:token,clientId:identity.clientId,pending,authoringPreview,
+    const collaboration=new CollaborativeWorkbenchAdapter({baseUrl,inviteToken:token,clientId:identity.clientId,pending,authoringPreview,
       assertOwned:()=>identity.assertOwned(),savePending:checkpoint=>identity.storage.write(checkpoint),saveSourceIntents:intents=>{if(sessionStorage.getItem(rawOwnerKey)!==rawOwner)throw Error("This page no longer owns its source recovery buffer");activeRaw.write(intents);}});
     const shared=collaboration;
     const download=(name:string,value:unknown)=>{
@@ -54,23 +56,24 @@ async function mount() {
     window.addEventListener("pagehide",()=>{shared.dispose();void identity.release();});
     window.addEventListener("pageshow",event=>{if(event.persisted)location.reload();});
     window.addEventListener("beforeunload",event=>{if(shared.pending.length||shared.pendingSourceEdits.length){event.preventDefault();}});
-    adapter=shared;
+    session=createCollaborativeWorkbenchSession(shared);
     } catch(error) { await identity.release().catch(()=>{}); throw error; }
   } else if (new URLSearchParams(location.search).get("folder") === "1") {
     const token = new URLSearchParams(location.hash.slice(1)).get("token") ?? sessionStorage.getItem("geosolve.folder.token");
     if (!token) throw Error("Open the folder URL printed by the local bridge; its session token is required.");
     sessionStorage.setItem("geosolve.folder.token", token);
     history.replaceState(null, "", location.pathname + location.search);
-    folder = new FolderWorkbenchAdapter(token);
-    const folderSession = folder;
+    const folderSession = new FolderWorkbenchAdapter(token);
     window.addEventListener("pagehide", (event) => { if (!event.persisted) folderSession.dispose(); });
-    adapter = folder;
+    session = createFolderWorkbenchSession(folderSession);
   } else if (import.meta.env.PROD && import.meta.env.VITE_GEOSOLVE_MOCK !== "1") {
     const worker = new WorkerWorkbenchAdapter();
-    adapter = worker;
+    session = createBrowserWorkbenchSession(worker);
     window.addEventListener("pagehide", (event) => { if (!event.persisted) worker.dispose(); });
+  } else {
+    session = createBrowserWorkbenchSession(new MockWorkbenchAdapter());
   }
-  createRoot(document.getElementById("root")!).render(<StrictMode><Tooltip.Provider delayDuration={450}><App adapter={adapter} folder={folder} collaboration={collaboration} /></Tooltip.Provider></StrictMode>);
+  createRoot(document.getElementById("root")!).render(<StrictMode><Tooltip.Provider delayDuration={450}><App session={session} /></Tooltip.Provider></StrictMode>);
 }
 
 void mount().catch((error: unknown) => {

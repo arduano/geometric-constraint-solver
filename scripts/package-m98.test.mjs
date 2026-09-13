@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { extname, resolve, sep } from "node:path";
 import test from "node:test";
-import { packageM98, repository } from "./package-m98.mjs";
+import { packageArchives, repository } from "../packages/geosolve-cli/scripts/package.mjs";
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const fixture = `import { defineGenerator, sketch, mm } from "@geosolve/sketch-code";
@@ -41,11 +41,17 @@ test("four offline archives install into an empty cache and run the actual SDK, 
   t.after(() => rmSync(temporary, { recursive: true, force: true }));
   const archiveDirectory = process.env.GEOSOLVE_M98_PACKAGES
     ? resolve(process.env.GEOSOLVE_M98_PACKAGES)
-    : packageM98({ out: process.env.GEOSOLVE_M98_PACKAGE_OUT ?? resolve(temporary, "archives"), ...(process.env.GEOSOLVE_M98_DIST ? { dist: process.env.GEOSOLVE_M98_DIST } : {}) }).output;
+    : packageArchives({ out: process.env.GEOSOLVE_M98_PACKAGE_OUT ?? resolve(temporary, "archives"), ...(process.env.GEOSOLVE_M98_DIST ? { dist: process.env.GEOSOLVE_M98_DIST } : {}) }).output;
   const manifest = JSON.parse(readFileSync(resolve(archiveDirectory, "packages.json"), "utf8"));
   assert.equal(manifest.format, "geosolve-offline-packages-v1");
   assert.equal(manifest.archives.length, 4);
   assert.deepEqual(manifest.archives.map(archive => archive.name).sort(), ["@geosolve/cli", "@geosolve/collaboration", "@geosolve/engine", "@geosolve/sketch-code"]);
+  const cliFiles = manifest.archives.find(archive => archive.name === "@geosolve/cli").files;
+  assert.ok(cliFiles.some(file => file.path === "runtime/geosolve-cli.mjs"));
+  assert.ok(cliFiles.some(file => file.path === "runtime/release-artifact.mjs"));
+  assert.ok(cliFiles.some(file => file.path === "dist/workspace-runtime.mjs"));
+  assert.ok(cliFiles.every(file => !file.path.startsWith("runtime/assets/demo-wasm/")), "Node hosts ship no separate demo execution package");
+  assert.ok(cliFiles.every(file => !file.path.startsWith("runtime/scripts/") && !file.path.startsWith("target/")), "packaging owns ordinary runtime/build resources");
   const archives = manifest.archives.map((archive) => {
     const path = resolve(archiveDirectory, archive.file);
     assert.equal(digest(readFileSync(path)), archive.sha256);
@@ -111,7 +117,7 @@ try {
 import {createSharedText} from "@geosolve/collaboration";
 import {createTrustedSourceHost} from "@geosolve/collaboration/host";
 import {CollaborationClient} from "@geosolve/collaboration/client";
-import {createMirrorWorker} from "./node_modules/@geosolve/cli/runtime/scripts/collaboration-mirror-worker-bridge.mjs";
+import {createMirrorWorker} from "./node_modules/@geosolve/cli/runtime/collaboration-mirror-worker-bridge.mjs";
 import {mkdir,writeFile} from "node:fs/promises";
 import {resolve} from "node:path";
 const actor=new TextEncoder().encode("installed-server");
@@ -182,6 +188,9 @@ try{
   assert.equal(sharedAfter.state.authority.acceptedInput, acceptedInput);
   assert.match(sharedAfter.state.document.working.files["sketch.ts"], /installed shared edit 😀/u);
   assert.equal(cli("apply", starter, ...flags, "--expected", expected, "--operation", "installed-apply").ok, true);
+  const editableFolder = resolve(installed, "folder-ui");
+  assert.equal(cli("init", editableFolder).ok, true);
+  const editableSession = await installedServer(t, bin, ["serve", editableFolder], installed, environment);
 
   // Build the actual custom website against the clean-installed packages. The
   // repository contributes test/build tools only, never product SDK/engine bytes.
@@ -205,7 +214,7 @@ try{
     } catch { response.writeHead(404); response.end(); }
   });
   await new Promise((done) => staticServer.listen(0, "127.0.0.1", done));
-  const { chromium } = await import(resolve(repository, "crates/geosolve-demo-web/frontend/node_modules/playwright/index.mjs"));
+  const { chromium, expect } = await import(resolve(repository, "crates/geosolve-demo-web/frontend/node_modules/@playwright/test/index.mjs"));
   const browser = await chromium.launch({ executablePath: process.env.GEOSOLVE_CHROMIUM_PATH ?? "/home/arduano/.nix-profile/bin/google-chrome", args: ["--disable-dev-shm-usage"] });
   try {
     const page = await browser.newPage();
@@ -219,6 +228,33 @@ try{
     assert.equal(await page.locator("#width").textContent(), "41.5 mm");
     assert.equal(await page.locator("#bores").textContent(), "8");
     assert.deepEqual(errors, []);
+    // Exercise the shipped workbench and native browsing/authoring workers from
+    // installed URLs too; matching index bytes alone cannot witness worker loads.
+    for (const [url, sourceFolder, editable] of [[session.url, project, false], [editableSession.url, editableFolder, true], [sharedSession.urls[0].url, starter, true]]) {
+      const sourcePath = resolve(sourceFolder, editable ? "sketch.ts" : "generator.ts");
+      const before = readFileSync(sourcePath, "utf8");
+      const workbench = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+      const failures = []; workbench.on("pageerror", error => failures.push(error.message));
+      try {
+        await workbench.goto(url);
+        const canvas = workbench.locator('canvas[data-renderer="webgl2"]');
+        await expect(canvas).toHaveAttribute("data-render-state", "ready", { timeout: 30000 });
+        await expect.poll(() => canvas.evaluate(element => Reflect.get(element, "__geosolvePresentedFrame")?.items.filter(item => item.layer === "geometry").length ?? 0)).toBeGreaterThan(0);
+        if (editable) {
+          await workbench.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
+          await workbench.getByRole("menuitem", { name: "Polyline", exact: true }).click();
+          const box = await workbench.getByRole("application").boundingBox(); assert.ok(box);
+          await workbench.keyboard.down("Alt");
+          await workbench.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.7);
+          await workbench.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.8);
+          await workbench.keyboard.up("Alt");
+          await expect(workbench.getByRole("button", { name: "Finish", exact: true })).toBeEnabled({ timeout: 15000 });
+          await workbench.keyboard.press("Escape");
+          assert.equal(readFileSync(sourcePath, "utf8"), before, "native local drafting cannot publish source");
+        }
+        assert.deepEqual(failures, []);
+      } finally { await workbench.close(); }
+    }
   } finally {
     await browser.close();
     await new Promise((done) => staticServer.close(done));
@@ -229,7 +265,7 @@ test("packaging refuses an existing destination without replacing bytes", () => 
   const temporary = mkdtempSync(resolve(tmpdir(), "geosolve-package-existing-"));
   try {
     writeFileSync(resolve(temporary, "keep.txt"), "retained");
-    assert.throws(() => packageM98({ out: temporary, dist: resolve(repository, "crates/geosolve-demo-web/dist") }), /Refusing to overwrite/);
+    assert.throws(() => packageArchives({ out: temporary, dist: resolve(repository, "crates/geosolve-demo-web/dist") }), /Refusing to overwrite/);
     assert.equal(readFileSync(resolve(temporary, "keep.txt"), "utf8"), "retained");
   } finally { rmSync(temporary, { recursive: true }); }
 });

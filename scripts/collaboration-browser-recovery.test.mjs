@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "../crates/geosolve-demo-web/frontend/node_modules/playwright-core/index.mjs";
 import { inventory, mediaType, hash } from "../crates/geosolve-demo-web/frontend/scripts/release-artifact-lib.mjs";
-import { openCollaborationRuntime } from "./collaboration-runtime.mjs";
+import { openCollaborationRuntime } from "../packages/geosolve-cli/runtime/collaboration-runtime.mjs";
 
 const source = `"use geosolve sketch";
 import {sketch,mm} from "@geosolve/sketch-code";

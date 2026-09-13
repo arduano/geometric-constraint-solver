@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { Worker } from "node:worker_threads";
+import { createWorkerLifetime, createWorkerRequest } from "./worker-lifetime.mjs";
 
-/** A single ordered Rust workbench in a terminable worker, independent of HTTP liveness. */
+/** A single ordered Rust engine session in a terminable worker, independent of HTTP liveness. */
 export async function createWorkspaceWorkbench({ timeoutMs = 120000, workerUrl = new URL("./workspace-workbench-worker.mjs", import.meta.url) } = {}) {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300000) throw Error("Workbench timeout must be 1..300000 ms");
   let worker;
@@ -13,42 +13,39 @@ export async function createWorkspaceWorkbench({ timeoutMs = 120000, workerUrl =
   function fail(owner, error) {
     if (disposed || worker !== owner) return;
     const reconstructing = [...pending.values()].some((request) => request.method === "construct");
-    for (const request of pending.values()) { clearTimeout(request.timer); request.reject(error); }
+    for (const request of pending.values()) request.reject(error);
     pending.clear();
     // Detach before termination: the old exit event cannot reject new requests.
     worker = undefined;
-    void owner.terminate();
+    void owner.stop();
     start();
     recovery = reconstructing ? Promise.reject(error)
       : send("construct", { version: 2, ...(lastCheckpoint ? { persistedProject: lastCheckpoint } : {}) });
     void recovery.catch(() => {});
   }
   function start() {
-    worker = new Worker(workerUrl, {
-      execArgv: [], stdout: true, stderr: true, resourceLimits: { maxOldGenerationSizeMb: 512 },
+    worker = createWorkerLifetime({
+      url: workerUrl,
+      onMessage(message) {
+        const request = pending.get(message.id);
+        if (!request) return;
+        pending.delete(message.id);
+        if (message.ok) request.resolve(message.result); else request.reject(Error(message.error));
+      },
+      onError: error => fail(worker, error),
+      onExit: code => fail(worker, Error(`Workbench worker exited (${code}); last saved design retained`)),
     });
-    const owner = worker;
-    worker.stdout.resume(); worker.stderr.resume();
-    worker.on("message", (message) => {
-      if (worker !== owner) return;
-      const request = pending.get(message.id);
-      if (!request) return;
-      pending.delete(message.id); clearTimeout(request.timer);
-      if (message.ok) request.resolve(message.result); else request.reject(Error(message.error));
-    });
-    worker.once("error", (error) => fail(owner, error));
-    worker.once("exit", (code) => fail(owner, Error(`Workbench worker exited (${code}); last saved design retained`)));
   }
   function send(method, input) {
     if (disposed) return Promise.reject(Error("Folder workbench is disposed"));
     const id = ++sequence;
     const owner = worker;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => fail(owner, Error(`Workbench operation exceeded ${timeoutMs} ms; last saved design retained`)), timeoutMs);
-      pending.set(id, { resolve, reject, timer, method });
-      try { owner.postMessage({ id, method, input }); }
-      catch (error) { fail(owner, error); }
-    });
+    const request = Object.assign(createWorkerRequest(), { method });
+    pending.set(id, request);
+    request.watch({ timeoutMs, onTimeout: () => fail(owner, Error(`Workbench operation exceeded ${timeoutMs} ms; last saved design retained`)) });
+    try { owner.post({ id, method, input }); }
+    catch (error) { fail(owner, error); }
+    return request.promise;
   }
   start();
   const call = async (method, input) => {
@@ -65,13 +62,13 @@ export async function createWorkspaceWorkbench({ timeoutMs = 120000, workerUrl =
       if (method === "dispatch" && input.command === "workspace.checkpoint.restore") lastCheckpoint = input.payload.contents;
       return result;
   };
-  const adapter = Object.fromEntries(["construct", "snapshot", "interactionSnapshot", "interactionApply", "toolCatalog", "dispatch", "pointer", "wheel", "wheelBatch", "resize", "cancel", "exportProject", "exportWorkspaceDesign", "persistProject", "exportReproduction", "exportInteractionTrace", "bakeProfile"].map((method) => [method, (input) => call(method, input)]));
+  const adapter = Object.fromEntries(["construct", "snapshot", "dispatch", "commit", "mutation", "exportProject", "exportWorkspaceDesign", "persistProject", "exportReproduction", "bakeProfile"].map((method) => [method, (input) => call(method, input)]));
   adapter.dispose = async () => {
     if (disposed) return;
     disposed = true;
-    for (const request of pending.values()) { clearTimeout(request.timer); request.reject(Error("Folder workbench disposed")); }
+    for (const request of pending.values()) request.reject(Error("Folder workbench disposed"));
     pending.clear();
-    await worker.terminate();
+    await worker.stop();
   };
   return adapter;
 }

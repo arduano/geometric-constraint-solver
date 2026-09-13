@@ -43,13 +43,21 @@ an independent writer retaining an old descriptor is preserved in recovery data.
 
 ## Building the archives from a prepared checkout
 
+Production host modules live in this package's `runtime/` directory. The CLI owns
+its bundler dependency and ordinary `dist/` build output; runtime execution and
+packaging do not read a milestone's `target/` directory. The release artifact
+reader is shared with the browser build tools through this package.
+
 ```bash
-node scripts/package-m98.mjs --out target/m98/packages \
+npm --prefix packages/geosolve-cli ci --ignore-scripts
+npm --prefix packages/geosolve-cli run build
+node packages/geosolve-cli/bin/geosolve.mjs inspect examples/file-workspace
+node packages/geosolve-cli/scripts/package.mjs --out target/packages \
   --dist /absolute/path/to/frozen/geosolve-production
 node --test scripts/package-m98.test.mjs
 ```
 
-The packager consumes existing SDK, engine, workbench-runtime and WASM build outputs. It
+The packager consumes existing SDK, engine, CLI and WASM build outputs. It
 does not build Rust, install packages or contact a registry. It refuses an existing output
 directory and records the SHA-256 of every shipped runtime file and archive in
 `packages.json`. Pass the candidate's frozen production directory for final qualification;

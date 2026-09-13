@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { Worker } from "node:worker_threads";
 import { createTrustedSourceHost } from "../packages/geosolve-collaboration/dist/host.js";
-import { createMirrorWorker } from "./collaboration-mirror-worker-bridge.mjs";
+import { createMirrorWorker } from "../packages/geosolve-cli/runtime/collaboration-mirror-worker-bridge.mjs";
 
 const actor = value => new TextEncoder().encode(value);
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return {promise,resolve}; };
@@ -105,7 +105,7 @@ test("worker callback exception preserves lost ACK request across native host re
 });
 
 test("worker rejects unknown request protocol and exits without calling an authority callback",{timeout:10000},async()=>{
-  const worker=new Worker(new URL("./collaboration-mirror-worker.mjs",import.meta.url),{workerData:{},execArgv:[]});
+  const worker=new Worker(new URL("../packages/geosolve-cli/runtime/collaboration-mirror-worker.mjs",import.meta.url),{workerData:{},execArgv:[]});
   const messages=[];worker.on("message",message=>messages.push(message));
   const exited=new Promise((resolve,reject)=>{worker.once("exit",resolve);worker.once("error",reject);});
   worker.postMessage({protocol:"geosolve-mirror-worker-v1",kind:"request",id:1,method:"arbitrary-write"});
@@ -162,7 +162,7 @@ test("deadline termination still drains the trusted callback and keeps exact adm
 
 test("worker callback replies require exact current request and callback identities",{timeout:10000},async()=>{
   const folder=await mkdtemp(join(tmpdir(),"geosolve-mirror-protocol-"));
-  const worker=new Worker(new URL("./collaboration-mirror-worker.mjs",import.meta.url),{
+  const worker=new Worker(new URL("../packages/geosolve-cli/runtime/collaboration-mirror-worker.mjs",import.meta.url),{
     workerData:{folder,documentId:"document",documentEpoch:"epoch",userId:"user",clientId:"client"},execArgv:[],
   });
   const messages=[],exited=new Promise((resolve,reject)=>{worker.once("exit",resolve);worker.once("error",reject);});

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { createWorkspaceLoader, evaluateWorkspaceSnapshot, readWorkspaceSnapshot } from "./workspace-loader.mjs";
+import { createWorkspaceLoader, evaluateWorkspaceSnapshot, readWorkspaceSnapshot } from "../packages/geosolve-cli/runtime/workspace-loader.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const sdkDirectory = process.env.GEOSOLVE_LOADER_TEST_SDK_DIRECTORY ?? resolve(root, "packages/geosolve-sketch-code/dist/src");

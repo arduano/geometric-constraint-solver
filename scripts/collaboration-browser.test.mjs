@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { get } from "node:http";
 import { chromium } from "../crates/geosolve-demo-web/frontend/node_modules/playwright-core/index.mjs";
-import { openCollaborationRuntime } from "./collaboration-runtime.mjs";
+import { openCollaborationRuntime } from "../packages/geosolve-cli/runtime/collaboration-runtime.mjs";
 import { inventory, mediaType, hash } from "../crates/geosolve-demo-web/frontend/scripts/release-artifact-lib.mjs";
 import { CollaborationClient } from "../packages/geosolve-collaboration/dist/client.js";
 import { createSharedText } from "../packages/geosolve-collaboration/dist/index.js";

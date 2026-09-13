@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: GPL-3.0-or-later
-// M98 single-folder prototype. All geometry/compiler authority is existing Rust/WASM.
+// Folder disk publication and recovery around shared native engine authority.
 import { createWorkspaceWorkbench } from "./workspace-workbench.mjs";
 import { evaluateProjectSnapshot } from "./workspace-evaluation.mjs";
 import { readWorkspaceSnapshot, evaluateWorkspaceSnapshot } from "./workspace-loader.mjs";
 import { acquireWorkspaceLock, createWorkspaceStorage } from "./workspace-storage.mjs";
-import { createWorkspaceSession, isWorkspaceNavigation, isWorkspacePresentation, workspaceInteractionKey } from "./workspace-session.mjs";
-import { runtimeRoot as root, demoWasmPath, engineModuleUrl, workbenchDist, starterDirectory } from "./workspace-runtime-paths.mjs";
+import { createWorkspaceSession } from "./workspace-session.mjs";
+import { runtimeRoot as root, engineModuleUrl, workbenchDist, starterDirectory } from "./workspace-runtime-paths.mjs";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, lstatSync, realpathSync,
   renameSync, linkSync, unlinkSync, openSync, fsyncSync, closeSync } from "node:fs";
 import { resolve, dirname, basename, extname, sep } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { fileURLToPath } from "node:url";
 
 const sourceLimit = 4 * 1024 * 1024;
 export const hash = (text) => createHash("sha256").update(text).digest("hex");
@@ -149,11 +149,10 @@ export async function openProject(folder, { cache = true, storage } = {}) {
     mkdirSync(cachePath, { recursive: true });
     if (lstatSync(cachePath).isSymbolicLink() || realpathSync(cachePath) !== cachePath) throw Error("Project cache must be a local directory, not a symlink.");
   }
-  const runtimeIdentity = hash(readFileSync(demoWasmPath));
+  const runtimeIdentity = hash(readFileSync(fileURLToPath(new URL("./wasm/geosolve_sketch_engine_wasm_bg.wasm", engineModuleUrl))));
   const adapter = await createWorkspaceWorkbench();
   try {
-    await adapter.construct({ version: 2 });
-    let snapshot = await adapter.dispatch({ version: 2, command: "project.new-code" });
+    let snapshot = await adapter.construct({ version: 2 });
     const apply = async (contents, captured, expectedDiskRevision = captured?.revision) => {
       if (multi) {
         if (!captured) throw Error("Complete project snapshot required");
@@ -174,7 +173,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
             } });
         }
         if (readWorkspaceSnapshot(folder).revision !== expectedDiskRevision) throw Error("Conflict: project files changed during native evaluation");
-        if (next.project.status === "accepted" && !next.source.dirty && !next.pendingManagedMutation) {
+        if (next.status === "accepted" && !next.source.dirty) {
           snapshot = next;
           acceptedCompilation = compiled;
           if (mode === "editable") {
@@ -188,7 +187,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       }
       const next = await adapter.dispatch({ version: 2, command: "source.prepare", payload: { path: "sketch.ts", contents } });
       snapshot = next;
-      return snapshot.project.status === "accepted" && !snapshot.source.dirty && !snapshot.pendingManagedMutation;
+      return snapshot.status === "accepted" && !snapshot.source.dirty;
     };
     let acceptedHash = null;
     let currentHash = null;
@@ -202,7 +201,6 @@ export async function openProject(folder, { cache = true, storage } = {}) {
     let candidate = null;
     let candidateSince = 0;
     let notify = () => {};
-    let gestureRollback = null;
     const session = createWorkspaceSession();
     const lastGoodPath = resolve(cachePath, "last-good.ts");
     const derivedPath = resolve(cachePath, "derived-session.json");
@@ -210,7 +208,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
     const sourceOf = (value) => value.source.files.find((file) => file.path === "sketch.ts")?.contents;
     const state = (clientId) => ({
       ...session.state(clientId),
-      format: "geosolve-folder-status-v1", ok: !ioError && currentHash === acceptedHash && !snapshot.source.dirty && snapshot.project.status === "accepted",
+      format: "geosolve-folder-status-v1", ok: !ioError && currentHash === acceptedHash && !snapshot.source.dirty && snapshot.status === "accepted",
       sourceFiles: mode === "generator" && acceptedCompilation ? (inputsSnapshot?.files ?? []).filter((file) => /\.[mc]?ts$/.test(file.path)).map((file) => ({ path: file.path, contents: file.contents, language: "typescript", readOnly: true })) : undefined,
       mode, entry, sourceHash, capabilities: { sourceEditing: mode === "editable", geometryEditing: mode === "editable", generatorInputs: mode === "generator" },
       inputDefinitions: acceptedCompilation?.inputDefinitions ?? null, inputs: acceptedCompilation?.inputs ?? null,
@@ -242,9 +240,6 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         sourceRevision++;
         candidate = null;
         externalApplies++;
-        session.endGesture();
-        await adapter.cancel({ version: 2, reason: "blur" });
-        gestureRollback = null;
         rollback = (await adapter.persistProject()).contents;
         previous = { acceptedCompilation, acceptedDesign, acceptedProject, acceptedHash, acceptedRevision, inputsSnapshot };
         // Repairing exactly the last accepted bytes is not a new authoring step.
@@ -313,7 +308,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       }
     }
     async function saveDerived() {
-      if (currentHash !== acceptedHash || ioError || snapshot.source.dirty || snapshot.pendingManagedMutation) return;
+      if (currentHash !== acceptedHash || ioError || snapshot.source.dirty) return;
       // Recovery must retain the newest accepted design even when optional disk
       // caches are disabled. Navigation never calls this publication checkpoint.
       const contents = (await adapter.persistProject()).contents;
@@ -335,11 +330,13 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       const current = (await adapter.persistProject()).contents;
       try {
         const derived = JSON.parse(readSource(derivedPath));
-        if (derived.format !== "geosolve-derived-session-v1" || derived.revision !== acceptedHash || derived.runtime !== runtimeIdentity
+        // Runtime hashes are provenance, not cache authority: the native codec authenticates
+        // all historical checkpoints before exact current source/design comparison.
+        if (derived.format !== "geosolve-derived-session-v1" || derived.revision !== acceptedHash
           || !sameCompiledProject(derived.project, acceptedProject) || derived.design !== acceptedDesign) return;
         const restored = await adapter.construct({ version: 2, persistedProject: derived.contents });
         const restoredProject = (await adapter.exportProject()).contents;
-        if (restored.project.status !== "accepted" || restored.source.dirty || restored.pendingManagedMutation
+        if (restored.status !== "accepted" || restored.source.dirty
           || restoredProject !== derived.project
           || JSON.stringify(await adapter.exportWorkspaceDesign()) !== acceptedDesign) throw Error("Derived session does not reconstruct the current source and design");
         if (!Array.isArray(derived.sources) || derived.sources.length > 64) throw Error("Derived dependency history exceeds its bound");
@@ -360,7 +357,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       const empty = (await adapter.persistProject()).contents;
       try {
         const derived = JSON.parse(readSource(derivedPath));
-        if (derived.format !== "geosolve-derived-session-v1" || derived.runtime !== runtimeIdentity
+        if (derived.format !== "geosolve-derived-session-v1"
           || typeof derived.project !== "string" || !Array.isArray(derived.sources) || derived.sources.length > 64) throw Error("Invalid previous-source cache");
         // Previous runtimes stored the complete project hash, including allocator state.
         const recorded = derived.sources.find(([key]) => key === sourceHistoryKey(derived.project))?.[1]
@@ -376,7 +373,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         if (!design || JSON.stringify(JSON.parse(design)) !== derived.design) throw Error("Previous semantic design differs from its source snapshot");
         await adapter.construct({ version: 2, persistedProject: project });
         const restored = await adapter.dispatch({ version: 2, command: "workspace.project.apply", payload: { project, design: JSON.parse(design) } });
-        if (restored.project.status !== "accepted" || restored.source.dirty || restored.pendingManagedMutation) throw Error("Previous source reconstruction was rejected");
+        if (restored.status !== "accepted" || restored.source.dirty) throw Error("Previous source reconstruction was rejected");
         const restoredDesign = JSON.stringify(await adapter.exportWorkspaceDesign());
         const restoredProject = (await adapter.exportProject()).contents;
         await adapter.persistProject();
@@ -415,25 +412,15 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         warnings.push(`Derived last-good cache ignored: ${error}`);
       }
     }
-    await adapter.dispatch({ version: 2, command: "view.fit" });
     snapshot = await adapter.snapshot();
     await restoreDerived();
 
-    const allowed = new Set(["snapshot", "toolCatalog", "dispatch", "pointer", "wheel", "wheelBatch", "resize", "cancel", "exportProject", "exportReproduction", "exportInteractionTrace"]);
+    const allowed = new Set(["snapshot", "dispatch", "authoring.commit", "authoring.mutation", "exportProject", "exportReproduction"]);
+    const sourceCommands = new Set(["source.prepare", "source.revert", "history.undo", "history.redo"]);
     async function request(method, input, baseHash, context) {
-      const result = await requestOperation(method, input, baseHash, context);
-      if (context?.localInteraction === true && result?.frame) {
-        // One native call captures mutually matching chrome and interaction
-        // geometry, still inside the HTTP operation's serial authority scope.
-        const exported = await adapter.interactionSnapshot();
-        snapshot = exported.snapshot;
-        return { ...snapshot, localInteraction: exported.seed };
-      }
-      return result;
+      return requestOperation(method, input, baseHash, context);
     }
     async function requestOperation(method, input, baseHash, context) {
-      const interaction = context?.localInteraction === true ? context.interaction : undefined;
-      const interactionSync = method === "interaction.sync" && context?.localInteraction === true && interaction !== undefined;
       if (method === "operation.outcome") return storage?.outcome(input?.operationId) ?? null;
       if (method === "recovery.inspect") return storage?.list() ?? [];
       if (method === "recovery.resolve") {
@@ -449,19 +436,20 @@ export async function openProject(folder, { cache = true, storage } = {}) {
       }
       if (method === "session.takeover") {
         session.takeover(context?.clientId, context?.authority);
-        snapshot = await adapter.cancel({ version: 2, reason: "blur" });
         publish();
-        return snapshot ?? adapter.snapshot();
+        return adapter.snapshot();
       }
-      if (!interactionSync && !["files.apply", "inputs.set"].includes(method) && !allowed.has(method)) throw Error("Unsupported workspace method");
-      if (method === "toolCatalog" || method.startsWith("export")) return adapter[method]();
+      if (allowed.has(method) && method.startsWith("export")) return adapter[method]();
       if (method === "snapshot") return adapter.snapshot();
       if (method === "dispatch" && ["workspace.project.apply", "workspace.generator.apply", "workspace.checkpoint.restore", "project.new", "project.new-code", "project.import", "sample.open"].includes(input?.command)) {
         throw Error("Folder mode keeps this project's sketch.ts open. Use the ordinary demo URL for New, samples or project import.");
       }
       const operationId = context?.operationId ?? randomBytes(16).toString("hex");
+      // Historical journal receipts include the old opt-in interaction bytes.
+      // Keep their exact digest/collision contract; personal state is never executed.
+      const legacyInteraction = context?.localInteraction === true ? context.interaction : undefined;
       const requestDigest = hash(JSON.stringify({ method, input, baseHash, clientId: context?.clientId,
-        ...(interaction !== undefined ? { interaction } : {}),
+        ...(legacyInteraction !== undefined ? { interaction: legacyInteraction } : {}),
       }));
       const previousOperation = storage?.outcome(operationId);
       if (previousOperation) {
@@ -472,6 +460,8 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         await scan(true);
         return adapter.snapshot();
       }
+      if (!["files.apply", "inputs.set"].includes(method) && !allowed.has(method)) throw Error("Unsupported workspace method");
+      if (method === "dispatch" && !sourceCommands.has(input?.command)) throw Error("Unsupported folder authoring command");
       if (["files.apply", "inputs.set"].includes(method)) {
         if (!multi || !storage) throw Error("Complete file transactions require a v2 folder bridge");
         session.verify(context?.clientId, context?.authority);
@@ -497,7 +487,6 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         const previous = { snapshot, acceptedCompilation, acceptedDesign, acceptedProject };
         let publishedSnapshot;
         try {
-          if (interaction !== undefined) snapshot = await adapter.interactionApply(interaction);
           await apply(candidate.files.find((file) => file.path === entry).contents, candidate, basis.revision);
           if (mode === "editable") {
             const bytes = acceptedDesign + "\n";
@@ -541,64 +530,46 @@ export async function openProject(folder, { cache = true, storage } = {}) {
         publish();
         return snapshot;
       }
-      const navigation = isWorkspaceNavigation(method, input, snapshot)
-        || method === "pointer" && ["move", "up"].includes(input?.phase)
-          && session.isNavigationGesture(context?.clientId, input?.pointerId);
-      const authoredMutation = !interactionSync && !navigation && !isWorkspacePresentation(method, input);
-      if (context && navigation && interaction === undefined && !session.state(context.clientId).editor.canEdit) return adapter.snapshot();
-      if (context) {
-        // A predicted selection is target-bearing even when the following
-        // command only changes the camera. It cannot borrow navigation's
-        // relaxed interaction-revision check.
-        if (interaction !== undefined) session.verify(context.clientId, context.authority);
-        if (method === "pointer" && input.phase === "down") session.beginGesture(context.clientId, context.authority, input.pointerId, { navigation });
-        else session.verify(context.clientId, context.authority, { navigation, pointerId: method === "pointer" ? input.pointerId : undefined });
-      }
-      if (mode === "generator" && !navigation && !interactionSync && !(
-        method === "pointer" && !(input.buttons & 1 && input.phase === "move")
-        || method === "dispatch" && ["selection.select", "declaration.select", "navigation.rows.select", "dimensions.focus"].includes(input?.command)
-        || method === "dispatch" && input?.command === "tool.select" && input.payload?.id === "select"
-      )) throw Error("Generator mode is read only. Change its inputs or TypeScript source to regenerate.");
+      if (context) session.verify(context.clientId, context.authority);
+      if (mode === "generator") throw Error("Generator mode is read only. Change its inputs or TypeScript source to regenerate.");
       const diskIdentity = () => multi ? readWorkspaceSnapshot(folder).revision : hash(readSource(sourcePath));
-      const beforeInteraction = workspaceInteractionKey(snapshot);
-      if (authoredMutation && (ioError || acceptedHash !== currentHash)) {
+      const beforeRevision = snapshot.revision;
+      if (ioError || acceptedHash !== currentHash) {
         const error = Error("Conflict: current disk files are not accepted. Repair the files before editing retained geometry; pending intent was preserved.");
         error.conflict = true;
         throw error;
       }
-      if ((!navigation || interaction !== undefined) && (baseHash !== currentHash || diskIdentity() !== baseHash)) {
+      if (baseHash !== currentHash || diskIdentity() !== baseHash) {
         await scan(true);
         const error = Error("Conflict: disk changed since this edit began. Disk and pending intent were retained. Refresh from disk, then retry explicitly.");
         error.conflict = true;
         throw error;
       }
-      if (!multi && method === "pointer" && snapshot.presentation.activeTool === "select" && input.phase === "move" && (input.buttons & 1)) {
-        snapshot = await adapter.cancel({ version: 2, reason: "escape" });
-        throw Error("Point/grip dragging is deferred in folder mode because it stores native instance overlays. Edit a source value or an Inspector dimension instead.");
+      if (!multi && method === "authoring.commit" && input?.kind === "point") {
+        throw Error("Point/grip dragging requires a v2 folder with its semantic design sidecar. Edit a source value or Inspector dimension instead.");
       }
       const before = sourceOf(snapshot);
-      const diskSource = authoredMutation ? readSource(sourcePath) : null;
-      const rollback = authoredMutation ? gestureRollback ?? (await adapter.persistProject()).contents : null;
-      if (authoredMutation && method === "pointer" && input.phase === "down") gestureRollback = rollback;
+      const diskSource = readSource(sourcePath);
+      const rollback = (await adapter.persistProject()).contents;
       const previousAccepted = { acceptedCompilation, acceptedDesign, acceptedProject, inputsSnapshot,
         acceptedHash, currentHash, sourceHash, sourceRevision, acceptedRevision };
       try {
-        const applied = interaction !== undefined ? await adapter.interactionApply(interaction) : null;
-        if (applied) snapshot = applied;
-        const next = interactionSync ? applied : (await adapter[method](input)) ?? applied;
-        if (!next) {
-          if (method === "cancel" || (method === "pointer" && input.phase === "up")) { session.endGesture(); gestureRollback = null; }
-          return null;
-        }
+        const operation = method === "authoring.commit" ? "commit" : method === "authoring.mutation" ? "mutation" : method;
+        const next = await adapter[operation](input);
+        if (!next) return null;
         snapshot = next;
         let after = sourceOf(snapshot);
-        if (!navigation && typeof after === "string" && diskSource) after = preserveSourcePreamble(diskSource, after);
-        const settledDesign = multi && mode === "editable" && authoredMutation ? JSON.stringify(await adapter.exportWorkspaceDesign()) : acceptedDesign;
-        const settledProject = multi && mode === "editable" && authoredMutation ? (await adapter.exportProject()).contents : acceptedProject;
+        if (typeof after === "string" && diskSource) after = preserveSourcePreamble(diskSource, after);
+        // A rejected source application is a retained diagnostic draft, not a
+        // publication candidate. Canonical export deliberately rejects that draft.
+        const revertingDraft = method === "dispatch" && input.command === "source.revert";
+        const publishable = snapshot.status === "accepted" && !snapshot.source.dirty && !revertingDraft;
+        const settledDesign = publishable && multi && mode === "editable" ? JSON.stringify(await adapter.exportWorkspaceDesign()) : acceptedDesign;
+        const settledProject = publishable && multi && mode === "editable" ? (await adapter.exportProject()).contents : acceptedProject;
         const changedSource = sourceOf(snapshot) !== before;
         const changedDesign = settledDesign !== acceptedDesign;
         const changedProject = settledProject !== acceptedProject;
-        if (authoredMutation && snapshot.project.status === "accepted" && !snapshot.source.dirty && (changedSource || changedDesign || changedProject)) {
+        if (publishable && (changedSource || changedDesign || changedProject)) {
           let publishedSnapshot;
           try {
             if (typeof after !== "string") throw Error("This edit has no supported plaintext source.");
@@ -672,8 +643,7 @@ export async function openProject(folder, { cache = true, storage } = {}) {
           await saveDerived();
           publish();
         }
-        if (workspaceInteractionKey(snapshot) !== beforeInteraction) session.advance();
-        if (method === "cancel" || (method === "pointer" && input.phase === "up")) { session.endGesture(); gestureRollback = null; }
+        if (snapshot.revision !== beforeRevision) session.advance();
         return snapshot;
       } catch (error) {
         if (rollback) {
@@ -684,8 +654,6 @@ export async function openProject(folder, { cache = true, storage } = {}) {
             acceptedHash, currentHash, sourceHash, sourceRevision, acceptedRevision } = previousAccepted);
           try { if (diskIdentity() !== acceptedHash) ioError = `Publication interrupted: ${error}`; }
           catch (readError) { ioError = `Publication interrupted: ${error}; ${readError}`; }
-          session.endGesture();
-          gestureRollback = null;
           session.advance();
           publish();
         }
@@ -853,37 +821,4 @@ export async function bakeProject(folder, output, chordErrorMm, namedOutput) {
   return { ok: true, output, source: { path: resolve(folder, captured.entry), sha256: captured.sourceHash },
     revision: captured.revision, validation: evaluated.result.validation,
     regions: geometry.regions.map(({ id, outer, holes }) => ({ id, outerVertices: outer.length, holes: holes.map((loop) => loop.length) })) };
-}
-
-async function main() {
-  const [command, folder, ...options] = process.argv.slice(2);
-  if (!folder || !["init", "serve", "open", "check", "status", "bake"].includes(command)) throw Error("Usage: node scripts/file-workspace.mjs init|serve|open|check|status <folder> [--port N]; bake <folder> --out <file> --chord-error-mm <positive number>");
-  if (command === "bake") {
-    const flags = new Map();
-    for (let i = 0; i < options.length; i += 2) {
-      if (!["--out", "--chord-error-mm", "--output"].includes(options[i]) || !options[i + 1] || flags.has(options[i])) throw Error("Expected --out <file> --chord-error-mm <positive number>");
-      flags.set(options[i], options[i + 1]);
-    }
-    if (!flags.has("--out") || !flags.has("--chord-error-mm")) throw Error("Bake requires --out <file> and --chord-error-mm <positive number>");
-    console.log(JSON.stringify(await bakeProject(folder, flags.get("--out"), Number(flags.get("--chord-error-mm")), flags.get("--output")), null, 2));
-    return;
-  }
-  if (command === "init") { console.log(JSON.stringify(initProject(folder), null, 2)); return; }
-  if (command === "status") {
-    const session = JSON.parse(readSource(resolve(folder, ".geosolve/session.json")));
-    const response = await fetch(`${session.origin}/api/status`, { headers: { Authorization: `Bearer ${session.token}` } });
-    if (!response.ok) throw Error(`Status failed: ${response.status}`);
-    console.log(JSON.stringify(await response.json(), null, 2)); return;
-  }
-  if (command === "check") {
-    const result = await checkProject(folder);
-    console.log(JSON.stringify(result, null, 2)); return;
-  }
-  if (options.length && (options.length !== 2 || options[0] !== "--port" || !/^\d+$/.test(options[1]))) throw Error("Expected --port N (0 chooses a fresh private port)");
-  const session = await serveProject(folder, { port: Number(options[1] ?? 0) });
-  console.log(JSON.stringify({ status: "PROTOTYPE_READY_FOR_UAT", ...session, project: undefined, storage: undefined, close: undefined }, null, 2));
-  for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { void session.close().then(() => process.exit(0)); });
-}
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((error) => { console.error(JSON.stringify({ ok: false, error: String(error) })); process.exitCode = 1; });
 }

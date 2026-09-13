@@ -2,6 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { CollaborativeWorkbenchAdapter, type CollaborativeTextClient, type CollaborativeDocument } from "./collaboration-adapter";
 import { MockWorkbenchAdapter } from "./mock-adapter";
+import { createCollaborativeWorkbenchSession } from "./collaborative-workbench-session";
 import type { LocalInteractionClient, LocalInteractionUpdate } from "./local-interaction-adapter";
 import type { TextWorkerUpdate } from "./collaboration-text-adapter";
 import type { PointerSample, WorkbenchSnapshot } from "./adapter";
@@ -28,17 +29,42 @@ async function fixture(fixtureOptions:{textResponse?:()=>Promise<Response>;brows
     const route=new URL(String(url)).pathname.split("/").at(-1)!;requests.push(route);
     if(route==="join")return json({connection:{protocol:1,documentId:"doc",documentEpoch:"epoch",userId:"alice",clientId:"tab",role:"editor"},token:"a".repeat(64)});
     if(route==="state")return json({authority:{acceptedRevision:document.accepted.modelRevision,acceptedInput:"a",latestSequence:0},document,participants:[],presence:[]});
-    if(route==="scene")return json({snapshot,seed:{},toolCatalog},{"X-Geosolve-Revision":String(document.accepted.modelRevision)});
+    if(route==="scene")return json({seed:{}},{"X-Geosolve-Revision":String(document.accepted.modelRevision)});
     if(route==="events")return new Response(new ReadableStream({start(controller){options?.signal?.addEventListener("abort",()=>{try{controller.close();}catch{}});}}),{headers:{"Content-Type":"text/event-stream"}});
     if(route==="commands")return held.promise;
     if(route==="text")return fixtureOptions.textResponse?fixtureOptions.textResponse():json({sourceSequence:1});
     if(route==="text-state")return json({sourceSequence:1,workingRevision:document.working.revision,changes:[],history:document.textHistory});
     throw Error(`Unexpected ${route}`);
   });
-  const adapter=new CollaborativeWorkbenchAdapter({baseUrl:"http://test/api/collaboration/",inviteToken:"invite",clientId:"tab",fetch:fetch as typeof globalThis.fetch},local,text,fixtureOptions.authoring??null,fixtureOptions.browsing??null);
+  const identity={documentEpoch:"epoch",revision:0,sourceDesignDigest:"digest"};
+  const fallback:LocalBrowsingClient={
+    replace:async model=>({kind:"ready",model}),
+    present:async view=>({kind:"chrome",model:identity,view,chrome:{explorer:snapshot.explorer,navigation:snapshot.navigation,dimensions:snapshot.dimensions,parameters:snapshot.parameters,problems:snapshot.problems,selection:null,selectedGeometryRole:null,authoringDocument:snapshot.authoringDocument??null}}),
+    navigate:vi.fn(),describe:vi.fn(),dispose:()=>{},
+  };
+  const browsing=fixtureOptions.browsing??fallback;
+  browsing.initialize??=async(model,seed)=>{
+    // Initial projection is independent of subsequent browsing refresh barriers.
+    if(model.revision>0)await browsing.replace(model,seed);
+    return {kind:"initialized",model,snapshot,seed,toolCatalog};
+  };
+  const adapter=new CollaborativeWorkbenchAdapter({baseUrl:"http://test/api/collaboration/",inviteToken:"invite",clientId:"tab",fetch:fetch as typeof globalThis.fetch},local,text,fixtureOptions.authoring??null,browsing);
   handles.push(adapter);await adapter.construct();
-  return{adapter,requests,held,json,localCount:()=>localCount,snapshot,text,document,textSnapshot,local,view};
+  return{adapter,requests,held,json,localCount:()=>localCount,snapshot,text,document,textSnapshot,local,view,browsing};
 }
+
+it("keeps the installed canvas responsive while local accepted initialization is held",async()=>{
+  const f=await fixture(),entered=deferred<void>(),release=deferred<void>();
+  const initialize=f.browsing.initialize!;
+  f.browsing.initialize=async(model,seed)=>{entered.resolve();await release.promise;return initialize(model,seed);};
+  Object.assign(f.document.accepted,{modelRevision:1});
+  const refresh=f.adapter.refresh();await entered.promise;
+  const requests=f.requests.length;
+  const frame=await f.adapter.wheel({version:2,x:100,y:100,deltaX:0,deltaY:-20,ctrl:false});
+  expect(frame?.frame.ariaLabel).toBe("local 1");expect(f.requests.length).toBe(requests);
+  release.resolve();await refresh;
+  expect((await f.adapter.snapshot()).project.status).toBe("accepted");
+});
 
 it("keeps local navigation and dimension browsing independent of a held semantic request",async()=>{
   const f=await fixture();
@@ -69,7 +95,7 @@ it("describes an initial parameter edit with the local Inspector authority after
     }),dispose:()=>{ready.resolve();presented.resolve();},
   };
   const f=await fixture({browsing});
-  // The server's initial chrome has a different native allocation namespace.
+  // Initial and refreshed read projections carry their own exact Inspector authority.
   const editing=f.adapter.dispatch({version:2,command:"parameter.edit",payload:{id:"channelWidth",value:11}});
   ready.resolve();presented.resolve();await editing;
   expect(browsing.describe).toHaveBeenCalledOnce();
@@ -89,7 +115,7 @@ it("maps an initial Explorer action to the ready local navigation authority",asy
   const chrome={explorer:mock.explorer,navigation:{authority:"local-navigation",selectionKey:"empty",rows:[],sources:[],itemCount:0,canNavigateSource:true},dimensions:mock.dimensions,parameters:mock.parameters,problems:mock.problems,selection:null,selectedGeometryRole:null,authoringDocument:null};
   const browsing:LocalBrowsingClient={
     replace:async()=>{await ready.promise;return {kind:"ready",model:identity};},
-    present:async(view)=>({kind:"chrome",model:identity,view,chrome}),
+    present:async(view)=>{await ready.promise;return {kind:"chrome",model:identity,view,chrome};},
     navigate:vi.fn(async(view,command,payload)=>{
       expect(command).toBe("navigation.rows.select");
       expect(payload).toEqual({authority:"local-navigation",ids:["managed:planDepth"],mode:"replace"});
@@ -352,4 +378,31 @@ it("exposes the full native catalog and routes selected-role mutation through na
   expect((await f.adapter.snapshot()).presentation.activeTool).toBe("select");
   const requestId=f.adapter.pending[0]!.requestId;
   f.held.resolve(f.json({receipt:{operation:{userId:"alice",clientId:"tab",requestId},admission:1,outcome:{status:"rejected",code:"fixture",message:"Completed role route witness"}}}));
+});
+
+
+it("exposes pending shared text independently of model saving and encodes recovery only on demand", async () => {
+  const f = await fixture();
+  const session = createCollaborativeWorkbenchSession(f.adapter);
+  const checkpoint = vi.spyOn(f.adapter.client, "checkpoint");
+  const persistence = vi.spyOn(f.adapter, "persistProject");
+  const released = deferred<TextWorkerUpdate>();
+  f.text.edit = async () => released.promise;
+  const file = (await session.adapter.snapshot()).source.files[0]!;
+  const edit = session.sharedText!.editSource(file.path, {
+    displayId: file.sharedRevision, before: file.contents, after: file.contents + "a",
+    changes: [{ from: file.contents.length, to: file.contents.length, insert: "a" }],
+  });
+  await vi.waitFor(() => expect(session.sharedText?.pendingCount).toBe(1));
+  expect(session.persistence.automatic).toBe(false);
+  expect(session.persistDraft).toBeUndefined();
+  const banner = session.banner!;
+  expect(banner.region).toBe("Shared document");
+  expect(checkpoint).not.toHaveBeenCalled();
+  const download = JSON.parse(banner.downloads![0]!.contents());
+  expect(download.sourceEdits[0].edit.after).toBe(file.contents + "a");
+  expect(checkpoint).toHaveBeenCalledOnce();
+  expect(persistence).not.toHaveBeenCalled();
+  released.resolve({ ...f.textSnapshot, localRevision: { heads: ["local"] } });
+  await edit;
 });

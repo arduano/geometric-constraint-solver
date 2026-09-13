@@ -153,3 +153,21 @@ it("maps Explorer picks on the server from personal state and preserves option c
     expect(JSON.stringify(f.rpc.mock.calls)).not.toContain("local scene");
   }finally{f.client.dispose();}
 });
+
+it("ignores a late local paint after replacement without retiring the new server ticket", async () => {
+  const f = await fixture(async body => preview("b".repeat(64), body.basis as typeof basis));
+  const paint = f.renderer.postMessage.getMockImplementation()!;
+  f.renderer.postMessage.mockImplementation(() => {});
+  try {
+    const old = expect(f.client.beginPoint({ target, gestureId: 19, viewport, view })).rejects.toThrow("replaced");
+    await vi.waitFor(() => expect(f.renderer.postMessage).toHaveBeenCalledOnce());
+    const stale = f.renderer.postMessage.mock.calls[0][0];
+    await f.client.replace({ ...model, revision: 2 }); await old;
+    f.renderer.postMessage.mockImplementation(paint);
+    expect((await f.client.beginPoint({ target, gestureId: 20, viewport, view })).model.revision).toBe(2);
+    paint(stale);
+    expect((await f.client.render(view)).model.revision).toBe(2);
+    await f.client.cancel();
+    expect(f.rpc.mock.calls.at(-1)?.[0]).toEqual({ action: "cancel", ticket: "b".repeat(64) });
+  } finally { f.client.dispose(); }
+});

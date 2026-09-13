@@ -4,9 +4,33 @@
   "description": "Offline local-folder GeoSolve authoring and engine tools",
   "type": "module",
   "license": "GPL-3.0-or-later",
-  "engines": { "node": ">=22" },
-  "os": ["linux"],
-  "bin": { "geosolve": "bin/geosolve.mjs" },
-  "files": ["bin", "runtime", "README.md", "LICENSE", "THIRD_PARTY_LICENSES.md"],
-  "dependencies": { "@geosolve/sketch-code": "0.2.0", "@geosolve/engine": "0.1.0", "@geosolve/collaboration": "0.1.0" }
+  "engines": {
+    "node": ">=22"
+  },
+  "os": [
+    "linux"
+  ],
+  "bin": {
+    "geosolve": "bin/geosolve.mjs"
+  },
+  "files": [
+    "bin",
+    "runtime",
+    "dist",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_LICENSES.md"
+  ],
+  "dependencies": {
+    "@geosolve/sketch-code": "file:../geosolve-sketch-code",
+    "@geosolve/engine": "file:../geosolve-engine",
+    "@geosolve/collaboration": "file:../geosolve-collaboration"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test:runtime": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
 }

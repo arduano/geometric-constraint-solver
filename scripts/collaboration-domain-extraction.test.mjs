@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createEngine } from "../packages/geosolve-engine/dist/index.js";
 import { compileManagedSource, applyManagedSketchMutation, applyManagedSketchSourceMutation } from "../packages/geosolve-sketch-code/dist/src/managed.js";
-import { prepareStructuralSource } from "./collaboration-domain-structure.mjs";
+import { prepareStructuralSource } from "../packages/geosolve-cli/runtime/collaboration-domain-structure.mjs";
 
 const source = `"use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";

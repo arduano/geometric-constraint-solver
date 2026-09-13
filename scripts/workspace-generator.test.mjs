@@ -4,7 +4,7 @@ import test from "node:test";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { serveProject, bakeProject } from "./file-workspace.mjs";
+import { serveProject, bakeProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 const source = `import {defineGenerator,sketch,mm} from "@geosolve/sketch-code";
 export default defineGenerator({ count:{type:"integer",default:2,min:1,max:4,label:"Ports"}, radius:{type:"number",default:6,min:1,max:8,unit:"mm",label:"Port radius"} },

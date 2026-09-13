@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDurableCollaborationHost } from "./collaboration-host.mjs";
+import { openDurableCollaborationHost } from "../packages/geosolve-cli/runtime/collaboration-host.mjs";
 const configuration = { documentId: "drawing", documentEpoch: "drawing-life", initialInput: "initial-independent-input" };
 const bytes = (value) => Buffer.from(JSON.stringify(value));
 // Transport owner fixture: domain-independent strings deliberately do not claim

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { mkdtemp, rm, appendFile, readFile, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openCollaborationStorage } from "./collaboration-storage.mjs";
+import { openCollaborationStorage } from "../packages/geosolve-cli/runtime/collaboration-storage.mjs";
 async function fixture(t) { const folder = await mkdtemp(join(tmpdir(), "geosolve-collab-storage-")); t.after(() => rm(folder, { recursive: true, force: true })); return folder; }
 
 test("durable envelope retains exact accepted and invalid working source across reopen", async (t) => {

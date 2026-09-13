@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { Worker } from "node:worker_threads";
+import { createWorkerLifetime, createWorkerRequest } from "./worker-lifetime.mjs";
 
 const PROTOCOL = "geosolve-mirror-worker-v1";
 const MAX_CHECKPOINT = 64 * 1024 * 1024, MAX_TEXT = 16 * 1024 * 1024;
@@ -67,102 +67,101 @@ export async function createMirrorWorker(options) {
     || typeof readCommitted !== "function" || typeof admitWorkingEdits !== "function" || (onPhase !== undefined && typeof onPhase !== "function")
     || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300_000) throw Error("Invalid mirror worker configuration");
   const identity = { folder, documentId, documentEpoch, userId, clientId };
-  const worker = new Worker(new URL("./collaboration-mirror-worker.mjs", import.meta.url), {
-    workerData: { ...identity, phases: !!onPhase }, execArgv: [], stdout: true, stderr: true,
-    resourceLimits: { maxOldGenerationSizeMb: 512 },
-  });
   let state = "open", nextId = 0, callbackId = 0, active, tail = Promise.resolve();
   let reconcilePromise, statusPromise, closing, terminating, output = 0, terminalError;
   const callbacks = new Set();
-  let exitResolve;
-  const exited = new Promise(resolve => { exitResolve = resolve; });
   function terminate(error) {
     terminalError ??= error;
     if (state !== "closed") state = "closing";
-    if (!terminating) terminating = worker.terminate().then(() => exited);
+    if (!terminating) terminating = worker.stop();
     return terminating;
   }
   function rejectActive(error) {
     if (!active) return;
-    const pending = active; active = undefined; clearTimeout(pending.timer);
+    const pending = active; active = undefined; pending.clear();
     // Do not expose an operation failure while its worker can still write files.
     void terminate(error).then(() => pending.reject(error), pending.reject);
   }
   function protocolError(message) { rejectActive(fault("mirror_protocol", message)); void terminate(fault("mirror_protocol", message)); }
   function send(message) {
-    try { worker.postMessage({ protocol: PROTOCOL, ...message }); }
+    try { worker.post({ protocol: PROTOCOL, ...message }); }
     catch (error) { protocolError(`Mirror worker mailbox failed: ${errorMessage(error)}`); }
   }
-  worker.on("message", message => {
-    if (terminating || state === "closed") return;
-    if (!object(message) || message.protocol !== PROTOCOL) { protocolError("Foreign mirror worker message"); return; }
-    if (message.kind === "closed") {
-      if (state !== "closing" || active) { protocolError("Unexpected mirror worker close acknowledgement"); return; }
-      // Entry has drained all filesystem work before closing its message port.
-      return;
-    }
-    if (message.kind === "fatal") { protocolError(`Mirror worker protocol failure: ${errorMessage(message.error)}`); return; }
-    if (message.kind === "result") {
-      if (!active || message.id !== active.id || typeof message.ok !== "boolean"
-        || message.ok && (active.method === "initialize" ? message.value !== null : !validStatus(message.value))
-        || !message.ok && (typeof message.error !== "string" || message.error.length > 8192)) { protocolError("Mismatched or malformed mirror worker result"); return; }
-      const pending = active; active = undefined; clearTimeout(pending.timer);
-      if (message.ok) pending.resolve(message.value);
-      else pending.reject(fault("mirror_failed", errorMessage(message.error)));
-      if (state === "closing") send({kind:"close"});
-      return;
-    }
-    if (message.kind !== "callback" || state !== "open" || !active || message.requestId !== active.id
-      || !Number.isSafeInteger(message.id) || message.id !== callbackId + 1 || callbacks.size
-      || !validCallback(message.method, message.value, identity) || message.method === "onPhase" && !onPhase) {
-      // Closing callbacks are answered with refusal so the worker can finish its
-      // current fs-safe boundary without entering another authority callback.
-      if (state === "closing" && message.kind === "callback") {
-        send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:false,error:"Mirror is closing"}); return;
+  const worker = createWorkerLifetime({
+    url: new URL("./collaboration-mirror-worker.mjs", import.meta.url),
+    workerData: { ...identity, phases: !!onPhase },
+    onMessage(message) {
+      if (terminating || state === "closed") return;
+      if (!object(message) || message.protocol !== PROTOCOL) { protocolError("Foreign mirror worker message"); return; }
+      if (message.kind === "closed") {
+        if (state !== "closing" || active) { protocolError("Unexpected mirror worker close acknowledgement"); return; }
+        // Entry has drained all filesystem work before closing its message port.
+        return;
       }
-      protocolError("Unknown, duplicate or excessive mirror callback"); return;
-    }
-    callbackId = message.id;
-    const invoke = message.method === "readCommitted" ? readCommitted
-      : message.method === "admitWorkingEdits" ? () => admitWorkingEdits(message.value)
-      : () => onPhase(message.value.name, message.value.detail);
-    const task = Promise.resolve().then(invoke).then(value => {
-      if (message.method === "readCommitted" && !validSnapshot(value)) throw Error("Committed mirror snapshot exceeds bounds or is malformed");
-      if (message.method === "admitWorkingEdits" && (!object(value) || !["committed", "rejected"].includes(value.status)
-        || value.reason !== undefined && (typeof value.reason !== "string" || value.reason.length > 8192))) throw Error("Invalid durable mirror admission result");
-      // Only working text and file identity are needed. Do not duplicate the
-      // accepted snapshot/history on every worker read or transfer native handles.
-      const result = message.method === "readCommitted" ? {checkpoint:value.checkpoint,
-        snapshot:{working:value.snapshot.working,fileIds:value.snapshot.fileIds}} : message.method === "onPhase" ? null : value;
-      if (state === "open") send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:true,value:result});
-      else if (!terminating) send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:false,error:"Mirror closed after callback; retry exact persisted admission"});
-    }, error => {
-      if (!terminating) send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:false,error:errorMessage(error)});
-    }).catch(error => {
-      if (!terminating) send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:false,error:errorMessage(error)});
-    }).finally(() => callbacks.delete(task));
-    callbacks.add(task);
+      if (message.kind === "fatal") { protocolError(`Mirror worker protocol failure: ${errorMessage(message.error)}`); return; }
+      if (message.kind === "result") {
+        if (!active || message.id !== active.id || typeof message.ok !== "boolean"
+          || message.ok && (active.method === "initialize" ? message.value !== null : !validStatus(message.value))
+          || !message.ok && (typeof message.error !== "string" || message.error.length > 8192)) { protocolError("Mismatched or malformed mirror worker result"); return; }
+        const pending = active; active = undefined; pending.clear();
+        if (message.ok) pending.resolve(message.value);
+        else pending.reject(fault("mirror_failed", errorMessage(message.error)));
+        if (state === "closing") send({kind:"close"});
+        return;
+      }
+      if (message.kind !== "callback" || state !== "open" || !active || message.requestId !== active.id
+        || !Number.isSafeInteger(message.id) || message.id !== callbackId + 1 || callbacks.size
+        || !validCallback(message.method, message.value, identity) || message.method === "onPhase" && !onPhase) {
+        // Closing callbacks are answered with refusal so the worker can finish its
+        // current fs-safe boundary without entering another authority callback.
+        if (state === "closing" && message.kind === "callback") {
+          send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:false,error:"Mirror is closing"}); return;
+        }
+        protocolError("Unknown, duplicate or excessive mirror callback"); return;
+      }
+      callbackId = message.id;
+      const invoke = message.method === "readCommitted" ? readCommitted
+        : message.method === "admitWorkingEdits" ? () => admitWorkingEdits(message.value)
+        : () => onPhase(message.value.name, message.value.detail);
+      const task = Promise.resolve().then(invoke).then(value => {
+        if (message.method === "readCommitted" && !validSnapshot(value)) throw Error("Committed mirror snapshot exceeds bounds or is malformed");
+        if (message.method === "admitWorkingEdits" && (!object(value) || !["committed", "rejected"].includes(value.status)
+          || value.reason !== undefined && (typeof value.reason !== "string" || value.reason.length > 8192))) throw Error("Invalid durable mirror admission result");
+        // Only working text and file identity are needed. Do not duplicate the
+        // accepted snapshot/history on every worker read or transfer native handles.
+        const result = message.method === "readCommitted" ? {checkpoint:value.checkpoint,
+          snapshot:{working:value.snapshot.working,fileIds:value.snapshot.fileIds}} : message.method === "onPhase" ? null : value;
+        if (state === "open") send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:true,value:result});
+        else if (!terminating) send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:false,error:"Mirror closed after callback; retry exact persisted admission"});
+      }, error => {
+        if (!terminating) send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:false,error:errorMessage(error)});
+      }).catch(error => {
+        if (!terminating) send({kind:"callback_result",id:message.id,requestId:message.requestId,ok:false,error:errorMessage(error)});
+      }).finally(() => callbacks.delete(task));
+      callbacks.add(task);
+    },
+    onError(error) { rejectActive(fault("mirror_worker_failed", errorMessage(error))); void terminate(error); },
+    onExit() {}, // Natural and forced exits share finalization through exited below.
+    onOutput(chunk) {
+      output += chunk.byteLength;
+      if (output > 1024 * 1024) { rejectActive(fault("mirror_limit", "Mirror diagnostics exceed 1 MiB")); void terminate(fault("mirror_limit", "Mirror diagnostic limit")); }
+    },
   });
-  worker.once("error", error => { rejectActive(fault("mirror_worker_failed", errorMessage(error))); void terminate(error); });
-  worker.once("exit", code => {
-    exitResolve();
+  const exited = worker.exited.then(code => {
     const error = terminalError ?? fault("mirror_worker_failed", `Mirror worker exited (${code})`);
-    if (active) { const pending = active; active = undefined; clearTimeout(pending.timer); pending.reject(error); }
+    if (active) { const pending = active; active = undefined; pending.reject(error); }
     state = "closed";
-  });
-  for (const pipe of [worker.stdout, worker.stderr]) pipe.on("data", chunk => {
-    output += chunk.byteLength;
-    if (output > 1024 * 1024) { rejectActive(fault("mirror_limit", "Mirror diagnostics exceed 1 MiB")); void terminate(fault("mirror_limit", "Mirror diagnostic limit")); }
   });
   function request(method) {
     if (state !== "open") return Promise.reject(terminalError ?? Error("Mirror worker is closed"));
     const promise = tail.then(() => {
       if (state !== "open") throw terminalError ?? Error("Mirror worker is closed");
-      return new Promise((resolve, reject) => {
-        const id = ++nextId;
-        const timer = setTimeout(() => rejectActive(fault("mirror_timeout", `Mirror worker exceeded ${timeoutMs} ms`)), timeoutMs);
-        active = { id, method, resolve, reject, timer }; send({kind:"request",id,method});
-      });
+      const id = ++nextId;
+      const pending = Object.assign(createWorkerRequest(), { id, method });
+      active = pending;
+      pending.watch({ timeoutMs, onTimeout: () => rejectActive(fault("mirror_timeout", `Mirror worker exceeded ${timeoutMs} ms`)) });
+      send({kind:"request",id,method});
+      return pending.promise;
     });
     tail = promise.catch(() => {});
     void promise.catch(() => {}); return promise;

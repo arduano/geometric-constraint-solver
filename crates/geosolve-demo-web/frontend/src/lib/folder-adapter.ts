@@ -1,13 +1,49 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { assertWorkbenchSnapshot, getCanvasSnapshotSequence, stampCanvasSnapshot, markCanvasOnlySnapshot, type WorkbenchAdapter, type WorkbenchSnapshot, type PointerSample, type WheelSample, type SourceFileSnapshot, type DeclarationRow, type AuthoringMetadataSnapshot } from "./adapter";
+import { assertWorkbenchSnapshot, getCanvasSnapshotSequence, stampCanvasSnapshot, markCanvasOnlySnapshot, type WorkbenchAdapter, type WorkbenchSnapshot, type PointerSample, type WheelSample, type SourceFileSnapshot } from "./adapter";
+import { readOnlyWorkbenchPresentation } from "./workbench-session";
 import type { GeneratorInputDefinition } from "../components/generator-inputs";
-import type { ToolCatalog } from "./tool-catalog";
+import { assertToolCatalog, type ToolCatalog } from "./tool-catalog";
+import type { EditableDesign, WorkspaceViewPresentation } from "../../../../../packages/geosolve-engine/src/index";
+import { auxiliaryTools } from "../../../../../packages/geosolve-engine/src/tool-catalog";
+import { LocalBrowsingWorker, type LocalBrowsingClient, type BrowsingModel, type BrowsingInitialization, type BrowsingChrome } from "./collaboration-browsing-adapter";
+import type { BrowsingEditCommand, BrowsingNavigationCommand } from "./collaboration-browsing-worker";
+import { LocalAuthoringWorker, type LocalAuthoringClient, type AuthoringModel, type AuthoringPreview, type AuthoringView } from "./collaboration-authoring-adapter";
+import { CollaborationAuthoringController, type AuthoringCommand } from "./collaboration-authoring-controller";
 import { WorkbenchActivity } from "./workbench-activity";
-import { LocalInteractionWorker, type LocalInteractionClient, type InteractionSeed, type InteractionState, type LocalInteractionUpdate } from "./local-interaction-adapter";
+import { LocalInteractionWorker, type LocalInteractionClient, type InteractionSeed, type LocalInteractionUpdate } from "./local-interaction-adapter";
 
 export interface FolderAuthority { epoch: string; lease: number; revision: number; }
 interface FolderBasis { hash: string | null; authority?: FolderAuthority; }
-interface SyncReceipt { before: FolderBasis; installed: Promise<FolderBasis | undefined>; resolve: (basis?: FolderBasis) => void; }
+interface FieldIntent { base: FolderBasis; label: string; value: string }
+interface RequestIntent { expected: FolderBasis; field?: string; fieldIntent?: FieldIntent }
+export interface FolderModelSnapshot {
+  format: "geosolve-folder-model-v1";
+  revision: number;
+  status: "accepted" | "retained";
+  mode: "editable" | "generator";
+  model: { project: string; design: EditableDesign; sourceDesignDigest: string } | null;
+  generated?: unknown;
+  source: WorkbenchSnapshot["source"];
+  history: { canUndo: boolean; canRedo: boolean };
+  problems: { id: string; detail: string; path?: string }[];
+  seed: InteractionSeed;
+  restoredViewPresentation?: WorkspaceViewPresentation;
+}
+interface BrowsingCandidate {
+  key: string;
+  model: BrowsingModel;
+  rawSeed: InteractionSeed;
+  presentation?: WorkspaceViewPresentation;
+  savedPresentation?: WorkspaceViewPresentation;
+  client?: LocalBrowsingClient;
+  ready?: Promise<BrowsingInitialization>;
+  initialized?: boolean;
+  preparing?: number;
+}
+export interface FolderBrowserOptions {
+  createBrowsing?: () => LocalBrowsingClient;
+  authoring?: LocalAuthoringClient | null;
+}
 
 export interface FolderState {
   authority?: FolderAuthority;
@@ -52,7 +88,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   private remoteOrder = 0;
   private readonly snapshotRemoteOrders = new WeakMap<object, number>();
   private readonly snapshotHashes = new WeakMap<object, FolderBasis>();
-  private readonly fields = new Map<string, { base: FolderBasis; label: string; value: string }>();
+  private readonly fields = new Map<string, FieldIntent>();
   private committingField?: string;
   private draftBase: FolderBasis | undefined;
   private get fieldBase() { return this.fields.values().next().value?.base; }
@@ -66,55 +102,49 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   private local?: LocalInteractionClient;
   private localSnapshot?: WorkbenchSnapshot;
   private localTail: Promise<unknown> = Promise.resolve();
-  private localSelectionRevision = 0;
-  private readonly snapshotSeeds = new WeakMap<object, { seed: InteractionSeed; selectionRevision: number; preserveSelection: boolean }>();
-  private syncPending = false;
-  private syncAgain = false;
-  private syncNeedsRefresh = false;
-  private syncRefreshPending = false;
-  private syncReceipt?: SyncReceipt;
-  private readonly snapshotSyncReceipts = new WeakMap<object, SyncReceipt>();
-  private gesture?: { down: PointerSample; state: Promise<InteractionState>; samples: PointerSample[]; remote: boolean; editable: boolean };
-  private remoteGesture = false;
-  private remoteDraft = false;
-  private localPan?: number;
+  private view?: AuthoringView;
+  private activeBrowsing?: BrowsingCandidate;
+  private readonly snapshotBrowsing = new WeakMap<object, BrowsingCandidate>();
+  private readonly candidates = new Map<string, BrowsingCandidate>();
+  private catalog?: ToolCatalog;
+  private initializationTail: Promise<unknown> = Promise.resolve();
+  private readonly snapshotInstallReceipts = new WeakMap<object, (installed: boolean) => void>();
+  private readonly pendingInstallReceipts = new Set<(installed: boolean) => void>();
+  private authoring?: CollaborationAuthoringController;
+  private readonly authoringBases = new WeakMap<object, FolderBasis>();
+  private prediction?: AuthoringPreview;
+  private acceptedFrame?: WorkbenchSnapshot["frame"];
+  private browsingScheduled = false;
+  private browsingAgain = false;
+  private panning?: number;
+  private blockedPointer?: number;
+  private disposed = false;
   private semanticPending = 0;
+  private externalBusy = false;
   get responsiveCanvas() { return this.localSnapshot !== undefined; }
 
-  constructor(private readonly token: string, private readonly createLocal: () => LocalInteractionClient = () => new LocalInteractionWorker()) {
+  constructor(private readonly token: string, private readonly createLocal: () => LocalInteractionClient = () => new LocalInteractionWorker(), private readonly options: FolderBrowserOptions = {}) {
     try { this.pending = sessionStorage.getItem("geosolve.folder.pending") ?? ""; } catch { /* In-memory intent remains available. */ }
   }
-  private rpc<T>(method: string, input?: unknown, options: { interaction?: Promise<InteractionState> | null; preserveSelection?: boolean } = {}): Promise<T> {
-    // Capture intent authority when enqueued, never from a later disk observation.
+  private captureIntent(method: string, input?: unknown): RequestIntent {
     const field = this.committingField;
-    const fieldIntent = field ? this.fields.get(field) : undefined;
+    return { field, fieldIntent: field ? this.fields.get(field) : undefined,
+      expected: method === "session.takeover" ? { hash: this.basis.hash, authority: this.state?.authority }
+        : method === "dispatch" && (input as { command?: string })?.command === "source.prepare" && this.draftBase
+          ? this.draftBase : this.fieldBase ?? this.basis };
+  }
+  private rpc<T>(method: string, input?: unknown, intent = this.captureIntent(method, input)): Promise<T> {
+    // Capture the exact authority and field witness before any queue or native read.
+    const { expected, field, fieldIntent } = intent;
     const operationId = crypto.randomUUID();
-    const savedMutation = ["files.apply", "inputs.set"].includes(method) || method === "dispatch" && [
-      "source.prepare", "history.undo", "history.redo", "parameter.edit", "dimensions.edit",
-      "authoring.metadata.set", "authoring.parameter.extract",
-    ].includes((input as { command?: string })?.command ?? "");
-    const readOnly = ["snapshot", "toolCatalog", "operation.outcome", "recovery.inspect",
-      "exportProject", "exportReproduction", "exportInteractionTrace"].includes(method);
-    const expected = method === "session.takeover"
-      ? { hash: this.basis.hash, authority: this.state?.authority } : method === "dispatch" && (input as { command?: string })?.command === "source.prepare" && this.draftBase !== undefined
-      ? this.draftBase : this.fieldBase !== undefined ? this.fieldBase : this.basis;
-    let selectionRevision = this.localSelectionRevision;
-    const precedingSync = method !== "interaction.sync" ? this.syncReceipt : undefined;
-    const interaction = options.interaction !== undefined ? options.interaction
-      : this.localSnapshot && !readOnly && !["session.join", "session.takeover"].includes(method)
-        ? this.queueLocal(() => { selectionRevision = this.localSelectionRevision; return this.local!.state(); }) : undefined;
-    const semantic = !readOnly && method !== "interaction.sync" && !["session.join", "session.takeover"].includes(method)
-      && !(method === "dispatch" && isPresentationCommand((input as { command?: string })?.command ?? ""));
+    const savedMutation = ["files.apply", "inputs.set", "authoring.commit", "authoring.mutation"].includes(method)
+      || method === "dispatch" && ["source.prepare", "history.undo", "history.redo"].includes((input as { command?: string })?.command ?? "");
+    const readOnly = ["snapshot", "operation.outcome", "recovery.inspect", "exportProject", "exportReproduction"].includes(method);
+    const semantic = !readOnly && !["session.join", "session.takeover"].includes(method);
     if (semantic) this.semanticPending += 1;
-    const finishActivity = method === "interaction.sync" ? () => {} : this.activity.begin();
+    const finishActivity = this.activity.begin();
     const run = this.tail.then(async () => {
-      const synchronized = await precedingSync?.installed;
-      // Only an installed, same-source presentation receipt may advance the
-      // interaction revision of an intent enqueued behind its own selection sync.
-      const authority = synchronized && this.sameBasis(expected, synchronized)
-        && expected.authority?.revision === precedingSync?.before.authority?.revision
-        ? synchronized.authority : expected.authority;
-      const request = { method, input, baseHash: expected.hash, authority, clientId: this.clientId, operationId, localInteraction: true, ...(interaction ? { interaction: await interaction } : {}) };
+      const request = { method, input, baseHash: expected.hash, authority: expected.authority, clientId: this.clientId, operationId };
       const send = async () => {
         const response = await fetch("/api/rpc", {
           method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
@@ -125,8 +155,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
       let received;
       try { received = await send(); }
       catch (firstError) {
-        // Only authored transactions have durable receipts. Replaying a wheel,
-        // pointer or handoff could apply its relative action twice.
+        // Only authored transactions have durable receipts. Lease handoff is not replayed.
         try {
           if (!savedMutation && !readOnly) throw firstError;
           received = await send();
@@ -148,18 +177,10 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
         this.pending = this.fieldDraft;
         try { sessionStorage.setItem("geosolve.folder.pending", this.pending); } catch { /* Download remains available. */ }
       }
-      if (!response.ok && method === "interaction.sync" && response.status === 409) {
-        // Automatic presentation can race a source/lease notification. Retain
-        // local navigation and refresh its basis; this is not an authored save.
-        this.syncAgain = true;
-        this.syncNeedsRefresh = true;
-        this.refreshSelectionBasis();
-        return null as T;
-      }
       if (!response.ok) {
         this.notice = body.error ?? `Folder request failed (${response.status})`;
         this.retainedError = this.notice;
-        if (method !== "interaction.sync" && (response.status === 409 || body.pendingSource)) {
+        if (savedMutation && (response.status === 409 || body.pendingSource)) {
           this.pending = JSON.stringify({ ...request, pendingSource: body.pendingSource }, null, 2);
           try { sessionStorage.setItem("geosolve.folder.pending", this.pending); } catch { this.notice += " Download pending intent before closing this tab."; }
         }
@@ -167,12 +188,12 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
         throw Error(this.notice);
       }
       // Fetching is observation. Only the host can acknowledge installation.
-      if (body.result && typeof body.result === "object" && "frame" in body.result) {
+      if (body.result && typeof body.result === "object" && "format" in body.result && body.result.format === "geosolve-folder-model-v1") {
         this.snapshotHashes.set(body.result, { hash: body.state?.currentHash ?? null, authority: body.state?.authority });
+        this.snapshotRemoteOrders.set(body.result, ++this.remoteOrder);
         if (body.state) this.snapshotStates.set(body.result, body.state);
-        const result = body.result as unknown as WorkbenchSnapshot & { localInteraction?: InteractionSeed };
-        if (result.localInteraction) this.snapshotSeeds.set(result, { seed: result.localInteraction, selectionRevision, preserveSelection: options.preserveSelection ?? !changesSelection(method, input) });
-        if (field && this.fields.get(field) === fieldIntent && !result.source.dirty && result.project.status === "accepted") this.fields.delete(field);
+        const result = body.result as unknown as FolderModelSnapshot;
+        if (field && this.fields.get(field) === fieldIntent && !result.source.dirty && result.status === "accepted") this.fields.delete(field);
       }
       this.notice = this.retainedError || (this.state?.editor && !this.state.editor.canEdit ? "Read only — another tab owns editing. Take over editing to work here." : undefined) || (this.fieldBase !== undefined && !this.sameBasis(this.fieldBase, { hash: this.state?.currentHash ?? null, authority: this.state?.authority })
         ? "Disk changed while an Inspector edit is pending. Your input is retained; applying it will report a conflict."
@@ -197,236 +218,392 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
     this.retainedError = this.notice;
     this.listener?.();
   }
-  private checked(snapshot: WorkbenchSnapshot) {
-    assertWorkbenchSnapshot(snapshot);
-    const state = this.snapshotStates.get(snapshot);
-    const basis = this.snapshotHashes.get(snapshot);
+  private copyAuthority(from: object, to: WorkbenchSnapshot) {
+    const basis = this.snapshotHashes.get(from);
     if (!basis) throw Error("Folder snapshot has no transport authority");
-    let result = snapshot;
-    if (state?.mode === "generator" || state?.editor?.canEdit === false || state?.capabilities?.geometryEditing === false) {
-      result = structuredClone(snapshot);
-      const reason = state.editor?.canEdit === false ? "Another tab owns editing."
-        : "Change generator inputs or edit the TypeScript files to regenerate this design.";
-      if (state.mode === "generator" && state.sourceFiles?.length) {
-        result.source.files = state.sourceFiles.map((file) => ({ ...file, readOnly: true }));
-        result.source.selectedPath = result.source.files.find((file) => file.path === this.selectedSourcePath)?.path
-          ?? result.source.files.find((file) => file.path === state.entry)?.path ?? result.source.files[0]!.path;
-        result.source.dirty = false;
-      } else result.source.files = result.source.files.map((file) => ({ ...file, readOnly: true }));
-      result = readOnlyFolderPresentation(result, reason);
-      this.snapshotHashes.set(result, basis);
-      const seed = this.snapshotSeeds.get(snapshot);
-      if (seed) this.snapshotSeeds.set(result, seed);
-      if (state) this.snapshotStates.set(result, state);
+    this.snapshotHashes.set(to, basis);
+    this.snapshotRemoteOrders.set(to, this.snapshotRemoteOrders.get(from)!);
+    const state = this.snapshotStates.get(from), browsing = this.snapshotBrowsing.get(from);
+    if (state) this.snapshotStates.set(to, state);
+    if (browsing) this.snapshotBrowsing.set(to, browsing);
+    const receipt = this.snapshotInstallReceipts.get(from);
+    if (receipt) this.snapshotInstallReceipts.set(to, receipt);
+    return stampCanvasSnapshot(assertWorkbenchSnapshot(to), ++this.sequence);
+  }
+  private readonlyPresentation(snapshot: WorkbenchSnapshot, state = this.snapshotStates.get(snapshot)) {
+    if (!state || state.mode !== "generator" && state.editor?.canEdit !== false && state.capabilities?.geometryEditing !== false) return snapshot;
+    const reason = state.editor?.canEdit === false ? "Another tab owns editing."
+      : "Change generator inputs or edit the TypeScript files to regenerate this design.";
+    return readOnlyWorkbenchPresentation({ ...snapshot, source: { ...snapshot.source, files: snapshot.source.files.map(file => ({ ...file, readOnly: true })) } }, reason);
+  }
+  private ensureBrowsing(candidate: BrowsingCandidate): Promise<BrowsingInitialization> {
+    if (candidate.ready) return candidate.ready;
+    this.candidates.set(candidate.key, candidate);
+    const ready = this.initializationTail.then(async () => {
+      if (this.disposed) throw Error("Folder workbench closed");
+      const client = (this.options.createBrowsing ?? (() => new LocalBrowsingWorker()))();
+      if (!client.initialize) { client.dispose(); throw Error("Native folder browsing initialization is unavailable"); }
+      candidate.client = client;
+      try {
+        let initial: BrowsingInitialization;
+        try { initial = await client.initialize(candidate.model, candidate.rawSeed, candidate.savedPresentation ?? candidate.presentation); }
+        catch (error) {
+          if (!candidate.savedPresentation) throw error;
+          // Only the native codec interprets stored preferences. A corrupt or
+          // obsolete personal envelope must not prevent the accepted model opening.
+          candidate.savedPresentation = undefined;
+          initial = await client.initialize(candidate.model, candidate.rawSeed, candidate.presentation);
+        }
+        if (this.disposed) throw Error("Folder workbench closed");
+        candidate.initialized = true;
+        this.pruneBrowsing(candidate);
+        return initial;
+      } catch (error) { candidate.client = undefined; client.dispose(); throw error; }
+    });
+    candidate.ready = ready;
+    this.initializationTail = ready.catch(() => undefined);
+    void ready.catch(() => { if (candidate.ready === ready) candidate.ready = undefined; });
+    return ready;
+  }
+  private pruneBrowsing(keep: BrowsingCandidate) {
+    for (const [key, candidate] of this.candidates) {
+      if (candidate === keep || candidate === this.activeBrowsing || candidate.preparing || !candidate.initialized) continue;
+      candidate.client?.dispose(); candidate.client = undefined; candidate.ready = undefined; candidate.initialized = false;
+      this.candidates.delete(key);
     }
-    this.snapshotRemoteOrders.set(result, ++this.remoteOrder);
-    return stampCanvasSnapshot(assertWorkbenchSnapshot(result), ++this.sequence);
   }
-  private async update(method: string, input?: unknown, options?: { interaction?: Promise<InteractionState> | null; preserveSelection?: boolean }) {
-    if (this.state?.editor && !this.state.editor.canEdit) return null;
-    const result = await this.rpc<WorkbenchSnapshot | null>(method, input, options);
-    return result ? this.checked(result) : null;
+  private async checked(remote: FolderModelSnapshot): Promise<WorkbenchSnapshot> {
+    if (remote?.format !== "geosolve-folder-model-v1" || !Number.isSafeInteger(remote.revision) || !remote.seed) throw Error("Invalid folder model snapshot");
+    const basis = this.snapshotHashes.get(remote), state = this.snapshotStates.get(remote);
+    if (!basis) throw Error("Folder snapshot has no transport authority");
+    const identity = { documentEpoch: `${basis.authority?.epoch ?? "folder"}:${basis.authority?.lease ?? 0}`, revision: basis.authority?.revision ?? remote.revision };
+    const model: BrowsingModel = remote.mode === "generator"
+      ? { ...identity, generated: JSON.stringify(remote.generated), sourceDesignDigest: `generated:${String(remote.seed.sceneKey)}` }
+      : { ...remote.model!, ...identity };
+    const key = JSON.stringify([identity, model.sourceDesignDigest, remote.seed.sceneKey]);
+    let candidate = this.candidates.get(key);
+    if (!candidate) { candidate = { key, model, rawSeed: remote.seed, presentation: remote.restoredViewPresentation, savedPresentation: this.readPersonalPresentation(state) }; this.candidates.set(key, candidate); }
+    // Reconstruction is independent of both HTTP ordering and local canvas input.
+    const initial = await this.ensureBrowsing(candidate);
+    if (this.disposed) throw Error("Folder workbench closed");
+    this.catalog ??= assertToolCatalog(initial.toolCatalog);
+    let source = remote.source;
+    if (remote.mode === "generator" && state?.sourceFiles?.length) source = { files: state.sourceFiles.map(file => ({ ...file, readOnly: true })), selectedPath: state.entry ?? state.sourceFiles[0].path, dirty: false };
+    source = { ...source, selectedPath: source.files.find(file => file.path === this.selectedSourcePath)?.path ?? source.selectedPath };
+    const snapshot = this.copyAuthority(remote, this.readonlyPresentation({ ...initial.snapshot,
+      project: { ...initial.snapshot.project, status: remote.status === "accepted" ? "accepted" : "failed" }, source,
+      problems: [...initial.snapshot.problems, ...remote.problems.map(problem => ({ id: problem.id, detail: problem.detail, file: problem.path, severity: "error" as const, title: "Folder source" }))],
+      presentation: { ...initial.snapshot.presentation, ...remote.history },
+    }, state));
+    this.snapshotBrowsing.set(snapshot, candidate);
+    return snapshot;
   }
-  async construct() { return this.checked(await this.rpc<WorkbenchSnapshot>("session.join")); }
+  async construct() { return this.checked(await this.rpc<FolderModelSnapshot>("session.join")); }
   async takeOver() {
     if (!this.pendingOperationId && this.fieldBase !== undefined) this.pending = this.fieldDraft;
     this.retainedError = "";
-    const snapshot = this.checked(await this.rpc<WorkbenchSnapshot>("session.takeover"));
-    this.listener?.(snapshot);
+    this.listener?.(await this.checked(await this.rpc<FolderModelSnapshot>("session.takeover")));
   }
-  async snapshot() { return this.checked(await this.rpc<WorkbenchSnapshot>("snapshot")); }
-  async toolCatalog() { return this.rpc<ToolCatalog>("toolCatalog"); }
-  async dispatch(input: { version: 2; command: string; payload?: unknown }) {
-    if (this.localSnapshot && localCommands.has(input.command)) {
-      if (input.command === "view.fit" || input.command === "view.origin") this.cancelRemoteGesture();
-      const snapshot = await this.localUpdate("dispatch", input);
-      if (!transientLocalCommands.has(input.command)) this.requestSelectionSync();
-      return snapshot ?? this.localSnapshot!;
-    }
-
-    if (input.command === "source.select" && this.isGenerator && this.installedSnapshot) {
-      const path = (input.payload as { path?: string })?.path;
-      if (!path || !this.installedSnapshot.source.files.some((file) => file.path === path)) throw Error("Source file is not in this accepted generator");
-      const result = structuredClone(this.localSnapshot ?? this.installedSnapshot);
-      result.source.selectedPath = path;
+  async snapshot() { return this.checked(await this.rpc<FolderModelSnapshot>("snapshot")); }
+  async toolCatalog() {
+    if (!this.catalog) throw Error("Folder tool catalog has not loaded");
+    const unavailableReason = this.editingBlockedReason ?? (this.options.authoring === null ? "Authoring is unavailable in this session" : undefined);
+    return { ...this.catalog, geometryRole: { ...this.catalog.geometryRole, unavailableReason }, sections: this.catalog.sections.map(section => ({ ...section, commands: section.commands.map(command => ({ ...command, unavailableReason: unavailableReason ?? command.unavailableReason })) })) };
+  }
+  async dispatch(input: { version: 2; command: string; payload?: unknown }): Promise<WorkbenchSnapshot> {
+    if (localCommands.has(input.command)) return await this.localUpdate("dispatch", input) ?? this.currentSnapshot();
+    if (input.command === "navigation.rows.select" || input.command === "navigation.source.select") return this.navigate(input.command, input.payload);
+    if (structuredCommands.has(input.command)) return this.editStructured(input.command as BrowsingEditCommand, input.payload, this.captureIntent("authoring.mutation"));
+    if (input.command === "source.select") {
+      const snapshot = this.currentSnapshot(), path = (input.payload as { path?: string })?.path;
+      if (!path || !snapshot.source.files.some(file => file.path === path)) throw Error("Source file is not in this accepted project");
       this.selectedSourcePath = path;
-      this.snapshotHashes.set(result, this.snapshotHashes.get(this.installedSnapshot)!);
-      this.snapshotStates.set(result, this.snapshotStates.get(this.installedSnapshot)!);
-      return this.checked(result);
+      this.localSnapshot = this.copyAuthority(snapshot, { ...snapshot, source: { ...snapshot.source, selectedPath: path } });
+      return this.localSnapshot;
     }
-    const options = this.remoteDraft ? { interaction: null } : undefined;
-    const result = this.checked(await this.rpc<WorkbenchSnapshot>("dispatch", input, options));
-    if (["tool.select", "tool.finish", "feature.apply"].includes(input.command)) this.remoteDraft = result.presentation.activeTool !== "select";
-    if (["source.prepare", "source.revert"].includes(input.command) && !result.source.dirty) this.draftBase = undefined;
-    return result;
+    if (["source.prepare", "source.revert", "history.undo", "history.redo"].includes(input.command)) {
+      if (this.state?.editor?.canEdit === false) throw Error(this.editingBlockedReason);
+      const result = await this.checked(await this.rpc<FolderModelSnapshot>("dispatch", input));
+      if (["source.prepare", "source.revert"].includes(input.command) && !result.source.dirty) this.draftBase = undefined;
+      return result;
+    }
+    if (!this.authoring) throw Error("Local authoring is unavailable");
+    if (this.editingBlockedReason && !(input.command === "tool.select" && (input.payload as { id?: string })?.id === "select")) throw Error(this.editingBlockedReason);
+    if (input.command === "tool.select") {
+      const id = (input.payload as { id: string }).id;
+      if (id === "select") this.authoring.select(id);
+      else await this.queueLocal(async () => { const start = await this.operationStart(); this.authoring!.select(id, start); });
+      this.restoreAcceptedFrame();
+    } else if (input.command === "tool.finish" || input.command === "feature.apply") this.authoring.finish();
+    else if (input.command === "tool.step_back") this.authoring.stepBack();
+    else if (input.command === "tool.construction.input") this.authoring.constructionEvent(input.payload as Parameters<CollaborationAuthoringController["constructionEvent"]>[0]);
+    else if (input.command === "tool.operation.input") this.authoring.operationEvent(input.payload as Parameters<CollaborationAuthoringController["operationEvent"]>[0]);
+    else if (input.command === "geometry.authoring-role.toggle") this.authoring.toggleRole();
+    else if (input.command === "geometry.role.toggle") await this.queueLocal(async () => { this.authoring!.applyOperation(auxiliaryTools["geometry-role"], await this.operationStart()); });
+    else throw Error(`Folder command is unavailable: ${input.command}`);
+    return this.projectAuthoring();
   }
-  async managedCompilerContext(): Promise<{ version: 2; patches: Record<string, unknown> }> { throw Error("Folder compiler transactions settle in the local Rust bridge."); }
-  async pointer(input: PointerSample) {
-    if (!this.localSnapshot) {
-      if (this.isGenerator && input.phase === "move" && (input.buttons & 1)) return null;
-      return this.update("pointer", input);
-    }
-    if (input.phase === "down" && input.buttons === 4) {
-      this.cancelRemoteGesture();
-      this.localPan = input.pointerId;
-    }
-    if (this.localPan === input.pointerId) {
-      if (input.phase === "up") this.localPan = undefined;
-      return this.localUpdate("pointer", input);
-    }
-    const select = Boolean(this.editingBlockedReason) || this.localSnapshot.presentation.activeTool === "select";
-    if (!select) {
-      const continuation = this.remoteDraft || this.remoteGesture;
-      if (input.phase === "down") { this.remoteGesture = true; this.remoteDraft = true; }
-      else if (input.phase === "up") this.remoteGesture = false;
-      this.deliverRemote("pointer", input, continuation ? { interaction: null } : {});
-      return null;
-    }
-    if (input.phase === "down" && (input.buttons & 1)) {
-      this.gesture = { down: input, state: this.queueLocal(() => this.local!.state()), samples: [], remote: false,
-        editable: !this.editingBlockedReason && this.semanticPending === 0 && !this.activity.getPendingSnapshot() };
-      return this.localUpdate("pointer", input);
-    }
-    const gesture = this.gesture;
-    if (gesture && gesture.down.pointerId === input.pointerId && (input.phase === "move" || input.phase === "up")) {
-      gesture.samples.push(input);
-      if (gesture.editable && !gesture.remote && Math.hypot(input.x - gesture.down.x, input.y - gesture.down.y) >= 3) {
-        gesture.remote = true;
-        this.deliverRemote("pointer", gesture.down, { interaction: gesture.state });
-        for (const sample of gesture.samples) this.deliverRemote("pointer", sample, { interaction: null });
-        gesture.samples = [];
-        await this.localUpdate("cancel", { version: 2, reason: "lost-capture" });
-      } else if (gesture.remote) {
-        this.deliverRemote("pointer", input, { interaction: null });
-        gesture.samples = [];
+  private async operationStart() {
+    if (!this.local?.authoringPointer || !this.view) throw Error("Accepted tool selection is still loading");
+    const { viewport } = await this.local.authoringPointer({ x: 0, y: 0 });
+    return { viewport, view: this.view };
+  }
+  private async navigate(command: BrowsingNavigationCommand, payload: unknown) {
+    const snapshot = this.currentSnapshot(), candidate = this.activeBrowsing, view = this.view;
+    const requested = payload as { authority?: unknown } | null;
+    if (!candidate?.client || !view) throw Error("Local browsing is unavailable");
+    if (!requested || typeof requested.authority !== "string" || requested.authority !== snapshot.navigation?.authority) throw Error("This navigation belongs to an older source revision");
+    if (command === "navigation.source.select" && (snapshot.source.dirty || this.draftBase)) throw Error("Apply the source draft before navigating from its source");
+    const current = await candidate.client.present(view);
+    this.assertCurrentView(candidate, view);
+    const authority = current.chrome.navigation?.authority;
+    if (!authority) throw Error("Accepted navigation details are still loading");
+    const result = await candidate.client.navigate(view, command, { ...(payload as Record<string, unknown>), authority });
+    return this.queueLocal(async () => {
+      this.assertCurrentView(candidate, view);
+      const update = await this.local!.update("restoreSelection", { expected: view.state, state: result.state });
+      if (update) {
+        await this.installLocal(update); this.installChrome(result.chrome);
+        if (this.view && this.authoring) { const projection = await this.local!.authoringPointer?.({ x: 0, y: 0 }); this.authoring.pickSelection(this.view, projection?.viewport); }
       }
-      if (input.phase === "up") {
-        this.gesture = undefined;
-        if (!gesture.remote) {
-          const snapshot = await this.localUpdate("pointer", input);
-          this.requestSelectionSync();
-          return snapshot;
-        }
+      return this.projectAuthoring();
+    });
+  }
+  private async editStructured(command: BrowsingEditCommand, payload: unknown, intent: RequestIntent) {
+    if (this.editingBlockedReason) throw Error(this.editingBlockedReason);
+    const candidate = this.activeBrowsing, view = this.view;
+    if (!candidate?.client || !view) throw Error("Accepted Inspector details are still loading");
+    const current = await candidate.client.present(view);
+    this.assertCurrentView(candidate, view);
+    const authority = current.chrome.authoringDocument?.authority;
+    if (!authority) throw Error("Accepted Inspector details are still loading");
+    const described = await candidate.client.describe(view, authority, command, payload);
+    this.assertCurrentView(candidate, view);
+    if (!described.mutation) return this.currentSnapshot();
+    return this.checked(await this.rpc<FolderModelSnapshot>("authoring.mutation", { mutation: described.mutation }, intent));
+  }
+  private assertCurrentView(candidate: BrowsingCandidate, view: AuthoringView) {
+    if (candidate !== this.activeBrowsing || JSON.stringify(view.state) !== JSON.stringify(this.view?.state)) throw Error("The accepted sketch or selection changed; review the current Inspector");
+  }
+  async managedCompilerContext(): Promise<{ version: 2; patches: Record<string, unknown> }> { throw Error("Folder compiler transactions settle in the engine host."); }
+  pointer(input: PointerSample) {
+    return this.queueLocal(async () => {
+      if (!this.localSnapshot || !this.local) return null;
+      if (input.phase === "down" && input.buttons === 4) this.panning = input.pointerId;
+      const navigating = this.panning === input.pointerId;
+      if (input.phase === "down") this.blockedPointer = this.editingBlockedReason || this.semanticPending || this.externalBusy ? input.pointerId : undefined;
+      const blocked = Boolean(this.editingBlockedReason) || this.blockedPointer === input.pointerId;
+      const drawing = !blocked && this.authoring && this.authoring.tool !== "select" && !navigating;
+      const update = drawing ? null : await this.local.update("pointer", input);
+      const painted = update ? await this.installLocal(update) : null;
+      if (!navigating && !blocked && this.local.authoringPointer && this.view) {
+        const projection = await this.local.authoringPointer({ x: input.x, y: input.y, captured: input.phase !== "down" });
+        this.authoring?.pointer(input, projection, this.view);
       }
-      return gesture.remote ? null : this.localUpdate("pointer", input);
-    }
-    return this.localUpdate("pointer", input);
+      if (input.phase === "up") { if (navigating) this.panning = undefined; if (this.blockedPointer === input.pointerId) this.blockedPointer = undefined; }
+      return painted;
+    });
   }
   async setGeneratorInputs(values: Record<string, unknown>) {
     if (!this.isGenerator || this.installedState?.capabilities?.generatorInputs === false) throw Error("This project does not expose generator inputs");
     if (this.state?.editor && !this.state.editor.canEdit) throw Error("Another tab owns editing. Take over editing to change generator inputs.");
-    return this.checked(await this.rpc<WorkbenchSnapshot>("inputs.set", { values: structuredClone(values) }));
+    return this.checked(await this.rpc<FolderModelSnapshot>("inputs.set", { values: structuredClone(values) }));
   }
-  wheel(input: WheelSample) { if (this.localSnapshot) this.cancelRemoteGesture(); return this.localSnapshot ? this.localUpdate("wheel", input) : this.update("wheel", input); }
-  wheelBatch(input: WheelSample[]) { if (this.localSnapshot) this.cancelRemoteGesture(); return this.localSnapshot ? (input.length ? this.localUpdate("wheel", { version: 2, samples: input }) : Promise.resolve(null)) : this.update("wheelBatch", input); }
-  resize(input: { version: 2; width: number; height: number; pixelRatio: number }) { if (this.localSnapshot) this.cancelRemoteGesture(); return this.localSnapshot ? this.localUpdate("resize", input) : this.update("resize", input); }
+  wheel(input: WheelSample) { return this.localUpdate("wheel", input); }
+  wheelBatch(input: WheelSample[]) { return input.length ? this.localUpdate("wheel", { version: 2, samples: input }) : Promise.resolve(null); }
+  resize(input: { version: 2; width: number; height: number; pixelRatio: number }) { return this.localUpdate("resize", input); }
   cancel(input: { version: 2; reason: "escape" | "lost-capture" | "blur" }) {
-    if (!this.localSnapshot) return this.update("cancel", input);
-    if (this.gesture?.remote || this.remoteGesture || this.localSnapshot.presentation.activeTool !== "select") this.deliverRemote("cancel", input, { interaction: null });
-    this.gesture = undefined;
-    this.remoteGesture = false;
-    this.remoteDraft = false;
+    this.authoring?.cancel(); this.restoreAcceptedFrame(); this.panning = this.blockedPointer = undefined;
     return this.localUpdate("cancel", input);
   }
   exportProject() { return this.rpc<{ version: 2; filename: string; contents: string }>("exportProject"); }
   exportReproduction() { return this.rpc<{ version: 2; filename: string; contents: string }>("exportReproduction"); }
-  exportInteractionTrace() { return this.rpc<{ version: 2; filename: string; contents: string }>("exportInteractionTrace"); }
+  async exportInteractionTrace() { return { version: 2 as const, filename: "folder-local-view.json", contents: JSON.stringify(await this.local?.state()) }; }
   async persistProject(): Promise<{ version: 2; contents: string }> { throw Error("Folder source is saved automatically by accepted transactions."); }
 
-  /** Called only when the host intends to install this authenticated remote snapshot. */
+  /** Only an installable response may replace the accepted local browsing authority. */
   async prepareSnapshot(snapshot: WorkbenchSnapshot): Promise<WorkbenchSnapshot> {
-    const seed = this.snapshotSeeds.get(snapshot);
-    if (!seed || !this.canInstall(snapshot)) return snapshot;
-    return this.queueLocal(async () => {
+    const candidate = this.snapshotBrowsing.get(snapshot);
+    if (!candidate || !this.canInstall(snapshot)) return snapshot;
+    if (candidate === this.activeBrowsing) return this.queueLocal(async () => {
       if (!this.canInstall(snapshot)) return snapshot;
-      const existed = this.local !== undefined;
-      this.local ??= this.createLocal();
-      const update = existed ? await this.local.replace(seed.seed, seed.preserveSelection || seed.selectionRevision !== this.localSelectionRevision)
-        : await this.local.construct(seed.seed);
-      const result = this.withLocalFrame(snapshot, update, false);
-      this.localSnapshot = result;
-      return result;
-    }).catch((error: unknown) => { this.snapshotSyncReceipts.get(snapshot)?.resolve(); throw error; });
+      const current = this.currentSnapshot();
+      return this.copyAuthority(snapshot, this.readonlyPresentation({ ...current,
+        project: snapshot.project, source: snapshot.source, problems: snapshot.problems,
+        presentation: { ...current.presentation, canUndo: snapshot.presentation.canUndo, canRedo: snapshot.presentation.canRedo },
+      }, this.snapshotStates.get(snapshot)));
+    });
+    candidate.preparing = (candidate.preparing ?? 0) + 1;
+    try {
+      const initial = await this.ensureBrowsing(candidate);
+      return await this.queueLocal(async () => {
+        if (!this.canInstall(snapshot)) return snapshot;
+        const previous = this.view;
+        const existed = this.local !== undefined;
+        this.local ??= this.createLocal();
+        const update = existed ? await this.local.replace(initial.seed, true) : await this.local.construct(initial.seed);
+        // A field can begin while native scene replacement is in flight. Restore
+        // the old authority before local input resumes if that field vetoes install.
+        if (!this.canInstall(snapshot)) {
+          if (previous) {
+            const restored = await this.local.replace(previous.seed, true);
+            await this.local.update("restoreSelection", { expected: restored.state, state: previous.state });
+          }
+          return snapshot;
+        }
+        this.prediction = undefined; this.acceptedFrame = update.frame;
+        this.view = { seed: initial.seed, state: update.state };
+        this.activeBrowsing = candidate;
+        this.localSnapshot = this.copyAuthority(snapshot, { ...snapshot, frame: update.frame });
+        this.catalog = assertToolCatalog(initial.toolCatalog);
+        if ("project" in candidate.model && this.options.authoring !== null) {
+          this.authoring ??= new CollaborationAuthoringController(this.options.authoring ?? new LocalAuthoringWorker(), {
+            paint: preview => this.presentPrediction(preview), changed: () => { if (this.localSnapshot) this.listener?.(this.projectAuthoring()); },
+            cleared: () => this.restoreAcceptedFrame(), activity: () => this.activity.begin(),
+            error: error => this.reportLocalError(error), commit: (model, command, kind) => this.commitGesture(model, command, kind),
+          });
+          this.authoringBases.set(candidate.model, this.snapshotHashes.get(snapshot)!);
+          this.authoring.replace(candidate.model);
+        } else { this.authoring?.dispose(); this.authoring = undefined; }
+        this.pruneBrowsing(candidate);
+        this.scheduleBrowsing();
+        return this.projectAuthoring();
+      });
+    } finally { candidate.preparing!--; }
+  }
+  private currentSnapshot() {
+    const result = this.localSnapshot ?? this.installedSnapshot;
+    if (!result) throw Error("Folder workbench has not opened");
+    return result;
+  }
+  private projectAuthoring() {
+    const snapshot = this.currentSnapshot();
+    const result = this.readonlyPresentation({ ...snapshot,
+      authoringContext: this.authoring ? { construction: this.authoring.construction, operation: this.authoring.operation } : undefined,
+      presentation: { ...snapshot.presentation, activeTool: this.authoring?.tool ?? "select", canFinish: this.authoring?.canFinish ?? false, geometryRole: this.authoring?.role ?? "profile" },
+    }, this.snapshotStates.get(snapshot));
+    this.localSnapshot = this.copyAuthority(snapshot, result);
+    return this.localSnapshot;
   }
   private queueLocal<T>(operation: () => Promise<T>): Promise<T> {
     const run = this.localTail.then(operation, operation);
-    this.localTail = run.catch(() => undefined);
-    return run;
-  }
-  private withLocalFrame(snapshot: WorkbenchSnapshot, update: LocalInteractionUpdate, canvasOnly: boolean) {
-    // Authoritative drawing contains construction/inference overlays absent from
-    // the detached accepted scene. Rust permits it only at the exact local view.
-    const frame = !canvasOnly && update.serverFrameCompatible ? snapshot.frame : update.frame;
-    const result = stampCanvasSnapshot(assertWorkbenchSnapshot({ ...snapshot, frame }), ++this.sequence);
-    const basis = this.snapshotHashes.get(snapshot);
-    if (basis) this.snapshotHashes.set(result, basis);
-    const state = this.snapshotStates.get(snapshot);
-    if (state) this.snapshotStates.set(result, state);
-    this.snapshotRemoteOrders.set(result, this.snapshotRemoteOrders.get(snapshot)!);
-    const sync = this.snapshotSyncReceipts.get(snapshot);
-    if (sync) this.snapshotSyncReceipts.set(result, sync);
-    return canvasOnly ? markCanvasOnlySnapshot(result) : result;
+    this.localTail = run.catch(() => undefined); return run;
   }
   private localUpdate(method: "dispatch" | "pointer" | "wheel" | "resize" | "cancel", input: unknown) {
     return this.queueLocal(async () => {
-      const update = await this.local!.update(method, input);
+      if (!this.local || !this.localSnapshot) return null;
+      const update = await this.local.update(method, input);
       if (!update) return null;
-      if (update.selectionChanged) this.localSelectionRevision += 1;
-      const result = this.withLocalFrame(this.localSnapshot!, update, true);
-      this.localSnapshot = result;
-      return result;
+      const snapshot = await this.installLocal(update);
+      if (method === "dispatch" && personalCommands.has((input as { command: string }).command)) await this.savePersonalPresentation();
+      return snapshot;
     });
   }
-  private cancelRemoteGesture() {
-    if (this.gesture?.remote || this.remoteGesture || this.remoteDraft) this.deliverRemote("cancel", { version: 2, reason: "lost-capture" }, { interaction: null });
-    this.gesture = undefined;
-    this.remoteGesture = false;
-    this.remoteDraft = false;
-    this.localPan = undefined;
+  private readPersonalPresentation(state?: FolderState): WorkspaceViewPresentation | undefined {
+    if (!state?.paths.folder) return;
+    try {
+      const saved = localStorage.getItem(`geosolve.folder.view:${state.paths.folder}`);
+      return saved ? JSON.parse(saved) as WorkspaceViewPresentation : undefined;
+    } catch { return undefined; }
   }
-  private deliverRemote(method: string, input: unknown, options: { interaction?: Promise<InteractionState> | null } = {}) {
-    void this.update(method, input, options).then((snapshot) => { if (snapshot) this.listener?.(snapshot); }).catch((error: unknown) => {
-      if (!this.retainedError) this.notice = this.retainedError = `Canvas edit failed: ${String(error)}`;
-      this.listener?.();
+  private async savePersonalPresentation() {
+    const folder = this.snapshotStates.get(this.currentSnapshot())?.paths.folder;
+    if (!folder || !this.local?.exportPresentation) return;
+    try {
+      const presentation = await this.local.exportPresentation();
+      localStorage.setItem(`geosolve.folder.view:${folder}`, JSON.stringify(presentation));
+    } catch (error) { this.reportLocalError(`View preferences could not be saved: ${String(error)}`); }
+  }
+  private async installLocal(update: LocalInteractionUpdate) {
+    const changed = JSON.stringify(update.state) !== JSON.stringify(this.view?.state), prediction = this.prediction;
+    this.acceptedFrame = update.frame;
+    if (this.view) this.view = { seed: this.view.seed, state: update.state };
+    if (changed && prediction?.presentation && this.local?.projectPrediction && this.view) {
+      const construction = prediction.construction ? { preview: prediction.construction.preview, inference_guides: prediction.construction.inference_guides } : undefined;
+      const projected = await this.local.projectPrediction({ presentation: prediction.presentation, view: this.view, construction });
+      if (this.prediction === prediction) this.prediction = { ...prediction, view: this.view, frame: projected.frame };
+    }
+    const predicted = this.prediction && JSON.stringify(this.prediction.view.state) === JSON.stringify(this.view?.state) ? this.prediction.frame : undefined;
+    const snapshot = markCanvasOnlySnapshot(this.copyAuthority(this.currentSnapshot(), { ...this.currentSnapshot(), frame: predicted ?? update.frame }));
+    this.localSnapshot = snapshot;
+    if (changed) { this.scheduleBrowsing(); if (this.view && (!prediction?.presentation || !this.local?.projectPrediction)) this.authoring?.render(this.view); }
+    return snapshot;
+  }
+  private scheduleBrowsing() {
+    if (!this.activeBrowsing?.client || !this.view) return;
+    if (this.browsingScheduled) { this.browsingAgain = true; return; }
+    this.browsingScheduled = true;
+    void (async () => {
+      do {
+        this.browsingAgain = false;
+        const candidate = this.activeBrowsing!, view = this.view!;
+        try {
+          const result = await candidate.client!.present(view);
+          if (this.disposed || candidate !== this.activeBrowsing || JSON.stringify(result.view.state) !== JSON.stringify(this.view?.state)) continue;
+          this.installChrome(result.chrome); this.listener?.(this.projectAuthoring());
+        } catch (error) {
+          if (!this.disposed && candidate === this.activeBrowsing && JSON.stringify(view.state) === JSON.stringify(this.view?.state)) this.reportLocalError(error);
+        }
+      } while (this.browsingAgain && !this.disposed);
+    })().finally(() => { this.browsingScheduled = false; if (this.browsingAgain && !this.disposed) this.scheduleBrowsing(); });
+  }
+  private installChrome(value: BrowsingChrome) {
+    const snapshot = this.currentSnapshot();
+    const { authoringDocument, selection, selectedGeometryRole, constructionVisible, visibilityRestoreAvailable, ...chrome } = value;
+    this.localSnapshot = this.copyAuthority(snapshot, this.readonlyPresentation({ ...snapshot, ...chrome,
+      // Source failures belong to the host and survive read-only browser refresh.
+      problems: [...chrome.problems, ...snapshot.problems.filter(problem => problem.title === "Folder source")],
+      authoringDocument: authoringDocument ?? undefined, selection: selection ?? undefined,
+      presentation: { ...snapshot.presentation, selectedGeometryRole: selectedGeometryRole ?? undefined,
+        constructionVisible: constructionVisible ?? snapshot.presentation.constructionVisible,
+        visibilityRestoreAvailable: visibilityRestoreAvailable ?? snapshot.presentation.visibilityRestoreAvailable },
+    }, this.snapshotStates.get(snapshot)));
+  }
+  private restoreAcceptedFrame() {
+    this.prediction = undefined;
+    if (this.localSnapshot && this.acceptedFrame) this.localSnapshot = markCanvasOnlySnapshot(this.copyAuthority(this.localSnapshot, { ...this.localSnapshot, frame: this.acceptedFrame }));
+  }
+  private presentPrediction(preview: AuthoringPreview) {
+    const model = this.activeBrowsing?.model;
+    if (!this.localSnapshot || !model || preview.model.documentEpoch !== model.documentEpoch || preview.model.revision !== model.revision || preview.model.sourceDesignDigest !== model.sourceDesignDigest || JSON.stringify(preview.view.state) !== JSON.stringify(this.view?.state)) return;
+    this.prediction = preview;
+    this.localSnapshot = markCanvasOnlySnapshot(this.copyAuthority(this.localSnapshot, { ...this.localSnapshot, frame: preview.frame }));
+    this.listener?.(this.localSnapshot);
+  }
+  private async commitGesture(model: AuthoringModel, command: AuthoringCommand, kind: "point" | "construction" | "operation") {
+    const expected = this.authoringBases.get(model);
+    if (model !== this.activeBrowsing?.model || !expected) throw Error("The accepted sketch changed during drawing; draw again on the current sketch");
+    if (this.editingBlockedReason) throw Error(this.editingBlockedReason);
+    const snapshot = await this.checked(await this.rpc<FolderModelSnapshot>("authoring.commit", { kind, command }, { expected }));
+    if (!this.listener) return;
+    const installed = new Promise<boolean>(resolve => {
+      const receipt = (accepted: boolean) => { this.pendingInstallReceipts.delete(receipt); resolve(accepted); };
+      this.pendingInstallReceipts.add(receipt); this.snapshotInstallReceipts.set(snapshot, receipt);
     });
+    this.listener(snapshot);
+    if (!await installed && !this.disposed) throw Error("The edit was saved; revert the pending draft and refresh to display it.");
   }
-  private requestSelectionSync() {
-    if (this.state?.editor?.canEdit === false || this.gesture?.remote || this.remoteGesture || this.remoteDraft) return;
-    if (this.syncPending || this.semanticPending > 0 || this.activity.getPendingSnapshot() || this.syncNeedsRefresh) { this.syncAgain = true; return; }
-    this.syncAgain = false;
-    this.syncPending = true;
-    let resolve!: (basis?: FolderBasis) => void;
-    const receipt: SyncReceipt = { before: this.basis, installed: new Promise((done) => { resolve = done; }), resolve: (basis) => resolve(basis) };
-    const response = this.update("interaction.sync", undefined, { preserveSelection: true });
-    this.syncReceipt = receipt;
-    void response.then(async (snapshot) => {
-      if (!snapshot || !this.listener) { receipt.resolve(); return; }
-      // Even an old selection response carries a new server interaction revision.
-      // The host acknowledges it while prepareSnapshot preserves the latest view.
-      this.snapshotSyncReceipts.set(snapshot, receipt);
-      this.listener(snapshot);
-      await receipt.installed;
-    }).catch(() => { receipt.resolve(); }).finally(() => {
-      if (this.syncReceipt === receipt) this.syncReceipt = undefined;
-      this.syncPending = false;
-      if (this.syncAgain && this.semanticPending === 0 && !this.syncNeedsRefresh) this.requestSelectionSync();
-    });
-  }
-  private refreshSelectionBasis() {
-    if (this.syncRefreshPending || !this.syncAgain || !this.listener) return;
-    this.syncRefreshPending = true;
-    void this.refresh(false).catch(() => {}).finally(() => { this.syncRefreshPending = false; });
+  private reportLocalError(error: unknown) {
+    if (this.retainedError || this.pendingOperationId) return;
+    this.notice = String(error); this.listener?.();
   }
   private canInstall(snapshot: WorkbenchSnapshot) {
     const basis = this.snapshotHashes.get(snapshot);
     if (!basis) throw Error("Folder snapshot has no transport authority");
-    const sequence = getCanvasSnapshotSequence(snapshot)!;
-    const remoteOrder = this.snapshotRemoteOrders.get(snapshot)!;
+    const sequence = getCanvasSnapshotSequence(snapshot)!, remoteOrder = this.snapshotRemoteOrders.get(snapshot)!;
     return (remoteOrder > this.installedRemoteOrder || remoteOrder === this.installedRemoteOrder && sequence >= this.installedSequence)
       && !(this.fieldBase !== undefined && !this.sameBasis(this.fieldBase, basis))
       && !(this.draftBase !== undefined && !this.sameBasis(this.draftBase, basis));
   }
-  dispose() { this.syncReceipt?.resolve(); this.local?.dispose(); this.local = undefined; this.localSnapshot = undefined; }
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true; this.authoring?.dispose(); this.local?.dispose();
+    for (const receipt of this.pendingInstallReceipts) receipt(false);
+    const browsers = new Set([...this.candidates.values(), this.activeBrowsing].flatMap(candidate => candidate?.client ? [candidate.client] : []));
+    for (const browser of browsers) browser.dispose();
+    this.candidates.clear(); this.local = undefined; this.localSnapshot = undefined;
+    this.events?.close(); this.events = undefined; this.listener = undefined; this.activity.reset();
+  }
 
   draftChanged(dirty: boolean) {
     if (dirty && this.draftBase === undefined) this.draftBase = this.basis;
@@ -434,29 +611,19 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   }
   /** Called after host validation and immediately before replacing displayed state. */
   installSnapshot(snapshot: WorkbenchSnapshot): boolean {
-    const sync = this.snapshotSyncReceipts.get(snapshot);
-    if (!this.canInstall(snapshot)) { sync?.resolve(); return false; }
-    const sequence = getCanvasSnapshotSequence(snapshot)!;
-    const basis = this.snapshotHashes.get(snapshot)!;
-    if (sync && this.sameBasis(sync.before, basis)) {
-      for (const intent of this.fields.values()) if (this.sameBasis(intent.base, basis)
-        && intent.base.authority?.revision === sync.before.authority?.revision) intent.base = basis;
-      if (this.draftBase && this.sameBasis(this.draftBase, basis)
-        && this.draftBase.authority?.revision === sync.before.authority?.revision) this.draftBase = basis;
-    }
-    if (!sync && this.snapshotRemoteOrders.get(snapshot)! > this.installedRemoteOrder) this.syncNeedsRefresh = false;
-    this.basis = basis;
-    this.installedSequence = sequence;
+    if (!this.canInstall(snapshot)) { this.snapshotInstallReceipts.get(snapshot)?.(false); return false; }
+    this.basis = this.snapshotHashes.get(snapshot)!;
+    this.installedSequence = getCanvasSnapshotSequence(snapshot)!;
     this.installedRemoteOrder = this.snapshotRemoteOrders.get(snapshot)!;
     this.installedState = this.snapshotStates.get(snapshot) ?? null;
     this.installedSnapshot = snapshot;
-    if (this.localSnapshot && getCanvasSnapshotSequence(this.localSnapshot)! <= sequence) this.localSnapshot = snapshot;
-    sync?.resolve(basis);
-    // Wait until an edited scene is actually installed before rebasing a pending
-    // selection sync. Its old scene/source basis cannot authorize a new scene.
-    if (this.syncAgain && this.semanticPending === 0 && !this.syncPending) this.requestSelectionSync();
+    if (this.localSnapshot && getCanvasSnapshotSequence(this.localSnapshot)! <= this.installedSequence) this.localSnapshot = snapshot;
+    this.snapshotInstallReceipts.get(snapshot)?.(true);
     return true;
   }
+  // Display compatibility follows source/lease identity. A rejected source draft
+  // can advance server revision without changing disk. Each captured edit still
+  // sends its original exact revision; installing diagnostics never rebases it.
   private sameBasis(left: FolderBasis, right: FolderBasis) {
     return left.hash === right.hash && left.authority?.epoch === right.authority?.epoch && left.authority?.lease === right.authority?.lease;
   }
@@ -477,18 +644,13 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
     const events = new EventSource(`/api/events?token=${encodeURIComponent(this.token)}`);
     this.events = events;
     let finishRemoteActivity: (() => void) | undefined;
-    const clearRemoteActivity = () => { finishRemoteActivity?.(); finishRemoteActivity = undefined; };
+    const clearRemoteActivity = () => { this.externalBusy = false; finishRemoteActivity?.(); finishRemoteActivity = undefined; };
     events.addEventListener("activity", (event) => {
       if (this.events !== events) return;
       try {
         const { busy } = JSON.parse((event as MessageEvent<string>).data) as { busy?: unknown };
-        if (busy === true) finishRemoteActivity ??= this.activity.begin();
-        else if (busy === false) {
-          clearRemoteActivity();
-          // A selection made during external work must observe the completed
-          // accepted scene before it can synchronize with the server.
-          if (this.syncAgain && !this.syncPending && this.semanticPending === 0) this.refreshSelectionBasis();
-        }
+        if (busy === true) { this.externalBusy = true; finishRemoteActivity ??= this.activity.begin(); }
+        else if (busy === false) clearRemoteActivity();
       } catch { /* An invalid presentation hint grants no state or authority. */ }
     });
     events.onmessage = (event) => {
@@ -498,7 +660,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
       void this.refresh(false).catch(() => {});
     };
     events.onerror = () => { clearRemoteActivity(); this.notice = "Disconnected — edits are not saved. Reconnecting to disk…"; this.eventSequence = -1; listener(); };
-    return () => { events.close(); clearRemoteActivity(); if (this.events === events) { this.events = undefined; this.listener = undefined; this.syncReceipt?.resolve(); } };
+    return () => { events.close(); clearRemoteActivity(); if (this.events === events) { this.events = undefined; this.listener = undefined; } };
   }
   async refresh(explicit = true) {
     if (explicit) {
@@ -510,39 +672,7 @@ export class FolderWorkbenchAdapter implements WorkbenchAdapter {
   }
 }
 
-/** Restrict host interactions without changing any accepted value or geometry. */
-export function readOnlyFolderPresentation(snapshot: WorkbenchSnapshot, reason: string): WorkbenchSnapshot {
-  const result = { ...snapshot, presentation: { ...snapshot.presentation },
-    dimensions: snapshot.dimensions ? { ...snapshot.dimensions } : undefined };
-  result.presentation.canUndo = false;
-  result.presentation.canRedo = false;
-  result.presentation.canFinish = false;
-  delete result.presentation.selectedGeometryRole;
-  const restrict = (rows: DeclarationRow[]): DeclarationRow[] => rows.map((row) => ({ ...row,
-    capabilities: { ...row.capabilities, ...Object.fromEntries(["edit", "move", "moveUp", "moveDown", "suppress", "delete"].map((action) => [action, { enabled: false, reason }])) },
-    children: restrict(row.children),
-  }));
-  result.explorer = restrict(result.explorer);
-  const metadata = (value: AuthoringMetadataSnapshot | undefined) => value ? { ...value, editable: false, canExtract: false, reason } : undefined;
-  if (result.authoringDocument) result.authoringDocument = { ...result.authoringDocument, editable: false, reason };
-  if (result.selection) result.selection = { ...result.selection, metadata: metadata(result.selection.metadata) };
-  result.parameters = result.parameters.map((parameter) => ({ ...parameter, editable: false, metadata: metadata(parameter.metadata) }));
-  if (result.dimensions) {
-    result.dimensions.entries = result.dimensions.entries.map((entry) => ({ ...entry, editable: false, reason, metadata: metadata(entry.metadata) }));
-    result.dimensions.parameters = result.dimensions.parameters.map((parameter) => ({ ...parameter, editable: false, metadata: metadata(parameter.metadata) }));
-    if (result.dimensions.allMeasurements) result.dimensions.allMeasurements = result.dimensions.allMeasurements.map((entry) => ({ ...entry, editable: false, reason, metadata: metadata(entry.metadata) }));
-  }
-  return result;
-}
+const localCommands = new Set(["explorer.visibility.set", "explorer.visibility.isolate", "explorer.visibility.restore", "view.construction.toggle", "view.fit", "view.origin", "view.grid.toggle", "dimensions.hover", "dimensions.hover.clear", "dimensions.navigation.begin", "dimensions.navigation.end", "dimensions.mode", "dimensions.pin", "dimensions.clearPins", "dimensions.focus", "selection.clear"]);
+const structuredCommands = new Set(["parameter.edit", "dimensions.edit", "authoring.metadata.set", "authoring.parameter.extract", "declaration.move", "declaration.delete", "declaration.suppression.set"]);
 
-const transientLocalCommands = new Set(["dimensions.hover", "dimensions.hover.clear", "dimensions.navigation.begin", "dimensions.navigation.end"]);
-const localCommands = new Set([...transientLocalCommands, "view.fit", "view.origin", "view.grid.toggle", "dimensions.mode", "dimensions.pin", "dimensions.clearPins", "dimensions.focus", "selection.clear"]);
-function changesSelection(method: string, input: unknown) {
-  // All pointer requests on the local-capable path are semantic edits; their
-  // authoritative created/dragged selection may intentionally change.
-  return method === "pointer" || method === "cancel" || method === "dispatch" && ["selection.select", "declaration.select", "navigation.rows.select", "navigation.source.select", "sample.open", "project.new", "project.new-code", "project.import", "history.undo", "history.redo", "declaration.delete", "declaration.suppression.set", "tool.select", "tool.finish", "feature.apply"].includes((input as { command?: string })?.command ?? "");
-}
-
-function isPresentationCommand(command: string) {
-  return command.startsWith("view.") || command.startsWith("navigation.") || command.startsWith("explorer.") || ["selection.select", "declaration.select", "source.select", "declaration.source.open"].includes(command) || localCommands.has(command);
-}
+const personalCommands = new Set(["explorer.visibility.set", "explorer.visibility.isolate", "explorer.visibility.restore", "view.construction.toggle", "dimensions.mode", "dimensions.pin", "dimensions.clearPins"]);

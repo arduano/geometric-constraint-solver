@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import { auxiliaryTools } from "../../../../../packages/geosolve-engine/src/tool-catalog";
 import { CollaborationClient, collaborationRequestId, type CollaborationState, type Command, type Participant, type PendingCheckpoint, type Receipt, type JournalRecord } from "../../../../../packages/geosolve-collaboration/src/client";
 import type { SourceSnapshot, UserTextHistory } from "../../../../../packages/geosolve-collaboration/src/source";
 import type { TextSnapshot } from "../../../../../packages/geosolve-collaboration/src/index";
@@ -14,7 +15,7 @@ import type { SourceEditorEdit } from "../components/code-editor";
 import { LocalAuthoringWorker, type LocalAuthoringClient, type AuthoringModel, type AuthoringPreview, type AuthoringView } from "./collaboration-authoring-adapter";
 import { CollaborationAuthoringController, supportsCollaborativeTool, type AuthoringCommand } from "./collaboration-authoring-controller";
 import { projectAuthoredSource, projectCanonicalSource, projectSourceNavigation, type SourceProjection } from "./collaboration-source-projection";
-import type { BrowsingNavigationCommand, BrowsingEditCommand, BrowsingChrome } from "./collaboration-browsing-worker";
+import type { BrowsingNavigationCommand, BrowsingEditCommand, BrowsingChrome, BrowsingInitialization } from "./collaboration-browsing-worker";
 import type { ManagedSketchMutation } from "./managed-compiler";
 import { LocalBrowsingWorker, type LocalBrowsingClient } from "./collaboration-browsing-adapter";
 import { createRemoteAuthoringClient } from "./collaboration-remote-authoring";
@@ -34,7 +35,7 @@ export interface CollaborativeDocument extends SourceSnapshot {
   readonly inventory:{readonly objects:readonly {object:string;declaration:string;dependencies:readonly string[]}[];
     readonly properties:readonly {object:string;declaration:string;path:readonly unknown[];value:unknown}[]};
 }
-export interface CollaborativeScene {snapshot:WorkbenchSnapshot;seed:InteractionSeed;toolCatalog:ToolCatalog}
+export interface CollaborativeScene {seed:InteractionSeed}
 export type CollaborativeTextClient=Pick<CollaborationTextWorker,"open"|"edit"|"receive"|"undo"|"redo"|"snapshot"|"dispose">;
 interface PeerPresence {userId:string;clientId:string;sequence:number;cursor:readonly[number,number]|null;selection:readonly string[]}
 const localCommands=new Set(["explorer.visibility.set","explorer.visibility.isolate","explorer.visibility.restore","view.construction.toggle","view.fit","view.origin","view.grid.toggle","dimensions.hover","dimensions.hover.clear","dimensions.navigation.begin","dimensions.navigation.end","dimensions.mode","dimensions.pin","dimensions.clearPins","dimensions.focus","selection.clear"]);
@@ -54,6 +55,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
   private readonly browsing?:LocalBrowsingClient;
   private browsingReady:Promise<unknown>=Promise.resolve();
   private browsingGeneration=0;
+  private initializingScene?:{revision:number;promise:Promise<BrowsingInitialization>};
   private browsingScheduled=false;
   private browsingAgain=false;
   private seed?:InteractionSeed;
@@ -210,7 +212,7 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     if(input.command==="geometry.role.toggle"){
       if(this.editingBlockedReason)throw Error(this.editingBlockedReason);
       if(!this.authoring||!this.local.authoringPointer||!this.view)throw Error("Accepted tool selection is still loading");
-      await this.queueLocal(async()=>{const {viewport}=await this.local.authoringPointer!({x:0,y:0});this.authoring!.applyOperation("toggle_geometry_role",{viewport,view:this.view!});});
+      await this.queueLocal(async()=>{const {viewport}=await this.local.authoringPointer!({x:0,y:0});this.authoring!.applyOperation(auxiliaryTools["geometry-role"],{viewport,view:this.view!});});
       return this.projectText();
     }
     if(input.command==="geometry.authoring-role.toggle"){this.authoring?.toggleRole();return this.projectText();}
@@ -394,23 +396,37 @@ export class CollaborativeWorkbenchAdapter implements WorkbenchAdapter {
     if(this.state?.document.accepted.modelRevision!==scene.revision)throw Error("The shared sketch is changing; waiting for a matching model and scene");
     if(scene.revision<this.modelRevision)return this.snapshot();
     if(scene.revision===this.modelRevision)return this.projectText();
+    const document=this.state?.document,connection=this.client.connection;
+    if(!document||!connection||document.accepted.modelRevision!==scene.revision)throw Error("Accepted model changed while loading its scene");
+    if(!this.browsing?.initialize)throw Error("Native accepted browsing initialization is unavailable");
+    const model={...document.model,revision:scene.revision,documentEpoch:connection.documentEpoch};
+    if(this.initializingScene?.revision!==scene.revision){
+      this.browsingGeneration++;
+      const promise=this.browsing.initialize(model,scene.value.seed);
+      this.initializingScene={revision:scene.revision,promise};
+      this.browsingReady=promise;void promise.catch(()=>{});
+      void promise.catch(()=>{if(this.initializingScene?.promise===promise)this.initializingScene=undefined;});
+    }
+    // Reconstruction runs outside the navigation queue. The installed accepted
+    // canvas remains usable while another native worker prepares its replacement.
+    let initial:BrowsingInitialization;
+    try{initial=await this.initializingScene.promise;}
+    catch(error){
+      if(!this.disposed&&this.state?.document.accepted.modelRevision!==scene.revision)return this.refreshScene();
+      throw error;
+    }
+    if(this.state?.document.accepted.modelRevision!==scene.revision)return this.refreshScene();
     return this.queueLocal(async()=>{
       if(scene.revision<this.modelRevision)return this.snapshot();
       if(scene.revision===this.modelRevision)return this.projectText();
-      const snapshot=assertWorkbenchSnapshot(scene.value.snapshot);
-      this.catalog=assertToolCatalog(scene.value.toolCatalog);
-      const local=this.installed?await this.local.replace(scene.value.seed,true):await this.local.construct(scene.value.seed);
-      this.prediction=undefined;this.modelRevision=scene.revision;this.seed=scene.value.seed;this.view={seed:this.seed,state:local.state};this.acceptedFrame=local.frame;this.schedulePresencePaint();
+      if(this.state?.document.accepted.modelRevision!==scene.revision)throw Error("Accepted model changed before scene installation");
+      const snapshot=assertWorkbenchSnapshot(initial.snapshot);
+      this.catalog=assertToolCatalog(initial.toolCatalog);
+      const local=this.installed?await this.local.replace(initial.seed,true):await this.local.construct(initial.seed);
+      this.prediction=undefined;this.modelRevision=scene.revision;this.seed=initial.seed;this.view={seed:this.seed,state:local.state};this.acceptedFrame=local.frame;this.schedulePresencePaint();
       this.installed={...snapshot,...projectSourceNavigation(snapshot.navigation,snapshot.explorer,this.state?.document.sourceProjection),
         selection:snapshot.selection&&{...snapshot.selection,source:snapshot.selection.source&&projectAuthoredSource(snapshot.selection.source,this.state?.document.sourceProjection)},frame:local.frame};
-      const document=this.state?.document,connection=this.client.connection;
-      if(document&&connection&&document.accepted.modelRevision===scene.revision){
-        const model={...document.model,revision:scene.revision,documentEpoch:connection.documentEpoch};this.authoring?.replace(model);
-        if(this.browsing){
-          this.browsingGeneration++;
-          this.browsingReady=this.browsing.replace(model,this.seed);void this.browsingReady.catch(()=>{});this.scheduleBrowsing();
-        }
-      }
+      this.authoring?.replace(model);this.scheduleBrowsing();
       return this.projectText();
     });
   }

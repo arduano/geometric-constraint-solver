@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { gunzipSync } from "node:zlib";
-import { initProject, serveProject } from "./file-workspace.mjs";
+import { nativeBrowsing } from "./workspace-native-test.mjs";
+import { initProject, serveProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 async function setup(t,prepare) {
   const folder=mkdtempSync(resolve(tmpdir(),"geosolve-m98-http-"));
@@ -150,27 +151,34 @@ test("M98-F015 rejected external generator retains the measured, zoomed and pann
     writeFileSync(resolve(folder,"geosolve.json"),JSON.stringify({format:"geosolve-folder-v2",entry:"sketch.ts",mode:"generator"}));
     writeFileSync(resolve(folder,"sketch.ts"),source);
   });
-  const adapter=f.bridge.project.adapter;
+  const server=f.bridge.project.adapter;
+  const local=await nativeBrowsing(await server.snapshot()); t.after(()=>local.dispose());
+  let frame;
+  const adapter=Object.fromEntries(["resize","wheel","pointer"].map(method=>[method,async input=>{const update=JSON.parse(local.interaction[method](JSON.stringify(input)));if(update)frame=update.frame;return update;}]));
   await adapter.resize({version:2,width:969,height:876,pixelRatio:2});
   await adapter.wheel({version:2,x:127,y:283,deltaX:0,deltaY:-160,ctrl:false});
   for(const [phase,x,y,buttons] of [["down",480,320,4],["move",540,345,4],["up",540,345,0]]) {
     await adapter.pointer({version:2,phase,pointerId:17,x,y,buttons,modifiers:{alt:false,ctrl:false,meta:false,shift:false}});
   }
-  const before=await adapter.snapshot(),state=f.bridge.project.state(),persisted=await adapter.persistProject();
+  const before=frame,state=f.bridge.project.state(),persisted=await server.persistProject();
+  const nativeBefore=(await server.snapshot()).result.geometry;
   const rejected='throw Error("external rejection retains host view");'+source;
   writeFileSync(resolve(f.folder,"sketch.ts"),rejected);
   await f.bridge.project.scan(true);
-  const after=await adapter.snapshot();
+  const after=await server.snapshot();
+  const retained=JSON.parse(local.interaction.replace(JSON.stringify({seed:after.seed,preserveSelection:true})));
+  frame=retained.frame;
   assert.equal(f.bridge.project.state().status,"error");
   assert.equal(f.bridge.project.state().acceptedHash,state.acceptedHash);
   assert.equal(f.read(),rejected);
-  assert.deepEqual(after.frame.scene.viewBox,before.frame.scene.viewBox);
-  const geometry=(snapshot)=>snapshot.frame.scene.items.filter((item)=>item.layer==="geometry");
-  assert.deepEqual(geometry(after),geometry(before));
-  assert.deepEqual(await adapter.persistProject(),persisted);
+  assert.deepEqual(frame.scene.viewBox,before.scene.viewBox);
+  const geometry=(frame)=>frame.scene.items.filter((item)=>item.layer==="geometry");
+  assert.deepEqual(geometry(frame),geometry(before));
+  assert.deepEqual(after.result.geometry,nativeBefore);
+  assert.deepEqual(await server.persistProject(),persisted);
   await adapter.resize({version:2,width:800,height:600,pixelRatio:1});
   await adapter.resize({version:2,width:969,height:876,pixelRatio:2});
-  assert.deepEqual(geometry(await adapter.snapshot()),geometry(before),"subsequent resize retains the already-measured camera instead of fitting again");
+  assert.deepEqual(geometry(frame),geometry(before),"subsequent resize retains the already-measured camera instead of fitting again");
 });
 
 test("init refuses existing authored files without replacing source or manifest",()=>{
@@ -203,6 +211,12 @@ test("HTTP rejects missing or foreign tokens, hostile origins and unsupported wr
   const internalRestore=await f.rpc("dispatch",{version:2,command:"workspace.checkpoint.restore",payload:{contents:(await f.bridge.project.adapter.persistProject()).contents}},initial.state,"forbidden-restore");
   assert.equal(internalRestore.status,400,internalRestore.error);
   assert.match(internalRestore.error,/Folder mode keeps/);
+  for (const command of ["view.fit", "tool.select", "selection.clear", "parameter.edit"]) {
+    const unsupported = await f.rpc("dispatch", {version:2,command}, initial.state, `legacy-${command.replaceAll(".", "-")}`);
+    assert.equal(unsupported.status,400,unsupported.error);
+    assert.match(unsupported.error,/Unsupported folder authoring command/);
+    assert.deepEqual(unsupported.state.authority,initial.state.authority,"removed UI commands cannot invalidate an accepted edit basis");
+  }
   assert.equal(f.read(),before);
   assert.deepEqual(readFileSync(resolve(f.folder,".geosolve/design.json")),design);
   assert.equal(f.bridge.project.state().writes,initial.state.writes);
@@ -228,9 +242,9 @@ test("an external rename before any watcher scan rejects a v2 edit with the old 
 test("a real publication failure retains source, semantic design and recoverable pending source",async(t)=>{
   const f=await setup(t),initial=await f.rpc("session.join"),before=f.read();
   const design=readFileSync(resolve(f.folder,".geosolve/design.json"));
-  await f.bridge.project.adapter.resize({version:2,width:969,height:876,pixelRatio:2});
-  await f.bridge.project.adapter.wheel({version:2,x:127,y:283,deltaX:0,deltaY:-160,ctrl:false});
-  const frame=(await f.bridge.project.adapter.snapshot()).frame.scene;
+  const local=await nativeBrowsing(await f.bridge.project.adapter.snapshot()); t.after(()=>local.dispose());
+  local.interaction.resize(JSON.stringify({version:2,width:969,height:876,pixelRatio:2}));
+  const frame=JSON.parse(local.interaction.wheel(JSON.stringify({version:2,x:127,y:283,deltaX:0,deltaY:-160,ctrl:false}))).frame.scene;
   const candidate=before.replace("value: mm(10)","value: mm(20)");
   chmodSync(f.folder,0o500);
   try {
@@ -241,7 +255,8 @@ test("a real publication failure retains source, semantic design and recoverable
     assert.equal(f.read(),before);
     assert.deepEqual(readFileSync(resolve(f.folder,".geosolve/design.json")),design);
     assert.equal(response.state.writes,initial.state.writes);
-    const retained=(await f.bridge.project.adapter.snapshot()).frame.scene;
+    const model=await f.bridge.project.adapter.snapshot();
+    const retained=JSON.parse(local.interaction.replace(JSON.stringify({seed:model.seed,preserveSelection:true}))).frame.scene;
     assert.deepEqual(retained.viewBox,frame.viewBox);
     assert.deepEqual(retained.items.filter((item)=>item.layer==="geometry"),frame.items.filter((item)=>item.layer==="geometry"));
   } finally {chmodSync(f.folder,0o700);}

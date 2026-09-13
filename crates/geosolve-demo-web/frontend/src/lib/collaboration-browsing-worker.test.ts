@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import initializePresentation, { BrowsingHandle, WorkbenchHandle, InteractionHandle } from "../generated/geosolve_demo_web.js";
 import initializeEngine, * as engineWasm from "../../../../../packages/geosolve-engine/dist/wasm/geosolve_sketch_engine_wasm.js";
 import { createEngine } from "../../../../../packages/geosolve-engine/src/index";
-import { createBrowsingWorkerHandler, type BrowsingAction, type BrowsingConstructor, type BrowsingNativeHandle, type BrowsingResult, type BrowsingWorkerRequest, type BrowsingWorkerResponse } from "./collaboration-browsing-worker";
+import { createBrowsingWorkerHandler, type BrowsingAction, type BrowsingModel, type BrowsingConstructor, type BrowsingNativeHandle, type BrowsingResult, type BrowsingWorkerRequest, type BrowsingWorkerResponse } from "./collaboration-browsing-worker";
 import { LocalBrowsingWorker } from "./collaboration-browsing-adapter";
 import type { AuthoringModel, AuthoringView } from "./collaboration-authoring-worker";
 import { LocalInteractionWorker } from "./local-interaction-adapter";
@@ -42,6 +42,147 @@ function parameterMeaning({ rowKey: _rowKey, metadata, ...parameter }: Parameter
 }
 
 describe("independent native browsing", () => {
+  it("initializes a generated artifact without inventing source or design", async () => {
+    const mock = new MockWorkbenchAdapter();
+    const initial = { snapshot: await mock.snapshot(), seed: view.seed, toolCatalog: await mock.toolCatalog() };
+    const generated: BrowsingModel = { documentEpoch: "generator", revision: 3, sourceDesignDigest: "generated-digest", generated: "{\"format\":\"generated-fixture\"}" };
+    const inputs: unknown[] = [];
+    class Native implements BrowsingNativeHandle {
+      constructor(request: string) { inputs.push(JSON.parse(request)); }
+      initialize() { return JSON.stringify(initial); }
+      update() { return "{}"; } navigate() { return "{}"; } describe() { return "null"; } free() {}
+    }
+    const send = harness(Promise.resolve(Native));
+    const expected = { kind: "initialized" as const, model: { documentEpoch: generated.documentEpoch, revision: generated.revision, sourceDesignDigest: generated.sourceDesignDigest }, ...initial };
+    expect(await send({ method: "initialize", model: generated, seed: view.seed })).toEqual(expected);
+    expect(inputs).toEqual([{ generated: generated.generated, seed: view.seed }]);
+    expect(inputs[0]).not.toHaveProperty("project"); expect(inputs[0]).not.toHaveProperty("design");
+    expect((await send({ method: "present", view })).model).toEqual(expected.model);
+    await expect(send({ method: "initialize", model: { ...generated, ...model }, seed: view.seed }, 2)).rejects.toThrow("Invalid generated browsing model");
+    expect(inputs).toHaveLength(1);
+    expect(await send({ method: "replace", model: { ...generated, revision: 4 }, seed: view.seed }, 2)).toMatchObject({ kind: "ready", model: { revision: 4 } });
+    expect(inputs[1]).toEqual({ generated: generated.generated, seed: view.seed });
+    const transport = new FakeWorker(), browsing = new LocalBrowsingWorker(transport as unknown as Worker);
+    const opened = browsing.initialize(generated, view.seed); await Promise.resolve();
+    expect(transport.postMessage.mock.lastCall?.[0]).toMatchObject({ method: "initialize", model: generated, seed: view.seed });
+    transport.reply({ id: 1, generation: 1, result: expected });
+    expect(await opened).toEqual(expected); browsing.dispose();
+  });
+
+  it("initializes accepted chrome once and orders later views behind native startup", async () => {
+    const mock = new MockWorkbenchAdapter();
+    const initial = { snapshot: await mock.snapshot(), seed: { ...view.seed, enriched: true }, toolCatalog: await mock.toolCatalog() };
+    const events: string[] = [];
+    let resolveConstructor!: (constructor: BrowsingConstructor) => void;
+    class Native implements BrowsingNativeHandle {
+      constructor(request: string) { events.push("construct"); expect(JSON.parse(request)).toEqual({ project: model.project, design: model.design, seed: view.seed }); }
+      initialize() { events.push("initialize"); return JSON.stringify(initial); }
+      update() { events.push("update"); return "{}"; }
+      navigate(): string { throw Error("unused"); }
+      describe(): string { throw Error("unused"); }
+      free() { events.push("free"); }
+    }
+    const send = harness(new Promise<BrowsingConstructor>(resolve => { resolveConstructor = resolve; }));
+    const opening = send({ method: "initialize", model, seed: view.seed });
+    const presenting = send({ method: "present", view });
+    await Promise.resolve(); expect(events).toEqual([]);
+    resolveConstructor(Native);
+    expect(await opening).toEqual({ kind: "initialized", model: { documentEpoch: model.documentEpoch, revision: model.revision, sourceDesignDigest: model.sourceDesignDigest }, ...initial });
+    expect((await presenting).kind).toBe("chrome");
+    expect(events).toEqual(["construct", "initialize", "update"]);
+    await send({ method: "replace", model: { ...model, revision: 2 }, seed: view.seed }, 2);
+    expect(events).toEqual(["construct", "initialize", "update", "construct", "free"]);
+  });
+
+  it("forwards saved personal presentation through browser initialization", async () => {
+    const mock = new MockWorkbenchAdapter();
+    const initial = { snapshot: await mock.snapshot(), seed: view.seed, toolCatalog: await mock.toolCatalog() };
+    const presentation = { hiddenRows: ["managed:edge"], constructionVisible: false, dimensions: { mode: "all" as const, pins: ["dimension:key"] } };
+    const inputs: unknown[] = [];
+    class Native implements BrowsingNativeHandle {
+      constructor(request: string) { inputs.push(JSON.parse(request)); }
+      initialize() { return JSON.stringify(initial); }
+      update() { return "{}"; } navigate() { return "{}"; } describe() { return "null"; } free() {}
+    }
+    const send = harness(Promise.resolve(Native));
+    expect(await send({ method: "initialize", model, seed: view.seed, presentation })).toMatchObject({ kind: "initialized", snapshot: initial.snapshot });
+    expect(inputs).toEqual([{ project: model.project, design: model.design, seed: view.seed, presentation }]);
+    const transport = new FakeWorker(), browsing = new LocalBrowsingWorker(transport as unknown as Worker);
+    const opened = browsing.initialize(model, view.seed, presentation); await Promise.resolve();
+    expect(transport.postMessage.mock.lastCall?.[0]).toMatchObject({ method: "initialize", presentation });
+    transport.reply({ id: 1, generation: 1, result: { ...initial, kind: "initialized", model } });
+    await opened; browsing.dispose();
+  });
+
+  it("retains the prior accepted handle and frees a refused initialization candidate", async () => {
+    const events: string[] = [];
+    let fail = true;
+    class Native implements BrowsingNativeHandle {
+      initialize() { if (fail) throw Error("initial chrome rejected"); return JSON.stringify({ snapshot: {}, seed: { sceneKey: "foreign" }, toolCatalog: {} }); }
+      update() { events.push("update"); return "{}"; }
+      navigate(): string { throw Error("unused"); }
+      describe(): string { throw Error("unused"); }
+      free() { events.push("free"); }
+    }
+    const send = harness(Promise.resolve(Native));
+    await send({ method: "replace", model, seed: view.seed });
+    await expect(send({ method: "initialize", model: { ...model, revision: 2 }, seed: view.seed }, 2)).rejects.toThrow("initial chrome rejected");
+    expect(events).toEqual(["free"]);
+    expect((await send({ method: "present", view })).kind).toBe("chrome");
+    fail = false;
+    await expect(send({ method: "initialize", model: { ...model, revision: 2 }, seed: view.seed }, 2)).rejects.toThrow("Invalid native browsing initialization");
+    expect(events).toEqual(["free", "update", "free"]);
+    await expect(send({ method: "initialize", model, seed: view.seed })).rejects.toThrow("obsolete");
+    expect((await send({ method: "present", view })).kind).toBe("chrome");
+    class LegacyNative implements BrowsingNativeHandle {
+      update() { return "{}"; } navigate() { return "{}"; } describe() { return "null"; } free() {}
+    }
+    const legacy = harness(Promise.resolve(LegacyNative));
+    await legacy({ method: "replace", model, seed: view.seed });
+    await expect(legacy({ method: "initialize", model, seed: view.seed }, 2)).rejects.toThrow("initialization is unavailable");
+    expect((await legacy({ method: "present", view })).kind).toBe("chrome");
+  });
+
+  it("replaces initialization generations and ignores late initialized replies", async () => {
+    const mock = new MockWorkbenchAdapter();
+    const initial = { snapshot: await mock.snapshot(), seed: view.seed, toolCatalog: await mock.toolCatalog() };
+    const transport = new FakeWorker(), browsing = new LocalBrowsingWorker(transport as unknown as Worker);
+    const first = expect(browsing.initialize(model, view.seed)).rejects.toThrow("Browsing model was replaced");
+    await Promise.resolve();
+    expect(transport.postMessage.mock.lastCall?.[0]).toMatchObject({ method: "initialize", generation: 1, model, seed: view.seed });
+    const queued = expect(browsing.present(view)).rejects.toThrow("Browsing model was replaced");
+    const replacement = { ...model, revision: 2 };
+    const next = browsing.initialize(replacement, view.seed);
+    await Promise.resolve(); await first; await queued;
+    const current = transport.postMessage.mock.lastCall![0] as BrowsingWorkerRequest;
+    expect(current).toMatchObject({ method: "initialize", generation: 2 });
+    transport.reply({ id: 1, generation: 1, result: { kind: "initialized", model, ...initial } });
+    transport.reply({ id: current.id, generation: 2, result: { kind: "initialized", model: replacement, ...initial } });
+    expect(await next).toEqual({ kind: "initialized", model: replacement, ...initial });
+    const pending = expect(browsing.initialize(replacement, view.seed)).rejects.toThrow("Browsing worker was disposed");
+    await Promise.resolve(); browsing.dispose(); await pending;
+    expect(transport.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects malformed initialized payloads at the native response boundary", async () => {
+    const mock = new MockWorkbenchAdapter();
+    const initial = { snapshot: await mock.snapshot(), seed: view.seed, toolCatalog: await mock.toolCatalog() };
+    const invalid = [
+      { ...initial, seed: { sceneKey: "foreign" } },
+      { ...initial, snapshot: { ...initial.snapshot, revision: Number.NaN } },
+      { ...initial, toolCatalog: { ...initial.toolCatalog, sections: [] } },
+    ];
+    for (const payload of invalid) {
+      const transport = new FakeWorker(), browsing = new LocalBrowsingWorker(transport as unknown as Worker);
+      const opened = expect(browsing.initialize(model, view.seed)).rejects.toThrow();
+      await Promise.resolve();
+      transport.reply({ id: 1, generation: 1, result: { kind: "initialized", model, ...payload } });
+      await opened;
+      expect(transport.terminate).toHaveBeenCalledTimes(1);
+      await expect(browsing.present(view)).rejects.toThrow();
+    }
+  });
+
   it("preserves navigation and edit descriptions between coalesced views", async () => {
     const transport = new FakeWorker(), browsing = new LocalBrowsingWorker(transport as unknown as Worker);
     const opened = browsing.replace(model, view.seed); await Promise.resolve();

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { WorkspaceViewPresentation } from "../../../../../packages/geosolve-engine/src/index";
 import initializeWasm, { BrowsingHandle } from "../generated/geosolve_demo_web.js";
 import type { WorkbenchSnapshot } from "./adapter";
+import type { ToolCatalog } from "./tool-catalog";
 import type { AuthoringModel, AuthoringModelIdentity, AuthoringView } from "./collaboration-authoring-worker";
 import type { InteractionSeed, InteractionState } from "./local-interaction-worker";
 import type { ManagedSketchMutation } from "./managed-compiler";
@@ -13,18 +15,26 @@ export type BrowsingChrome = Partial<Pick<WorkbenchSnapshot["presentation"], "co
   readonly selection: WorkbenchSnapshot["selection"] | null;
   readonly selectedGeometryRole: WorkbenchSnapshot["presentation"]["selectedGeometryRole"] | null;
 };
-export type BrowsingAction = { method: "replace"; model: AuthoringModel; seed: InteractionSeed }
+export type BrowsingModel = AuthoringModel | (AuthoringModelIdentity & { readonly generated: string });
+export interface BrowsingInitialization {
+  readonly snapshot: WorkbenchSnapshot;
+  readonly seed: InteractionSeed;
+  readonly toolCatalog: ToolCatalog;
+}
+export type BrowsingAction = { method: "initialize"; model: BrowsingModel; seed: InteractionSeed; presentation?: WorkspaceViewPresentation }
+  | { method: "replace"; model: BrowsingModel; seed: InteractionSeed }
   | { method: "present"; view: AuthoringView }
   | { method: "navigate"; view: AuthoringView; command: BrowsingNavigationCommand; payload: unknown }
   | { method: "describe"; view: AuthoringView; authority: string; command: BrowsingEditCommand; payload: unknown };
 export type BrowsingWorkerRequest = BrowsingAction & { id: number; generation: number };
-export type BrowsingResult = { readonly kind: "ready"; readonly model: AuthoringModelIdentity }
+export type BrowsingResult = (BrowsingInitialization & { readonly kind: "initialized"; readonly model: AuthoringModelIdentity })
+  | { readonly kind: "ready"; readonly model: AuthoringModelIdentity }
   | { readonly kind: "chrome"; readonly model: AuthoringModelIdentity; readonly view: AuthoringView; readonly chrome: BrowsingChrome }
   | { readonly kind: "navigation"; readonly model: AuthoringModelIdentity; readonly view: AuthoringView; readonly chrome: BrowsingChrome; readonly state: InteractionState }
   | { readonly kind: "mutation"; readonly model: AuthoringModelIdentity; readonly view: AuthoringView; readonly mutation: ManagedSketchMutation | null };
 export type BrowsingWorkerResponse = { id: number; generation: number; result: BrowsingResult }
   | { id: number; generation: number; error: string };
-export interface BrowsingNativeHandle { update(state: string): string; navigate(request: string): string; describe(request: string): string; free(): void }
+export interface BrowsingNativeHandle { initialize?(): string; update(state: string): string; navigate(request: string): string; describe(request: string): string; free(): void }
 export type BrowsingConstructor = new (request: string) => BrowsingNativeHandle;
 
 /** The native constructor independently reconstructs accepted project/design once.
@@ -40,13 +50,24 @@ export function createBrowsingWorkerHandler(constructor: Promise<BrowsingConstru
       try {
         if (!Number.isSafeInteger(data?.id) || data.id < 1 || !Number.isSafeInteger(data.generation) || data.generation < 1) throw Error("Invalid browsing worker request");
         let result: BrowsingResult;
-        if (data.method === "replace") {
+        if (data.method === "replace" || data.method === "initialize") {
           if (data.generation <= generation || !data.model.documentEpoch || !Number.isSafeInteger(data.model.revision) || data.model.revision < 0 || !data.model.sourceDesignDigest) throw Error("Invalid or obsolete browsing model");
           const Constructor = await constructor;
-          const next = new Constructor(JSON.stringify({ project: data.model.project, design: data.model.design, seed: data.seed }));
+          if ("generated" in data.model && (typeof data.model.generated !== "string" || "project" in data.model || "design" in data.model)) throw Error("Invalid generated browsing model");
+          const input = "generated" in data.model ? { generated: data.model.generated, seed: data.seed }
+            : { project: data.model.project, design: data.model.design, seed: data.seed };
+          const next = new Constructor(JSON.stringify({ ...input, ...(data.method === "initialize" && data.presentation ? { presentation: data.presentation } : {}) }));
+          let initial: BrowsingInitialization | undefined;
+          try {
+            if (data.method === "initialize") {
+              if (!next.initialize) throw Error("Native browsing initialization is unavailable");
+              initial = JSON.parse(next.initialize()) as BrowsingInitialization;
+              if (!initial?.snapshot || !initial.toolCatalog || !initial.seed || initial.seed.sceneKey !== data.seed.sceneKey) throw Error("Invalid native browsing initialization");
+            }
+          } catch (error) { next.free(); throw error; }
           handle?.free(); handle = next; generation = data.generation; sceneKey = data.seed.sceneKey;
           model = { documentEpoch: data.model.documentEpoch, revision: data.model.revision, sourceDesignDigest: data.model.sourceDesignDigest };
-          result = { kind: "ready", model };
+          result = initial ? { kind: "initialized", model, snapshot: initial.snapshot, seed: initial.seed, toolCatalog: initial.toolCatalog } : { kind: "ready", model };
         } else {
           if (!handle || !model || generation !== data.generation) throw Error("Browsing request belongs to an obsolete accepted model");
           if (data.view.seed.sceneKey !== sceneKey || data.view.state.sceneKey !== sceneKey) throw Error("Browsing view belongs to another scene");

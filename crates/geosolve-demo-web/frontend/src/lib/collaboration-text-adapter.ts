@@ -2,32 +2,23 @@
 import type { TextWorkerRequest, TextWorkerResponse, TextWorkerUpdate } from "./collaboration-text-worker";
 import type { TextEdit, TextRevision } from "../../../../../packages/geosolve-collaboration/src/index";
 export type { TextWorkerUpdate, TextEdit, TextRevision };
-type WithoutId<T>=T extends unknown?Omit<T,"id">:never;
+import { WorkerRequestChannel, type WorkerTransport, type WithoutWorkerId } from "./worker-channel";
+
+/** Every CRDT request is sent in order. Text merging stays in its native owner. */
 export class CollaborationTextWorker {
-  private id=0;
-  private readonly pending=new Map<number,{resolve:(value:TextWorkerUpdate)=>void;reject:(error:Error)=>void}>();
-  private failure?:Error;
-  private readonly worker:Worker;
-  constructor(){
-    this.worker=new Worker(new URL("./collaboration-text-worker.ts",import.meta.url),{type:"module"});
-    this.worker.onmessage=({data}:MessageEvent<TextWorkerResponse>)=>{
-      const pending=this.pending.get(data.id);if(!pending)return;this.pending.delete(data.id);
-      if("error"in data)pending.reject(Error(data.error));else pending.resolve(data.result);
-    };
-    this.worker.onerror=event=>{event.preventDefault();this.fail(Error(event.message||"Shared text worker stopped"));};
-    this.worker.onmessageerror=()=>this.fail(Error("Shared text response could not be decoded"));
+  private readonly channel: WorkerRequestChannel<WithoutWorkerId<TextWorkerRequest>, TextWorkerResponse, TextWorkerUpdate>;
+  constructor(worker: WorkerTransport = new Worker(new URL("./collaboration-text-worker.ts", import.meta.url), { type: "module" })) {
+    this.channel = new WorkerRequestChannel(worker, {
+      stoppedMessage: "Shared text worker stopped", unreadableMessage: "Shared text response could not be decoded",
+      responseError: (response) => "error" in response ? response.error : undefined,
+      decode: (response) => { if ("error" in response) throw Error(response.error); return response.result; },
+    });
   }
-  open(actor:readonly number[],checkpoint:readonly number[],saved?:readonly number[]){return this.request({method:"open",actor,checkpoint,saved});}
-  edit(revision:TextRevision,edits:readonly TextEdit[]){return this.request({method:"edit",revision,edits});}
-  receive(changes:readonly (readonly number[])[]){return this.request({method:"receive",changes});}
-  undo(){return this.request({method:"undo"});}
-  redo(){return this.request({method:"redo"});}
-  snapshot(){return this.request({method:"snapshot"});}
-  dispose(){this.fail(Error("Shared text worker disposed"));}
-  private request(input:WithoutId<TextWorkerRequest>):Promise<TextWorkerUpdate>{
-    if(this.failure)return Promise.reject(this.failure);
-    const id=++this.id;
-    return new Promise((resolve,reject)=>{this.pending.set(id,{resolve,reject});try{this.worker.postMessage({...input,id});}catch(error){this.pending.delete(id);reject(error);}});
-  }
-  private fail(error:Error){if(this.failure)return;this.failure=error;this.worker.terminate();for(const pending of this.pending.values())pending.reject(error);this.pending.clear();}
+  open(actor:readonly number[],checkpoint:readonly number[],saved?:readonly number[]){return this.channel.request({method:"open",actor,checkpoint,saved});}
+  edit(revision:TextRevision,edits:readonly TextEdit[]){return this.channel.request({method:"edit",revision,edits});}
+  receive(changes:readonly (readonly number[])[]){return this.channel.request({method:"receive",changes});}
+  undo(){return this.channel.request({method:"undo"});}
+  redo(){return this.channel.request({method:"redo"});}
+  snapshot(){return this.channel.request({method:"snapshot"});}
+  dispose(){this.channel.fail(Error("Shared text worker disposed"));}
 }

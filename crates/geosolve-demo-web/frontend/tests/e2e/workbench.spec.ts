@@ -1033,7 +1033,7 @@ test("the supplied native contact workspace retains a constrained point drag", a
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   const reproduction = await readFile(
-    new URL("../../../tests/fixtures/m90_f005_native_drag_repro.txt", import.meta.url),
+    new URL("../../../../geosolve-constraint-editor/tests/fixtures/m90_f005_native_drag_repro.txt", import.meta.url),
     "utf8",
   );
   expect(reproduction).toMatch(/^GEOSOLVE_REPRO_V1:/);

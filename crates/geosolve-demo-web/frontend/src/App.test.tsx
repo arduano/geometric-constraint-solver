@@ -5,6 +5,7 @@ import axe from "axe-core";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { createBrowserWorkbenchSession } from "./lib/browser-workbench-session";
 import reviewedCatalog from "../../../geosolve-sketch-code/assets/bundled-sample-catalog.json";
 import { MockWorkbenchAdapter } from "./lib/mock-adapter";
 import {
@@ -54,7 +55,7 @@ async function ready(
   projectStore: ProjectStore = new TestProjectStore(),
 ) {
   const user = userEvent.setup();
-  const result = render(<App adapter={adapter} projectStore={projectStore} />);
+  const result = render(<App session={createBrowserWorkbenchSession(adapter, projectStore)} />);
   await screen.findByText("Untitled sketch");
   return { user, adapter, projectStore, ...result };
 }
@@ -1047,7 +1048,7 @@ describe("M88 workbench interaction contract", () => {
     }
     const projectStore = new TestProjectStore("rejected-saved-workspace");
 
-    render(<App adapter={new RejectingPersistenceAndFallbackAdapter()} projectStore={projectStore} />);
+    render(<App session={createBrowserWorkbenchSession(new RejectingPersistenceAndFallbackAdapter(), projectStore)} />);
 
     expect(await screen.findByText("Workbench unavailable")).toBeVisible();
     expect(projectStore.removals).toBe(0);
@@ -1074,7 +1075,7 @@ describe("M88 workbench interaction contract", () => {
     }
     const projectStore = new UncertainProjectStore("unread-indexed-project");
 
-    render(<App adapter={new RejectingLegacyFallbackAdapter()} projectStore={projectStore} />);
+    render(<App session={createBrowserWorkbenchSession(new RejectingLegacyFallbackAdapter(), projectStore)} />);
 
     expect(await screen.findByText("Untitled sketch")).toBeVisible();
     expect(await screen.findByRole("alert")).toHaveTextContent("IndexedDB authority was unread");
@@ -1097,7 +1098,7 @@ describe("M88 workbench interaction contract", () => {
     }
     const adapter = new DelayedFallbackAdapter();
     const projectStore = new TestProjectStore("rejected-saved-workspace");
-    render(<App adapter={adapter} projectStore={projectStore} />);
+    render(<App session={createBrowserWorkbenchSession(adapter, projectStore)} />);
     await waitFor(() => expect(adapter.fallbackStarted).toBe(true));
 
     expect(projectStore.removals).toBe(0);

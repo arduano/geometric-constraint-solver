@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEngine } from "../packages/geosolve-engine/dist/index.js";
-import { runCollaborationDomainJob as job } from "./collaboration-domain.mjs";
+import { runCollaborationDomainJob as job } from "../packages/geosolve-cli/runtime/collaboration-domain.mjs";
 const viewport = { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 5 };
 test("domain replays genuine local construction and preserves native source receipts and monotonic names", async (t) => {
   const folder = await mkdtemp(join(tmpdir(), "geosolve-domain-construction-")); t.after(() => rm(folder, { recursive: true, force: true }));

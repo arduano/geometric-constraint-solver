@@ -5,7 +5,7 @@ import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { bakeProject, hash } from "./file-workspace.mjs";
+import { bakeProject, hash } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 const evidence = resolve("target/m98/bake");
 mkdirSync(evidence, { recursive: true });
@@ -19,7 +19,7 @@ const area = (loop) => loop.reduce((sum, a, i) => {
 const width = (loop) => Math.max(...loop.map(([x]) => x)) - Math.min(...loop.map(([x]) => x));
 const logs = [];
 function bake(folder, output, error = "0.02", success = true) {
-  const args = ["scripts/file-workspace.mjs", "bake", folder, "--out", output, "--chord-error-mm", error];
+  const args = ["packages/geosolve-cli/bin/geosolve.mjs", "bake", folder, "--out", output, "--chord-error-mm", error];
   const result = spawnSync(process.execPath, args, { encoding: "utf8", timeout: 60000 });
   logs.push({ args, status: result.status, stdout: result.stdout, stderr: result.stderr });
   writeFileSync(resolve(evidence, "regression-invocations.json"), JSON.stringify(logs, null, 2));

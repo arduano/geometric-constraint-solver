@@ -16,7 +16,7 @@
     "test:e2e": "playwright test",
     "test:e2e:language": "playwright test tests/e2e/language-service.spec.ts",
     "check": "npm run check:manifest && npm run check:licenses && npm run test:build && npm run test && npm run build",
-    "check:manifest": "cargo run --locked -q -p geosolve-sketch-code --example generate_frontend_samples -- --check src/data/samples.json && node scripts/check-sample-manifest.mjs",
+    "check:manifest": "npm run check:tools && cargo run --locked -q -p geosolve-sketch-code --example generate_frontend_samples -- --check src/data/samples.json && node scripts/check-sample-manifest.mjs",
     "check:licenses": "node scripts/check-runtime-licenses.mjs",
     "check:language-sdk": "node scripts/sync-language-service-declarations.mjs --check",
     "generate:language-sdk": "node scripts/sync-language-service-declarations.mjs",
@@ -26,7 +26,8 @@
     "check:static": "npm run check:manifest && npm run check:licenses && npm run test:build && npm run check:language-sdk",
     "build:release-artifacts": "node scripts/build-release-artifacts.mjs",
     "serve:artifact": "node scripts/serve-artifact.mjs",
-    "verify:artifact": "node scripts/verify-artifact.mjs"
+    "verify:artifact": "node scripts/verify-artifact.mjs",
+    "check:tools": "cargo run --locked -q -p geosolve-constraint-editor --example generate_tool_catalog -- --check ../../../packages/geosolve-engine/src/tool-catalog.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",

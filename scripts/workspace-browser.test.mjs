@@ -5,7 +5,8 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { chromium, expect } from "../crates/geosolve-demo-web/frontend/node_modules/@playwright/test/index.mjs";
-import { initProject, serveProject, bakeProject, hash } from "./file-workspace.mjs";
+import { initProject, serveProject, bakeProject, hash } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
+import { nativeBrowsing } from "./workspace-native-test.mjs";
 
 const evidence=resolve(process.env.GEOSOLVE_BROWSER_EVIDENCE ?? "target/m98/browser");
 mkdirSync(evidence,{recursive:true});
@@ -22,9 +23,11 @@ async function setup(t,prepare,options={}) {
   if(options.initScript) await context.addInitScript(options.initScript);
   const page=await context.newPage();
   const errors=[];page.on("pageerror",e=>errors.push(String(e)));
+  const openingStarted=performance.now();
   await page.goto(bridge.url);
-  await expect(page.locator('canvas[data-renderer="webgl2"]')).toHaveAttribute("data-render-state","ready");
-  return {folder,get bridge(){return bridge;},browser,context,page,errors,
+  await expect(page.locator('canvas[data-renderer="webgl2"]')).toHaveAttribute("data-render-state","ready",{timeout:options.readinessTimeout??5000});
+  const openingMs=performance.now()-openingStarted;
+  return {folder,get bridge(){return bridge;},browser,context,page,errors,openingMs,
     async restart(prepare){await bridge.close();prepare?.(folder);bridge=await serveProject(folder);await page.goto(bridge.url);await expect(page.locator('canvas[data-renderer="webgl2"]')).toHaveAttribute("data-render-state","ready");}};
 }
 
@@ -40,6 +43,63 @@ const status=async(fixture)=>{
   assert.equal(response.status,200);return response.json();
 };
 function curveWidth(items){const points=items.find((item)=>item.kind==="polyline"&&item.points.length>12)?.points;assert.ok(points,"real presented circle has sampled points");return Math.max(...points.map(([x])=>x))-Math.min(...points.map(([x])=>x));}
+
+// Observe the real worker boundaries, retaining native projection results rather
+// than reproducing screen/model conversion or authoring equations in the test.
+function captureLocalAuthoring() {
+  window.m98LocalUpdates=[];window.m98PointerInputs=[];window.m98PointerTerminals=[];
+  window.m98WorkerInputs=[];window.m98WorkerResults=[];
+  const NativeWorker=window.Worker;
+  window.Worker=class extends NativeWorker {
+    constructor(...args){super(...args);this.requests=new Map();this.addEventListener("message",({data})=>{
+      const request=this.requests.get(data?.id);this.requests.delete(data?.id);
+      if(request)window.m98WorkerResults.push({request,result:structuredClone(data.result),error:data.error});
+      if(data?.result?.frame&&data.result.state){
+        window.m98LocalUpdates.push(structuredClone(data.result));
+        if(request?.method==="pointer"&&request.input?.phase==="up")window.m98PointerTerminals.push({input:request.input,state:structuredClone(data.result.state)});
+      }
+    });}
+    postMessage(message,...rest){this.requests.set(message.id,structuredClone(message));window.m98WorkerInputs.push(structuredClone(message));return super.postMessage(message,...rest);}
+  };
+  for(const phase of ["down","move","up"])window.addEventListener(`pointer${phase}`,(event)=>{
+    const host=document.querySelector('[role="application"]');if(!host?.contains(event.target))return;
+    const box=host.getBoundingClientRect();window.m98PointerInputs.push({version:2,phase,pointerId:event.pointerId,x:event.clientX-box.x,y:event.clientY-box.y,buttons:event.buttons,modifiers:{alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey}});
+  },true);
+}
+function assertNoPersonalRpc(delivered) {
+  assert.deepEqual(delivered.filter(({request})=>["pointer","wheel","wheelBatch","resize","interaction.sync"].includes(request.method)),[],"personal input and state never travel to the server");
+}
+async function assertPointTerminal(page,delivered,inputs) {
+  const {workerInputs,workerResults}=await page.evaluate(()=>({workerInputs:window.m98WorkerInputs,workerResults:window.m98WorkerResults}));
+  assertNoPersonalRpc(delivered);
+  const commits=delivered.filter(({request})=>request.method==="authoring.commit");
+  assert.equal(commits.length,1,"a complete point gesture publishes one native terminal");
+  assert.equal(commits[0].request.input.kind,"point");
+  const command=commits[0].request.input.command;
+  const begins=workerInputs.filter(({method})=>method==="beginPoint");
+  assert.equal(begins.length,1);
+  assert.deepEqual(command.viewport,begins[0].viewport,"native replay uses the exact captured local camera");
+  assert.deepEqual(command.target,begins[0].target);
+  const down=inputs.find(({phase})=>phase==="down");assert.ok(down);
+  const projections=workerResults.filter(({request})=>request.method==="authoringPointer");
+  const projectionFor=(input)=>{
+    const matches=projections.filter(({request})=>request.input.x===input.x&&request.input.y===input.y&&request.input.captured===(input.phase!=="down"));
+    assert.ok(matches.length,`native projection exists for ${JSON.stringify(input)}`);
+    return matches.at(-1).result;
+  };
+  assert.deepEqual(command.target,projectionFor(down).target);
+  assert.deepEqual(command.viewport,projectionFor(down).viewport);
+  assert.deepEqual(workerInputs.filter(({method,input})=>method==="pointer"&&(input.phase!=="move"||(input.buttons&1))).map(({input})=>input),inputs,"local Rust receives every original down, subthreshold move, semantic move and release in order");
+  const semantic=inputs.filter((input)=>input.phase==="up"||(input.phase==="move"&&Math.hypot(input.x-down.x,input.y-down.y)>=3));
+  assert.equal(semantic.length,5,"fixture includes four admitted movements and the release, plus a subthreshold move");
+  const expected=semantic.map((input,index)=>({sequence:index+1,position:projectionFor(input).position}));
+  const nativeSamples=workerInputs.filter(({method})=>method==="advancePoint").flatMap(({samples})=>samples);
+  assert.deepEqual(nativeSamples,expected,"all semantic samples retain their exact native model positions and order");
+  assert.deepEqual(command.samples,expected,"server replays the complete native semantic trace");
+  const terminals=workerResults.filter(({request})=>request.method==="finishPoint");
+  assert.equal(terminals.length,1);assert.deepEqual(command,terminals[0].result.terminal.command,"HTTP publishes the native terminal without translation");
+  return command;
+}
 
 test("M98-F016/F017 folder canvas navigates and selects locally during a stalled edit, then reconciles native authority",{timeout:60000},async(t)=>{
   const f=await setup(t,undefined,{initScript:()=>{
@@ -80,10 +140,10 @@ test("M98-F016/F017 folder canvas navigates and selects locally during a stalled
   },input);
   const presentedCurve=()=>canvas.evaluate((element)=>Reflect.get(element,"__geosolvePresentedFrame").items.find((item)=>item.layer==="geometry"&&item.kind==="polyline"&&item.points.length>12));
   let held=false,heldAt;const release=Promise.withResolvers();
-  const dispatch=f.bridge.project.adapter.dispatch;
-  f.bridge.project.adapter.dispatch=async(input)=>{
-    if(input.command==="parameter.edit"&&!held){held=true;heldAt=performance.now();await release.promise;}
-    return dispatch(input);
+  const mutation=f.bridge.project.adapter.mutation;
+  f.bridge.project.adapter.mutation=async(input)=>{
+    if(!held){held=true;heldAt=performance.now();await release.promise;}
+    return mutation(input);
   };
   try{
     // Preserve the preceding ordered-anchor regression, now at the local Rust
@@ -141,18 +201,13 @@ test("M98-F016/F017 folder canvas navigates and selects locally during a stalled
     assert.equal(readSource(folder),beforeSource,"navigation/selection cannot perform the held edit locally");
     assert.deepEqual(await f.bridge.project.adapter.exportProject(),beforeProject);
     assert.equal(requests.filter(({method})=>["pointer","wheel","wheelBatch","resize"].includes(method)).length,0,"camera, hover and selection never wait for HTTP");
-    assert.equal(requests.filter(({method})=>method==="interaction.sync").length,0,"Inspector sync waits for the pending edit's accepted scene");
+    assert.equal(requests.filter(({method})=>method==="interaction.sync").length,0,"local Inspector browsing does not synchronize personal state");
     release.resolve();
     await expect.poll(()=>readSource(folder)).toContain("value: mm(12)");
     await expect(folderNotice(page)).toContainText("Saved to disk");
-    await expect.poll(()=>requests.filter(({method})=>method==="interaction.sync").length).toBeGreaterThan(0);
     await expect.poll(async()=>Math.abs(curveWidth(await geometry(page))/curveWidth(heldGeometry)-1.2)).toBeLessThan(0.01);
-    await expect.poll(async()=>{
-      const current=await f.bridge.project.adapter.interactionSnapshot();
-      return current.seed.selection;
-    },{message:"server must install the latest client selection after accepting the edited scene"}).toEqual(localBeforeRelease.selection);
-    const reconciled=await f.bridge.project.adapter.interactionSnapshot();
-    assert.deepEqual(JSON.parse(reconciled.seed.scene).viewport,localBeforeRelease.viewport,"late acceptance and sync preserve the local camera exactly");
+    const reconciled=await f.bridge.project.adapter.snapshot();
+    assert.deepEqual(reconciled.seed.selection,[],"server seeds do not install personal selection");
     const localAfter=await page.evaluate(()=>window.m98LocalUpdates.at(-1).state);
     assert.deepEqual(localAfter.viewport,localBeforeRelease.viewport);
     assert.deepEqual(localAfter.selection,localBeforeRelease.selection);
@@ -163,43 +218,33 @@ test("M98-F016/F017 folder canvas navigates and selects locally during a stalled
     assert.equal(afterState.writes,beforeState.writes+1);
     assert.equal(afterState.externalApplies,beforeState.externalApplies);
     assert.equal(afterState.currentHash,afterState.acceptedHash);
-    assert.equal(reconciled.snapshot.presentation.canUndo,true);
+    assert.equal(reconciled.history.canUndo,true);
     const delivered=await Promise.all(responses);
-    assert.ok(delivered.some(({encoding,body})=>encoding==="gzip"&&body.result?.localInteraction),"Chromium installs compressed authoritative interaction seeds");
+    assert.ok(delivered.some(({encoding,body})=>encoding==="gzip"&&body.result?.seed),"Chromium receives compressed semantic model seeds");
     assert.ok(delivered.every(({status,body})=>status===200&&!body.error),JSON.stringify(delivered.filter(({status,body})=>status!==200||body.error)));
+    assertNoPersonalRpc(delivered);
     assert.deepEqual(errors,[]);
-    writeFileSync(resolve(evidence,"local-folder-navigation.json"),JSON.stringify({localZoomMs,heldDurationMs,wheelSamples:actual,navigationRpcCount:0,localBeforeRelease,localAfter,selection:reconciled.seed.selection,editWrites:afterState.writes-beforeState.writes,requests:requests.map(({method,input})=>({method,command:input?.command})),compressedSeeds:delivered.filter(({encoding,body})=>encoding==="gzip"&&body.result?.localInteraction).length},null,2));
-  }finally{release.resolve();f.bridge.project.adapter.dispatch=dispatch;await page.unroute("**/api/rpc");}
+    writeFileSync(resolve(evidence,"local-folder-navigation.json"),JSON.stringify({localZoomMs,heldDurationMs,wheelSamples:actual,navigationRpcCount:0,localBeforeRelease,localAfter,selection:localAfter.selection,serverSelection:reconciled.seed.selection,editWrites:afterState.writes-beforeState.writes,requests:requests.map(({method,input})=>({method,command:input?.command})),compressedSeeds:delivered.filter(({encoding,body})=>encoding==="gzip"&&body.result?.seed).length},null,2));
+  }finally{release.resolve();f.bridge.project.adapter.mutation=mutation;await page.unroute("**/api/rpc");}
 });
 
 test("M98-F017 local folder authoring previews, multi-click Finish, exact point drag and history retain the local camera",{timeout:90000},async(t)=>{
-  const f=await setup(t,undefined,{initScript:()=>{
-    window.m98LocalUpdates=[];window.m98PointerInputs=[];window.m98PointerTerminals=[];
-    const NativeWorker=window.Worker;
-    window.Worker=class extends NativeWorker {
-      constructor(...args){super(...args);this.requests=new Map();this.addEventListener("message",({data})=>{
-        const request=this.requests.get(data?.id);this.requests.delete(data?.id);
-        if(data?.result?.frame&&data.result.state){
-          window.m98LocalUpdates.push(structuredClone(data.result));
-          if(request?.method==="pointer"&&request.input?.phase==="up")window.m98PointerTerminals.push({input:request.input,state:structuredClone(data.result.state)});
-        }
-      });}
-      postMessage(message,...rest){if(message?.method==="pointer")this.requests.set(message.id,structuredClone(message));return super.postMessage(message,...rest);}
-    };
-    for(const phase of ["down","move","up"])window.addEventListener(`pointer${phase}`,(event)=>{
-      const host=document.querySelector('[role="application"]');if(!host?.contains(event.target))return;
-      const box=host.getBoundingClientRect();window.m98PointerInputs.push({version:2,phase,pointerId:event.pointerId,x:event.clientX-box.x,y:event.clientY-box.y,buttons:event.buttons,modifiers:{alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey}});
-    },true);
-  }}),{folder,page,errors}=f;
+  const f=await setup(t,undefined,{initScript:captureLocalAuthoring}),{folder,page,errors}=f;
   const host=page.getByRole("application"),canvas=page.locator('canvas[data-renderer="webgl2"]');
   const frame=()=>canvas.evaluate((element)=>Reflect.get(element,"__geosolvePresentedFrame"));
   const localState=()=>page.evaluate(()=>window.m98LocalUpdates.at(-1)?.state);
   const settled=async()=>{await expect(host).toHaveAttribute("aria-busy","false");await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await expect(host).toHaveAttribute("aria-busy","false");};
+  const accepted=async()=>{
+    await settled();
+    const native=await f.bridge.project.adapter.snapshot();
+    await expect.poll(async()=>(await localState()).sceneKey).toBe(native.seed.sceneKey);
+    await expect.poll(async()=>(await frame()).provenance.scene).toBe("accepted-presentation");
+  };
   const responses=[];
   page.on("response",(response)=>{if(new URL(response.url()).pathname==="/api/rpc")responses.push((async()=>({request:response.request().postDataJSON(),status:response.status(),body:await response.json()}))());});
   const capture=async()=>{
     if(page.isClosed())return;
-    writeFileSync(resolve(evidence,"local-folder-authoring-debug.json"),JSON.stringify({source:readSource(folder),responses:await Promise.all(responses),frame:await frame(),local:await localState(),notice:await folderNotice(page).innerText(),native:await f.bridge.project.adapter.interactionSnapshot(),errors},null,2));
+    writeFileSync(resolve(evidence,"local-folder-authoring-debug.json"),JSON.stringify({source:readSource(folder),responses:await Promise.all(responses),frame:await frame(),local:await localState(),notice:await folderNotice(page).innerText(),native:await f.bridge.project.adapter.snapshot(),worker:await page.evaluate(()=>({inputs:window.m98WorkerInputs,results:window.m98WorkerResults,pointers:window.m98PointerInputs})),errors},null,2));
   };
   try {
   await settled();await expect.poll(localState).toBeTruthy();
@@ -211,15 +256,17 @@ test("M98-F017 local folder authoring previews, multi-click Finish, exact point 
   const positions=[[0.18,0.18],[0.32,0.23],[0.40,0.15]].map(([x,y])=>[box.x+box.width*x,box.y+box.height*y]);
   const finish=page.getByRole("button",{name:"Finish",exact:true});
   await expect(finish).toBeDisabled();
-  // Local navigation cancels a staged draft but preserves the armed tool. The
-  // next press must use the new camera, without treating that mode as a live draft.
+  // M98 U03 requires mid-tool navigation to preserve collected inputs. The
+  // shared controller records the new native viewport before the next sample.
   await page.mouse.click(...positions[0]);await settled();
   const armedViewport=(await localState()).viewport;
+  const firstClick=await page.evaluate(()=>window.m98WorkerInputs.filter(({method})=>method==="advanceConstruction").flatMap(({samples})=>samples).find(({input})=>input.event==="click"));
+  assert.ok(firstClick);
   await page.mouse.wheel(0,-55);
   await expect.poll(async()=>JSON.stringify((await localState()).viewport)).not.toBe(JSON.stringify(armedViewport));
   await settled();await expect(finish).toBeDisabled();
-  assert.equal(readSource(folder),initialSource,"navigation cancellation cannot publish a partial draft");
-  await page.mouse.click(...positions[0]);await settled();
+  assert.equal(readSource(folder),initialSource,"navigation cannot publish a partial draft");
+  assert.equal((await status(f)).writes,initialStatus.writes,"wheel performs no authoring transaction");
   await page.mouse.move(...positions[1]);
   await expect.poll(async()=>(await frame()).items.some(({layer})=>layer==="draft")).toBe(true);
   assert.equal(readSource(folder),initialSource,"preview cannot publish an incomplete polyline");
@@ -229,9 +276,18 @@ test("M98-F017 local folder authoring previews, multi-click Finish, exact point 
   await page.mouse.click(...positions[2]);await settled();
   assert.equal(readSource(folder),initialSource,"multiple draft clicks remain unpublished until Finish");
   await finish.click();
-  await expect.poll(()=>readSource(folder)).toContain("$.geometry.polyline");await settled();
+  await expect.poll(()=>readSource(folder)).toContain("$.geometry.polyline");await accepted();
   const authoredSource=readSource(folder),authoredStatus=await status(f);
   assert.equal(authoredStatus.writes,initialStatus.writes+1,"Finish writes exactly one source transaction");
+  const constructionCommits=(await Promise.all(responses)).filter(({request})=>request.method==="authoring.commit"&&request.input.kind==="construction");
+  assert.equal(constructionCommits.length,1);
+  const constructionCommand=constructionCommits[0].request.input.command;
+  const clicks=constructionCommand.samples.filter(({input})=>input.event==="click");
+  assert.equal(clicks.length,3,"mid-tool zoom preserves exactly the three original clicks");
+  assert.deepEqual(clicks[0],firstClick,"the first staged vertex retains its exact native model position across zoom");
+  assert.ok(constructionCommand.samples.some(({sequence,input})=>input.event==="viewport"&&sequence>clicks[0].sequence&&sequence<clicks[1].sequence),"the native terminal records the changed camera before the next click");
+  const polyline=constructionCommand.expected_declarations.find(({builder_path})=>builder_path.join(".")==="geometry.polyline");
+  assert.equal(polyline.arguments.value.vertices.value.length,3,"accepted polyline contains exactly the three collected vertices");
   assert.ok((await geometry(page)).length>initialGeometry.length,"new polyline has actual accepted painted spans");
   await select.click();await settled();
   await page.mouse.move(box.x+40,box.y+40);await page.mouse.wheel(0,-70);
@@ -246,53 +302,45 @@ test("M98-F017 local folder authoring previews, multi-click Finish, exact point 
   assert.deepEqual(terminal.input,terminalInput);
   const camera=terminal.state.viewport;
   assert.deepEqual((await localState()).viewport,camera);
-  assert.notDeepEqual(camera,JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).viewport);
-  await page.getByRole("button",{name:"Undo",exact:true}).click();await expect.poll(()=>readSource(folder)).toBe(initialSource);await settled();
+  assert.notDeepEqual(camera,JSON.parse((await f.bridge.project.adapter.snapshot()).seed.scene).viewport);
+  await page.getByRole("button",{name:"Undo",exact:true}).click();await expect.poll(()=>readSource(folder)).toBe(initialSource);await accepted();
   assert.deepEqual((await localState()).viewport,camera,"Undo cannot rewind local navigation");
-  await page.getByRole("button",{name:"Redo",exact:true}).click();await expect.poll(()=>readSource(folder)).toBe(authoredSource);await settled();
+  await page.getByRole("button",{name:"Redo",exact:true}).click();await expect.poll(()=>readSource(folder)).toBe(authoredSource);await accepted();
   assert.deepEqual((await localState()).viewport,camera,"Redo cannot rewind local navigation");
   const beforeFrame=await frame();
   const point=beforeFrame.items.filter(item=>item.layer==="points"&&item.kind==="circle"&&item.interactive).sort((a,b)=>a.center[0]-b.center[0])[0];
   assert.ok(point,"authoring publishes an independently pickable point");
   const pointId=point.metadata.persistentId;
   const pointAfter=async()=>(await frame()).items.find(item=>item.layer==="points"&&item.kind==="circle"&&item.metadata.persistentId===pointId);
-  const beforeNative=JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).points;
+  const beforeNative=JSON.parse((await f.bridge.project.adapter.snapshot()).seed.scene).points;
   const beforeDrag=await status(f);const beforeDesign=await f.bridge.project.adapter.exportWorkspaceDesign();
-  await page.evaluate(()=>{window.m98PointerInputs=[];});const responseStart=responses.length;
+  await page.evaluate(()=>{window.m98PointerInputs=[];window.m98WorkerInputs=[];window.m98WorkerResults=[];});const responseStart=responses.length;
   const dragBox=await host.boundingBox(),start=[dragBox.x+point.center[0],dragBox.y+point.center[1]];
   await page.mouse.move(...start);await page.mouse.down();
   for(const [dx,dy] of [[1,0],[5,2],[10,4],[16,7],[22,9]])await page.mouse.move(start[0]+dx,start[1]+dy);
   await page.mouse.up();
-  await expect.poll(async()=>Math.hypot((await pointAfter()).center[0]-point.center[0],(await pointAfter()).center[1]-point.center[1]),{timeout:10000}).toBeGreaterThan(15);
-  await settled();await expect.poll(async()=>(await status(f)).writes).toBe(beforeDrag.writes+1);
+  await expect.poll(async()=>Math.hypot(...((await pointAfter())?.center??point.center).map((value,index)=>value-point.center[index])),{timeout:10000}).toBeGreaterThan(15);
+  await settled();await expect.poll(async()=>(await status(f)).writes).toBe(beforeDrag.writes+1);await accepted();
   const pointerInputs=(await page.evaluate(()=>window.m98PointerInputs)).filter(({phase,buttons})=>phase!=="move"||(buttons&1));
-  const pointerResponses=(await Promise.all(responses.slice(responseStart))).filter(({request})=>request.method==="pointer");
-  assert.deepEqual(pointerResponses.map(({request})=>request.input),pointerInputs,"every original down, subthreshold move, semantic move and release reaches server in order");
-  assert.ok(pointerResponses[0].request.interaction,"original down transfers captured local camera once");
-  assert.ok(pointerResponses.slice(1).every(({request})=>request.interaction===undefined));
+  const command=await assertPointTerminal(page,await Promise.all(responses.slice(responseStart)),pointerInputs);
   assert.equal(readSource(folder),authoredSource,"point movement remains a semantic sidecar edit");
   assert.notDeepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(),beforeDesign);
-  const afterNative=JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).points;
+  const afterNative=JSON.parse((await f.bridge.project.adapter.snapshot()).seed.scene).points;
   assert.notDeepEqual(afterNative.map(({model_position})=>model_position),beforeNative.map(({model_position})=>model_position),"native accepted coordinates actually moved");
   assert.ok(afterNative.every(({model_position})=>model_position.every(Number.isFinite)));
   await page.getByRole("button",{name:"Undo",exact:true}).click();await settled();
-  await expect.poll(async()=>Math.hypot((await pointAfter()).center[0]-point.center[0],(await pointAfter()).center[1]-point.center[1])).toBeLessThan(1e-7);
+  await expect.poll(async()=>Math.hypot(...((await pointAfter())?.center??point.center).map((value,index)=>value-point.center[index]))).toBeLessThan(1e-7);
   await page.getByRole("button",{name:"Redo",exact:true}).click();await settled();
-  await expect.poll(async()=>Math.hypot((await pointAfter()).center[0]-point.center[0],(await pointAfter()).center[1]-point.center[1])).toBeGreaterThan(15);
+  await expect.poll(async()=>Math.hypot(...((await pointAfter())?.center??point.center).map((value,index)=>value-point.center[index]))).toBeGreaterThan(15);
   assert.deepEqual((await localState()).viewport,camera);
   const delivered=await Promise.all(responses);assert.ok(delivered.every(({status,body})=>status===200&&!body.error),JSON.stringify(delivered.filter(({status,body})=>status!==200||body.error)));
   assert.deepEqual(errors,[]);
-  writeFileSync(resolve(evidence,"local-folder-authoring.json"),JSON.stringify({pointerInputs,pointId,camera,finishWrites:authoredStatus.writes-initialStatus.writes,dragWrites:(await status(f)).writes-beforeDrag.writes-2,sourceHash:hash(authoredSource),beforeNative,afterNative},null,2));
+  writeFileSync(resolve(evidence,"local-folder-authoring.json"),JSON.stringify({pointerInputs,command,pointId,camera,finishWrites:authoredStatus.writes-initialStatus.writes,dragWrites:(await status(f)).writes-beforeDrag.writes-2,sourceHash:hash(authoredSource),beforeNative,afterNative},null,2));
   }finally{await capture();}
 });
 
 test("M98-F017 local folder point drag keeps exact semantic samples, one release write and camera-preserving history",{timeout:60000},async(t)=>{
-  const f=await setup(t,undefined,{initScript:()=>{
-    window.m98LocalUpdates=[];window.m98PointerInputs=[];
-    const NativeWorker=window.Worker;
-    window.Worker=class extends NativeWorker {constructor(...args){super(...args);this.addEventListener("message",({data})=>{if(data?.result?.frame&&data.result.state)window.m98LocalUpdates.push(structuredClone(data.result));});}};
-    for(const phase of ["down","move","up"])window.addEventListener(`pointer${phase}`,(event)=>{const host=document.querySelector('[role="application"]');if(!host?.contains(event.target))return;const box=host.getBoundingClientRect();window.m98PointerInputs.push({version:2,phase,pointerId:event.pointerId,x:event.clientX-box.x,y:event.clientY-box.y,buttons:event.buttons,modifiers:{alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey}});},true);
-  }}),{page,folder,errors}=f;
+  const f=await setup(t,undefined,{initScript:captureLocalAuthoring}),{page,folder,errors}=f;
   const host=page.getByRole("application"),canvas=page.locator('canvas[data-renderer="webgl2"]');
   const frame=()=>canvas.evaluate(element=>Reflect.get(element,"__geosolvePresentedFrame"));
   const localState=()=>page.evaluate(()=>window.m98LocalUpdates.at(-1)?.state);
@@ -304,26 +352,24 @@ test("M98-F017 local folder point drag keeps exact semantic samples, one release
     const pointId=before.metadata.persistentId;
     const point=async()=>(await frame()).items.find(item=>item.layer==="points"&&item.kind==="circle"&&item.metadata.persistentId===pointId);
     const source=readSource(folder),beforeStatus=await status(f),beforeDesign=await f.bridge.project.adapter.exportWorkspaceDesign();
-    const beforeNative=JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).points;
+    const beforeNative=JSON.parse((await f.bridge.project.adapter.snapshot()).seed.scene).points;
     const camera=(await localState()).viewport,box=await host.boundingBox(),start=[box.x+before.center[0],box.y+before.center[1]];
-    await page.mouse.move(...start);await page.evaluate(()=>{window.m98PointerInputs=[];});
+    await page.mouse.move(...start);await page.evaluate(()=>{window.m98PointerInputs=[];window.m98WorkerInputs=[];window.m98WorkerResults=[];});
     await page.mouse.down();for(const[dx,dy]of[[1,0],[5,2],[10,4],[16,7],[22,9]])await page.mouse.move(start[0]+dx,start[1]+dy);await page.mouse.up();
     await expect.poll(async()=>Math.hypot((await point()).center[0]-before.center[0],(await point()).center[1]-before.center[1]),{timeout:10000}).toBeGreaterThan(15);
     await settled();await expect.poll(async()=>(await status(f)).writes).toBe(beforeStatus.writes+1);
     const inputs=(await page.evaluate(()=>window.m98PointerInputs)).filter(({phase,buttons})=>phase!=="move"||(buttons&1));
-    const pointers=(await Promise.all(responses)).filter(({request})=>request.method==="pointer");
-    assert.deepEqual(pointers.map(({request})=>request.input),inputs);
-    assert.ok(pointers[0].request.interaction);assert.ok(pointers.slice(1).every(({request})=>request.interaction===undefined));
+    const command=await assertPointTerminal(page,await Promise.all(responses),inputs);
     assert.equal(readSource(folder),source);assert.notDeepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(),beforeDesign);
-    const afterNative=JSON.parse((await f.bridge.project.adapter.interactionSnapshot()).seed.scene).points;
+    const afterNative=JSON.parse((await f.bridge.project.adapter.snapshot()).seed.scene).points;
     assert.notDeepEqual(afterNative.map(({model_position})=>model_position),beforeNative.map(({model_position})=>model_position));assert.ok(afterNative.every(({model_position})=>model_position.every(Number.isFinite)));
     const moved=(await point()).center;
     await page.getByRole("button",{name:"Undo",exact:true}).click();await settled();await expect.poll(async()=>(await point()).center).toEqual(before.center);
     await page.getByRole("button",{name:"Redo",exact:true}).click();await settled();await expect.poll(async()=>(await point()).center).toEqual(moved);
     assert.deepEqual((await localState()).viewport,camera);assert.deepEqual(errors,[]);
     const delivered=await Promise.all(responses);assert.ok(delivered.every(({status,body})=>status===200&&!body.error),JSON.stringify(delivered.filter(({status,body})=>status!==200||body.error)));
-    writeFileSync(resolve(evidence,"local-folder-point-drag.json"),JSON.stringify({inputs,pointId,camera,beforeNative,afterNative,moved,writeDelta:(await status(f)).writes-beforeStatus.writes},null,2));
-  }finally{writeFileSync(resolve(evidence,"local-folder-point-drag-debug.json"),JSON.stringify({responses:await Promise.all(responses),source:readSource(folder),frame:await frame(),local:await localState(),native:await f.bridge.project.adapter.interactionSnapshot(),notice:await folderNotice(page).innerText(),errors},null,2));}
+    writeFileSync(resolve(evidence,"local-folder-point-drag.json"),JSON.stringify({inputs,command,pointId,camera,beforeNative,afterNative,moved,writeDelta:(await status(f)).writes-beforeStatus.writes},null,2));
+  }finally{writeFileSync(resolve(evidence,"local-folder-point-drag-debug.json"),JSON.stringify({responses:await Promise.all(responses),source:readSource(folder),frame:await frame(),local:await localState(),native:await f.bridge.project.adapter.snapshot(),notice:await folderNotice(page).innerText(),errors},null,2));}
 });
 
 test("external rename updates the open canvas once, invalid text retains it, and browser storage remains separate",{timeout:120000},async(t)=>{
@@ -453,8 +499,12 @@ test("legacy single-file cold reopen retains its last accepted canvas while inco
   assert.equal(invalidState.currentHash,hash(invalid));assert.equal(readSource(folder),invalid);
   assert.ok((await geometry(page)).some((item)=>item.kind==="polyline"&&item.points.length>12));
   const snapshot=await f.bridge.project.adapter.snapshot();
-  assert.ok(snapshot.dimensions.allMeasurements.some((entry)=>entry.label==="ringRadius"&&Number(entry.value)===18),JSON.stringify(snapshot.dimensions));
-  await assert.rejects(f.bridge.project.adapter.exportProject(),/canonical export.*invalid/);
+  const browsing=await nativeBrowsing(snapshot);
+  try {
+    const dimensions=browsing.initial.snapshot.dimensions;
+    assert.ok(dimensions.allMeasurements.some((entry)=>entry.label==="ringRadius"&&Number(entry.value)===18),JSON.stringify(dimensions));
+  } finally { browsing.dispose(); }
+  await assert.rejects(f.bridge.project.adapter.exportProject(),/Canonical export is unavailable while source is invalid or unfinished/);
   await page.screenshot({path:resolve(evidence,"legacy-invalid-cold-reopen.png")});
   replaceSource(folder,good);await expect(folderNotice(page)).toContainText("Saved to disk");
   await page.getByRole("tab",{name:"Parameters",exact:true}).click();
@@ -563,7 +613,11 @@ test("slow external generator evaluation dims the retained canvas after half a s
 });
 
 test("complete manifold opens from plain files and shared channel edits export all regions",{timeout:180000},async(t)=>{
-  const {folder,page,errors}=await setup(t,(folder)=>cpSync(resolve("examples/file-workspace-manifold"),folder,{recursive:true}));
+  // Native browser reconstruction is asynchronous startup, within this case's
+  // existing overall deadline. Input latency/veil tests keep their own measured
+  // budgets; an implicit locator default is not a startup performance contract.
+  const {folder,page,errors,openingMs}=await setup(t,(folder)=>cpSync(resolve("examples/file-workspace-manifold"),folder,{recursive:true}),{readinessTimeout:30000});
+  writeFileSync(resolve(evidence,"manifold-startup.json"),JSON.stringify({openingMs,geometryItems:(await geometry(page)).length},null,2));
   await expect(page.getByRole("region",{name:"Local folder"})).toContainText("Saved to disk");
   await page.getByRole("tab",{name:"Parameters",exact:true}).click();
   await page.screenshot({path:resolve(evidence,"manifold-folder.png")});
@@ -579,7 +633,7 @@ test("complete manifold opens from plain files and shared channel edits export a
     page.waitForResponse(response=>{
       if(new URL(response.url()).pathname!=="/api/rpc")return false;
       const request=response.request().postDataJSON();
-      return request?.method==="dispatch"&&request.input?.command==="parameter.edit";
+      return request?.method==="authoring.mutation";
     },{timeout:60000}),
     input.press("Enter"),
   ]);

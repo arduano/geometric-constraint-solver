@@ -8,7 +8,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-export const repository = fileURLToPath(new URL("../", import.meta.url));
+export const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const json = (path, value) => writeFileSync(path, JSON.stringify(value, null, 2) + "\n", { flag: "wx" });
@@ -85,25 +85,17 @@ function stageCli(output, sdk, engine, collaboration, dist) {
   for (const path of ["bin", "README.md"]) copy(resolve(source, path), resolve(output, path));
   chmodSync(resolve(output, "bin/geosolve.mjs"), 0o755);
   copy(resolve(repository, "LICENSE"), resolve(output, "LICENSE"));
-  const metadata = readJson(resolve(source, "package.json"));
+  const { scripts: _scripts, devDependencies: _devDependencies, ...metadata } = readJson(resolve(source, "package.json"));
   json(resolve(output, "package.json"), { ...metadata, cpu: [process.arch], dependencies: { "@geosolve/sketch-code": sdk.version, "@geosolve/engine": engine.version, "@geosolve/collaboration": collaboration.version } });
   const runtime = resolve(output, "runtime");
-  const scripts = ["geosolve-cli.mjs", "file-workspace.mjs", "workspace-loader.mjs", "workspace-loader-worker.mjs", "workspace-runtime-paths.mjs",
-    "workspace-evaluation.mjs", "workspace-evaluation-worker.mjs", "workspace-workbench.mjs", "workspace-workbench-worker.mjs", "workspace-storage.mjs", "workspace-session.mjs",
-    "collaboration-cli.mjs", "collaboration-host.mjs", "collaboration-http.mjs", "collaboration-storage.mjs", "collaboration-runtime.mjs", "collaboration-serve.mjs", "collaboration-mirror.mjs",
-    "collaboration-mirror-worker.mjs", "collaboration-mirror-worker-bridge.mjs",
-    "collaboration-preview.mjs", "collaboration-preview-worker.mjs", "collaboration-preview-route.mjs",
-    "collaboration-domain.mjs", "collaboration-domain-worker.mjs", "collaboration-domain-sessions.mjs", "collaboration-domain-structure.mjs", "collaboration-domain-syntax.mjs", "collaboration-domain-properties.mjs"];
-  for (const name of scripts) copy(resolve(repository, "scripts", name), resolve(runtime, "scripts", name));
-  copy(resolve(repository, "target/m98/workspace-runtime.mjs"), resolve(runtime, "assets/workspace-runtime.mjs"));
-  copy(resolve(repository, "crates/geosolve-demo-web/frontend/src/generated"), resolve(runtime, "assets/demo-wasm"));
+  copy(resolve(source, "runtime"), runtime);
+  copy(resolve(source, "dist"), resolve(output, "dist"));
   copy(dist, resolve(runtime, "assets/workbench"));
-  copy(resolve(repository, "crates/geosolve-demo-web/frontend/scripts/release-artifact-lib.mjs"), resolve(runtime, "assets/release-artifact-lib.mjs"));
   const workbenchFiles = filesUnder(dist).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   json(resolve(runtime, "assets/workbench-artifact.json"), { format: "geosolve-release-artifact-v1", kind: "production", publicBase: "./", directory: resolve(dist),
     files: workbenchFiles, totalBytes: workbenchFiles.reduce((sum, file) => sum + file.bytes, 0), filesSha256: hash(JSON.stringify(workbenchFiles)) });
   for (const name of ["geosolve.json", "sketch.ts"]) copy(resolve(repository, "examples/file-workspace", name), resolve(runtime, "assets/starter", name));
-  const esbuild = resolve(repository, "crates/geosolve-demo-web/frontend/node_modules/esbuild");
+  const esbuild = resolve(source, "node_modules/esbuild");
   for (const path of ["lib/main.js", "lib/main.d.ts", "LICENSE.md"]) copy(resolve(esbuild, path), resolve(runtime, "vendor/esbuild", path));
   // Enable ordinary Node package self-reference from a vendor directory. This
   // keeps esbuild's JS unmodified while its own binary fallback resolves itself.
@@ -132,7 +124,7 @@ function stageCli(output, sdk, engine, collaboration, dist) {
 }
 
 /** Package only prepared product bytes; qualification owns all builds and gates. */
-export function packageM98({ out, dist = resolve(repository, "crates/geosolve-demo-web/dist") }) {
+export function packageArchives({ out, dist = resolve(repository, "crates/geosolve-demo-web/dist") }) {
   if (!out) throw Error("Expected --out <new directory> and optionally --dist <frozen production directory>");
   if (process.platform !== "linux" || !["x64", "arm64"].includes(process.arch)) throw Error("CLI packaging currently supports Linux x64 and arm64 hosts");
   const output = resolve(out), distribution = resolve(dist);
@@ -167,6 +159,6 @@ export function packageM98({ out, dist = resolve(repository, "crates/geosolve-de
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({ options: { out: { type: "string" }, dist: { type: "string" } } });
-  const result = packageM98(values);
+  const result = packageArchives(values);
   console.log(JSON.stringify({ ok: true, output: result.output, archives: result.manifest.archives.map(({ name, file, bytes, sha256 }) => ({ name, file, bytes, sha256 })) }, null, 2));
 }

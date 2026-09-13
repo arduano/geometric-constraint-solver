@@ -26,8 +26,8 @@ From a prepared repository, first make a working copy:
 ```bash
 mkdir -p target/m98
 cp -a examples/file-workspace-manifold target/m98/my-manifold
-node scripts/file-workspace.mjs check target/m98/my-manifold
-node scripts/file-workspace.mjs serve target/m98/my-manifold
+node packages/geosolve-cli/bin/geosolve.mjs check target/m98/my-manifold
+node packages/geosolve-cli/bin/geosolve.mjs serve target/m98/my-manifold
 # Open the exact URL printed by serve, including its session token.
 ```
 
@@ -36,8 +36,8 @@ to compile and independently validate it. While the bridge is running, `status` 
 current versus accepted revisions and diagnostics:
 
 ```bash
-node scripts/file-workspace.mjs status target/m98/my-manifold
-node scripts/file-workspace.mjs bake target/m98/my-manifold \
+node packages/geosolve-cli/bin/geosolve.mjs status target/m98/my-manifold
+node packages/geosolve-cli/bin/geosolve.mjs bake target/m98/my-manifold \
   --out target/m98/manifold-profiles.json --chord-error-mm 0.02
 ```
 

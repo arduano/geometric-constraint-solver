@@ -5,11 +5,12 @@ import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { openCollaborationRuntime } from "./collaboration-runtime.mjs";
+import { openCollaborationRuntime } from "../packages/geosolve-cli/runtime/collaboration-runtime.mjs";
 import { createSharedText } from "../packages/geosolve-collaboration/dist/index.js";
 import { createEngine } from "../packages/geosolve-engine/dist/index.js";
 import { CollaborationClient } from "../packages/geosolve-collaboration/dist/client.js";
-import { demoBindingsUrl, demoWasmPath } from "./workspace-runtime-paths.mjs";
+const demoBindingsUrl = new URL("../crates/geosolve-demo-web/frontend/src/generated/geosolve_demo_web.js", import.meta.url).href;
+const demoWasmPath = new URL("../crates/geosolve-demo-web/frontend/src/generated/geosolve_demo_web_bg.wasm", import.meta.url);
 const source = `"use geosolve sketch";
 import {sketch,mm} from "@geosolve/sketch-code";
 export default sketch(($)=>{
@@ -691,7 +692,8 @@ test("retained candidate scene cannot publish across failed terminal durability 
     const duplicate = await restarted.send(rejoined, "retained-fsync", command);
     assert.deepEqual(duplicate, receipt); assert.equal((await restarted.state(rejoined)).authority.acceptedRevision, 1);
     const scene = await restarted.request("scene", rejoined.token);
-    assert.equal(scene.snapshot.project.status, "accepted");
+    assert.equal(scene.seed.format, "geosolve-local-interaction-v1");
+    assert.deepEqual(Object.keys(scene), ["seed"]);
     const points = JSON.parse(scene.seed.scene).points.map(point => point.model_position);
     assert.ok(points.some(point => point[0] === 8 && point[1] === 4));
     assert.ok(points.some(point => point[0] === 20 && point[1] === 0));

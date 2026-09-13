@@ -4,10 +4,11 @@ import test from "node:test";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { hash, initProject, openProject, serveProject } from "./file-workspace.mjs";
-import { acquireWorkspaceLock, createWorkspaceStorage } from "./workspace-storage.mjs";
-import { evaluateWorkspaceSnapshot, readWorkspaceSnapshot } from "./workspace-loader.mjs";
-import { engineModuleUrl } from "./workspace-runtime-paths.mjs";
+import { hash, initProject, openProject, serveProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
+import { acquireWorkspaceLock, createWorkspaceStorage } from "../packages/geosolve-cli/runtime/workspace-storage.mjs";
+import { evaluateWorkspaceSnapshot, readWorkspaceSnapshot } from "../packages/geosolve-cli/runtime/workspace-loader.mjs";
+import { describedMutation, polylineCommand } from "./workspace-native-test.mjs";
+import { engineModuleUrl } from "../packages/geosolve-cli/runtime/workspace-runtime-paths.mjs";
 
 async function fixture(t, populate, options) {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-review-"));
@@ -32,9 +33,12 @@ test("manifold GUI widths preserve complete profiles through semantic sidecar re
   const evidence = [];
   for (const width of [12, 10, 11]) {
     if (width !== 12) {
-      const parameter = current.result.parameters.find((parameter) => parameter.label === "Channel width");
-      assert.ok(parameter, JSON.stringify(current.result.parameters));
-      current = await f.rpc("dispatch", { version: 2, command: "parameter.edit", payload: { id: parameter.id, value: String(width) } }, current.state, `manifold-width-${width}`);
+      const mutation = await describedMutation(current.result, "parameter.edit", chrome => {
+        const parameter = chrome.parameters.find((parameter) => parameter.label === "Channel width");
+        assert.ok(parameter, JSON.stringify(chrome.parameters));
+        return { id: parameter.id, value: String(width) };
+      });
+      current = await f.rpc("authoring.mutation", { mutation }, current.state, `manifold-width-${width}`);
       assert.equal(current.status, 200, current.error);
       assert.equal(current.state.ok, true, JSON.stringify(current.state));
     }
@@ -88,23 +92,15 @@ test("canvas-authored polyline Undo/Redo restores exact source and accepted proj
   const f = await directFixture(t);
   const initialSource = f.source();
   const initialWrites = f.state().writes;
-  await f.request("resize", { version: 2, width: 1000, height: 700, pixelRatio: 1 });
-  await f.request("dispatch", { version: 2, command: "view.fit" });
-  await f.request("dispatch", { version: 2, command: "tool.select", payload: { id: "polyline" } });
-  for (const [x, y] of [[180, 130], [320, 170], [400, 110]]) {
-    for (const [phase, buttons] of [["move", 0], ["down", 1], ["up", 0]]) {
-      await f.request("pointer", { version: 2, phase, pointerId: 1, x, y, buttons,
-        modifiers: { alt: false, ctrl: false, meta: false, shift: false } });
-    }
-    assert.equal(f.source(), initialSource, "unfinished canvas authoring must not write source");
-  }
-  await f.request("dispatch", { version: 2, command: "tool.finish" }, "polyline-finish");
+  const command = await polylineCommand(await f.project.adapter.snapshot(), [[-30, 25], [-20, 30], [-5, 20]], () => {
+    assert.equal(f.source(), initialSource, "unfinished local authoring must not write source");
+  });
+  await f.request("authoring.commit", { kind: "construction", command }, "polyline-finish");
   const authoredSource = f.source();
   assert.match(authoredSource, /\$\.geometry\.polyline/);
   assert.equal(f.state().writes, initialWrites + 1);
   const authoredProject = (await f.project.adapter.exportProject()).contents;
   const authoredDesign = await f.project.adapter.exportWorkspaceDesign();
-  await f.request("dispatch", { version: 2, command: "tool.select", payload: { id: "select" } });
   await f.request("dispatch", { version: 2, command: "history.undo" }, "polyline-undo");
   assert.equal(f.source(), initialSource);
   await f.request("dispatch", { version: 2, command: "history.redo" }, "polyline-redo");
@@ -117,14 +113,8 @@ test("canvas-authored polyline Undo/Redo restores exact source and accepted proj
   assert.equal(f.state().ok, true, "derived history must restore an authored project");
   await f.request("dispatch", { version: 2, command: "history.undo" }, "polyline-reopened-undo");
   assert.equal(f.source(), initialSource, "reopened Undo restores original shorthand exports and preamble");
-  await f.request("dispatch", { version: 2, command: "tool.select", payload: { id: "polyline" } });
-  for (const [x, y] of [[160, 100], [310, 130]]) {
-    for (const [phase, buttons] of [["down", 1], ["up", 0]]) {
-      await f.request("pointer", { version: 2, phase, pointerId: 1, x, y, buttons,
-        modifiers: { alt: false, ctrl: false, meta: false, shift: false } });
-    }
-  }
-  await f.request("dispatch", { version: 2, command: "tool.finish" }, "polyline-after-undo");
+  const nextCommand = await polylineCommand(await f.project.adapter.snapshot(), [[-30, 25], [-20, 30]]);
+  await f.request("authoring.commit", { kind: "construction", command: nextCommand }, "polyline-after-undo");
   assert.match(f.source(), /const geometry2 = \$\.geometry\.polyline/,
     "source-history comparison must not reset the native declaration allocator");
   assert.doesNotMatch(f.source(), /const geometry1 =/);
@@ -151,7 +141,7 @@ test("local interaction cannot change native state before file transaction valid
   assert.deepEqual((await f.project.adapter.bakeProfile(0.02)).regions, before.regions);
 });
 
-test("local interaction and the following source edit remain inside publication rollback", async (t) => {
+test("source publication rollback cannot execute a legacy personal interaction payload", async (t) => {
   let armed = false;
   const order = [];
   const f = await directFixture(t, { fault: (point) => {
@@ -164,24 +154,20 @@ test("local interaction and the following source edit remain inside publication 
   const dispatch = f.project.adapter.dispatch;
   f.project.adapter.persistProject = async () => { order.push("rollback-captured"); return persist(); };
   f.project.adapter.dispatch = async (input) => { order.push(input.command); return dispatch(input); };
-  f.project.adapter.interactionApply = async (state) => {
-    order.push("interaction-applied");
-    assert.deepEqual(state, { opaque: "native-prediction" });
-    return f.project.adapter.resize({ version: 2, width: 737, height: 480, pixelRatio: 1 });
-  };
+  f.project.adapter.interactionApply = async () => { throw Error("Server must never apply personal interaction state"); };
   armed = true;
   await assert.rejects(f.request("dispatch", sourceEdit(source, 12), "local-interaction-publication-failure", basis,
     { localInteraction: true, interaction: { opaque: "native-prediction" } }), /injected local interaction publication failure/);
   f.project.adapter.persistProject = persist;
   f.project.adapter.dispatch = dispatch;
-  assert.deepEqual(order, ["rollback-captured", "interaction-applied", "source.prepare", "publication-failed", "workspace.checkpoint.restore"]);
+  assert.deepEqual(order, ["rollback-captured", "source.prepare", "publication-failed", "workspace.checkpoint.restore"]);
   assert.equal(f.source(), source);
   assert.deepEqual((await f.project.adapter.bakeProfile(0.02)).regions, before.regions);
   assert.equal(f.state().acceptedHash, basis.acceptedHash);
   assert.equal(f.state().writes, basis.writes);
   assert.equal(f.storage.outcome("local-interaction-publication-failure").state, "conflict");
-  assert.equal((await f.project.adapter.snapshot()).frame.scene.viewBox[2], 737,
-    "failed authoring preserves the user's current camera under the existing rollback contract");
+  assert.equal(Object.hasOwn(await f.project.adapter.snapshot(), "frame"), false,
+    "personal camera remains outside the server rollback authority");
 });
 
 test("storage staging failure restores native accepted geometry and authored bytes", async (t) => {
@@ -296,7 +282,7 @@ test("historical source bytes with forged hashes cannot replace accepted Undo au
   writeFileSync(path, JSON.stringify(derived));
   await f.restart();
   const before = f.state();
-  assert.equal((await f.project.adapter.snapshot()).presentation.canUndo, true,
+  assert.equal((await f.project.adapter.snapshot()).history.canUndo, true,
     "valid current checkpoint still loads; historical bytes remain untrusted candidates");
   await assert.rejects(f.request("dispatch", { version: 2, command: "history.undo" }, "poisoned-source-undo"),
     /Historical dependency bytes do not match/);
@@ -315,8 +301,7 @@ for (const mode of ["editable", "generator"]) test(`external ${mode} save during
   } : undefined });
   assert.equal(f.state().ok, true, JSON.stringify(f.state()));
   const source = f.source();
-  const geometry = async () => mode === "editable" ? (await f.project.adapter.bakeProfile(0.02)).regions
-    : (await f.project.adapter.snapshot()).frame.scene.items.filter((item) => item.layer === "geometry");
+  const geometry = async () => (await f.project.adapter.bakeProfile(0.02)).regions;
   const before = await geometry();
   const candidate = source.replaceAll("mm(10)", "mm(12)");
   const external = source.replaceAll("mm(10)", "mm(14)");
@@ -377,4 +362,42 @@ test("external save after acknowledgment cannot acquire authority for another na
   await f.project.scan(true);
   assert.equal(f.state().ok, true);
   assert.ok((await f.project.adapter.bakeProfile(0.02)).regions[0].outer.every(([x, y]) => Math.abs(Math.hypot(x, y) - 14) < 1e-7));
+});
+
+test("a supported legacy presentation cache keeps complete history across runtime replacement", async t => {
+  const f = await directFixture(t);
+  const original = f.source();
+  await f.request("dispatch", sourceEdit(original, 12), "legacy-radius-12");
+  await f.request("dispatch", sourceEdit(original, 14), "legacy-radius-14");
+  await f.request("dispatch", { version: 2, command: "history.undo" }, "legacy-undo");
+  const accepted = f.source();
+  const path = resolve(f.folder, ".geosolve/derived-session.json");
+  const derived = JSON.parse(readFileSync(path, "utf8"));
+  const envelope = JSON.parse(derived.contents);
+  assert.equal(envelope.format, "geosolve-workbench-presentation-v1");
+  // Exercise the independently retained ordinary workbench writer and decoder,
+  // including the exact opaque complete history, without a production Node dependency.
+  const wasm = await import("../crates/geosolve-demo-web/frontend/src/generated/geosolve_demo_web.js");
+  await wasm.default({ module_or_path: readFileSync(new URL("../crates/geosolve-demo-web/frontend/src/generated/geosolve_demo_web_bg.wasm", import.meta.url)) });
+  const legacy = new wasm.WorkbenchHandle(JSON.stringify({ version: 2, persistedProject: derived.contents }));
+  try {
+    const snapshot = JSON.parse(legacy.snapshot());
+    assert.equal(snapshot.presentation.canUndo, true);
+    assert.equal(snapshot.presentation.canRedo, true);
+    derived.contents = JSON.parse(legacy.persistProject()).contents;
+  } finally { legacy.free(); }
+  derived.runtime = "a".repeat(64); // The previous demo-WASM identity is no longer this engine's hash.
+  writeFileSync(path, JSON.stringify(derived));
+  await f.restart();
+  assert.equal(f.state().ok, true);
+  assert.equal(f.source(), accepted);
+  const restored = await f.project.adapter.snapshot();
+  assert.equal(restored.history.canUndo, true);
+  assert.equal(restored.history.canRedo, true);
+  assert.deepEqual(restored.restoredViewPresentation, envelope.presentation);
+  await f.request("dispatch", { version: 2, command: "history.redo" }, "legacy-restored-redo");
+  assert.match(f.source(), /value: mm\(14\)/);
+  await f.request("dispatch", { version: 2, command: "history.undo" }, "legacy-restored-undo-1");
+  await f.request("dispatch", { version: 2, command: "history.undo" }, "legacy-restored-undo-2");
+  assert.equal(f.source(), original);
 });

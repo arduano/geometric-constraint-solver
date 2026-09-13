@@ -4,7 +4,7 @@ import test from "node:test";
 import { mkdtempSync, readFileSync, writeFileSync, renameSync, mkdirSync, chmodSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium, expect } from "../crates/geosolve-demo-web/frontend/node_modules/@playwright/test/index.mjs";
-import { initProject, serveProject, hash } from "./file-workspace.mjs";
+import { initProject, serveProject, hash } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 const evidence = resolve("target/m98/tests");
 mkdirSync(evidence, { recursive: true });

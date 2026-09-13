@@ -5,7 +5,7 @@ import type { AuthoringModelIdentity, AuthoringPreview, AuthoringWorkerRequest, 
 import type { RemotePaintRequest } from "./collaboration-remote-authoring-renderer";
 import type { ConstructionCommand, ConstructionFrame, PointGestureFrame, PointGestureTerminal } from "../../../../../packages/geosolve-engine/src/index";
 
-type Transport = Pick<Worker, "postMessage" | "addEventListener" | "removeEventListener" | "terminate">;
+import { WorkerRequestChannel, type WorkerTransport as Transport, type WithoutWorkerId } from "./worker-channel";
 type PreviewReply =
   | { kind: "preview"; basis: AuthoringModelIdentity; ticket: string; presentation: string; point?: PointGestureFrame; construction?: ConstructionFrame; operation?: ToolOperationFrame }
   | { kind: "point"; basis: AuthoringModelIdentity; terminal: PointGestureTerminal }
@@ -30,11 +30,18 @@ export class RemoteAuthoringTransport extends EventTarget implements Transport {
   private cached?: Extract<PreviewReply, { kind: "preview" }>;
   private readonly requests = new Set<AbortController>();
   private stopped = false;
-  constructor(private readonly rpc: PreviewRpc, private readonly renderer: Transport) {
+  private readonly renderer: WorkerRequestChannel<WithoutWorkerId<RemotePaintRequest>, AuthoringWorkerResponse, AuthoringPreview>;
+  constructor(private readonly rpc: PreviewRpc, renderer: Transport) {
     super();
-    renderer.addEventListener("message", this.rendered);
-    renderer.addEventListener("error", this.renderError);
-    renderer.addEventListener("messageerror", this.renderError);
+    this.renderer = new WorkerRequestChannel(renderer, {
+      stoppedMessage: "Authoring preview rendering stopped", unreadableMessage: "Authoring preview rendering stopped",
+      responseError: (response) => "error" in response ? response.error : undefined,
+      decode: (response) => {
+        if ("error" in response || response.result.kind !== "preview") throw Error("Invalid authoring preview rendering response");
+        return response.result;
+      },
+      onFailure: () => { if (!this.stopped) this.dispatchEvent(new ErrorEvent("error", { message: "Authoring preview rendering stopped" })); },
+    });
   }
   postMessage(request: AuthoringWorkerRequest) {
     void this.handle(request).catch(error => {
@@ -45,22 +52,13 @@ export class RemoteAuthoringTransport extends EventTarget implements Transport {
   terminate() {
     if (this.stopped) return;
     this.stopped = true; this.retire();
-    this.renderer.removeEventListener("message", this.rendered);
-    this.renderer.removeEventListener("error", this.renderError);
-    this.renderer.removeEventListener("messageerror", this.renderError);
-    this.renderer.terminate();
+    this.renderer.fail(Error("Authoring preview renderer was disposed"));
   }
   private reply(response: AuthoringWorkerResponse) {
     if (!this.stopped) this.dispatchEvent(new MessageEvent("message", { data: response }));
   }
-  private rendered = (event: MessageEvent<AuthoringWorkerResponse>) => {
-    if (event.data.generation === this.generation) {
-      if ("error" in event.data) this.retire();
-      this.reply(event.data);
-    }
-  };
-  private renderError = () => { this.dispatchEvent(new ErrorEvent("error", { message: "Authoring preview rendering stopped" })); };
   private retire() {
+    this.renderer.invalidate(Error("Authoring preview rendering was superseded"));
     for (const controller of this.requests) controller.abort();
     this.requests.clear();
     if (this.ticket) void this.rpc({ action: "cancel", ticket: this.ticket }).catch(() => {});
@@ -125,7 +123,8 @@ export class RemoteAuthoringTransport extends EventTarget implements Transport {
       if (result.kind !== "preview" || !("view" in request) || typeof result.presentation !== "string" || !/^[a-f0-9]{64}$/u.test(result.ticket)) throw Error("Unexpected authoring preview response");
       this.ticket = result.ticket; this.cached = result;
       const preview: Omit<AuthoringPreview, "frame"> = { kind: "preview", model, view: request.view, presentation: result.presentation, point: result.point, construction: result.construction, operation: result.operation };
-      this.renderer.postMessage({ id: request.id, generation, presentation: result.presentation, result: preview } satisfies RemotePaintRequest);
+      const rendered = await this.renderer.request({ generation, presentation: result.presentation, result: preview });
+      if (generation === this.generation) this.reply({ id: request.id, generation, result: rendered });
     }
   }
 }

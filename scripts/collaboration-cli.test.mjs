@@ -4,8 +4,8 @@ import { test } from "node:test";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openCollaborationRuntime } from "./collaboration-runtime.mjs";
-import { runCli } from "./geosolve-cli.mjs";
+import { openCollaborationRuntime } from "../packages/geosolve-cli/runtime/collaboration-runtime.mjs";
+import { runCli } from "../packages/geosolve-cli/runtime/geosolve-cli.mjs";
 
 test("shared CLI status, latest value, raw working edits and Apply use invited durable HTTP authority", async (t) => {
   const folder = await mkdtemp(join(tmpdir(), "geosolve-shared-cli-"));

@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FolderWorkbenchAdapter, type FolderState } from "./folder-adapter";
 import { assertWorkbenchSnapshot, type WorkbenchSnapshot } from "./adapter";
 import { MockWorkbenchAdapter } from "./mock-adapter";
+import { folderBrowser, folderModel } from "./folder-test-support";
 
 async function harness(mode: "editable" | "generator" = "generator") {
   const fixture = await new MockWorkbenchAdapter().snapshot();
+  const browser = await folderBrowser(fixture);
   fixture.parameters[0].metadata = { authority: "metadata", target: { kind: "parameter", id: "width" }, editable: true, canExtract: true };
   const state: FolderState = {
     mode, entry: "src/generator.ts", authority: { epoch: "epoch", lease: 1, revision: 1 },
@@ -25,11 +27,11 @@ async function harness(mode: "editable" | "generator" = "generator") {
       state.inputs = request.input.values; state.currentHash = state.acceptedHash = "accepted-input";
       state.authority!.revision++;
     }
-    return { ok: true, json: async () => ({ result: structuredClone(fixture), state: structuredClone(state) }) };
+    return { ok: true, json: async () => ({ result: { ...folderModel(fixture, state.authority!.revision), mode, generated: mode === "generator" ? { artifact: true } : undefined }, state: structuredClone(state) }) };
   }));
   vi.stubGlobal("EventSource", class extends EventTarget { close() {} });
-  const adapter = new FolderWorkbenchAdapter("token");
-  const snapshot = await adapter.construct(); adapter.installSnapshot(snapshot);
+  const adapter = new FolderWorkbenchAdapter("token", () => browser.local, { createBrowsing: browser.createBrowsing, authoring: null });
+  const snapshot = await adapter.prepareSnapshot(await adapter.construct()); adapter.installSnapshot(snapshot);
   return { adapter, snapshot, fixture, state, requests, rejectInputs: () => { rejectInputs = true; } };
 }
 
@@ -53,7 +55,7 @@ describe("generator workbench transport", () => {
     expect(selected.source.selectedPath).toBe("src/profile.ts");
     expect(requests).toHaveLength(count);
     expect(() => adapter.installSnapshot(structuredClone(selected))).toThrow(/transport authority/);
-    await expect(adapter.dispatch({ version: 2, command: "source.select", payload: { path: "absent.ts" } })).rejects.toThrow(/accepted generator/);
+    await expect(adapter.dispatch({ version: 2, command: "source.select", payload: { path: "absent.ts" } })).rejects.toThrow(/accepted project/);
   });
 
   it("retains installed inputs and original draft basis across observation and takeover", async () => {
@@ -92,13 +94,13 @@ describe("generator workbench transport", () => {
     const { adapter, state, requests } = await harness();
     const count = requests.length;
     const pointer = { version: 2 as const, phase: "move" as const, pointerId: 1, x: 10, y: 20, buttons: 1, modifiers: { alt: false, ctrl: false, meta: false, shift: false } };
-    expect(await adapter.pointer(pointer)).toBeNull();
+    expect(await adapter.pointer(pointer)).not.toBeNull();
     expect(requests).toHaveLength(count);
     expect(await adapter.pointer({ ...pointer, phase: "down" })).not.toBeNull();
     state.editor!.canEdit = false;
     await adapter.snapshot();
     const before = requests.length;
-    expect(await adapter.resize({ version: 2, width: 900, height: 700, pixelRatio: 1 })).toBeNull();
+    expect(await adapter.resize({ version: 2, width: 900, height: 700, pixelRatio: 1 })).not.toBeNull();
     await expect(adapter.setGeneratorInputs({ width: 16 })).rejects.toThrow(/Another tab/);
     expect(requests).toHaveLength(before);
   });

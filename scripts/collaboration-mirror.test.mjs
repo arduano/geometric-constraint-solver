@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, open, readFile, writeFile, rename, rm, symlink, unlink 
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { createTrustedSourceHost } from "../packages/geosolve-collaboration/dist/host.js";
-import { createCollaborationMirror, externalTextSplices } from "./collaboration-mirror.mjs";
+import { createCollaborationMirror, externalTextSplices } from "../packages/geosolve-cli/runtime/collaboration-mirror.mjs";
 
 const actor = value => new TextEncoder().encode(value);
 async function durable(path, value) {

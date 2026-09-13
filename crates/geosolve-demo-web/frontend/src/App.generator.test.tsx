@@ -4,13 +4,15 @@ import { EditorView } from "@codemirror/view";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { createFolderWorkbenchSession } from "./lib/folder-workbench-session";
 import { FolderWorkbenchAdapter, type FolderState } from "./lib/folder-adapter";
 import { MockWorkbenchAdapter } from "./lib/mock-adapter";
+import { folderBrowser, folderModel } from "./lib/folder-test-support";
 
 async function ready() {
   const native = new MockWorkbenchAdapter();
   const fixture = await native.snapshot();
-  const catalog = await native.toolCatalog();
+  const browser = await folderBrowser(fixture);
   const state: FolderState = {
     mode: "generator", entry: "generator.ts", authority: { epoch: "epoch", lease: 1, revision: 1 },
     editor: { clientId: "tab", canEdit: true }, ok: true, sequence: 1, currentHash: "accepted-before", acceptedHash: "accepted-before", status: "saved",
@@ -28,11 +30,13 @@ async function ready() {
       state.authority!.revision++;
     }
     if (request.method === "session.takeover") { state.editor!.canEdit = true; state.authority!.lease++; }
-    return { ok: true, json: async () => ({ result: request.method === "toolCatalog" ? catalog : structuredClone(fixture), state: structuredClone(state) }) };
+    const model = folderModel(fixture, state.authority!.revision, state.acceptedHash!);
+    model.mode = "generator"; model.model = null; model.generated = {};
+    return { ok: true, json: async () => ({ result: model, state: structuredClone(state) }) };
   }));
   vi.stubGlobal("EventSource", class extends EventTarget { close() {} });
-  const adapter = new FolderWorkbenchAdapter("token");
-  const rendered = render(<App adapter={adapter} folder={adapter} />);
+  const adapter = new FolderWorkbenchAdapter("token", () => browser.local, { createBrowsing: browser.createBrowsing, authoring: null });
+  const rendered = render(<App session={createFolderWorkbenchSession(adapter)} />);
   await screen.findByRole("region", { name: "Local folder" });
   await screen.findByRole("region", { name: "Generator inputs" });
   return { adapter, requests, state, ...rendered, user: userEvent.setup() };

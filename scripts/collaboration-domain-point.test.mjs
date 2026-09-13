@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCollaborationDomainJob as job } from "./collaboration-domain.mjs";
+import { runCollaborationDomainJob as job } from "../packages/geosolve-cli/runtime/collaboration-domain.mjs";
 import { createEngine } from "../packages/geosolve-engine/dist/index.js";
 const viewport = { screen_size: [800, 600], model_center: [0, 0], pixels_per_model_unit: 10 };
 async function fixture(t, name = "point-gesture-constrained.json") {

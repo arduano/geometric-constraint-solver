@@ -6,9 +6,9 @@ From the repository root, after preparing the dedicated engine WASM and TypeScri
 
 ```sh
 mkdir -p target/m98/bake
-node scripts/file-workspace.mjs bake examples/file-workspace-bake/pi-footprint \
+node packages/geosolve-cli/bin/geosolve.mjs bake examples/file-workspace-bake/pi-footprint \
   --out target/m98/bake/pi-footprint.json --chord-error-mm 0.02
-node scripts/file-workspace.mjs bake examples/file-workspace-bake/circle-arc \
+node packages/geosolve-cli/bin/geosolve.mjs bake examples/file-workspace-bake/circle-arc \
   --out target/m98/bake/circle-arc.json --chord-error-mm 0.02
 ```
 

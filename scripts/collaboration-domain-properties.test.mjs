@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { runCollaborationDomainJob as job } from "./collaboration-domain.mjs";
+import { runCollaborationDomainJob as job } from "../packages/geosolve-cli/runtime/collaboration-domain.mjs";
 import { createTrustedSemanticHost } from "../packages/geosolve-collaboration/dist/host.js";
 const source = '"use geosolve sketch";import{sketch,mm}from"@geosolve/sketch-code";export default sketch(($)=>{const bore=$.geometry.centerRadiusCircle("bore",{center:[0,0],radius:mm(2),label:"Base"});const other=$.geometry.centerRadiusCircle("other",{center:[30,0],radius:mm(3)});return{bore,other};});';
 const operation = (userId, requestId) => ({ userId, clientId: `tab-${userId}`, requestId });

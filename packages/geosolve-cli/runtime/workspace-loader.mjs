@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
-import { Worker } from "node:worker_threads";
+import { runWorkerTask } from "./worker-task.mjs";
 import { sdkRoot, sdkDirectory as defaultSdkDirectory, typescriptModuleUrl, esbuildRoot } from "./workspace-runtime-paths.mjs";
 
 const { default: ts } = await import(typescriptModuleUrl);
@@ -191,30 +191,20 @@ export function evaluateWorkspaceSnapshot(snapshot, { signal, timeoutMs = 15000,
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300000) throw new TypeError("loader timeout must be 1..300000 ms");
   if (signal?.aborted) return Promise.reject(new WorkspaceLoadError("cancelled", "Workspace evaluation cancelled"));
   if (toolIdentity(sdkDirectory) !== snapshot.toolchain) return Promise.reject(new WorkspaceLoadError("conflict", "SDK/compiler files changed after the workspace snapshot was captured"));
-  return new Promise((resolveResult, reject) => {
-    const worker = new Worker(new URL("./workspace-loader-worker.mjs", import.meta.url), { workerData: { snapshot, sdkDirectory }, execArgv: [], stdout: true, stderr: true, resourceLimits: { maxOldGenerationSizeMb: 256 } });
-    worker.stdout.resume(); worker.stderr.resume();
-    let finished = false;
-    const done = (error, result) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", abort);
-      void worker.terminate();
-      if (error) reject(error);
-      else {
-        try {
-          if (toolIdentity(sdkDirectory) !== snapshot.toolchain) throw new WorkspaceLoadError("conflict", "SDK/compiler files changed during workspace evaluation");
-          resolveResult(freeze(result));
-        } catch (failure) { reject(failure); }
-      }
-    };
-    const abort = () => done(new WorkspaceLoadError("cancelled", "Workspace evaluation cancelled"));
-    const timer = setTimeout(() => done(new WorkspaceLoadError("timeout", `Workspace evaluation exceeded ${timeoutMs} ms`, { path: snapshot.entry })), timeoutMs);
-    signal?.addEventListener("abort", abort, { once: true });
-    worker.once("message", (message) => message.ok ? done(null, message.result) : done(new WorkspaceLoadError(message.error.code, message.error.detail, message.error.location)));
-    worker.once("error", (error) => done(new WorkspaceLoadError("evaluation_failed", error.message, { path: snapshot.entry })));
-    worker.once("exit", (code) => { if (!finished) done(new WorkspaceLoadError("evaluation_failed", `Workspace worker exited before completing (code ${code})`, { path: snapshot.entry })); });
+  return runWorkerTask({
+    url: new URL("./workspace-loader-worker.mjs", import.meta.url),
+    workerData: { snapshot, sdkDirectory }, memoryMb: 256, signal, timeoutMs,
+    decode(message) {
+      if (!message.ok) throw new WorkspaceLoadError(message.error.code, message.error.detail, message.error.location);
+      if (toolIdentity(sdkDirectory) !== snapshot.toolchain) throw new WorkspaceLoadError("conflict", "SDK/compiler files changed during workspace evaluation");
+      return freeze(message.result);
+    },
+    failure(kind, detail) {
+      if (kind === "cancelled") return new WorkspaceLoadError("cancelled", "Workspace evaluation cancelled");
+      if (kind === "timeout") return new WorkspaceLoadError("timeout", `Workspace evaluation exceeded ${timeoutMs} ms`, { path: snapshot.entry });
+      return new WorkspaceLoadError("evaluation_failed", kind === "error" ? detail.message
+        : `Workspace worker exited before completing (code ${detail})`, { path: snapshot.entry });
+    },
   });
 }
 

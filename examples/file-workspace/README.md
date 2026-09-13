@@ -11,11 +11,11 @@ See the [current CLI](../../packages/geosolve-cli/README.md) and
 From a prepared checkout:
 
 ```bash
-node scripts/geosolve-cli.mjs init target/my-sketch
-node scripts/geosolve-cli.mjs serve target/my-sketch
+node packages/geosolve-cli/bin/geosolve.mjs init target/my-sketch
+node packages/geosolve-cli/bin/geosolve.mjs serve target/my-sketch
 # Open the exact printed session URL, including its token.
-node scripts/geosolve-cli.mjs inspect target/my-sketch
-node scripts/geosolve-cli.mjs check target/my-sketch
+node packages/geosolve-cli/bin/geosolve.mjs inspect target/my-sketch
+node packages/geosolve-cli/bin/geosolve.mjs check target/my-sketch
 ```
 
 Edit the circle's driving `value: mm(10)` in `sketch.ts`. The open canvas and Inspector
@@ -46,7 +46,8 @@ npm ci --prefix crates/geosolve-demo-web/frontend
 node packages/geosolve-engine/scripts/build-wasm.mjs
 node packages/geosolve-engine/scripts/build.mjs
 npm run wasm:release --prefix crates/geosolve-demo-web/frontend
-node crates/geosolve-demo-web/frontend/scripts/build-workspace.mjs
+npm --prefix packages/geosolve-cli ci --ignore-scripts
+npm --prefix packages/geosolve-cli run build
 npm run build:ui --prefix crates/geosolve-demo-web/frontend
 ```
 

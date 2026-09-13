@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { createTrustedSourceHost } from "../packages/geosolve-collaboration/dist/host.js";
 import { createSharedText } from "../packages/geosolve-collaboration/dist/index.js";
-import { openDurableCollaborationHost } from "./collaboration-host.mjs";
+import { openDurableCollaborationHost } from "../packages/geosolve-cli/runtime/collaboration-host.mjs";
 const bytes = (value) => Buffer.from(JSON.stringify(value));
 const actor = (value) => Buffer.from(value);
 const files = { "main.ts": "const width = 12;\n", "helper.ts": "export const height = 8;\n" };

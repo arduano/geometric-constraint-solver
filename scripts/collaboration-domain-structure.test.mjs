@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTrustedSemanticHost } from "../packages/geosolve-collaboration/dist/host.js";
-import { runCollaborationDomainJob as job } from "./collaboration-domain.mjs";
+import { runCollaborationDomainJob as job } from "../packages/geosolve-cli/runtime/collaboration-domain.mjs";
 const source = '"use geosolve sketch";\nimport {sketch,mm} from "@geosolve/sketch-code";\nexport default sketch(($)=>{\n // Bore stays owned.\n const bore=$.geometry.centerRadiusCircle("bore",{center:[0,0],radius:mm(5)});\n const other=$.geometry.centerRadiusCircle("other",{center:[30,0],radius:mm(3)});\n return {bore,other};\n});\n';
 const operation = (userId, requestId) => ({ userId, clientId: `tab-${userId}`, requestId });
 async function fixture(t, text = source) {
@@ -129,7 +129,7 @@ test("domain reference replacement and its native structural inverse preserve ex
 
 test("compiler suppression history preserves exact activation, explicit same-value ownership and independent values", async () => {
   const { compileManagedSource, applyManagedSketchMutation } = await import("../packages/geosolve-sketch-code/dist/src/managed.js");
-  const { suppressionChanges, prepareStructuralSource } = await import("./collaboration-domain-structure.mjs");
+  const { suppressionChanges, prepareStructuralSource } = await import("../packages/geosolve-cli/runtime/collaboration-domain-structure.mjs");
   const before = { entry: "sketch.ts", compiled: compileManagedSource(source), patches: {} };
   const mutation = { mutation: "set_suppressed", target: { target: "declaration", declaration: "bore" }, suppressed: true };
   const after = { ...before, compiled: applyManagedSketchMutation(before.compiled, mutation).compiled };

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createWorkspaceWorkbench } from "./workspace-workbench.mjs";
+import { createWorkspaceWorkbench } from "../packages/geosolve-cli/runtime/workspace-workbench.mjs";
 
 // Real workers exercise process loss independently of native geometry. Native
 // persistence validity is owned by the public Rust/session tests.
@@ -16,9 +16,9 @@ parentPort.on("message", ({ id, method, input }) => {
     if (input.hang) { while (true) {} }
     value = input.command === "workspace.checkpoint.restore" ? input.payload.contents : input.value;
   }
-  if (method === "interactionApply") value = input.opaque;
-  if (method === "interactionSnapshot") {
-    parentPort.postMessage({ id, ok: true, result: { snapshot: { value }, seed: { opaque: value } } });
+  if (method === "commit" || method === "mutation") value = input.value;
+  if (method === "snapshot" && input?.semantic) {
+    parentPort.postMessage({ id, ok: true, result: { model: { value }, seed: { opaque: value } } });
     return;
   }
   parentPort.postMessage({ id, ok: true, result: method === "persistProject" ? { contents: value } : { value } });
@@ -41,21 +41,21 @@ for (const [name, input, pattern] of [
   assert.deepEqual(await adapter.snapshot(), { value: "next" });
 });
 
-test("interaction transport preserves an atomic opaque snapshot/seed pair and ordered application", { timeout: 10000 }, async (t) => {
+test("semantic transport preserves an atomic model/seed pair and ordered authored application", { timeout: 10000 }, async (t) => {
   const adapter = await createWorkspaceWorkbench({ workerUrl, timeoutMs: 1000 });
   t.after(() => adapter.dispose());
   await adapter.construct({ version: 2, persistedProject: "accepted" });
-  const initial = await adapter.interactionSnapshot();
-  assert.deepEqual(initial, { snapshot: { value: "accepted" }, seed: { opaque: "accepted" } });
-  const calls = [adapter.interactionApply({ opaque: "selected" }), adapter.interactionSnapshot(), adapter.dispatch({ value: "edited" }), adapter.interactionSnapshot()];
+  const initial = await adapter.snapshot({ semantic: true });
+  assert.deepEqual(initial, { model: { value: "accepted" }, seed: { opaque: "accepted" } });
+  const calls = [adapter.commit({ value: "selected" }), adapter.snapshot({ semantic: true }), adapter.dispatch({ value: "edited" }), adapter.snapshot({ semantic: true })];
   assert.deepEqual(await Promise.all(calls), [
-    { value: "selected" }, { snapshot: { value: "selected" }, seed: { opaque: "selected" } },
-    { value: "edited" }, { snapshot: { value: "edited" }, seed: { opaque: "edited" } },
+    { value: "selected" }, { model: { value: "selected" }, seed: { opaque: "selected" } },
+    { value: "edited" }, { model: { value: "edited" }, seed: { opaque: "edited" } },
   ]);
-  assert.deepEqual(initial, { snapshot: { value: "accepted" }, seed: { opaque: "accepted" } });
+  assert.deepEqual(initial, { model: { value: "accepted" }, seed: { opaque: "accepted" } });
   await assert.rejects(adapter.dispatch({ crash: 7 }), /exited/);
-  assert.deepEqual(await adapter.interactionSnapshot(), { snapshot: { value: "accepted" }, seed: { opaque: "accepted" } },
-    "transient interaction cannot replace the worker's accepted recovery checkpoint");
+  assert.deepEqual(await adapter.snapshot({ semantic: true }), { model: { value: "accepted" }, seed: { opaque: "accepted" } },
+    "unpublished authoring cannot replace the worker's accepted recovery checkpoint");
 });
 
 test("queued calls preserve order and disposal settles every caller", { timeout: 10000 }, async () => {

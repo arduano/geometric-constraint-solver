@@ -10,10 +10,10 @@ import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { createHash } from "node:crypto";
-import { acquireWorkspaceLock, createWorkspaceStorage } from "./workspace-storage.mjs";
+import { acquireWorkspaceLock, createWorkspaceStorage } from "../packages/geosolve-cli/runtime/workspace-storage.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const storageUrl = new URL("./workspace-storage.mjs", import.meta.url).href;
+const storageUrl = new URL("../packages/geosolve-cli/runtime/workspace-storage.mjs", import.meta.url).href;
 
 function fixture(t, options = {}) {
   const folder = mkdtempSync(join(tmpdir(), "geosolve-storage-"));

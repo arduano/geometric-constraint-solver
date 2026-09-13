@@ -39,6 +39,25 @@ describe("detached interaction worker transport", () => {
     await vi.waitFor(() => expect(reply).toHaveBeenLastCalledWith({ id: 3, error: "Unsupported local interaction operation" }));
   });
 
+  it("exports personal presentation through the native codec without exposing mutation", async () => {
+    const presentation = { hiddenRows: ["managed:edge"], constructionVisible: false, dimensions: { mode: "all" as const, pins: ["persistent-dimension-key"] } };
+    const reply = vi.fn();
+    class Handle implements InteractionHandle {
+      replace() { return "{}"; } dispatch = this.replace; pointer = this.replace; wheel = this.replace;
+      resize = this.replace; cancel = this.replace; authoringPointer = this.replace; restoreSelection = this.replace; presence = this.replace;
+      state() { return "{}"; } exportPresentation() { return JSON.stringify(presentation); } free() {}
+    }
+    const handle = createLocalInteractionHandler(Promise.resolve(Handle), reply);
+    handle(new MessageEvent("message", { data: { id: 1, method: "construct", input: {} } }));
+    handle(new MessageEvent("message", { data: { id: 2, method: "exportPresentation" } }));
+    await vi.waitFor(() => expect(reply).toHaveBeenLastCalledWith({ id: 2, result: presentation }));
+    const worker = new FakeWorker(), adapter = new LocalInteractionWorker(worker as unknown as Worker);
+    const saved = adapter.exportPresentation();
+    expect(worker.postMessage).toHaveBeenCalledWith({ id: 1, method: "exportPresentation", input: undefined });
+    worker.reply({ id: 1, result: presentation });
+    expect(await saved).toEqual(presentation); adapter.dispose();
+  });
+
   it("freezes locally composed frames and rejects pending requests when its worker fails", async () => {
     const worker = new FakeWorker(), adapter = new LocalInteractionWorker(worker as unknown as Worker);
     const frame = (await new MockWorkbenchAdapter().snapshot()).frame;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createWorkspaceSession, isWorkspaceNavigation } from "./workspace-session.mjs";
+import { createWorkspaceSession } from "../packages/geosolve-cli/runtime/workspace-session.mjs";
 const first = "first-editor";
 const second = "second-editor";
 
@@ -21,31 +21,20 @@ test("one active editor, explicit handoff, old lease and restart rejection", () 
   assert.throws(() => restarted.verify(second, handed.authority), /session changed/);
 });
 
-test("selection changes cannot authorize stale target-relative commands; navigation remains cheap", () => {
+test("every authored command requires the exact installed model revision", () => {
   const session = createWorkspaceSession();
   const initial = session.join(first).authority;
   session.advance();
-  assert.throws(() => session.verify(first, initial), /interaction state changed/);
-  session.verify(first, initial, { navigation: true });
+  assert.throws(() => session.verify(first, initial), /model revision changed/);
+  assert.throws(() => session.verify(first, initial, { navigation: true, pointerId: 7 }), /model revision changed/,
+    "old pointer/navigation hints cannot relax semantic admission");
   session.verify(first, session.state(first).authority);
-  for (const command of ["history.undo", "history.redo", "authoring.metadata.set", "authoring.parameter.extract", "unknown"]) {
-    assert.equal(isWorkspaceNavigation("dispatch", { command }), false);
-  }
-  assert.equal(isWorkspaceNavigation("wheelBatch", []), true);
 });
 
-test("ordered terminal gesture retains its starting authority but cannot survive a handoff", () => {
+test("a locally prepared terminal cannot survive an editing handoff", () => {
   const session = createWorkspaceSession();
-  const initial = session.join(first).authority;
-  session.beginGesture(first, initial, 7);
-  session.advance();
-  session.verify(first, initial, { pointerId: 7 });
-  assert.throws(() => session.verify(first, initial, { pointerId: 8 }), /interaction state changed/);
-  session.endGesture();
-  assert.throws(() => session.verify(first, initial, { pointerId: 7 }), /interaction state changed/);
-  const current = session.state(first).authority;
-  session.beginGesture(first, current, 9);
-  const handed = session.takeover(second, current);
-  assert.throws(() => session.verify(first, current, { pointerId: 9 }), /read only/);
+  const captured = session.join(first).authority;
+  const handed = session.takeover(second, captured);
+  assert.throws(() => session.verify(first, captured), /read only/);
   session.verify(second, handed.authority);
 });

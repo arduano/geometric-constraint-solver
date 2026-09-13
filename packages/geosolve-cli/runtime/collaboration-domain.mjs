@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { Worker } from "node:worker_threads";
+import { createWorkerLifetime, createWorkerRequest } from "./worker-lifetime.mjs";
 
 export class CollaborationDomainError extends Error {
   constructor(code, message, location = {}) { super(message); this.name = "CollaborationDomainError"; this.code = code; Object.assign(this, location); }
@@ -27,14 +27,14 @@ export function createCollaborationDomainService({ timeoutMs = 60_000 } = {}) {
   let worker, active, disposed = false, sequence = 0, stopping, queuedBytes = 0;
   const queue = [];
   function finish(request, failure, result) {
-    clearTimeout(request.timer); request.signal?.removeEventListener("abort", request.abort);
     failure ? request.reject(failure) : request.resolve(result);
   }
   async function terminate(owner, failure) {
     if (worker !== owner) return;
     worker = undefined;
     const request = active; active = undefined;
-    const stopped = owner.terminate(); stopping = stopped;
+    request?.clear();
+    const stopped = owner.stop(); stopping = stopped;
     try { await stopped; } finally {
       if (request) finish(request, failure);
       if (stopping === stopped) stopping = undefined;
@@ -42,32 +42,33 @@ export function createCollaborationDomainService({ timeoutMs = 60_000 } = {}) {
     }
   }
   function start() {
-    worker = new Worker(new URL("./collaboration-domain-worker.mjs", import.meta.url), {
-      workerData: { retained: true, timeoutMs }, execArgv: [], stdout: true, stderr: true,
-      resourceLimits: { maxOldGenerationSizeMb: 512 },
+    worker = createWorkerLifetime({
+      url: new URL("./collaboration-domain-worker.mjs", import.meta.url),
+      workerData: { retained: true, timeoutMs },
+      onOutput(chunk) {
+        if (!active) return;
+        active.outputBytes += chunk.length;
+        if (active.outputBytes > 1024 * 1024) void terminate(worker, error("resource_limit", "Domain diagnostic output exceeds 1 MiB"));
+      },
+      onMessage(message) {
+        if (!active || message.id !== active.id) return;
+        const request = active; active = undefined;
+        finish(request, message.ok ? null : new CollaborationDomainError(message.error.code, message.error.message, message.error.location), message.result);
+        pump();
+      },
+      onError: failure => { void terminate(worker, error("worker_failed", failure.message)); },
+      onExit: code => { void terminate(worker, error("worker_failed", `Domain worker exited before completion (${code})`)); },
     });
-    const owner = worker;
-    for (const pipe of [owner.stdout, owner.stderr]) pipe.on("data", (chunk) => {
-      if (worker !== owner || !active) return;
-      active.outputBytes += chunk.length;
-      if (active.outputBytes > 1024 * 1024) void terminate(owner, error("resource_limit", "Domain diagnostic output exceeds 1 MiB"));
-    });
-    owner.on("message", (message) => {
-      if (worker !== owner || !active || message.id !== active.id) return;
-      const request = active; active = undefined;
-      finish(request, message.ok ? null : new CollaborationDomainError(message.error.code, message.error.message, message.error.location), message.result);
-      pump();
-    });
-    owner.once("error", (failure) => { void terminate(owner, error("worker_failed", failure.message)); });
-    owner.once("exit", (code) => { void terminate(owner, error("worker_failed", `Domain worker exited before completion (${code})`)); });
   }
   function pump() {
     if (disposed || active || stopping || !queue.length) return;
     if (!worker) start();
     const request = queue.shift(); queuedBytes -= request.bytes; active = request;
     const owner = worker;
-    request.timer = setTimeout(() => { void terminate(owner, error("timeout", `Domain job exceeded ${request.timeoutMs} ms`)); }, request.timeoutMs);
-    try { owner.postMessage({ id: request.id, encoded: request.encoded, timeoutMs: request.timeoutMs }); }
+    request.watch({ timeoutMs: request.timeoutMs, onTimeout: () => { void terminate(owner, error("timeout", `Domain job exceeded ${request.timeoutMs} ms`)); },
+      signal: request.signal, onAbort: request.abort });
+    if (active !== request) return;
+    try { owner.post({ id: request.id, encoded: request.encoded, timeoutMs: request.timeoutMs }); }
     catch (failure) { void terminate(owner, error("worker_failed", failure.message)); }
   }
   return {
@@ -78,17 +79,16 @@ export function createCollaborationDomainService({ timeoutMs = 60_000 } = {}) {
       try { encoded = encode(input); } catch (failure) { return Promise.reject(error("invalid_input", failure.message)); }
       const bytes = Buffer.byteLength(encoded);
       if (queue.length >= 16 || queuedBytes + bytes > 128 * 1024 * 1024) return Promise.reject(error("resource_limit", "Domain job queue exceeds 16 waiting requests / 128 MiB"));
-      return new Promise((resolve, reject) => {
-        const request = { id: ++sequence, encoded, bytes, signal, timeoutMs: deadline, resolve, reject, outputBytes: 0 };
-        request.abort = () => {
-          if (active === request) { void terminate(worker, error("cancelled", "Domain job cancelled")); return; }
-          const index = queue.indexOf(request);
-          if (index >= 0) { queue.splice(index, 1); queuedBytes -= request.bytes; finish(request, error("cancelled", "Domain job cancelled")); }
-        };
-        queue.push(request); queuedBytes += bytes; signal?.addEventListener("abort", request.abort, { once: true });
-        if (signal?.aborted) request.abort();
-        pump();
-      });
+      const request = Object.assign(createWorkerRequest(), { id: ++sequence, encoded, bytes, signal, timeoutMs: deadline, outputBytes: 0 });
+      request.abort = () => {
+        if (active === request) { void terminate(worker, error("cancelled", "Domain job cancelled")); return; }
+        const index = queue.indexOf(request);
+        if (index >= 0) { queue.splice(index, 1); queuedBytes -= request.bytes; finish(request, error("cancelled", "Domain job cancelled")); }
+      };
+      queue.push(request); queuedBytes += bytes;
+      request.watch({ signal, onAbort: request.abort });
+      pump();
+      return request.promise;
     },
     async dispose() {
       if (disposed) { await stopping; return; }

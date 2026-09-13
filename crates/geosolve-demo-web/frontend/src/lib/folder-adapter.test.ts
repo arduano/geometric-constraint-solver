@@ -2,22 +2,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FolderWorkbenchAdapter } from "./folder-adapter";
 import { MockWorkbenchAdapter } from "./mock-adapter";
+import { folderBrowser, folderModel } from "./folder-test-support";
 
 async function harness() {
   const fixture = await new MockWorkbenchAdapter().snapshot();
+  const browser = await folderBrowser(fixture);
   let disk = "radius-10";
   const requests: Array<{ method: string; input?: { command: string }; baseHash: string }> = [];
   vi.stubGlobal("fetch", vi.fn(async (_url, init) => {
     const request = JSON.parse(init.body);
     requests.push(request);
-    return { ok: true, json: async () => ({ result: structuredClone(fixture), state: {
+    return { ok: true, json: async () => ({ result: folderModel(fixture), state: {
       ok: true, sequence: 1, currentHash: disk, acceptedHash: disk, status: "saved",
       diagnostics: [], paths: { folder: "/project", source: "/project/sketch.ts" },
     } }) };
   }));
   vi.stubGlobal("EventSource", class extends EventTarget { close() {} });
-  const adapter = new FolderWorkbenchAdapter("test-token");
-  adapter.installSnapshot(await adapter.construct());
+  const adapter = new FolderWorkbenchAdapter("test-token", () => browser.local, { createBrowsing: browser.createBrowsing, authoring: null });
+  adapter.installSnapshot(await adapter.prepareSnapshot(await adapter.construct()));
   return { adapter, requests, changeDisk: () => { disk = "radius-15"; } };
 }
 
@@ -32,7 +34,7 @@ it("tracks queued folder work through completion and failed transport retries", 
     await new Promise<void>((resolve) => { release = resolve; });
     return successful(...args);
   }));
-  const first = adapter.dispatch({ version: 2, command: "view.fit" });
+  const first = adapter.dispatch({ version: 2, command: "history.undo" });
   const second = adapter.snapshot();
   await vi.advanceTimersByTimeAsync(499);
   expect(adapter.activity.getSnapshot()).toBe(false);
@@ -133,7 +135,7 @@ describe("folder installed source authority", () => {
     const { adapter, requests, changeDisk } = await harness();
     adapter.changeFieldEdit("description", "Document description", "Two\nlines");
     changeDisk();
-    const newer = (await adapter.wheelBatch([]))!;
+    const newer = await adapter.snapshot();
     expect(adapter.installSnapshot(newer)).toBe(false);
     let committed!: Promise<unknown>;
     adapter.commitFieldEdit("description", () => {
@@ -182,14 +184,14 @@ it("a lost save response retries the identical operation ID and retains it if di
   expect(adapter.notice).toContain("status is unknown");
 });
 
-it("disconnected navigation is not replayed and status checks retain the saved intent", async () => {
+it("offline local navigation performs no RPC and status checks retain the saved intent", async () => {
   const { adapter } = await harness();
   adapter.pending = JSON.stringify({ operationId: "saved-edit", input: "original" });
   const original = adapter.pending;
   const disconnected = vi.fn(async () => { throw Error("disconnected"); });
   vi.stubGlobal("fetch", disconnected);
-  await expect(adapter.wheel({ version: 2, x: 100, y: 100, deltaX: 0, deltaY: -20, ctrl: false })).rejects.toThrow("disconnected");
-  expect(disconnected).toHaveBeenCalledTimes(1);
+  expect(await adapter.wheel({ version: 2, x: 100, y: 100, deltaX: 0, deltaY: -20, ctrl: false })).not.toBeNull();
+  expect(disconnected).not.toHaveBeenCalled();
   expect(adapter.pending).toBe(original);
   disconnected.mockClear();
   await expect(adapter.checkPendingOperation()).rejects.toThrow("disconnected");

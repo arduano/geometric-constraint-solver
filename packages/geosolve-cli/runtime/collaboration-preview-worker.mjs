@@ -2,8 +2,7 @@
 // One disposable worker retains one exact native authoring continuation. It has
 // no route to commit, source mutation, filesystem writes, or navigation state.
 import { parentPort, workerData } from "node:worker_threads";
-import { readFile } from "node:fs/promises";
-import { engineModuleUrl, demoBindingsUrl, demoWasmPath } from "./workspace-runtime-paths.mjs";
+import { engineModuleUrl } from "./workspace-runtime-paths.mjs";
 const { createEngine } = await import(engineModuleUrl);
 const input = JSON.parse(workerData.encoded);
 const canonical = value => JSON.stringify(value, (_key, child) => child && typeof child === "object" && !Array.isArray(child)
@@ -15,18 +14,11 @@ if (session.sourceDesignDigest() !== input.model.sourceDesignDigest
   || canonical(session.exportDesign()) !== canonical(input.model.design)) throw Error("Preview reconstruction differs from trusted accepted source/design");
 let prediction, kind, point, construction, operation, next = 1;
 const basis = input.basis;
-let presentationWasm;
 const preview = () => ({ kind: "preview", basis, presentation: prediction.presentationJSON(), ...(point ? { point } : {}), ...(construction ? { construction } : {}), ...(operation ? { operation } : {}) });
 let viewport;
 async function mappedOperands(view) {
   if (!input.viewSeed) throw Error("Accepted authoring selection scene is unavailable");
-  if (!presentationWasm) {
-    presentationWasm = await import(demoBindingsUrl);
-    await presentationWasm.default({ module_or_path: await readFile(demoWasmPath) });
-  }
-  const context = JSON.parse(session.toolOperationPresentationJSON(viewport));
-  const mapped = JSON.parse(presentationWasm.mapAuthoringSelection(JSON.stringify({ ...context, view: { seed: input.viewSeed, state: view.state } })));
-  return session.toolOperationOperands(mapped);
+  return session.toolOperationViewOperands(viewport, { seed: input.viewSeed, state: view.state });
 }
 async function run(request) {
   if (request.action === "begin") {

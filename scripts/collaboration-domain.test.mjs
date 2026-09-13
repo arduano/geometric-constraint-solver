@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCollaborationDomainJob as job } from "./collaboration-domain.mjs";
+import { runCollaborationDomainJob as job } from "../packages/geosolve-cli/runtime/collaboration-domain.mjs";
 import { createEngine } from "../packages/geosolve-engine/dist/index.js";
 
 const manifest = JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "editable" });

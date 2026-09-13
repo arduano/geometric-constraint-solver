@@ -17,7 +17,7 @@ const format = "geosolve-collaboration-model-v1";
 // Private to this document worker. Inputs and compiler receipts are immutable;
 // editable sessions leave the cache before any job can mutate them.
 const compiledCache = new Map(), sessionCache = new Map();
-let compilerBytes = 0, sessionBytes = 0, enginePromise, workbench, retainedScene;
+let compilerBytes = 0, sessionBytes = 0, enginePromise, retainedScene;
 let jobTimeoutMs = workerData.timeoutMs, documentFolder, toolchain, leases, outputs, sessions;
 const retainedLimit = 32 * 1024 * 1024;
 function compilerRemember(key, value) {
@@ -310,31 +310,12 @@ async function evaluate(input) {
   if (input.kind === "scene") {
     const key = hash(JSON.stringify(sorted({ files: input.files, model: input.model, viewport: input.viewport ?? null })));
     if (retainedScene?.key === key) return retainedScene.result;
-    if (!workbench) {
-      const { createWorkspaceWorkbench } = await import("./workspace-workbench.mjs");
-      workbench = await createWorkspaceWorkbench({ timeoutMs: workerData.timeoutMs });
-    }
-    try {
-      // Retain the loaded WASM worker, but reconstruct each distinct candidate's
-      // presentation authority. Constructor/first-resize fitting and document
-      // context must be identical to cold restoration, never inherited from an
-      // earlier candidate's optional viewport or source shape.
-      await workbench.construct({ version: 2, persistedProject: session.exportProject() });
-      await workbench.dispatch({ version: 2, command: "workspace.project.apply", payload: { project: session.exportProject(), design: session.exportDesign() } });
-      if (input.viewport !== undefined) {
-        const { width, height, pixelRatio = 1 } = input.viewport;
-        if (![width, height, pixelRatio].every((value) => Number.isFinite(value) && value > 0)) fail("invalid_input", "Expected finite positive scene viewport");
-        await workbench.resize({ version: 2, width, height, pixelRatio });
-      }
-      const scene = await workbench.interactionSnapshot();
-      scene.toolCatalog = await workbench.toolCatalog();
-      if (scene.snapshot.project.status !== "accepted" || scene.snapshot.source.dirty || scene.snapshot.pendingManagedMutation) fail("invalid_scene", "Workbench did not accept the independently rebuilt source/design");
-      const exported = await workbench.exportProject(), design = await workbench.exportWorkspaceDesign();
-      if (!equal(projectValue(exported.contents), projectValue(session.exportProject())) || !equal(design, session.exportDesign())) fail("invalid_scene", "Workbench scene changed accepted source/design authority");
-      const result = { acceptedInput: inputIdentity(input.files, session.sourceDesignDigest()), scene, pointTargets: session.pointGestureTargets() };
-      retainedScene = Buffer.byteLength(JSON.stringify(result)) <= retainedLimit ? { key, result } : undefined;
-      return result;
-    } catch (error) { await workbench.dispose(); workbench = undefined; retainedScene = undefined; throw error; }
+    // Native accepted geometry and exact bindings are the only server scene payload.
+    // Each browser builds its frame/chrome through the shared read-only adapter.
+    const result = { acceptedInput: inputIdentity(input.files, session.sourceDesignDigest()),
+      scene: { seed: session.interactionSeed(input.viewport) }, pointTargets: session.pointGestureTargets() };
+    retainedScene = Buffer.byteLength(JSON.stringify(result)) <= retainedLimit ? { key, result } : undefined;
+    return result;
   }
   if (input.kind === "point_gesture" || input.kind === "point_properties") {
     const before = session.exportDesign(), project = session.exportProject();

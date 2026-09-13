@@ -6,9 +6,11 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
 import { Worker } from "node:worker_threads";
-import { hash, serveProject } from "./file-workspace.mjs";
+import { hash, serveProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 const root = new URL("../", import.meta.url);
+const native = await import(new URL("../crates/geosolve-demo-web/frontend/src/generated/geosolve_demo_web.js", import.meta.url));
+await native.default({ module_or_path: readFileSync(new URL("../crates/geosolve-demo-web/frontend/src/generated/geosolve_demo_web_bg.wasm", import.meta.url)) });
 const samples = [
   { name: "small", source: "examples/file-workspace" },
   { name: "gridfinity", source: "crates/geosolve-sketch-code/assets/bundled-samples/gridfinity-bin-section" },
@@ -49,8 +51,19 @@ async function fixture(t, sample) {
   const current = await rpc("session.join");
   assert.equal(current.status, 200, current.error);
   assert.equal(current.state.ok, true, JSON.stringify(current.state.diagnostics));
-  assert.equal(current.result.project.status, "accepted");
-  return { folder, bridge, rpc, current, openingMs };
+  assert.equal(current.result.status, "accepted");
+  const value = current.result;
+  const browser = new native.BrowsingHandle(JSON.stringify(value.mode === "generator"
+    ? { generated: JSON.stringify(value.generated), seed: value.seed }
+    : { project: value.model.project, design: value.model.design, seed: value.seed }));
+  const initial = JSON.parse(browser.initialize());
+  const canvas = new native.InteractionHandle(JSON.stringify(initial.seed));
+  t.after(() => { canvas.free(); browser.free(); });
+  const local = async (method, input) => {
+    const value = JSON.parse(canvas[method === "wheelBatch" ? "wheel" : method](JSON.stringify(method === "wheelBatch" ? { version: 2, samples: input } : input)));
+    return value;
+  };
+  return { folder, bridge, rpc, current, openingMs, browser, canvas, initial, local };
 }
 
 function navigationGuard(t, adapter) {
@@ -92,16 +105,13 @@ function navigationGuard(t, adapter) {
 
 for (const sample of samples) test(`${sample.name} folder navigation preserves every authored/cache file without compilation or history serialization`, { timeout: 180000 }, async (t) => {
   const f = await fixture(t, sample);
-  let current = f.current;
-  current = await f.rpc("resize", { version: 2, width: 960, height: 640, pixelRatio: 1 }, current.state);
-  assert.equal(current.status, 200, current.error);
-  current = await f.rpc("dispatch", { version: 2, command: "view.fit" }, current.state);
-  assert.equal(current.status, 200, current.error);
+  let current = await f.local("resize", { version: 2, width: 960, height: 640, pixelRatio: 1 });
+  current = await f.local("dispatch", { version: 2, command: "view.fit" });
   await f.bridge.project.saveDerived();
   const beforeDisk = diskState(f.folder);
   const beforeProject = await f.bridge.project.adapter.exportProject();
   const beforeDesign = await f.bridge.project.adapter.exportWorkspaceDesign();
-  const before = current;
+  const before = f.current;
   const elapsed = [];
   const guard = navigationGuard(t, f.bridge.project.adapter);
   try {
@@ -112,31 +122,30 @@ for (const sample of samples) test(`${sample.name} folder navigation preserves e
       ];
       for (const [method, input] of operations) {
         const start = performance.now();
-        const next = await f.rpc(method, input, current.state);
-        current = { ...next, result: next.result ?? current.result };
+        const next = await f.local(method, input);
+        current = next ?? current;
         elapsed.push({ method, ms: performance.now() - start });
-        assert.equal(current.status, 200, current.error);
-        assert.equal(current.state.ok, true, JSON.stringify(current.state.diagnostics));
-        assert.equal(current.result.project.status, "accepted");
+        assert.ok(current.frame.scene.items.length > 0);
       }
     }
     for (const command of ["view.origin", "view.fit", "view.grid.toggle", "view.grid.toggle", "view.fit"]) {
       const start = performance.now();
-      current = await f.rpc("dispatch", { version: 2, command }, current.state);
+      current = await f.local("dispatch", { version: 2, command });
       elapsed.push({ method: command, ms: performance.now() - start });
-      assert.equal(current.status, 200, current.error);
+      assert.ok(current.frame.scene.items.length > 0);
     }
-    assert.deepEqual(current.result.source, before.result.source);
-    for (const key of ["writes", "externalApplies", "currentHash", "acceptedHash", "sourceHash", "revision", "acceptedRevision"]) assert.deepEqual(current.state[key], before.state[key], key);
+    const observed = await f.rpc("snapshot");
+    assert.deepEqual(observed.result.source, before.result.source);
+    for (const key of ["writes", "externalApplies", "currentHash", "acceptedHash", "sourceHash", "revision", "acceptedRevision"]) assert.deepEqual(observed.state[key], before.state[key], key);
     assert.deepEqual(await f.bridge.project.adapter.exportProject(), beforeProject);
     assert.deepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(), beforeDesign);
     assert.deepEqual(diskState(f.folder), beforeDisk);
     assert.deepEqual(guard.writes, [], "navigation attempted no filesystem writes, including temporary/cache files");
     assert.deepEqual(guard.workers, [], "navigation started no compilation or replacement workers");
-    assert.ok(guard.methods.every(({ method, command }) => ["wheelBatch", "pointer", "dispatch", "exportProject", "exportWorkspaceDesign"].includes(method) && (!command || command.startsWith("view."))), JSON.stringify(guard.methods));
+    assert.ok(guard.methods.every(({ method }) => ["snapshot", "exportProject", "exportWorkspaceDesign"].includes(method)), JSON.stringify(guard.methods));
   } finally { guard.restore(); }
   const durations = elapsed.map((row) => row.ms).sort((a, b) => a - b);
-  const evidence = { sample: sample.name, openingMs: f.openingMs, sceneItems: current.result.frame.scene.items.length,
+  const evidence = { sample: sample.name, openingMs: f.openingMs, sceneItems: current.frame.scene.items.length,
     sourceFiles: before.result.source.files.length, diskFiles: beforeDisk.filter((file) => file.hash).length,
     requests: elapsed.length, medianMs: durations[Math.floor(durations.length / 2)], p95Ms: durations[Math.ceil(durations.length * .95) - 1], maxMs: durations.at(-1),
     writes: guard.writes, compilationWorkers: guard.workers, elapsed };
@@ -152,10 +161,10 @@ test("generator Center on origin remains available as read-only navigation", { t
   const beforeDisk = diskState(f.folder);
   const guard = navigationGuard(t, f.bridge.project.adapter);
   try {
-    const current = await f.rpc("dispatch", { version: 2, command: "view.origin" }, before.state);
-    assert.equal(current.status, 200, current.error);
-    assert.equal(current.state.ok, true);
-    assert.equal(current.result.project.status, "accepted");
+    const local = await f.local("dispatch", { version: 2, command: "view.origin" });
+    assert.deepEqual(local.state.viewport.model_center, [0, 0]);
+    const current = await f.rpc("snapshot");
+    assert.equal(current.result.status, "accepted");
     for (const key of ["writes", "externalApplies", "currentHash", "acceptedHash", "sourceFiles", "inputs"]) assert.deepEqual(current.state[key], before.state[key], key);
     assert.deepEqual(diskState(f.folder), beforeDisk);
     assert.deepEqual(guard.writes, []);
@@ -173,11 +182,10 @@ test("middle-button pan terminals preserve authority without serializing authore
   const guard = navigationGuard(t, f.bridge.project.adapter);
   try {
     for (const [phase, x, y, buttons] of [["down", 480, 320, 4], ["move", 520, 340, 4], ["up", 520, 340, 0]]) {
-      const next = await f.rpc("pointer", { version: 2, phase, pointerId: 17, x, y, buttons,
-        modifiers: { alt: false, ctrl: false, meta: false, shift: false } }, current.state);
-      assert.equal(next.status, 200, `${phase}: ${next.error}`);
-      current = { ...next, result: next.result ?? current.result };
+      await f.local("pointer", { version: 2, phase, pointerId: 17, x, y, buttons,
+        modifiers: { alt: false, ctrl: false, meta: false, shift: false } });
     }
+    current = await f.rpc("snapshot");
     assert.equal(current.state.ok, true);
     assert.deepEqual(await f.bridge.project.adapter.exportProject(), beforeProject);
     assert.deepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(), beforeDesign);
@@ -199,14 +207,12 @@ test("Show in canvas selects source-owned geometry without serializing authored 
   const beforeDisk = diskState(f.folder);
   const guard = navigationGuard(t, f.bridge.project.adapter);
   try {
-    const current = await f.rpc("dispatch", { version: 2, command: "navigation.source.select", payload: {
-      authority: f.current.result.navigation.authority, path: "sketch.ts", from, to: from + 10,
-    } }, f.current.state);
-    assert.equal(current.status, 200, current.error);
-    assert.equal(current.state.ok, true);
-    assert.ok(current.result.navigation.itemCount > 0);
-    assert.ok(current.result.navigation.rows.some((row) => row.id === "managed:ring" && row.state === "selected"));
-    assert.notEqual(current.result.navigation.selectionKey, f.current.result.navigation.selectionKey);
+    const current = JSON.parse(f.browser.navigate(JSON.stringify({ state: JSON.parse(f.canvas.state()), command: "navigation.source.select", payload: {
+      authority: f.initial.snapshot.navigation.authority, path: "sketch.ts", from, to: from + 10,
+    } })));
+    assert.ok(current.chrome.navigation.itemCount > 0);
+    assert.ok(current.chrome.navigation.rows.some((row) => row.id === "managed:ring" && row.state === "selected"));
+    assert.notEqual(current.chrome.navigation.selectionKey, f.initial.snapshot.navigation.selectionKey);
     assert.deepEqual(await f.bridge.project.adapter.exportProject(), beforeProject);
     assert.deepEqual(await f.bridge.project.adapter.exportWorkspaceDesign(), beforeDesign);
     assert.deepEqual(diskState(f.folder), beforeDisk);
@@ -256,7 +262,7 @@ test("HTTP admission is bounded and repeated watcher ticks coalesce while the ho
     assert.equal(scans, 1, "queued watcher work is coalesced independently of request saturation");
     // The native actor and unauthenticated HTTP refusal both remain responsive
     // while a host operation is deliberately pending.
-    assert.equal((await f.bridge.project.adapter.snapshot()).project.status, "accepted");
+    assert.equal((await f.bridge.project.adapter.snapshot()).status, "accepted");
     const denied = await fetch(`${f.bridge.origin}/api/status`);
     assert.equal(denied.status, 403);
     release.resolve();

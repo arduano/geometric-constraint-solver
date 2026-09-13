@@ -48,9 +48,8 @@ export type AuthoringResult =
   | { readonly kind: "cancelled"; readonly model: AuthoringModelIdentity };
 export type AuthoringWorkerResponse = { id: number; generation: number; result: AuthoringResult } | { id: number; generation: number; error: string };
 export interface AuthoringRuntime {
-  open(model: AuthoringModel): Pick<EditableSession, "token" | "sourceDesignDigest" | "exportDesign" | "exportProject" | "beginPointGesture" | "beginConstruction" | "beginToolOperation" | "toolOperationPresentationJSON" | "toolOperationOperands" | "dispose" | "accepted">;
+  open(model: AuthoringModel): Pick<EditableSession, "token" | "sourceDesignDigest" | "exportDesign" | "exportProject" | "beginPointGesture" | "beginConstruction" | "beginToolOperation" | "toolOperationViewOperands" | "dispose" | "accepted">;
   render(presentation: string, view: AuthoringView, construction?: Pick<ConstructionFrame, "preview" | "inference_guides">): WorkbenchSnapshot["frame"];
-  mapSelection?(presentation: string, view: AuthoringView): unknown;
   release(session: ReturnType<AuthoringRuntime["open"]>): void;
 }
 type Session = ReturnType<AuthoringRuntime["open"]>;
@@ -110,8 +109,7 @@ export function createAuthoringWorkerHandler(runtime: Promise<AuthoringRuntime>,
             if (data.method === "beginPoint") point = session.beginPointGesture(data.target, options);
             else if(data.method === "beginConstruction") { construction = session.beginConstruction(data.tool, { ...options, role: data.role }); constructionFrame = construction.initialFrame; }
             else {
-              if(data.selection===undefined&&!native?.mapSelection)throw Error("Native tool selection mapping is unavailable");
-              const selection = data.selection ?? session.toolOperationOperands(native!.mapSelection!(session.toolOperationPresentationJSON(data.viewport), data.view));
+              const selection = data.selection ?? session.toolOperationViewOperands(data.viewport, data.view);
               operation = session.beginToolOperation(data.tool, { ...options, selection, options:data.options }); operationFrame = operation.initialFrame; operationViewport=data.viewport;
             }
             result = paint(data.view);
@@ -132,8 +130,8 @@ export function createAuthoringWorkerHandler(runtime: Promise<AuthoringRuntime>,
             }
             result = paint(data.view);
           } else if(data.method === "pickOperationSelection") {
-            if(!operation||!operationViewport||!native?.mapSelection)throw Error("No active native operation selection");
-            const operands=session.toolOperationOperands(native.mapSelection(session.toolOperationPresentationJSON(operationViewport),data.view));
+            if(!operation||!operationViewport)throw Error("No active native operation selection");
+            const operands=session.toolOperationViewOperands(operationViewport,data.view);
             operationFrame=operation.advance({sequence:data.sequence,input:{event:"pick_selection",operands}});
             result=paint(data.view);
           } else if (data.method === "finishPoint") {
@@ -167,7 +165,6 @@ async function createBrowserRuntime(): Promise<AuthoringRuntime> {
   return {
     open: model => engine.openEditableSession(model.project, { design: model.design }),
     release: session => releaseSession(engine, session),
-    mapSelection: (presentation, view) => JSON.parse(presentationWasm.mapAuthoringSelection(JSON.stringify({ ...JSON.parse(presentation), view }))),
     render: (presentation, view, construction) => JSON.parse(presentationWasm.renderAuthoringPreview(JSON.stringify({ ...JSON.parse(presentation), view, construction: construction ? { preview: construction.preview, inference_guides: construction.inference_guides } : null }))),
   };
 }

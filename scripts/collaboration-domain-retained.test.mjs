@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createCollaborationDomainService, runCollaborationDomainJob as cold } from "./collaboration-domain.mjs";
+import { createCollaborationDomainService, runCollaborationDomainJob as cold } from "../packages/geosolve-cli/runtime/collaboration-domain.mjs";
 const files = {
   "geosolve.json": JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "editable" }),
   "sketch.ts": '"use geosolve sketch";import {sketch,mm} from "@geosolve/sketch-code";export default sketch(($)=>{const first=$.geometry.centerRadiusCircle("first",{center:[-20,0],radius:mm(5)});const second=$.geometry.centerRadiusCircle("second",{center:[20,0],radius:mm(3)});return {first,second};});',
@@ -118,9 +118,9 @@ test("retained scene requests do not inherit a previous request's custom viewpor
   const { folder, service, initial } = await setup(t);
   const custom = await service.run({ kind: "scene", folder, files, model: initial.model, viewport: { width: 900, height: 700, pixelRatio: 2 } });
   const restored = await scene(service.run, folder, initial), independent = await scene(cold, folder, initial);
-  assert.notDeepEqual(custom.scene.snapshot.frame.scene.viewBox, independent.scene.snapshot.frame.scene.viewBox);
-  assert.deepEqual(restored.scene.snapshot.frame.scene.viewBox, independent.scene.snapshot.frame.scene.viewBox);
-  // Workbench restoration allocates a fresh native document namespace. Compare
+  assert.notDeepEqual(JSON.parse(custom.scene.seed.scene).viewport.screen_size, JSON.parse(independent.scene.seed.scene).viewport.screen_size);
+  assert.deepEqual(JSON.parse(restored.scene.seed.scene).viewport.screen_size, JSON.parse(independent.scene.seed.scene).viewport.screen_size);
+  // Independent native restoration allocates a fresh document namespace. Compare
   // every semantic and drawing field after mapping only those native IDs to
   // their exact stable compiler labels; do not omit geometry or authority.
   function semanticScene(seed) {
@@ -136,7 +136,7 @@ test("retained scene requests do not inherit a previous request's custom viewpor
 
 test("domain session owner releases superseded results and evicted sessions across accepted and rejected updates", async (t) => {
   const { createEngine } = await import("../packages/geosolve-engine/dist/index.js");
-  const { createDomainSessionOwner } = await import("./collaboration-domain-sessions.mjs");
+  const { createDomainSessionOwner } = await import("../packages/geosolve-cli/runtime/collaboration-domain-sessions.mjs");
   const { initial } = await setup(t), engine = await createEngine(), owner = createDomainSessionOwner(engine);
   t.after(() => engine.dispose());
   let model = initial.model;

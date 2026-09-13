@@ -4,7 +4,6 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import initializePresentation, { InteractionHandle, WorkbenchHandle, renderAuthoringPreview } from "../generated/geosolve_demo_web.js";
 import { createEngine, type EditableSession, type PointGestureTarget } from "../../../../../packages/geosolve-engine/src/index";
-import * as presentationWasm from "../generated/geosolve_demo_web.js";
 import initializeEngine, * as engineWasm from "../../../../../packages/geosolve-engine/dist/wasm/geosolve_sketch_engine_wasm.js";
 import { createAuthoringWorkerHandler, type AuthoringAction, type AuthoringModel, type AuthoringResult, type AuthoringRuntime, type AuthoringView, type AuthoringWorkerRequest, type AuthoringWorkerResponse } from "./collaboration-authoring-worker";
 import { LocalAuthoringWorker } from "./collaboration-authoring-adapter";
@@ -93,7 +92,6 @@ describe("separate authoring worker", () => {
     const runtime: AuthoringRuntime = {
       open: input => { session = engine.openEditableSession(input.project, { design: input.design }); return session; },
       release: held => { const result = held.accepted; held.dispose(); engine.release(result); },
-      mapSelection: (presentation, mappedView) => JSON.parse(presentationWasm.mapAuthoringSelection(JSON.stringify({...JSON.parse(presentation),view:mappedView}))),
       render: (scene, currentView, construction) => {
         expect(JSON.parse(scene)).toBeTypeOf("object"); expect(currentView).toEqual(genuineView);
         if (construction?.preview) expect(construction.preview).toHaveProperty("kind");
@@ -173,13 +171,12 @@ describe("separate authoring worker", () => {
       await expect(send({ method: "render", view: genuineView })).rejects.toThrow("No active authoring prediction");
       expect(construction.kind).toBe("construction");
       if (construction.kind === "construction") { expect(construction.command.samples).toHaveLength(3); expect(construction.command.expected_declarations.length).toBeGreaterThan(0); }
-      const nativeSelection=runtime.mapSelection!(session!.toolOperationPresentationJSON(viewport),genuineView);
-      expect(session!.toolOperationOperands(nativeSelection)).toHaveLength(1);
+      expect(session!.toolOperationViewOperands(viewport,genuineView)).toHaveLength(1);
       const operation=await send({method:"beginOperation",tool:"lock",gestureId:73,viewport,view:genuineView});
       expect(operation.kind==="preview"&&operation.operation?.completed).toBe(true);
       const locked=await send({method:"finishOperation"});
       if(locked.kind!=="operation")throw Error("Expected native operation terminal");
-      expect(locked.command.selection).toEqual(session!.toolOperationOperands(nativeSelection));
+      expect(locked.command.selection).toEqual(session!.toolOperationViewOperands(viewport,genuineView));
       expect(locked.command.expected_declarations.length).toBeGreaterThan(0);
       expect(locked.command.samples).toEqual([]);
       const afterOperation=await send({method:"render",view:genuineView});
@@ -193,18 +190,16 @@ describe("separate authoring worker", () => {
 
 it("maps operation preselection through native source correspondence and retains exact ordered terminal samples",async()=>{
   const frame=(await provisional()).frame;
-  const nativeSelection={items:[{curve:{curve:12,span:1}}],curve_picks:[{item:{curve:{curve:12,span:1}},parameter:0.375,origin:{native:true}}]};
   const operands=[{target:"binding" as const,symbol:"edge",binding:1,span:1,curve_parameter:0.375}];
   const operationFrame={sequence:0,completed:false,can_finish:false,has_pending:false,can_reset:false,can_step_back:false,diagnostic:null,pending:operands,authoring_options:{tangent_orientation:"aligned" as const,curvature_relation:"signed" as const,continuity:{kind:"g1" as const},dimension_mode:"driving" as const,angle_orientation:"counter_clockwise" as const},fillet_options:{fillet_radius:2,flip_first_side:false,flip_second_side:false,alternate_arc:false},fillet_corner_count:0,fillet_corners:[],offset_distance:null};
   const command={basis:model.sourceDesignDigest,gesture_id:31,viewport,tool:"fillet" as const,selection:operands,samples:[],expected_declarations:[]};
   const prediction={initialFrame:operationFrame,advance:vi.fn((_sample:import("../../../../../packages/geosolve-engine/src/tool-operations").ToolOperationSample)=>operationFrame),presentationJSON:vi.fn(()=>'{"native":"operation"}'),finish:vi.fn(()=>command),cancel:vi.fn()};
-  const session={token:{session:1},sourceDesignDigest:()=>model.sourceDesignDigest,exportProject:()=>model.project,exportDesign:()=>model.design,toolOperationPresentationJSON:vi.fn(()=>'{"native":"accepted"}'),toolOperationOperands:vi.fn(()=>operands),beginToolOperation:vi.fn(()=>prediction),dispose:vi.fn()};
-  const runtime:AuthoringRuntime={open:()=>session as unknown as ReturnType<AuthoringRuntime["open"]>,mapSelection:vi.fn(()=>nativeSelection),render:vi.fn(()=>frame),release:vi.fn()};
+  const session={token:{session:1},sourceDesignDigest:()=>model.sourceDesignDigest,exportProject:()=>model.project,exportDesign:()=>model.design,toolOperationViewOperands:vi.fn(()=>operands),beginToolOperation:vi.fn(()=>prediction),dispose:vi.fn()};
+  const runtime:AuthoringRuntime={open:()=>session as unknown as ReturnType<AuthoringRuntime["open"]>,render:vi.fn(()=>frame),release:vi.fn()};
   const send=harness(Promise.resolve(runtime));
   await send({method:"replace",model});
   const opened=await send({method:"beginOperation",tool:"fillet",gestureId:31,viewport,view});
-  expect(runtime.mapSelection).toHaveBeenCalledWith('{"native":"accepted"}',view);
-  expect(session.toolOperationOperands).toHaveBeenCalledWith(nativeSelection);
+  expect(session.toolOperationViewOperands).toHaveBeenCalledWith(viewport,view);
   expect(session.beginToolOperation).toHaveBeenCalledWith("fillet",{expected:session.token,gestureId:31,viewport,selection:operands,options:undefined});
   expect(opened.kind==="preview"&&opened.operation).toEqual(operationFrame);
   const samples=[{sequence:1,input:{event:"fillet_radius" as const,radius:4}},{sequence:2,input:{event:"complete" as const}}];
@@ -220,11 +215,11 @@ it("maps operation preselection through native source correspondence and retains
 it("explicit repeated-operation selection skips preselection mapping and obsolete generations cannot advance it",async()=>{
   const frame=(await provisional()).frame;
   const prediction={initialFrame:undefined,advance:vi.fn(),presentationJSON:()=>'{"native":"operation"}',cancel:vi.fn()};
-  const session={token:{session:1},sourceDesignDigest:()=>model.sourceDesignDigest,exportProject:()=>model.project,exportDesign:()=>model.design,beginToolOperation:vi.fn(()=>prediction),dispose:vi.fn()};
-  const runtime:AuthoringRuntime={open:()=>session as unknown as ReturnType<AuthoringRuntime["open"]>,mapSelection:vi.fn(),render:()=>frame,release:vi.fn()};
+  const session={token:{session:1},sourceDesignDigest:()=>model.sourceDesignDigest,exportProject:()=>model.project,exportDesign:()=>model.design,toolOperationViewOperands:vi.fn(),beginToolOperation:vi.fn(()=>prediction),dispose:vi.fn()};
+  const runtime:AuthoringRuntime={open:()=>session as unknown as ReturnType<AuthoringRuntime["open"]>,render:()=>frame,release:vi.fn()};
   const send=harness(Promise.resolve(runtime));await send({method:"replace",model});
   await send({method:"beginOperation",tool:"radius",gestureId:32,viewport,view,selection:[]});
-  expect(runtime.mapSelection).not.toHaveBeenCalled();
+  expect(session.toolOperationViewOperands).not.toHaveBeenCalled();
   await send({method:"replace",model:{...model,revision:2}},2);
   await expect(send({method:"advanceOperation",samples:[{sequence:1,input:{event:"click",position:[1,2]}}],view},1)).rejects.toThrow("obsolete accepted model");
   expect(prediction.advance).not.toHaveBeenCalled();expect(prediction.cancel).toHaveBeenCalledOnce();

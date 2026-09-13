@@ -4,7 +4,7 @@ import test from "node:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { initProject, openProject, hash } from "./file-workspace.mjs";
+import { initProject, openProject, hash } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 function fixture(t) {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-cache-"));

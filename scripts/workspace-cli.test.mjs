@@ -4,8 +4,8 @@ import test from "node:test";
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { runCli } from "./geosolve-cli.mjs";
-import { serveProject } from "./file-workspace.mjs";
+import { runCli } from "../packages/geosolve-cli/runtime/geosolve-cli.mjs";
+import { serveProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 test("plaintext CLI inspection, explicit ownership, accepted apply and idempotent outcome", async (t) => {
   const parent = mkdtempSync(resolve(tmpdir(), "geosolve-m98-cli-"));

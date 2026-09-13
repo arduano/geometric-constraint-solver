@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { readFileSync, writeFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { initProject, serveProject, checkProject, bakeProject } from "./file-workspace.mjs";
 import { readWorkspaceSnapshot } from "./workspace-loader.mjs";
@@ -99,8 +98,4 @@ export async function runCli(args) {
   if (command === "apply") return { ok: true, clientId, ...await rpc("files.apply", { files: jsonFile(flags.files) }, basis, flags.operation) };
   if (command === "recover") return { ok: true, ...await rpc("recovery.resolve", jsonFile(flags.resolve), basis, flags.operation) };
   throw Error(`Unknown command ${command}`);
-}
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  runCli(process.argv.slice(2)).then((result) => { console.log(JSON.stringify(result, null, 2)); if (result.ok === false) process.exitCode = 1; },
-    (error) => { console.error(JSON.stringify({ ok: false, error: String(error), ...error.details }, null, 2)); process.exitCode = 1; });
 }

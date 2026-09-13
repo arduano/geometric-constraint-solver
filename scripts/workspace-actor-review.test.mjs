@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { Worker } from "node:worker_threads";
-import { createWorkspaceWorkbench } from "./workspace-workbench.mjs";
+import { createWorkspaceWorkbench } from "../packages/geosolve-cli/runtime/workspace-workbench.mjs";
 
 const timeoutMs = 1500;
 

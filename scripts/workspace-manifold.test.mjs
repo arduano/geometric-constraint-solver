@@ -4,10 +4,10 @@ import test from "node:test";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { openProject } from "./file-workspace.mjs";
-import { acquireWorkspaceLock, createWorkspaceStorage } from "./workspace-storage.mjs";
-import { readWorkspaceSnapshot } from "./workspace-loader.mjs";
-import { evaluateProjectSnapshot } from "./workspace-evaluation.mjs";
+import { openProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
+import { acquireWorkspaceLock, createWorkspaceStorage } from "../packages/geosolve-cli/runtime/workspace-storage.mjs";
+import { readWorkspaceSnapshot } from "../packages/geosolve-cli/runtime/workspace-loader.mjs";
+import { evaluateProjectSnapshot } from "../packages/geosolve-cli/runtime/workspace-evaluation.mjs";
 
 test("manifold external patch and source metadata edits retain profiles and reversible dependency history", { timeout: 300000 }, async (t) => {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-manifold-workflow-"));

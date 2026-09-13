@@ -2,9 +2,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FolderWorkbenchAdapter } from "./folder-adapter";
 import { MockWorkbenchAdapter } from "./mock-adapter";
+import { folderBrowser, folderModel } from "./folder-test-support";
 
 async function harness() {
   const fixture = await new MockWorkbenchAdapter().snapshot();
+  const browser = await folderBrowser(fixture);
   let revision = 1;
   let disk = "disk-before";
   let resolveNext: (() => void) | undefined;
@@ -13,15 +15,15 @@ async function harness() {
     const request = JSON.parse(init.body); requests.push(request);
     if (request.input?.command === "dimensions.focus") revision++;
     if (request.input?.command === "dimensions.edit" && resolveNext) await new Promise<void>((resolve) => { resolveNext = resolve; });
-    return { ok: true, json: async () => ({ result: structuredClone(fixture), state: {
+    return { ok: true, json: async () => ({ result: folderModel(fixture), state: {
       authority: { epoch: "epoch", lease: 1, revision }, editor: { clientId: "client", canEdit: true },
       ok: true, sequence: revision, currentHash: disk, acceptedHash: disk, status: "saved",
       diagnostics: [], paths: { folder: "/project", source: "/project/sketch.ts" },
     } }) };
   }));
   vi.stubGlobal("EventSource", class extends EventTarget { close() {} });
-  const adapter = new FolderWorkbenchAdapter("test-token");
-  adapter.installSnapshot(await adapter.construct());
+  const adapter = new FolderWorkbenchAdapter("test-token", () => browser.local, { createBrowsing: browser.createBrowsing, authoring: null });
+  adapter.installSnapshot(await adapter.prepareSnapshot(await adapter.construct()));
   return { adapter, requests, diskChanged: () => { disk = "disk-after"; },
     delayNextEdit: () => { resolveNext = () => {}; }, resolveEdit: () => resolveNext?.() };
 }
@@ -42,7 +44,7 @@ describe("folder lifecycle review", () => {
     unsubscribe();
   });
 
-  it("focus response records a new revision and an already started draft stays stale", async () => {
+  it("local focus does not advance server authority or rebase a started draft", async () => {
     const { adapter, requests } = await harness();
     const focus = adapter.dispatch({ version: 2, command: "dimensions.focus" });
     adapter.changeFieldEdit("width", "Width", "14");
@@ -50,7 +52,7 @@ describe("folder lifecycle review", () => {
     let submitted!: Promise<unknown>;
     adapter.commitFieldEdit("width", () => { submitted = adapter.dispatch({ version: 2, command: "dimensions.edit" }); });
     await submitted;
-    expect(adapter.state?.authority?.revision).toBe(2);
+    expect(adapter.state?.authority?.revision).toBe(1);
     expect(requests.at(-1)?.authority.revision).toBe(1);
   });
 });

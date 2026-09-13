@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { randomBytes } from "node:crypto";
-import { Worker } from "node:worker_threads";
+import { createWorkerLifetime, createWorkerRequest } from "./worker-lifetime.mjs";
 import { previewFault, validatePreviewRequest } from "./collaboration-preview-route.mjs";
 
 const defaults = Object.freeze({ maxPreviews: 4, maxPerConnection: 1, maxBasisBytes: 64 * 1024 * 1024, maxTotalBasisBytes: 128 * 1024 * 1024,
@@ -42,8 +42,8 @@ export function createCollaborationPreviewService({ enabled = false, authenticat
     if (entry.ending) return entry.ending;
     clearTimeout(entry.idle);
     const active = entry.active; entry.active = undefined;
-    if (active) { clearTimeout(active.timer); active.signal?.removeEventListener("abort", active.abort); }
-    entry.ending = entry.worker.terminate().then(() => {
+    active?.clear();
+    entry.ending = entry.worker.stop().then(() => {
       entries.delete(entry.ticket); totalBytes -= entry.bytes;
       if (active) active.reject(error);
     });
@@ -61,38 +61,41 @@ export function createCollaborationPreviewService({ enabled = false, authenticat
     const bytes = Buffer.byteLength(encoded);
     if (totalBytes + bytes > limits.maxTotalBasisBytes) throw previewFault("preview_backpressure", "Retained preview memory budget is full", 429);
     const ticket = randomBytes(32).toString("hex");
-    const worker = new Worker(new URL("./collaboration-preview-worker.mjs", import.meta.url), { workerData: { encoded, maxResponseBytes: limits.maxResponseBytes }, execArgv: [], stdout: true, stderr: true, resourceLimits: { maxOldGenerationSizeMb: 512 } });
-    const entry = { ticket, owner: connectionOwner, basis: request.basis, kind: request.kind, worker, bytes, next: 0, active: undefined, idle: undefined, ending: undefined };
-    entries.set(ticket, entry); totalBytes += bytes;
+    const entry = { ticket, owner: connectionOwner, basis: request.basis, kind: request.kind, bytes, next: 0, active: undefined, idle: undefined, ending: undefined };
     let diagnosticBytes = 0;
-    for (const pipe of [worker.stdout, worker.stderr]) pipe.on("data", chunk => {
-      diagnosticBytes += chunk.length;
-      if (diagnosticBytes > 64 * 1024) void destroy(entry, previewFault("preview_limit", "Native preview diagnostic limit exceeded", 413));
+    entry.worker = createWorkerLifetime({
+      url: new URL("./collaboration-preview-worker.mjs", import.meta.url),
+      workerData: { encoded, maxResponseBytes: limits.maxResponseBytes },
+      onOutput(chunk) {
+        diagnosticBytes += chunk.length;
+        if (diagnosticBytes > 64 * 1024) void destroy(entry, previewFault("preview_limit", "Native preview diagnostic limit exceeded", 413));
+      },
+      onMessage(message) {
+        if (entry.ending) return;
+        const active = entry.active;
+        if (!active || message?.id !== active.id || typeof message.ok !== "boolean") { void destroy(entry, previewFault("preview_protocol", "Unexpected native preview response", 500)); return; }
+        if (!message.ok) { void destroy(entry, previewFault("preview_rejected", String(message.error).slice(0, 8192), 409)); return; }
+        let result;
+        try {
+          if (typeof message.encoded !== "string" || Buffer.byteLength(message.encoded) > limits.maxResponseBytes) throw Error("Native preview response exceeds bounds");
+          result = JSON.parse(message.encoded);
+          const expectedKind = active.action === "finish" ? entry.kind : "preview";
+          if (!result || result.kind !== expectedKind || JSON.stringify(result.basis) !== JSON.stringify(entry.basis)
+            || result.kind === "preview" && typeof result.presentation !== "string"
+            || result.kind === "point" && !result.terminal?.command || ["construction", "operation"].includes(result.kind) && !result.command) throw Error("Native preview response has foreign basis or operation");
+          authorize(active.connection);
+        } catch (error) { void destroy(entry, error); return; }
+        active.clear(); entry.active = undefined;
+        if (active.action === "finish" || active.action === "cancel") void destroy(entry).then(() => active.resolve(result), active.reject);
+        else {
+          entry.idle = setTimeout(() => { void destroy(entry, previewFault("preview_expired", "Idle authoring preview expired", 410)); }, limits.idleMs); entry.idle.unref();
+          active.resolve({ ...result, ticket });
+        }
+      },
+      onError: error => { void destroy(entry, previewFault("preview_worker_failed", error.message, 500)); },
+      onExit: code => { void destroy(entry, previewFault("preview_worker_failed", `Native preview worker exited (${code})`, 500)); },
     });
-    worker.on("message", message => {
-      if (entry.ending) return;
-      const active = entry.active;
-      if (!active || message?.id !== active.id || typeof message.ok !== "boolean") { void destroy(entry, previewFault("preview_protocol", "Unexpected native preview response", 500)); return; }
-      if (!message.ok) { void destroy(entry, previewFault("preview_rejected", String(message.error).slice(0, 8192), 409)); return; }
-      let result;
-      try {
-        if (typeof message.encoded !== "string" || Buffer.byteLength(message.encoded) > limits.maxResponseBytes) throw Error("Native preview response exceeds bounds");
-        result = JSON.parse(message.encoded);
-        const expectedKind = active.action === "finish" ? entry.kind : "preview";
-        if (!result || result.kind !== expectedKind || JSON.stringify(result.basis) !== JSON.stringify(entry.basis)
-          || result.kind === "preview" && typeof result.presentation !== "string"
-          || result.kind === "point" && !result.terminal?.command || ["construction", "operation"].includes(result.kind) && !result.command) throw Error("Native preview response has foreign basis or operation");
-        authorize(active.connection);
-      } catch (error) { void destroy(entry, error); return; }
-      clearTimeout(active.timer); active.signal?.removeEventListener("abort", active.abort); entry.active = undefined;
-      if (active.action === "finish" || active.action === "cancel") void destroy(entry).then(() => active.resolve(result), active.reject);
-      else {
-        entry.idle = setTimeout(() => { void destroy(entry, previewFault("preview_expired", "Idle authoring preview expired", 410)); }, limits.idleMs); entry.idle.unref();
-        active.resolve({ ...result, ticket });
-      }
-    });
-    worker.on("error", error => { void destroy(entry, previewFault("preview_worker_failed", error.message, 500)); });
-    worker.on("exit", code => { if (!entry.ending) void destroy(entry, previewFault("preview_worker_failed", `Native preview worker exited (${code})`, 500)); });
+    entries.set(ticket, entry); totalBytes += bytes;
     return entry;
   }
   async function request(connection, body, { signal } = {}) {
@@ -104,15 +107,18 @@ export function createCollaborationPreviewService({ enabled = false, authenticat
     if (request.action === "cancel") { await destroy(entry); return { kind: "cancelled", basis: entry.basis }; }
     if (entry.active) throw previewFault("preview_backpressure", "An authoring preview operation is already running", 429);
     clearTimeout(entry.idle);
-    return new Promise((resolve, reject) => {
-      const id = ++entry.next;
-      const abort = () => { void destroy(entry, previewFault("preview_cancelled", "Preview request cancelled", 499)); };
-      const timer = setTimeout(() => { void destroy(entry, previewFault("preview_timeout", `Native preview exceeded ${limits.timeoutMs} ms`, 504)); }, limits.timeoutMs);
-      entry.active = { id, action: request.action, resolve, reject, timer, signal, abort, connection };
-      signal?.addEventListener("abort", abort, { once: true });
-      if (signal?.aborted) { abort(); return; }
-      try { entry.worker.postMessage({ id, request }); } catch (error) { void destroy(entry, error); }
+    const id = ++entry.next;
+    const active = Object.assign(createWorkerRequest(), { id, action: request.action, connection });
+    entry.active = active;
+    active.watch({ signal,
+      onAbort: () => { void destroy(entry, previewFault("preview_cancelled", "Preview request cancelled", 499)); },
+      timeoutMs: limits.timeoutMs,
+      onTimeout: () => { void destroy(entry, previewFault("preview_timeout", `Native preview exceeded ${limits.timeoutMs} ms`, 504)); },
     });
+    if (entry.active === active) {
+      try { entry.worker.post({ id, request }); } catch (error) { void destroy(entry, error); }
+    }
+    return active.promise;
   }
   return {
     enabled, request,

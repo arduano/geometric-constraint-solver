@@ -4,24 +4,10 @@ import type { ConstructionFrame } from "../../../../../packages/geosolve-engine/
 import type { PointerSample } from "./adapter";
 import type { AuthoringPointer } from "./local-interaction-adapter";
 import type { AuthoringModel, AuthoringPreview, AuthoringView, LocalAuthoringClient } from "./collaboration-authoring-adapter";
-import type { ConstructionTool, PointGestureCommand, PointGestureSample, ConstructionCommand, ConstructionEvent } from "../../../../../packages/geosolve-engine/src/index";
+import type { PointGestureCommand, PointGestureSample, ConstructionCommand, ConstructionEvent } from "../../../../../packages/geosolve-engine/src/index";
 
-const tools = {
-  "sketch-point": "sketch_point", segment: "segment", polyline: "polyline", "midpoint-line": "midpoint_line",
-  "two-point-aligned-rectangle": "two_point_aligned_rectangle", "three-point-corner-rectangle": "three_point_corner_rectangle",
-  "center-rectangle": "center_rectangle", "three-point-center-rectangle": "three_point_center_rectangle",
-  "center-radius-circle": "center_radius_circle", "two-point-diameter-circle": "two_point_diameter_circle", "three-point-circle": "three_point_circle",
-  "center-arc": "center_arc", "three-point-arc": "three_point_arc", "tangent-arc": "tangent_arc",
-  "center-axes-ellipse": "center_axes_ellipse", "axis-endpoints-ellipse": "axis_endpoints_ellipse",
-  "center-axes-elliptical-arc": "center_axes_elliptical_arc", "axis-endpoints-elliptical-arc": "axis_endpoints_elliptical_arc",
-  "quadratic-bezier": "quadratic_bezier", "cubic-bezier": "cubic_bezier", "rational-quadratic-conic": "rational_quadratic_conic",
-  parabola: "parabola", hyperbola: "hyperbola", "open-control-nurbs": "open_control_nurbs", "periodic-control-nurbs": "periodic_control_nurbs",
-} satisfies Record<string, ConstructionTool>;
+import { constructionTools as tools, operationTools } from "../../../../../packages/geosolve-engine/src/tool-catalog";
 export function supportsCollaborativeConstruction(tool:string){return Object.hasOwn(tools,tool);}
-const operationTools = {
-  lock:"lock", coincident:"coincident", concentric:"concentric", collinear:"collinear", midpoint:"midpoint", horizontal:"horizontal", vertical:"vertical", parallel:"parallel", perpendicular:"perpendicular", equal:"equal", symmetric:"symmetric", tangent:"tangent", continuity:"continuity",
-  "point-distance":"point_distance", "segment-length":"segment_length", radius:"radius", diameter:"diameter", "oriented-angle":"oriented_angle", fillet:"fillet", offset:"offset",
-} satisfies Record<string,ToolOperationTool>;
 export function supportsCollaborativeTool(tool:string){return tool === "select" || supportsCollaborativeConstruction(tool) || Object.hasOwn(operationTools,tool);}
 export interface OperationStart { view:AuthoringView; viewport:AuthoringPointer["viewport"]; selection?:readonly ToolOperationOperand[] }
 export type AuthoringCommand=PointGestureCommand|ConstructionCommand|ToolOperationCommand;

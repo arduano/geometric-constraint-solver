@@ -4,33 +4,41 @@ import { test } from "node:test";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCollaborationDomainJob as job } from "./collaboration-domain.mjs";
-import { demoBindingsUrl, demoWasmPath } from "./workspace-runtime-paths.mjs";
+import { runCollaborationDomainJob as job } from "../packages/geosolve-cli/runtime/collaboration-domain.mjs";
+const demoBindingsUrl = new URL("../crates/geosolve-demo-web/frontend/src/generated/geosolve_demo_web.js", import.meta.url).href;
+const demoWasmPath = new URL("../crates/geosolve-demo-web/frontend/src/generated/geosolve_demo_web_bg.wasm", import.meta.url);
 
-test("domain scene returns matching actual workbench chrome and immutable interaction seed", async (t) => {
+test("domain exports only native accepted input and the browser composes matching chrome and canvas", async (t) => {
   const folder = await mkdtemp(join(tmpdir(), "geosolve-domain-scene-")); t.after(() => rm(folder, { recursive: true, force: true }));
   const compiled = JSON.parse(await readFile(new URL("../crates/geosolve-sketch-engine/tests/fixtures/point-gesture-constrained.json", import.meta.url)));
   const files = { "geosolve.json": JSON.stringify({ format: "geosolve-folder-v2", entry: "sketch.ts", mode: "editable" }), "sketch.ts": compiled.normalizedSource };
   const initial = await job({ kind: "initialize", folder, files });
   const result = await job({ kind: "scene", folder, files, model: initial.model, expectedInput: initial.acceptedInput, viewport: { width: 900, height: 700, pixelRatio: 1 } });
-  assert.equal(result.acceptedInput, initial.acceptedInput); assert.equal(result.scene.snapshot.project.status, "accepted");
-  assert.equal(result.scene.snapshot.source.dirty, false); assert.ok(result.scene.seed);
-  assert.equal(result.scene.toolCatalog.version, 1);
-  assert.ok(result.scene.toolCatalog.sections.some((section) => section.id === "sketch" && section.commands.length > 0));
+  assert.equal(result.acceptedInput, initial.acceptedInput);
+  assert.deepEqual(Object.keys(result.scene), ["seed"]);
   assert.deepEqual(result.pointTargets, initial.pointTargets);
-  assert.ok(result.scene.snapshot.frame.scene);
   const wasm = await import(demoBindingsUrl); await wasm.default({ module_or_path: await readFile(demoWasmPath) });
-  const first = new wasm.InteractionHandle(JSON.stringify(result.scene.seed)), second = new wasm.InteractionHandle(JSON.stringify(result.scene.seed));
+  const browser = new wasm.BrowsingHandle(JSON.stringify({ project: initial.model.project, design: initial.model.design, seed: result.scene.seed }));
+  t.after(() => browser.free());
+  const initialView = JSON.parse(browser.initialize());
+  assert.equal(initialView.snapshot.project.status, "accepted");
+  assert.equal(initialView.snapshot.source.dirty, false);
+  assert.equal(initialView.toolCatalog.version, 1);
+  assert.ok(initialView.toolCatalog.sections.some(section => section.id === "sketch" && section.commands.length > 0));
+  assert.equal(initialView.seed.scene, result.scene.seed.scene);
+  assert.equal(initialView.seed.sceneKey, result.scene.seed.sceneKey);
+  assert.deepEqual(initialView.seed.bindings, result.scene.seed.bindings);
+  const first = new wasm.InteractionHandle(JSON.stringify(initialView.seed)), second = new wasm.InteractionHandle(JSON.stringify(initialView.seed));
   t.after(() => { first.free(); second.free(); });
-  const installed = JSON.parse(first.replace(JSON.stringify({ seed: result.scene.seed, preserveSelection: false })));
+  const installed = JSON.parse(first.replace(JSON.stringify({ seed: initialView.seed, preserveSelection: false })));
   assert.equal(result.scene.seed.semanticPreview, false);
   // Local recomposition intentionally carries presentation-only provenance; its
-  // drawing and document/revision still match the accepted workbench export.
-  assert.deepEqual(installed.frame.scene.items, result.scene.snapshot.frame.scene.items);
-  assert.deepEqual(installed.frame.scene.viewBox, result.scene.snapshot.frame.scene.viewBox);
+  // drawing and document/revision still match the browser's accepted initial frame.
+  assert.deepEqual(installed.frame.scene.items, initialView.snapshot.frame.scene.items);
+  assert.deepEqual(installed.frame.scene.viewBox, initialView.snapshot.frame.scene.viewBox);
   assert.equal(installed.frame.scene.provenance.scene, "accepted-presentation");
-  assert.equal(installed.frame.scene.provenance.document, result.scene.snapshot.frame.scene.provenance.document);
-  assert.equal(installed.frame.scene.provenance.revision, result.scene.snapshot.frame.scene.provenance.revision);
+  assert.equal(installed.frame.scene.provenance.document, initialView.snapshot.frame.scene.provenance.document);
+  assert.equal(installed.frame.scene.provenance.revision, initialView.snapshot.frame.scene.provenance.revision);
   const secondBefore = second.state();
   const zoomed = JSON.parse(first.wheel(JSON.stringify({ version: 2, x: 400, y: 300, deltaX: 0, deltaY: -80, ctrl: false })));
   assert.notDeepEqual(zoomed.state.viewport, JSON.parse(secondBefore).viewport);

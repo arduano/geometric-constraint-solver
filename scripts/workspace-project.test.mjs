@@ -4,7 +4,8 @@ import test from "node:test";
 import { mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { serveProject, initProject } from "./file-workspace.mjs";
+import { pointCommand } from "./workspace-native-test.mjs";
+import { serveProject, initProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 async function setup(t, { entry = "model/design.ts" } = {}) {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-project-"));
@@ -31,7 +32,7 @@ test("complete folder writes entry and semantic design, Undo/Redo and restart re
   const { folder, entry, source, rpc, restart } = fixture;
   const initial = await rpc("session.join");
   assert.equal(initial.state.ok, true, JSON.stringify(initial.state));
-  assert.equal(initial.result.presentation.canUndo, false);
+  assert.equal(initial.result.history.canUndo, false);
   const candidate = source.replace("value: mm(10)", "value: mm(12)");
   const edited = await rpc("dispatch", { version: 2, command: "source.prepare", payload: { path: "sketch.ts", contents: candidate } }, initial.state, "v2-source-edit");
   assert.equal(edited.status, 200, edited.error);
@@ -69,24 +70,43 @@ test("rejected complete project retains accepted scene but cannot overwrite reje
   assert.equal(bridge.project.state().ok, false);
 });
 
+test("invalid v2 GUI source retains its diagnostic draft without publishing or rolling it back", async (t) => {
+  const { folder, entry, source, bridge, rpc } = await setup(t);
+  const initial = await rpc("session.join");
+  const design = await bridge.project.adapter.exportWorkspaceDesign();
+  const draft = "// retained incomplete 😀\nnot valid managed source";
+  const rejected = await rpc("dispatch", { version: 2, command: "source.prepare", payload: { path: "sketch.ts", contents: draft } }, initial.state, "invalid-gui-source");
+  assert.equal(rejected.status, 200, rejected.error);
+  assert.equal(rejected.result.status, "retained");
+  assert.equal(rejected.result.source.dirty, true);
+  assert.equal(rejected.result.source.files[0].contents, draft);
+  assert.ok(rejected.result.problems.length > 0);
+  assert.deepEqual(rejected.result.seed, initial.result.seed);
+  assert.deepEqual(rejected.result.history, initial.result.history);
+  assert.deepEqual(await bridge.project.adapter.exportWorkspaceDesign(), design);
+  assert.equal(readFileSync(resolve(folder, entry), "utf8"), source);
+  assert.equal(rejected.state.currentHash, initial.state.currentHash);
+  assert.equal(rejected.state.writes, initial.state.writes);
+  await assert.rejects(bridge.project.adapter.exportProject(), /Canonical export.*invalid/);
+  const reverted = await rpc("dispatch", { version: 2, command: "source.revert" }, rejected.state, "revert-gui-source");
+  assert.equal(reverted.status, 200, reverted.error);
+  assert.equal(reverted.result.source.dirty, false);
+  assert.equal(reverted.result.source.files[0].contents, initial.result.source.files[0].contents);
+  assert.equal(readFileSync(resolve(folder, entry), "utf8"), source);
+  assert.equal(reverted.state.writes, initial.state.writes);
+  assert.deepEqual(reverted.result.seed, initial.result.seed);
+});
+
 test("point drag publishes semantic sidecar and survives cold reopen without its derived cache", async (t) => {
   const f = await setup(t);
   const compiled = JSON.parse(readFileSync(new URL("../packages/geosolve-sketch-code/test/fixtures/managed-empty-circle.json", import.meta.url), "utf8"));
   writeFileSync(resolve(f.folder, f.entry), compiled.normalizedSource);
   await f.bridge.project.scan(true);
   let current = await f.rpc("session.join");
-  current = await f.rpc("resize", { version: 2, width: 1000, height: 700, pixelRatio: 1 }, current.state);
-  current = await f.rpc("dispatch", { version: 2, command: "view.fit" }, current.state);
   const before = await f.bridge.project.adapter.bakeProfile(0.01);
-  const circle = current.result.frame.scene.items.find((item) => item.layer === "geometry" && item.kind === "polyline");
-  const xs = circle.points.map(([x]) => x), ys = circle.points.map(([,y]) => y);
-  const x = (Math.min(...xs) + Math.max(...xs)) / 2, y = (Math.min(...ys) + Math.max(...ys)) / 2;
-  const start = current.state;
-  for (const [phase, dx, dy, buttons] of [["down",0,0,1],["move",40,20,1],["up",40,20,0]]) {
-    current = await f.rpc("pointer", { version: 2, phase, pointerId: 1, x: x+dx, y: y+dy, buttons,
-      modifiers: { alt: false, ctrl: false, meta: false, shift: false } }, start, `drag-${phase}`);
-    assert.equal(current.status,200,current.error);
-  }
+  const command = await pointCommand(current.result, [4, -2]);
+  current = await f.rpc("authoring.commit", { kind: "point", command }, current.state, "drag-release");
+  assert.equal(current.status, 200, current.error);
   const after = await f.bridge.project.adapter.bakeProfile(0.01);
   assert.notDeepEqual(after.regions,before.regions,"drag must change accepted model-space points");
   const design = JSON.parse(readFileSync(resolve(f.folder,".geosolve/design.json"),"utf8"));

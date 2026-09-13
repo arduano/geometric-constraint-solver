@@ -7,7 +7,7 @@ const commands = JSON.parse(await readFile(new URL("../src/data/commands.json", 
 const registrySource = await readFile(new URL("../../../geosolve-sketch-code/src/bundled_samples.rs", import.meta.url), "utf8");
 const geometrySource = await readFile(new URL("../../../geosolve-constraint-editor/src/geometry_tools.rs", import.meta.url), "utf8");
 const paletteSource = await readFile(new URL("../../src/workbench/geometry_palette.rs", import.meta.url), "utf8");
-const actionSource = await readFile(new URL("../../src/workbench/action_surface.rs", import.meta.url), "utf8");
+const actionSource = await readFile(new URL("../../../geosolve-constraint-editor/src/authoring_catalog.rs", import.meta.url), "utf8");
 const manifestSource = await readFile(new URL("../../src/workbench/command_manifest.rs", import.meta.url), "utf8");
 
 const reviewed = JSON.parse(await readFile(new URL("../../../geosolve-sketch-code/assets/bundled-sample-catalog.json", import.meta.url), "utf8"));

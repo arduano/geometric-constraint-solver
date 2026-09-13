@@ -4,7 +4,7 @@ import test from "node:test";
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { initProject, serveProject, hash } from "./file-workspace.mjs";
+import { initProject, serveProject, hash } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
 
 async function setup(t) {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-bridge-"));
@@ -32,8 +32,8 @@ test("canonical folder has one bridge, two tabs require explicit handoff", async
   const viewer = await rpc("second-editor", "session.join");
   assert.equal(viewer.state.editor.canEdit, false);
   const resized = await rpc("second-editor", "resize", { input: { version: 2, width: 600, height: 400, pixelRatio: 1 }, state: viewer.state });
-  assert.equal(resized.status, 200, resized.error);
-  assert.deepEqual(resized.result.frame.scene.viewBox, viewer.result.frame.scene.viewBox);
+  assert.equal(resized.status, 400, resized.error);
+  assert.match(resized.error, /Unsupported workspace method/);
   const denied = await rpc("second-editor", "dispatch", { input: { version: 2, command: "history.undo" }, state: viewer.state });
   assert.equal(denied.status, 409);
   const takeover = await rpc("second-editor", "session.takeover", { state: viewer.state });
@@ -43,52 +43,38 @@ test("canonical folder has one bridge, two tabs require explicit handoff", async
   assert.equal(old.status, 409);
 });
 
-// Exercise HTTP/session/publication ownership with an opaque native interaction
-// export. Rust owns scene membership and local/server picking equivalence.
+// Legacy personal payloads are journal identity only. The server has no route
+// that applies them to its semantic authority or executes canvas navigation.
 function interactionProbe(t, bridge) {
-  const adapter = bridge.project.adapter;
-  const previous = { snapshot: adapter.interactionSnapshot, apply: adapter.interactionApply };
   const calls = [];
-  let exports = 0;
-  adapter.interactionSnapshot = async () => {
-    exports++;
-    const snapshot = await adapter.snapshot();
-    return { snapshot, seed: { format: "opaque-native-interaction-test", export: exports, width: snapshot.frame.scene.viewBox[2] } };
-  };
-  adapter.interactionApply = async (state) => {
-    calls.push(structuredClone(state));
-    if (state.reject) throw Error("native interaction rejected stale scene");
-    return adapter.resize({ version: 2, width: state.width, height: 480, pixelRatio: 1 });
-  };
-  t.after(() => {
-    adapter.interactionSnapshot = previous.snapshot;
-    adapter.interactionApply = previous.apply;
-  });
-  return { calls, get exports() { return exports; } };
+  bridge.project.adapter.interactionApply = async state => { calls.push(state); throw Error("Server applied personal presentation"); };
+  t.after(() => { delete bridge.project.adapter.interactionApply; });
+  return { calls };
 }
 
-test("local interaction export is opt-in and read-only observation never applies supplied state", async (t) => {
-  const { bridge, rpc } = await setup(t);
-  const probe = interactionProbe(t, bridge);
-  const legacy = await rpc("first-editor", "session.join");
-  assert.equal(legacy.status, 200, legacy.error);
-  assert.equal(legacy.result.localInteraction, undefined);
-  assert.equal(probe.exports, 0);
+test("every observer receives an engine seed and personal input never changes semantic authority", async (t) => {
+  const { bridge, rpc } = await setup(t), probe = interactionProbe(t, bridge);
+  const first = await rpc("first-editor", "session.join");
+  assert.equal(first.status, 200, first.error);
+  assert.equal(first.result.format, "geosolve-folder-model-v1");
+  assert.ok(first.result.seed.scene); assert.equal(first.result.frame, undefined);
   const viewer = await rpc("second-editor", "session.join", { localInteraction: true, interaction: { reject: true } });
-  assert.equal(viewer.status, 200, viewer.error);
-  assert.equal(viewer.state.editor.canEdit, false);
-  assert.equal(viewer.result.localInteraction.width, viewer.result.frame.scene.viewBox[2]);
+  assert.equal(viewer.status, 200, viewer.error); assert.equal(viewer.state.editor.canEdit, false);
   const observed = await rpc("second-editor", "snapshot", { localInteraction: true, interaction: { reject: true } });
-  assert.equal(observed.status, 200, observed.error);
-  assert.equal(observed.result.localInteraction.export, 2);
+  assert.deepEqual(observed.result, viewer.result);
+  assert.deepEqual(observed.result.model, first.result.model);
   assert.deepEqual(probe.calls, []);
 });
 
-test("local interaction sync validates editor, epoch, revision and disk before applying opaque state", async (t) => {
-  const { bridge, folder, rpc } = await setup(t);
-  const probe = interactionProbe(t, bridge);
+test("semantic publication validates editor, epoch, lease, revision and disk before native work", async (t) => {
+  const { bridge, folder, rpc } = await setup(t), probe = interactionProbe(t, bridge);
   const initial = await rpc("first-editor", "session.join");
-  const state = { width: 713, arbitrary: ["native", "state"] };
+  const source = readFileSync(resolve(folder, "sketch.ts"), "utf8");
+  const input = { mutation: { mutation: "invalid" } };
+  const before = await bridge.project.adapter.persistProject();
+  const calls = [], original = bridge.project.adapter.mutation;
+  bridge.project.adapter.mutation = async value => { calls.push(value); throw Error("must not enter native mutation"); };
+  t.after(() => { bridge.project.adapter.mutation = original; });
   for (const [client, basis] of [
     ["second-editor", initial.state],
     ["first-editor", { ...initial.state, authority: { ...initial.state.authority, epoch: "old-epoch" } }],
@@ -96,33 +82,19 @@ test("local interaction sync validates editor, epoch, revision and disk before a
     ["first-editor", { ...initial.state, authority: { ...initial.state.authority, revision: initial.state.authority.revision + 1 } }],
     ["first-editor", { ...initial.state, currentHash: "uninstalled-disk" }],
   ]) {
-    const denied = await rpc(client, "interaction.sync", { state: basis, localInteraction: true, interaction: state });
-    assert.equal(denied.status, 409, denied.error);
-    assert.deepEqual(probe.calls, []);
+    const denied = await rpc(client, "authoring.mutation", { state: basis, input });
+    assert.equal(denied.status, 409, denied.error); assert.deepEqual(calls, []);
   }
-  const source = readFileSync(resolve(folder, "sketch.ts"), "utf8");
-  const beforeProject = await bridge.project.adapter.exportProject();
-  const persist = bridge.project.adapter.persistProject;
-  bridge.project.adapter.persistProject = () => { throw Error("interaction sync serialized authored history"); };
-  let synced;
-  try {
-    synced = await rpc("first-editor", "interaction.sync", { state: initial.state, localInteraction: true, interaction: state });
-  } finally { bridge.project.adapter.persistProject = persist; }
-  assert.equal(synced.status, 200, synced.error);
-  assert.equal(synced.result.frame.scene.viewBox[2], 713);
-  assert.equal(synced.result.localInteraction.width, 713);
-  assert.deepEqual(probe.calls, [state]);
-  assert.equal(synced.state.writes, initial.state.writes);
-  assert.equal(synced.state.acceptedHash, initial.state.acceptedHash);
+  for (const method of ["interaction.sync", "pointer", "wheelBatch", "resize"]) {
+    const denied = await rpc("first-editor", method, { state: initial.state, localInteraction: true, interaction: { reject: true } });
+    assert.equal(denied.status, 400, denied.error); assert.match(denied.error, /Unsupported workspace method/);
+  }
   assert.equal(readFileSync(resolve(folder, "sketch.ts"), "utf8"), source);
-  assert.deepEqual(await bridge.project.adapter.exportProject(), beforeProject);
-  const legacy = await rpc("first-editor", "dispatch", { state: synced.state, input: { version: 2, command: "view.origin" }, interaction: { reject: true } });
-  assert.equal(legacy.status, 200, legacy.error);
-  assert.equal(legacy.result.localInteraction, undefined);
-  assert.deepEqual(probe.calls, [state], "without opt-in existing requests ignore the extension");
+  assert.deepEqual(await bridge.project.adapter.persistProject(), before);
+  assert.deepEqual(probe.calls, []);
 });
 
-test("local interaction is part of immutable publication intent and receipt retries never apply it twice", async (t) => {
+test("legacy personal bytes retain durable request identity while receipt retries never execute them", async (t) => {
   const { folder, bridge, rpc } = await setup(t);
   const probe = interactionProbe(t, bridge);
   const initial = await rpc("first-editor", "session.join");
@@ -134,43 +106,36 @@ test("local interaction is part of immutable publication intent and receipt retr
   assert.equal(edited.status, 200, edited.error);
   assert.equal(edited.state.writes, initial.state.writes + 1);
   assert.match(readFileSync(resolve(folder, "sketch.ts"), "utf8"), /value: mm\(12\)/);
-  assert.equal(edited.result.localInteraction.width, 723);
-  assert.deepEqual(probe.calls, [interaction]);
+  const expectedDigest = hash(JSON.stringify({ method: "dispatch", input, baseHash: initial.state.currentHash,
+    clientId: "first-editor", interaction }));
+  assert.equal(bridge.storage.outcome(intent.operationId).requestDigest, expectedDigest, "existing M98 journal digest remains exact");
+  assert.deepEqual(probe.calls, []);
   const repeated = await rpc("first-editor", "dispatch", intent);
   assert.equal(repeated.status, 200, repeated.error);
   assert.equal(repeated.state.writes, edited.state.writes);
-  assert.deepEqual(probe.calls, [interaction]);
+  assert.deepEqual(probe.calls, []);
   const changed = await rpc("first-editor", "dispatch", { ...intent, interaction: { width: 724 } });
   assert.equal(changed.status, 400, changed.error);
   assert.match(changed.error, /different intent/);
-  assert.deepEqual(probe.calls, [interaction]);
+  assert.deepEqual(probe.calls, []);
 });
 
-test("native interaction rejection prevents the following authored command", async (t) => {
-  const { folder, bridge, rpc } = await setup(t);
-  const probe = interactionProbe(t, bridge);
+test("invalid native authoring terminal retains complete source and history without publication", async (t) => {
+  const { folder, bridge, rpc } = await setup(t), probe = interactionProbe(t, bridge);
   const initial = await rpc("first-editor", "session.join");
   const source = readFileSync(resolve(folder, "sketch.ts"), "utf8");
-  const before = await bridge.project.adapter.exportProject();
-  const dispatch = bridge.project.adapter.dispatch;
-  const commands = [];
-  bridge.project.adapter.dispatch = async (input) => { commands.push(input.command); return dispatch(input); };
-  let rejected;
-  try {
-    rejected = await rpc("first-editor", "dispatch", { state: initial.state, operationId: "invalid-native-prediction", localInteraction: true,
-      interaction: { reject: true }, input: { version: 2, command: "source.prepare", payload: { path: "sketch.ts", contents: source.replace("value: mm(10)", "value: mm(12)") } } });
-  } finally { bridge.project.adapter.dispatch = dispatch; }
+  const before = await bridge.project.adapter.persistProject();
+  const rejected = await rpc("first-editor", "authoring.commit", { state: initial.state, operationId: "invalid-native-prediction",
+    input: { kind: "construction", command: {} }, localInteraction: true, interaction: { reject: true } });
   assert.equal(rejected.status, 400, rejected.error);
-  assert.match(rejected.error, /native interaction rejected/);
-  assert.deepEqual(probe.calls, [{ reject: true }]);
-  assert.deepEqual(commands, ["workspace.checkpoint.restore"], "the source command never ran");
+  assert.deepEqual(probe.calls, []);
   assert.equal(readFileSync(resolve(folder, "sketch.ts"), "utf8"), source);
-  assert.deepEqual(await bridge.project.adapter.exportProject(), before);
+  assert.deepEqual(await bridge.project.adapter.persistProject(), before);
   assert.equal(rejected.state.writes, initial.state.writes);
   assert.equal(bridge.storage.outcome("invalid-native-prediction"), null);
 });
 
-test("accepted source edit is journaled and navigation neither writes nor serializes rollback history", async (t) => {
+test("accepted source edit is journaled and read-only observation never serializes rollback history", async (t) => {
   const { folder, bridge, rpc } = await setup(t);
   const initial = await rpc("first-editor", "session.join");
   const source = readFileSync(resolve(folder, "sketch.ts"), "utf8");
@@ -198,7 +163,7 @@ test("accepted source edit is journaled and navigation neither writes nor serial
   const applies = edited.state.externalApplies;
   const persist = bridge.project.adapter.persistProject;
   bridge.project.adapter.persistProject = () => { throw Error("navigation serialized rollback history"); };
-  const moved = await rpc("first-editor", "wheelBatch", { input: [{ version: 2, x: 100, y: 100, deltaX: 0, deltaY: -20, ctrl: false }], state: edited.state });
+  const moved = await rpc("first-editor", "snapshot", { state: edited.state });
   bridge.project.adapter.persistProject = persist;
   assert.equal(moved.status, 200, moved.error);
   assert.equal(moved.state.writes, writes);

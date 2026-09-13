@@ -4,8 +4,8 @@ import test from "node:test";
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { initProject, openProject } from "./file-workspace.mjs";
-import { acquireWorkspaceLock, createWorkspaceStorage } from "./workspace-storage.mjs";
+import { initProject, openProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs";
+import { acquireWorkspaceLock, createWorkspaceStorage } from "../packages/geosolve-cli/runtime/workspace-storage.mjs";
 
 for (const corrupt of [false, true]) test(`v2 invalid source opens with diagnostics and ${corrupt ? "refuses corrupt cached source" : "independently reconstructed previous geometry"}`, async (t) => {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-cold-recovery-"));
