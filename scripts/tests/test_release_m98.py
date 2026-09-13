@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -43,7 +44,8 @@ class M98ReleaseTests(unittest.TestCase):
         for name in m98.REQUIRED['engine.node']:
             self.write(f'{base}/packages/geosolve-engine/test/{name}.test.mjs')
         for name in m98.REQUIRED['folder.node']:
-            self.write(f'{base}/scripts/{name}.test.mjs')
+            directory = 'packages/geosolve-cli/test' if name in ('runtime-layout', 'worker-lifetime') else 'scripts'
+            self.write(f'{base}/{directory}/{name}.test.mjs')
         for name in m98.REQUIRED['collaboration.node']:
             self.write(f'{base}/scripts/{name}.test.mjs')
         for name in m98.REQUIRED['collaboration.package']:
@@ -73,7 +75,6 @@ class M98ReleaseTests(unittest.TestCase):
         for name in m98.DEPENDENCIES:
             self.write(name + '/installed.js', '// installed dependency\n')
         self.write('target/demo-wasm/bindings.js')
-        self.write('target/m98/workspace-runtime.mjs')
         fixture = self.write('target/custom-cargo-output/examples/text_fixture', '#!/bin/sh\n')
         captured = self.root / 'target/prepared'
         # Build commands are a separate Cargo/frontend preparation obligation;
@@ -92,6 +93,12 @@ class M98ReleaseTests(unittest.TestCase):
             m98.prepare(self.root, self.root / 'target/demo-wasm', captured)
         self.assertEqual(len(builds), 6)
         self.assertIn(['cargo', 'build', '--locked', '-p', 'geosolve-collaboration', '--example', 'text_fixture', '--message-format=json'], builds)
+        self.assertIn(['node', 'packages/geosolve-cli/scripts/build.mjs'], builds)
+        self.assertTrue((captured / 'repository/packages/geosolve-cli/dist/runtime.js').is_file())
+        self.assertFalse((captured / 'repository/target/m98/workspace-runtime.mjs').exists())
+        for name in ('sketch-code', 'engine', 'collaboration'):
+            dependency = captured / 'repository/packages/geosolve-cli/node_modules/@geosolve' / name
+            self.assertEqual(dependency.resolve(), captured / ('repository/packages/geosolve-' + name))
         self.assertEqual((captured / 'repository' / m98.NATIVE_FIXTURE).read_bytes(), fixture.read_bytes())
         return captured
 
@@ -123,7 +130,7 @@ class M98ReleaseTests(unittest.TestCase):
         for name in ('crates/geosolve-sketch-engine-wasm/Cargo.toml',
                      'crates/geosolve-demo-web/Cargo.toml'):
             self.write(name, '[package]\nname="example"\nversion="0.1.0"\n')
-        worker = self.write('scripts/workspace-workbench-worker.mjs')
+        worker = self.write('packages/geosolve-cli/runtime/workspace-workbench-worker.mjs')
         self.write('packages/geosolve-sketch-code/dist/src/managed.js')
         first = self.runner()
         stages, paths = gate.preparation_stages(first, {'wasm','m98'})
@@ -168,6 +175,73 @@ class M98ReleaseTests(unittest.TestCase):
         (repo / 'scripts/workspace-storage.test.mjs').unlink()
         with self.assertRaisesRegex(ValueError, 'incomplete'):
             m98.inventory(repo, 'folder.node')
+
+    def test_actual_folder_inventory_retains_host_and_package_runtime_owners(self):
+        repository = Path(__file__).resolve().parents[2]
+        files = m98.inventory(repository, 'folder.node')
+        cli = sorted(str(path.relative_to(repository)) for path in
+                     (repository / 'packages/geosolve-cli/test').glob('*.test.mjs'))
+        self.assertEqual([name for name in files if name.startswith('packages/')], cli)
+        for name in ('scripts/workspace-engine-runtime.test.mjs',
+                     'scripts/workspace-workbench.test.mjs', 'scripts/workspace-http.test.mjs',
+                     'scripts/workspace-recovery.test.mjs', 'scripts/workspace-actor-review.test.mjs',
+                     'scripts/workspace-manifold.test.mjs',
+                     'packages/geosolve-cli/test/runtime-layout.test.mjs',
+                     'packages/geosolve-cli/test/worker-lifetime.test.mjs'):
+            self.assertIn(name, files)
+        for name in files:
+            self.write(name)
+        # Use real discovered paths, not fixtures generated from REQUIRED: each
+        # current ownership test must remain mandatory after its relocation.
+        for name in files:
+            with self.subTest(missing=name):
+                (self.root / name).unlink()
+                with self.assertRaisesRegex(ValueError, 'incomplete|missing'):
+                    m98.inventory(self.root, 'folder.node')
+                self.write(name)
+
+    def test_captured_folder_runtime_preserves_sources_and_resolves_its_own_packages(self):
+        repository = Path(__file__).resolve().parents[2]
+        names = ['packages/geosolve-cli/src/workspace-runtime.ts',
+                 'packages/geosolve-cli/scripts/build.mjs', 'packages/geosolve-cli/scripts/package.mjs',
+                 'scripts/workspace-native-test.mjs']
+        names += [str(path.relative_to(repository)) for path in
+                  (repository / 'packages/geosolve-cli/runtime').glob('*.mjs')]
+        names += [f'packages/geosolve-{name}/package.json'
+                  for name in ('cli', 'sketch-code', 'engine', 'collaboration')]
+        expected = {name: (repository / name).read_bytes() for name in names}
+        for name, source in expected.items():
+            self.write(name).write_bytes(source)
+        # Tiny generated modules exercise the real Node resolver without another
+        # product build. Source-owned package exports and runtime paths are real.
+        self.write('packages/geosolve-sketch-code/dist/src/managed.js', 'export const captured = true;\n')
+        self.write('packages/geosolve-cli/dist/workspace-runtime.mjs', '''
+          export {captured} from '@geosolve/sketch-code/managed';
+          export const modules = [import.meta.resolve('@geosolve/engine'),
+            import.meta.resolve('@geosolve/collaboration/host'),
+            import.meta.resolve('@geosolve/collaboration/client')];
+        ''')
+        captured = self.captured_runtime()
+        for name, source in expected.items():
+            self.assertEqual((captured / 'repository' / name).read_bytes(), source, name)
+        private = self.root / 'target/private-resolution'
+        # Relative package links must also survive the private execution copy.
+        shutil.copytree(captured / 'repository', private, symlinks=True)
+        result = subprocess.run(['node', '--input-type=module', '--eval', '''
+          import assert from 'node:assert/strict';
+          import {pathToFileURL} from 'node:url';
+          import * as paths from './packages/geosolve-cli/runtime/workspace-runtime-paths.mjs';
+          const runtime = await import(paths.workbenchRuntimeUrl);
+          const root = pathToFileURL(process.cwd() + '/').href;
+          assert.equal(runtime.captured, true);
+          assert.equal(paths.runtimeRoot, process.cwd());
+          for (const url of [paths.workbenchRuntimeUrl, paths.engineModuleUrl,
+              paths.collaborationModuleUrl, paths.collaborationHostModuleUrl,
+              paths.collaborationClientModuleUrl, ...runtime.modules]) {
+            assert.ok(url.startsWith(root + 'packages/'), url);
+          }
+        '''], cwd=private, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_stage_group_carries_exact_file_inventory_runtime_bytes_and_browser_dependencies(self):
         repo = self.fixtures()
@@ -328,6 +402,32 @@ class M98ReleaseTests(unittest.TestCase):
             changed = prepared(snapshot | {name:{'sha256':'changed','executable':False}})
             self.assertNotEqual(original['m98'],changed['m98'])
             self.assertNotEqual(original['browser'],changed['browser'])
+
+    def test_relocated_folder_sources_and_helpers_change_preparation_identity(self):
+        real = Path(__file__).resolve().parents[2]
+        policy = gate.read_json(real / gate.POLICY_PATH)
+        snapshot = gate.source_snapshot(real)
+        def prepared(source):
+            runner = gate.Runner(real, gate.Store(self.root / 'target/real-store'), source, policy, {})
+            return gate.preparation_stages(runner, {'wasm','m98','browser'})[1]
+        original = prepared(snapshot)
+        names = ('packages/geosolve-cli/src/workspace-runtime.ts',
+                 'packages/geosolve-cli/scripts/build.mjs', 'packages/geosolve-cli/scripts/package.mjs',
+                 'packages/geosolve-cli/runtime/file-workspace.mjs',
+                 'packages/geosolve-cli/runtime/workspace-workbench-worker.mjs',
+                 'packages/geosolve-cli/runtime/workspace-runtime-paths.mjs',
+                 'packages/geosolve-cli/runtime/worker-lifetime.mjs',
+                 'packages/geosolve-cli/test/worker-lifetime.test.mjs',
+                 'packages/geosolve-sketch-code/package.json',
+                 'packages/geosolve-sketch-code/src/managed.ts',
+                 'scripts/workspace-engine-runtime.test.mjs', 'scripts/workspace-native-test.mjs')
+        for name in names:
+            with self.subTest(source=name):
+                self.assertIn(name, snapshot)
+                self.assertTrue(gate.matches(name, m98.SOURCE_INPUTS), name)
+                changed = prepared(snapshot | {name:{'sha256':'changed','executable':False}})
+                self.assertNotEqual(original['m98'], changed['m98'])
+                self.assertNotEqual(original['browser'], changed['browser'])
 
 
 if __name__ == '__main__':

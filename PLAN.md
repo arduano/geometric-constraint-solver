@@ -8592,6 +8592,21 @@ Status: **PROTOTYPE_READY_FOR_UAT**; [contract](docs/M98_BAKE_CONTRACT.md) and
 Consumer import/STL validation is independently owned. No solid kernel, case design, M97 closure
 or production release qualification is included.
 
+## M99 — shared authoring and host infrastructure
+
+Status: **implementation authorized on 2026-09-13**. The supervising user approved
+the [cleanup contract and ordered implementation](docs/M99_CLEANUP.md), including
+coordinated clean breaks to experimental APIs. This cleanup adds no primitives
+and does not imply M98 human acceptance or close its outstanding U02 recheck.
+
+- [x] Consolidate native tool catalogs and source-publication ownership.
+- [x] Retain defining intent through native completed-authoring receipts.
+- [x] Share engine transactions and reusable interaction/browsing services.
+- [x] Migrate collaboration, folder and standalone hosts behind one session interface.
+- [x] Package production Node hosting independently of the demo/frontend runtime.
+- [x] Migrate MiniCAD and remove superseded code/documentation coupling.
+- [ ] Complete integrated qualification and installed-product verification.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

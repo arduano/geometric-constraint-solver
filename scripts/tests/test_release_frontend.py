@@ -61,7 +61,12 @@ class FrontendPreflightTests(unittest.TestCase):
         self.assertEqual(unit[4:6], ('--', '--no-cache'))
         self.assertTrue(all(arg == '--exclude' for arg in unit[6::2]))
         self.assertEqual(tuple(gate.FRONTEND + '/' + pattern for pattern in unit[7::2]), m98.GROUPS['collaboration.frontend'])
-        self.assertEqual(len(m98.FRONTEND_RUNTIME_TESTS), 3)
+        self.assertEqual(set(m98.FRONTEND_RUNTIME_TESTS), {
+            "src/lib/local-interaction-worker.test.ts",
+            "src/lib/worker-workbench-adapter.test.ts",
+            "src/lib/browsing-initialize.test.ts",
+            "src/lib/collaboration-*.test.ts",
+        })
         self.assertEqual(len(commands), len(scripts) + 2)
         self.assertNotIn(gate.npm(gate.FRONTEND, 'run', 'test:build'), self.frontend.commands)
         self.assertIn(gate.npm(gate.FRONTEND, 'run', 'test:build'), self.catalog.commands)

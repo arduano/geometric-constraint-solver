@@ -10,18 +10,19 @@ import subprocess
 
 FRONTEND = "crates/geosolve-demo-web/frontend"
 DEPENDENCIES = (FRONTEND + "/node_modules", "packages/geosolve-sketch-code/node_modules",
-                "packages/geosolve-intent/node_modules")
+                "packages/geosolve-intent/node_modules", "packages/geosolve-cli/node_modules/esbuild",
+                "packages/geosolve-cli/node_modules/@esbuild")
 GENERATED = ("packages/geosolve-sketch-code/dist", "packages/geosolve-intent/dist",
-             "packages/geosolve-engine/dist", "packages/geosolve-collaboration/dist")
+             "packages/geosolve-engine/dist", "packages/geosolve-collaboration/dist", "packages/geosolve-cli/dist")
 NATIVE_FIXTURE = "target/debug/examples/text_fixture"
 FRONTEND_RUNTIME_TESTS = ("src/lib/collaboration-*.test.ts", "src/lib/local-interaction-worker.test.ts",
-                          "src/lib/worker-workbench-adapter.test.ts")
+                          "src/lib/worker-workbench-adapter.test.ts", "src/lib/browsing-initialize.test.ts")
 SOURCE_INPUTS = ("scripts/*.mjs", "scripts/release_gate_m98.py", "packages/**",
                  "examples/**", FRONTEND + "/**", "crates/*/tests/fixtures/**",
                  "crates/geosolve-sketch-code/assets/**", "LICENSE", "THIRD_PARTY_LICENSES.md")
 GROUPS = {
     "engine.node": ("packages/geosolve-engine/test/*.test.mjs",),
-    "folder.node": ("scripts/workspace-*.test.mjs", "scripts/file-workspace-bake.test.mjs"),
+    "folder.node": ("scripts/workspace-*.test.mjs", "scripts/file-workspace-bake.test.mjs", "packages/geosolve-cli/test/*.test.mjs"),
     # The current suite replaces the prototype's pre-session HTTP contract.
     "folder.browser": ("scripts/workspace-browser.test.mjs",),
     "example.generator": ("examples/generator-website/scripts/generator.test.mjs",),
@@ -37,13 +38,15 @@ REQUIRED = {
     "engine.node": ("engine", "native", "computed", "session"),
     "folder.node": ("workspace-storage", "workspace-session", "workspace-cache", "workspace-loader",
                     "workspace-bridge", "workspace-project", "workspace-cli", "workspace-generator",
-                    "workspace-navigation", "workspace-transaction-review", "file-workspace-bake"),
+                    "workspace-navigation", "workspace-transaction-review", "workspace-engine-runtime",
+                    "workspace-workbench", "workspace-http", "workspace-actor-review", "workspace-recovery",
+                    "workspace-manifold", "file-workspace-bake", "runtime-layout", "worker-lifetime"),
     "collaboration.node": ("collaboration-host", "collaboration-http", "collaboration-storage", "collaboration-runtime",
                            "collaboration-domain", "collaboration-domain-extraction", "collaboration-preview", "collaboration-source-integration", "collaboration-mirror", "collaboration-mirror-worker", "collaboration-cli"),
     "collaboration.package": ("authority", "semantic", "shared-text", "source", "client"),
     "collaboration.frontend": ("collaboration-adapter", "collaboration-authoring-controller", "collaboration-authoring-worker", "collaboration-browsing-worker",
                                "collaboration-remote-authoring", "collaboration-source-projection", "collaboration-storage", "collaboration-tab-identity",
-                               "local-interaction-worker", "worker-workbench-adapter"),
+                               "local-interaction-worker", "worker-workbench-adapter", "browsing-initialize"),
 }
 
 
@@ -90,16 +93,13 @@ def prepare(root, wasm_package, output):
         ["cargo", "build", "--locked", "-p", "geosolve-collaboration", "--example", "text_fixture", "--message-format=json"],
         cwd=root, check=True, text=True, stdout=subprocess.PIPE)
     native_fixture = fixture_executable(built_fixture.stdout)
-    subprocess.run(["node", FRONTEND + "/scripts/build-workspace.mjs"], cwd=root, check=True)
+    subprocess.run(["node", "packages/geosolve-cli/scripts/build.mjs"], cwd=root, check=True)
     repo = output / "repository"
     repo.mkdir(parents=True)
     copy_source(root, repo)
     for name in GENERATED:
         shutil.copytree(root / name, repo / name, symlinks=False)
     shutil.copytree(wasm_package, repo / FRONTEND / "src/generated")
-    runtime = repo / "target/m98/workspace-runtime.mjs"
-    runtime.parent.mkdir(parents=True)
-    shutil.copy2(root / "target/m98/workspace-runtime.mjs", runtime)
     fixture = repo / NATIVE_FIXTURE
     fixture.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(native_fixture, fixture)
@@ -114,6 +114,12 @@ def prepare(root, wasm_package, output):
     sdk = repo / "packages/geosolve-engine/node_modules/@geosolve/sketch-code"
     sdk.parent.mkdir(parents=True)
     sdk.symlink_to("../../../geosolve-sketch-code", target_is_directory=True)
+    # Resolve host dependencies through package exports in the captured tree.
+    # Installed file: links point into the live checkout and must not be captured.
+    for name in ("sketch-code", "engine", "collaboration"):
+        dependency = repo / "packages/geosolve-cli/node_modules/@geosolve" / name
+        dependency.parent.mkdir(parents=True, exist_ok=True)
+        dependency.symlink_to("../../../geosolve-" + name, target_is_directory=True)
     gate.write_json(output / "prepared.json", {
         "schema": "geosolve-m98-runtime-v1",
         "tests": {group: inventory(repo, group) for group in GROUPS},
@@ -237,8 +243,7 @@ def run(root, prepared, group, output, browser_package=None):
         if source.is_dir():
             destination.mkdir(parents=True, exist_ok=True)
             for path in source.iterdir():
-                if path.name != "workspace-runtime.mjs":
-                    shutil.move(str(path), destination / path.name)
+                shutil.move(str(path), destination / path.name)
     # Output evidence survives; private mutable source/build copies are disposable.
     shutil.rmtree(repository)
     shutil.rmtree(output / "npm-cache", ignore_errors=True)

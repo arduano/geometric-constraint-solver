@@ -142,6 +142,8 @@ const REMOVED: &[u8] = include_bytes!("../../../docs/missing.md");
         policy = gate.read_json(Path(__file__).resolve().parents[2] / gate.POLICY_PATH)
         stage = next(stage for stage in gate.preflight_stages() if stage.id == "preflight.frontend")
         for name in ("crates/geosolve-constraint-editor/src/geometry_tools.rs",
+                     "crates/geosolve-constraint-editor/src/authoring_catalog.rs",
+                     "crates/geosolve-constraint-editor/examples/generate_tool_catalog.rs",
                      "crates/geosolve-demo-web/src/workbench/geometry_palette.rs",
                      "crates/geosolve-demo-web/src/workbench/action_surface.rs",
                      "crates/geosolve-demo-web/src/workbench/command_manifest.rs"):

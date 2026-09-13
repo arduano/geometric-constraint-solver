@@ -3087,3 +3087,32 @@ The sketch owner verifies exact origin branch metadata, unchanged durable schema
 and finite nonzero span directions. Ordinary terminal parity, cold reconstruction
 and independent residual validation still gate publication. This seam is shared
 by the headless engine and standalone workbench and adds no protocol authority.
+
+## M99 shared authoring and host cleanup — implementation in progress
+
+The [active cleanup contract](docs/M99_CLEANUP.md) preserves the M98 protocol and
+all durable project, sidecar, history and recovery formats. Experimental APIs may
+change as consumers migrate. Qualification and supervising-user acceptance remain
+separate from this architecture description.
+
+Native construction receipts retain defining samples, operands, branches and
+created declaration correspondence. `geosolve-sketch-code` owns source names,
+metadata defaults, declaration projection and complete native/source terminal
+consistency. Engine construction and contextual tools retain distinct state
+machines while sharing compiler preparation, validation and installation.
+
+Detached camera, picking, exact selection correspondence, visibility, dimensions
+and captured navigation belong to `geosolve-constraint-editor`; they hold no solver,
+compiler or publication capability. The renderer paints prepared accepted or
+provisional presentation. Read-only engine inspection retains exact accepted
+source/native authority, and source navigation belongs to the source owner.
+Accepted browsing and remaining standalone/folder semantic migrations are tracked
+as unfinished work in M99 rather than implied complete here.
+
+React consumes a capability-based `WorkbenchSession`. Browser persistence,
+folder disk receipts/leases and collaborative text/outbox/personal history keep
+separate policy owners. Node production hosting/build/package output belongs to
+`packages/geosolve-cli`; remaining semantic dependence on demo execution is being
+removed. Worker lifecycle helpers share correlation, stale-generation fencing,
+settlement and teardown mechanics. Their callers retain the different ordered
+editing, coalesced presentation, text admission and durable-callback drain policies.

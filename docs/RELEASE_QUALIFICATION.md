@@ -66,7 +66,7 @@ memory stage alongside independent suites. Build and execution receipts remain s
 
 M98 adds `prepare.m98` after strict Clippy and the demo WASM preparation. It builds the dedicated
 engine and collaboration WASM, both TypeScript packages, the native collaboration text fixture
-and Node workbench adapter, then captures source, fixtures, generated SDK/engine/collaboration
+and the CLI package build, then captures source, fixtures, generated SDK/engine/collaboration/CLI
 modules and the exact prepared demo WASM. The captured tree and installed
 dependency bytes are authenticated inputs. Its consumers retain the shared build lock; no new
 overlap or equivalence boundary is implied. The existing native workspace discovery covers both
@@ -74,6 +74,13 @@ engine and collaboration crates. `wasm.engine` and `wasm.collaboration` separate
 Clippy for their WASM targets. Browser preparation waits for `prepare.m98` and authenticates
 all three native package outputs. Both browser artifacts must retain exactly the prepared
 demo, engine and collaboration WASM bytes; binding-file provenance is checked across builds.
+
+M99 moves the production Node hosts and artifact reader into `packages/geosolve-cli/runtime`.
+CLI output is captured from its ordinary `dist` directory. Preflight installs the CLI's
+locked bundler; preparation authenticates the installed bundler bytes and resolves SDK,
+engine and collaboration dependencies through package exports within the captured tree.
+No host runtime is loaded from `target/m98`. Package tests still install the four archives
+offline and verify the exact shipped files and actual native workers.
 
 The deferred M98 inventory expands into `engine.node`, `folder.node`, `folder.browser`,
 `example.generator`, `example.browser`, `package.m98`, `collaboration.node`,
@@ -204,8 +211,8 @@ TypeScript's generated build-info files live in the ignored frontend `.tsbuild-c
 outside `node_modules`, so later type-check builds preserve the installed dependency identity.
 
 `preflight.frontend` owns installation, license/SDK checks and static unit tests. It excludes
-`src/lib/collaboration-*.test.ts`, `src/lib/local-interaction-worker.test.ts` and
-`src/lib/worker-workbench-adapter.test.ts`: that complete mandatory inventory runs under
+`src/lib/collaboration-*.test.ts`, `src/lib/local-interaction-worker.test.ts`,
+`src/lib/worker-workbench-adapter.test.ts` and `src/lib/browsing-initialize.test.ts`: that complete mandatory inventory runs under
 `collaboration.frontend` after `prepare.m98` captures fresh demo/engine/collaboration WASM. The
 two existing worker transport tests also import modules that resolve demo bindings. This keeps
 clean-checkout preflight independent of generated native modules without omitting coverage. Its reviewed

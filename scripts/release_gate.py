@@ -761,7 +761,8 @@ def preflight_stages(include_clippy=True):
     except (OSError, ValueError):
         equivalence = None
     frontend_inputs = (FRONTEND + "/**", "packages/**", "crates/geosolve-sketch-code/**",
-                       "crates/geosolve-constraint-editor/src/**", "crates/geosolve-demo-web/src/**",
+                       "crates/geosolve-constraint-editor/src/**", "crates/geosolve-constraint-editor/examples/**",
+                       "crates/geosolve-demo-web/src/**",
                        "LICENSE", "THIRD_PARTY_LICENSES.md", "docs/API_COMPATIBILITY.md")
     stages = [
         Stage("preflight.inventory", (cmd(sys.executable, "scripts/release_gate.py", "--check-inventory"),
@@ -775,11 +776,13 @@ def preflight_stages(include_clippy=True):
         Stage("preflight.managed", (npm("packages/geosolve-intent", "ci", "--ignore-scripts"),
                                     npm("packages/geosolve-intent", "test"),
                                     npm("packages/geosolve-sketch-code", "ci", "--ignore-scripts"),
-                                    npm("packages/geosolve-sketch-code", "test")),
+                                    npm("packages/geosolve-sketch-code", "test"),
+                                    npm("packages/geosolve-cli", "ci", "--ignore-scripts")),
               inputs=("packages/**", "crates/geosolve-sketch-code/assets/**", "crates/geosolve-demo-web/tests/fixtures/**"),
               dependencies=("preflight.inventory",), resource="exclusive", timeout=600,
               outputs=("packages/geosolve-intent/dist", "packages/geosolve-sketch-code/dist",
-                       "packages/geosolve-intent/node_modules", "packages/geosolve-sketch-code/node_modules")),
+                       "packages/geosolve-intent/node_modules", "packages/geosolve-sketch-code/node_modules",
+                       "packages/geosolve-cli/node_modules/esbuild", "packages/geosolve-cli/node_modules/@esbuild")),
         Stage("preflight.frontend", (npm(FRONTEND, "ci", "--ignore-scripts"),
                                      npm(FRONTEND, "run", "check:licenses"),
                                      npm(FRONTEND, "run", "check:language-sdk"),
@@ -1092,7 +1095,8 @@ def qualification_stages(root, prepared, jobs):
                                    "packages/geosolve-intent/node_modules"), timeout=2400))
     result.append(Stage("artifact.transport", (cmd(sys.executable, "scripts/release_gate.py", "--verify-production", production,
                                                      "--output", "{scratch}/transport.json"),),
-                        inputs=(FRONTEND + "/scripts/**",), dependencies=built, resource="memory", reusable=False, timeout=180,
+                        inputs=(FRONTEND + "/scripts/**", "packages/geosolve-cli/runtime/release-artifact.mjs"),
+                        dependencies=built, resource="memory", reusable=False, timeout=180,
                         artifacts=(str(browser_path / "geosolve-production"),)))
     if "m98" in prepared:
         result.extend(m98_stages(root, prepared))

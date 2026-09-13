@@ -77,4 +77,3 @@ export async function readManifest(path, directoryOverride) {
   if (JSON.stringify(actual) !== JSON.stringify(manifest.files)) throw new Error("artifact bytes do not match manifest");
   return { manifest, directory, manifestSha256: hash(bytes) };
 }
-
