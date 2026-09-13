@@ -2,7 +2,11 @@
 
 # M93 qualification and measured limits
 
-Status: **M93 accepted and closed by the supervising user on 2026-09-07 at the measured scope below. C5 edit/prune latency remains missed and the historical four-entry replay remains unperformed; both are accepted closure limitations.** M92 stays closed with its accepted 16 samples.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **M93 accepted and closed by the maintainer on 2026-09-07 at the measured scope below. C5 edit/prune latency remains missed and the historical four-entry replay remains unperformed; both are accepted closure limitations.** M92 stays closed with its accepted 16 samples.
 
 ## Qualified source
 
@@ -14,7 +18,7 @@ No solver equation, residual tolerance, finite-state validation, branch/DOF beha
 
 ## Host and measurements
 
-Host: `main-pc`, AMD Ryzen 9 3900X, 12 cores / 24 logical CPUs, 64 GiB installed RAM (62.70 GiB reported by Linux). Parallel limits: 3 stages, 2 memory-marked stages, one Cargo writer, 4 compilation jobs and 2 native threads per stage. Serial used one stage with the same compiler/native limits and profiles.
+Host: `the measurement host`, AMD Ryzen 9 3900X, 12 cores / 24 logical CPUs, 64 GiB installed RAM (62.70 GiB reported by Linux). Parallel limits: 3 stages, 2 memory-marked stages, one Cargo writer, 4 compilation jobs and 2 native threads per stage. Serial used one stage with the same compiler/native limits and profiles.
 
 | Workload | Gate process seconds | Preparation + gate seconds | Qualification | Timing target |
 |---|---:|---:|---|---|
@@ -29,7 +33,7 @@ Host: `main-pc`, AMD Ryzen 9 3900X, 12 cores / 24 logical CPUs, 64 GiB installed
 
 Preparation includes generation, candidate commit and baseline-index setup. The combined figure omits subsequent result checking, evidence archival and final checkout/index restoration, so it is not the full helper wall time. Deployment latency is outside these measurements.
 
-The full-run host snapshot recorded load averages [9.20068359375, 12.45556640625, 23.365234375] on 24 logical CPUs. Earlier checkpoint runs recorded unrelated OCCT triage and SLA-slicer compilation; the new measurements retain their own host records. These observations disclose shared-host contention without attributing a particular amount of delay to it. Every timing miss remains a miss.
+The full-run host snapshot recorded load averages [9.20068359375, 12.45556640625, 23.365234375] on 24 logical CPUs. Earlier checkpoint runs recorded unrelated compilation workloads; the new measurements retain their own host records. These observations disclose shared-host contention without attributing a particular amount of delay to it. Every timing miss remains a miss.
 
 Every candidate proved exactly 15 baseline survivor workflows reused with fresh required catalog/shared checks. Numeric candidates reran the changed manifold workflow; prune candidates temporarily removed Bondtech while retaining its dedicated regression fixture. Each prune repetition removed one current entry; these are representative single-entry prune measurements, not an exact replay of M92’s historical four-entry removal. Per-candidate cleanup records confirm restoration of the baseline source and signed indexes.
 
@@ -53,7 +57,7 @@ Commands from completed measurement records (induced preflight failures are expe
 
 ```bash
 nix-shell shell.nix --run './scripts/release-gate.sh --fresh'
-nix-shell shell.nix --run 'CARGO_TARGET_DIR=/home/arduano/programming/geometric-constraint-solver/target/m93/cold-serial-cargo-08510fc ./scripts/release-gate.sh --fresh --jobs 1'
+nix-shell shell.nix --run 'CARGO_TARGET_DIR=target/m93/cold-serial-cargo-08510fc ./scripts/release-gate.sh --fresh --jobs 1'
 ./scripts/release-gate.sh --docs-only --since HEAD
 nix-shell shell.nix --run './scripts/release-gate.sh --preflight'
 nix-shell shell.nix --run 'node packages/geosolve-sketch-code/scripts/generate-bundled-samples.mjs --write'
@@ -65,17 +69,17 @@ Previously recorded focused checks are described in [M93_IMPLEMENTATION.md](M93_
 
 Exact candidate source identities, generation/qualification commands, cache provenance and cleanup records are retained under `target/m93/recovery-qualification`. Archived measurement scripts have SHA-256 identities in `measurement-scripts/sha256.json`. `serial-parallel-comparison.json` records semantic/coverage parity; `frontend-output-stability.json` records that the later browser build preserved static dependency bytes. Earlier failures and timing misses remain in the implementation notes.
 
-## Supervising-user closure — 2026-09-07
+## Maintainer closure — 2026-09-07
 
 C1/C3/C7 qualification and selection evidence is recorded above. C2 has three repetitions of each induced failure; C4 has completed serial/parallel parity plus separately recorded recovery regressions. C6 has a warm fresh run and a measured cold serial fresh run; the warm target passed.
 
 After reviewing the results recorded at documentation commit `7142488c6c56c1c260e66fcf5957638b63a90362`,
-the supervising user said: **"yeah looks good to me, we can close at this"**. This closes M93 at
+maintainer acceptance closed M93 at
 qualified implementation source `08510fcf554d91829c2069a068450bbd4747a6c7`, accepting the delivered
 workflow with its measured latency and replay limitations. This sign-off changes documentation only.
 
 **C5 edit/prune latency is not met.** Target misses remain numeric-3.1, numeric-3.2, numeric-3.25,
-prune-1, prune-2 and prune-3. The user accepted those 12m22s–15m41s results and the unperformed
+prune-1, prune-2 and prune-3. Maintainer acceptance includes those 12m22s–15m41s results and the unperformed
 historical four-entry replay for milestone closure. Neither is relabeled PASS, and the ten-minute
 target is not rewritten. Further optimization and the historical replay are future work without
 a newly assigned milestone. Documentation latency and count-repair evidence retain their scope
@@ -119,7 +123,7 @@ These inspection costs are separate from the repeated five-second stale-count pr
 this is not repaired full-gate latency.
 
 ```bash
-python3 /tmp/m93-product-count-repair.py --root /home/arduano/programming/geometric-constraint-solver --baseline-commit 08510fcf554d91829c2069a068450bbd4747a6c7 --baseline-run 20260906T203028-063974c6 --output /home/arduano/programming/geometric-constraint-solver/target/m93/recovery-qualification/count-repair --execute
+python3 m93-product-count-repair.py --root . --baseline-commit 08510fcf554d91829c2069a068450bbd4747a6c7 --baseline-run 20260906T203028-063974c6 --output target/m93/recovery-qualification/count-repair --execute
 ```
 
 The executed helper is archived with SHA-256
@@ -143,7 +147,6 @@ Source `b43f54b4ed57745774503a12e4e410be8f985311` passed fresh parallel run
 | prune-1 | 645.308 | 654.901 | PASS | MISS |
 | prune-2 | 807.464 | 816.492 | PASS | MISS |
 | prune-3 | 645.790 | 658.026 | PASS | MISS |
-
 
 The historical preparation + gate figures also exclude later result checking, archival and restoration.
 Its docs repetitions took 1.539 / 1.662 / 1.528s; stale-count failures 5.401 / 5.139 / 5.315s;

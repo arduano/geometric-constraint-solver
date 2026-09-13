@@ -2,8 +2,12 @@
 
 # M81 implementation — Core architecture consolidation
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and closed 2026-08-20**. Implementation, rotating independent review, final
-clean qualification, immutable Tailscale nomination, supervising-human acceptance, GitHub Pages
+clean qualification, immutable preview nomination, maintainer acceptance, GitHub Pages
 publication and exact hosted-byte verification pass. Product behavior remains the M80 baseline
 except for reproduced transactional defect M81-F001.
 
@@ -21,7 +25,7 @@ semantics, independent validators and persistence languages.
 ## Compatibility freeze and final comparison
 
 The activation evidence was captured outside the worktree at
-`/tmp/geosolve-m81-baseline.iPhVsl`:
+`geosolve-m81-baseline.iPhVsl`:
 
 - `cargo metadata --locked --no-deps --format-version 1`:
   `691591282713d87fb2ae63ff12873577c91daadaa2af0c817c0543b9bfd4d66e`;
@@ -51,7 +55,7 @@ Activation and nominated bytes compare equal. Metadata remains
 selection remains `0b46f015459f16f20de98373c452c8cb203aebe4cd4cdc54dbfbc78f4d01e9cd` (119
 lines, 8,584 bytes); and the supplemental all-nine-library-root selection is
 `5cd55480a3d0f8a1d7175ef9359c94cc4dcd14cbf6b5d865abf1697667d1af90` (180 lines,
-13,210 bytes). Evidence is `/tmp/geosolve-m81-public-surface.0DYVLo`. These `rg` snapshots prove
+13,210 bytes). Evidence is `geosolve-m81-public-surface.0DYVLo`. These `rg` snapshots prove
 the selected declaration/export-leading lines stayed equal; they do not hash multiline type/export
 bodies and are not presented as a complete semantic API-diff mechanism. Locked compilation,
 package tests and the clean gate supply the complementary type-level evidence. The release copy of
@@ -236,7 +240,7 @@ env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
 The gate ran from 2026-08-20 11:42:50 to 11:58:14 AEST. Its 271,230-byte, 3,516-line log is
-`/tmp/geosolve-m81-clean-gate.e4eca32.nix.log`, SHA-256
+`geosolve-m81-clean-gate.e4eca32.nix.log`, SHA-256
 `43abb1e262293d607e6e37d636b90979d9be7c0807020c0d7bbc49800716797e`. It passed formatting and
 diff hygiene, warnings-denied locked all-feature workspace Clippy, locked all-feature workspace
 tests, exact 271-row golden `--require-clean`, M70/M71/M74/M75/M76/M77/M79 native/WASM parity,
@@ -247,51 +251,21 @@ and Trunk 0.21.14 release assembly.
 ## Immutable candidate and served-byte evidence
 
 Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
-`/tmp/geosolve-m81-uat.QqItRd` and byte-compared before and after freezing. The directory is `0555`;
+`geosolve-m81-uat.QqItRd` and byte-compared before and after freezing. The directory is `0555`;
 all seven entries are regular non-symlink files at `0444`. The C-locale ordered `sha256sum *`
 manifest aggregate is
 `df24deb988a31a373b3f973432081078c15e157382134f62c99aaabe96b8e49e`:
 
-```text
-7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-93f79eda2bf49cc53495dbafe2b7aabb5f7f9cc3852c9a48af2758694718e953  geosolve-demo-web-5512436a65f3f954.js
-599deb5b6e7241b76963318e921ecf0e58e39e8ee1e70c74d31ebcaeef10f8a1  geosolve-demo-web-5512436a65f3f954_bg.wasm
-f4a69f88a58b2a12b17c972ca98c34d8f69d4c7192f6276aa89df62480adc4a2  index.html
-957c7809eab90b61a2a72266af8f8660390b8c04fcce7b6c9e06398582097bbf  styles-a41d7984178d1121.css
-```
+The archived manifest records the individual asset checksums.
 
-| File | Bytes |
-| --- | ---: |
-| `API_COMPATIBILITY.md` | 28,079 |
-| `LICENSE` | 35,148 |
-| `THIRD_PARTY_LICENSES.md` | 3,120 |
-| `geosolve-demo-web-5512436a65f3f954.js` | 33,750 |
-| `geosolve-demo-web-5512436a65f3f954_bg.wasm` | 7,749,099 |
-| `index.html` | 31,033 |
-| `styles-a41d7984178d1121.css` | 38,291 |
-
-Temporary service `geosolve-m81-temp-uat.service`, PID `2842248`, first served only that snapshot
-at `100.94.63.83:18080`. Proxy-disabled, cache-bypassed identity requests for `/` and all seven
-files returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected
-media type and length, and snapshot-identical bytes; `/` equals `index.html`. Evidence is
-`/tmp/geosolve-m81-temp-verify.baolJt/results.tsv`, SHA-256
-`7e981a47c3d02957c55e81eddb747e749e21f32d42464cdff4f6b1065e94a855`.
-
-Only after that ledger passed, `geosolve-m81-uat.service`, PID `2850776`, began serving the same
-immutable directory at `http://100.94.63.83:8080/`. The same eight checks passed independently;
-final evidence is `/tmp/geosolve-m81-final-verify.Z4aCP5/results.tsv`, with the same result-ledger
-SHA-256 because every asserted path/status/type/length/body hash is identical. The temporary
-listener was retired and the retained `:8080` service stayed live through focused human UAT and
-until the final Pages proof below passed.
+The archived manifest records the per-file sizes and checksums.
 
 The documentation changes recording this evidence are descendants of `e4eca32`; they do not
 replace the nominated product source/tree or rebuild its artifact.
 
 ## Human acceptance
 
-On 2026-08-20 the supervising caller reviewed the nature of the consolidation, the independent
+On 2026-08-20 the maintainer reviewed the nature of the consolidation, the independent
 findings and M81-F001, explicitly approved the qualified milestone and requested closure. The
 scoped decision accepts M81-U1 through M81-U5 without a new finding; it does not claim a separate
 exhaustive replay of every historical M80 scenario.
@@ -309,27 +283,14 @@ The extracted repository-prefixed artifact has exactly seven regular non-symlink
 C-locale ordered-manifest aggregate
 `c461835ac327655fd16e9355e0b42c1971e74ed9233fcf500908b8051614de72`:
 
-```text
-7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-93f79eda2bf49cc53495dbafe2b7aabb5f7f9cc3852c9a48af2758694718e953  geosolve-demo-web-54c3dc38dd10d527.js
-f770b6a79fc81e3b09f3a4967c6c52954d68c4f5cc9e0161e878915029bddefc  geosolve-demo-web-54c3dc38dd10d527_bg.wasm
-cbb3da74f14ee492bd73f0ffc8b1ff430b789236ff16c008bd9b51809cad7139  index.html
-957c7809eab90b61a2a72266af8f8660390b8c04fcce7b6c9e06398582097bbf  styles-a41d7984178d1121.css
-```
+The archived manifest records the individual asset checksums.
 
 Proxy-disabled, cache-bypassed identity requests to
 `https://arduano.github.io/geometric-constraint-solver/` for `/` and all seven paths returned HTTP
 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected media type and length,
 and artifact-identical bytes; `/` equals `index.html`. The fetched seven-file aggregate matches
-the artifact. Evidence `/tmp/geosolve-m81-pages-verify.LlrpbW/results.tsv` has SHA-256
+the artifact. Evidence `geosolve-m81-pages-verify.LlrpbW/results.tsv` has SHA-256
 `f54cbd6942b9ca9894089d52bd29ec2ef7290ef2c783e7869ba17bc7e6208306`.
-
-Pages is final public-byte authority. Historical immutable Tailscale snapshot
-`/tmp/geosolve-m81-uat.QqItRd` remains accepted nomination evidence, while
-`geosolve-m81-uat.service` and PID `2850776` are retired. M81 is closed; no M82 scope is activated
-by this closeout.
 
 ## Known limitations and deferred work
 

@@ -2,8 +2,12 @@
 
 # M92 visual and geometric design audit
 
-Status: **accepted and closed by the supervising user on 2026-09-06.** The qualified 16-sample
-product is unchanged. [Scoped sign-off](M92_UAT.md#supervising-user-closure--2026-09-06) accepts
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed by the maintainer on 2026-09-06.** The qualified 16-sample
+product is unchanged. [Scoped sign-off](M92_UAT.md#maintainer-closure--2026-09-06) accepts
 U1–U8 collectively without claiming a separate exhaustive replay. Pending/not-run wording below
 records the earlier nomination checkpoints; it is superseded by that sign-off.
 
@@ -18,7 +22,7 @@ and passive-follower-locality regression retains its source/envelope as a privat
 
 [Qualification of the 16-sample replacement](#pruned-catalog-qualification-and-immutable-nomination)
 passes, including the fresh gate, visual/history audit, no-rebuild freeze and exact endpoint checks.
-The old immutable 20-sample snapshot `/tmp/geosolve-m92-uat.x4b870rw` is retained and its listener
+The old immutable 20-sample snapshot `geosolve-m92-uat.x4b870rw` is retained and its listener
 retired. All earlier 20-sample/40-edit/ten-witness records below are pre-pruning evidence and keep
 their exact source, byte and result identities. They do not qualify the replacement catalog or
 accept any human UAT row. Pages remains unchanged.
@@ -39,7 +43,7 @@ survey and check also passed on exact clean `ed4dbec`; the survey output is byte
 unchanged 271-PASS oracle SHA-256
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
 
-Evidence: `/home/arduano/m92-visual-audit-20260905/pruning-r1/gate/receipt.json`,
+Evidence: `m92-visual-audit-20260905/pruning-r1/gate/receipt.json`,
 `release-gate.log` (433,329 bytes, 6,793 lines; SHA-256
 `c2e83470a8507651016827a74801c8d1218d0ae2b76ccf8f55116f3b7be4cb8d`) and
 `pruning-r1/golden-r2/completion.json`. No replacement distribution was frozen or nominated from
@@ -56,7 +60,7 @@ audit. Final clean release qualification and immutable nomination now pass as re
 final section below. The atlas edit log's 2/2 result retains its wrapper exit 143 caveat,
 detailed below.
 
-The supervising user authorized implementation of the visual/geometric audit and repair plan on
+The maintainer authorized implementation of the visual/geometric audit and repair plan on
 2026-09-05. A sample that solves correctly but fails to demonstrate its named purpose must be
 reworked within the existing 20-entry 2D scope. Correct residuals and backend parity alone do not
 establish correct design intent.
@@ -65,7 +69,7 @@ establish correct design intent.
 
 Baseline source `b49dbd303d477e05c412ef8e7bf521be5ca6d20d`, tree
 `07e6f4b857a49d05bdb1c3907beb41553cd5c6b3`, was clean when captured. Persistent evidence is under
-`/home/arduano/m92-visual-audit-20260905/`; `baseline-b49dbd3/` preserves the sample sources,
+`m92-visual-audit-20260905/`; `baseline-b49dbd3/` preserves the sample sources,
 headless executable, distribution, handover and qualification logs with `SHA256SUMS`.
 
 All 20 baseline samples successfully rendered through the existing `geosolve-headless render`
@@ -78,10 +82,10 @@ its missing explicit exit receipt remains a qualification caveat.
 
 Baseline overview sheets:
 
-- [Mechanisms](/home/arduano/m92-visual-audit-20260905/baseline-b49dbd3/mechanisms.png)
-- [Products 6–11](/home/arduano/m92-visual-audit-20260905/baseline-b49dbd3/products-a.png)
-- [Products 12–16](/home/arduano/m92-visual-audit-20260905/baseline-b49dbd3/products-b.png)
-- [Atlases and scale](/home/arduano/m92-visual-audit-20260905/baseline-b49dbd3/atlas-scale.png)
+- Mechanisms (archived evidence)
+- Products 6–11 (archived evidence)
+- Products 12–16 (archived evidence)
+- Atlases and scale (archived evidence)
 
 ## Review contract
 
@@ -99,7 +103,7 @@ reference studies must still reproduce the functional relationships their names 
 
 ## Complete baseline inventory
 
-The initial primary-agent overview inspection produced the historical targets below. Subsequent
+The initial initial visual inspection produced the historical targets below. Subsequent
 measurement, repair and browser outcomes are recorded later in this ledger. Leads were numbered
 only after independent reproduction.
 
@@ -135,7 +139,7 @@ hand-editing authenticated envelopes. Final integration must pass the clean rele
 the separately counted 20-row release harness and two 19-row immutable production endpoint runs.
 The final freeze must be a no-rebuild copy of those qualified production bytes.
 
-M92-U1 through M92-U8 remain pending/unexecuted. Agent visual review does not accept a human row.
+M92-U1 through M92-U8 remain pending/unexecuted. Automated visual review does not accept a human row.
 GitHub Pages remains the accepted M91 publication and is unchanged.
 
 ## Reproduced findings and integrated repairs
@@ -160,7 +164,7 @@ unchanged unless a distinct owning boundary is named.
 
 Products-A repairs are integrated in `3b82f42`, `d90187e`, `8488864`, `a2c7b88`. Mechanism repairs
 and regressions are integrated in `e60f2bb`, `70c63fd`, `d4f2417`, `3657445`, `77c3727`.
-The independent mechanisms evidence directory is `/home/arduano/m92-visual-evidence/mechanisms/`;
+The independent mechanisms evidence directory is `m92-visual-evidence/mechanisms/`;
 its six trajectory files preserve 520 accepted native frames. Jansen stance is 155 crank degrees
 within a 1 mm vertical band, with 56.1283 mm horizontal stance travel and 22.3079 mm lift. Whitworth
 stroke is 12.2370791 mm, with 250°/110° turnaround intervals at 5° sampling. Cam passive follower
@@ -407,8 +411,6 @@ The audited invocation has a complete failure receipt:
 |---|---|
 | Source | `c4c02abd8a92e2e929ccfb23b59c211a32a7400a` |
 | Tree | `74ff8155a389ef97249c3984e4692f5059269b49` |
-| Worktree | `/home/arduano/programming/geometric-constraint-solver.worktrees/m92-final-audit` |
-| Service | `geosolve-m92-audited-release-gate.service` |
 | Invocation | `d10ff7c22efa47b4937c0d7c07f73c35` |
 | Start UTC | `2026-09-05T05:41:16.299236+00:00` |
 | End UTC | `2026-09-05T05:59:54.846172+00:00` |
@@ -420,7 +422,7 @@ The audited invocation has a complete failure receipt:
 The exact launch in `final-gate/run.sh` was:
 
 ```sh
-nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
+nix-shell shell.nix --run 'TMPDIR=target ./scripts/release-gate.sh'
 ```
 
 Formatting and warnings-denied Clippy passed. The demo library finished 292 passed / 1 failed /
@@ -428,14 +430,13 @@ Formatting and warnings-denied Clippy passed. The demo library finished 292 pass
 `workbench::bridge::tests::theo_jansen_drag_uses_canonical_managed_authority_without_compilation`
 with `theo-jansen-leg draggable point at [-8.0, 3.0]`. It therefore stopped before completing
 the gate. The receipt is
-`/home/arduano/m92-visual-audit-20260905/final-gate/receipt.json`; the corresponding log is
-`/home/arduano/m92-visual-audit-20260905/final-gate/release-gate.log`.
+`m92-visual-audit-20260905/final-gate/receipt.json`; the corresponding log is
+`m92-visual-audit-20260905/final-gate/release-gate.log`.
 
 Corrected selection subsequently exposed the independently reproduced F015 defect above. No
 nomination follows from this failed gate or prior partial runs. This checkpoint required a full
 gate from clean integrated source; the successful final receipt below supplies it. All M92-U1–U8 human rows
 remain pending and unexecuted; GitHub Pages is unchanged.
-
 
 ### F015 core repair and bounded qualification
 
@@ -484,14 +485,12 @@ or human UAT acceptance.
 ### Second audited clean gate — Gridfinity harness error, no nomination
 
 The post-F015 replacement gate has a complete failure receipt in
-`/home/arduano/m92-visual-audit-20260905/final-gate-r2/receipt.json`:
+`m92-visual-audit-20260905/final-gate-r2/receipt.json`:
 
 | Field | Recorded value |
 |---|---|
 | Source | `cd9440e4b4dfc827753ea2e3f9299e792c278f89` |
 | Tree | `3ae5232a6ac590390732a30e516b5e332cd76bfd` |
-| Worktree | `/home/arduano/programming/geometric-constraint-solver.worktrees/m92-final-audit` |
-| Service | `geosolve-m92-f015-release-gate.service` |
 | Invocation | `e44e0b85e5134fc7969ccf03e0c98145` |
 | Start UTC | `2026-09-05T06:39:55.444543+00:00` |
 | End UTC | `2026-09-05T07:05:28.152112+00:00` |
@@ -503,7 +502,7 @@ The post-F015 replacement gate has a complete failure receipt in
 The exact launch in `final-gate-r2/run.sh` was:
 
 ```sh
-nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
+nix-shell shell.nix --run 'TMPDIR=target ./scripts/release-gate.sh'
 ```
 
 The gate reached `geosolve-sketch-code`'s `m87_manufacturing_sketches` target and stopped with
@@ -511,7 +510,7 @@ The gate reached `geosolve-sketch-code`'s `m87_manufacturing_sketches` target an
 `gridfinity_uses_one_coordinate_datum_instead_of_point_fixing_the_profile` expected one
 `fixedCoordinate` declaration and observed two. Its later assertion also expected one fixed point.
 These assumptions predated the repaired Gridfinity plan/section relationship. The full gate log is
-`/home/arduano/m92-visual-audit-20260905/final-gate-r2/release-gate.log`.
+`m92-visual-audit-20260905/final-gate-r2/release-gate.log`.
 
 The current sample correctly owns two scalar Y datums (`sectionBaseYDatum` and `planAnchor`) and
 zero fixed points. Symmetry and dimensions allow width edits to propagate through
@@ -523,7 +522,7 @@ measure cavity growth, fixed floor height, symmetry and linked plan/section widt
 
 This is a confirmed `HARNESS_ERROR`, with no new finding ID and no production change. The focused
 manufacturing suite passes 2/2 in 7.76 seconds in
-`/home/arduano/m92-visual-audit-20260905/gridfinity-old-contract-fixed.log`. Independent read-only
+`m92-visual-audit-20260905/gridfinity-old-contract-fixed.log`. Independent read-only
 review found the correction preserves the intended coverage. The failed gate remains failed;
 complete qualification and immutable nomination required a fresh successful clean gate, now
 recorded below. All M92-U1–U8 rows remain pending and unexecuted; GitHub Pages is unchanged.
@@ -535,9 +534,9 @@ historical; it is superseded by the qualified 16-sample nomination recorded belo
 
 Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
 `b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
-(exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
+(exit 0). The no-rebuild ten-file snapshot `geosolve-m92-uat.x4b870rw` has manifest SHA-256
 `e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and was nominated at
-**http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
+the archived preview. Release workbench 20/20, separate sample audit 20/20 and
 language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
 separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
 All 20 samples received visual review and two measured edits each; captured geometry and source restore
@@ -552,7 +551,6 @@ remain historical evidence and are not retroactively upgraded.
 |---|---|
 | Product source / tree | `b854d74c08833dc33412cfa859ecdef1a0bfc383` / `b6262b7ed51a47608b97264810c3192f9577bc9e` |
 | Clean gate | `2026-09-05T07:18:29.688311+00:00` to `2026-09-05T09:51:29.678675+00:00`, exit 0; clean unchanged start/end |
-| Gate service / invocation | `geosolve-m92-gridfinity-release-gate.service` / `695960c463934706801dfccb46523d6c` |
 | Gate log | `951,249` bytes, `15,963` lines; SHA-256 `28940567ad577ff71832f05cb6bdf420f0c4a069e4810d974ca7231d2d8a9f7b` |
 | Native workspace | 2,605 passed, zero failed; demo lib 293 passed, zero failed, one existing ignored |
 | Golden | 271 unchanged PASS rows, SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` |
@@ -560,25 +558,24 @@ remain historical evidence and are not retroactively upgraded.
 | WASM | Seven interaction suites: 37 passed; optimized actual lifecycle 3/3 including scale restore/history |
 | Browser gate | Workbench 20/20 (3.4 min), samples 20/20 (14.5 min), language service 1/1 |
 | Frontend | 8 test files, 97/97 tests; manifest, licences, build contracts, TypeScript, optimized build and dist validation pass |
-| Snapshot | `/tmp/geosolve-m92-uat.x4b870rw`; exactly 10 files / 2 directories, no symlinks/special files; files 0444, directories 0555 |
+| Snapshot | `geosolve-m92-uat.x4b870rw`; exactly 10 files / 2 directories, no symlinks/special files; files 0444, directories 0555 |
 | Frozen total | `27128743` bytes, strictly below 30 MiB |
 | WASM | `assets/geosolve_demo_web_bg-DCEEdhO6.wasm`, `18337861` bytes, strictly below 20 MiB; SHA-256 `250af04649347fce3e7de548c7ef6eec3798fec26969ef0c558abc5180f11ab7` |
-| External manifest | `/tmp/geosolve-m92-uat.x4b870rw.sha256`; SHA-256 `e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` |
+| External manifest | `geosolve-m92-uat.x4b870rw.sha256`; SHA-256 `e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` |
 | Frozen HTTP | Each endpoint: all 11 routes returned 200, exact bytes/MIME, zero redirects or content encoding; root equals index.html |
 | Local HTTP ledger | SHA-256 `e19995322d156715188e70d3964070e7dfaeb9adc3cc612ea28131f7fbbbf5a8` |
-| Tailscale HTTP ledger | SHA-256 `e19995322d156715188e70d3964070e7dfaeb9adc3cc612ea28131f7fbbbf5a8` |
+| preview HTTP ledger | SHA-256 `e19995322d156715188e70d3964070e7dfaeb9adc3cc612ea28131f7fbbbf5a8` |
 | Each frozen browser endpoint | 19/19 ordinary workbench rows plus separate 1/1 Jansen bounded drag/history/reload; zero failed, skipped, flaky or retried rows |
-| Historical Tailscale service (retired after pruning qualification) | `geosolve-m92-uat-18092.service`, PID `2608805`, invocation `751b2baded324c9eb2f0bcc981fef571` |
 | Finalizer completion | `2026-09-05T09:59:33.532283+00:00`; `post-gate-completion.json` status `passed` |
 
 Actual clean-gate launch, from the isolated candidate worktree:
 
 ```bash
 NO_COLOR=true \
-GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
+GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) \
 GEOSOLVE_E2E_PORT=18197 \
-M92_BROWSER_AUDIT_OUTPUT=/home/arduano/m92-visual-audit-20260905/final-gate-r3/browser-samples \
-nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
+M92_BROWSER_AUDIT_OUTPUT=m92-visual-audit-20260905/final-gate-r3/browser-samples \
+nix-shell shell.nix --run 'TMPDIR=target ./scripts/release-gate.sh'
 ```
 
 The gate ran `cargo fmt --all -- --check`, warnings-denied locked workspace Clippy,
@@ -598,7 +595,7 @@ candidate independently passes `--require-clean`. No golden bytes were regenerat
 
 The finalizer ran `node scripts/validate-dist.mjs ../dist ./` on the existing production dist,
 then copied it without rebuilding through the unchanged hash-pinned freeze helper. It invoked
-both shell helpers through `/run/current-system/sw/bin/bash`. Frozen browser commands used
+both shell helpers through `bash`. Frozen browser commands used
 `node node_modules/@playwright/test/cli.js test tests/e2e/workbench.spec.ts --workers=1 --retries=0
 --forbid-only --reporter=list,json` with `--grep-invert` for the exact harness-only compiler-envelope
 title; a separate invocation selected only `M92 visual workflow 1: theo-jansen-leg$` in
@@ -606,7 +603,7 @@ title; a separate invocation selected only `M92 visual workflow 1: theo-jansen-l
 Every full command, environment, UTC interval, exit code and log hash is in the attempt receipts.
 The production snapshot contains no `compiler-parity.html`; the language-service row is not
 added to the frozen 19-row inventory. Local staging stopped after passing; this historical
-Tailscale listener was later retired after pruning qualification, with its bytes retained.
+preview listener was later retired after pruning qualification, with its bytes retained.
 
 An initial finalizer attempt stopped before copying because the freeze helper had mode 0644 and
 was invoked directly (`PermissionError`). This was an orchestration `HARNESS_ERROR`: allocated
@@ -615,26 +612,26 @@ attempt and path record remain preserved in `finalizer-r4-recovery.json`. R5 cha
 explicit Bash invocation and passed all prerequisites, freeze and endpoint checks. Its SHA-256
 is `8b92baac7a0cc6da579bafb8cd33aac6269cdc82520ca4704591815ea0257467`.
 
-Evidence under `/home/arduano/m92-visual-audit-20260905/`:
+Evidence under `m92-visual-audit-20260905/`:
 
-- [Gate receipt](/home/arduano/m92-visual-audit-20260905/final-gate-r3/receipt.json) and
-  [complete log](/home/arduano/m92-visual-audit-20260905/final-gate-r3/release-gate.log).
-- [Passed nomination receipt](/home/arduano/m92-visual-audit-20260905/final-gate-r3/post-gate-completion.json),
-  attempt `/home/arduano/m92-visual-audit-20260905/final-gate-r3/post-gate-attempt.juk6zv3p` and frozen evidence `/tmp/geosolve-m92-freeze-evidence.p9d7k8to`.
-- [Final visual gallery](/home/arduano/m92-visual-audit-20260905/final-gate-r3-visual-review/index.html):
+- Gate receipt (archived evidence) and
+  complete log (archived evidence).
+- Passed nomination receipt (archived evidence),
+  attempt `m92-visual-audit-20260905/final-gate-r3/post-gate-attempt.juk6zv3p` and frozen evidence `geosolve-m92-freeze-evidence.p9d7k8to`.
+- Final visual gallery (archived evidence):
   45 comparison/contact sheets from 182 unchanged original PNGs, with SVG, source and geometry
   records. The manifest hashes every input and ties it to the successful gate receipt.
-- [Primary per-sample visual review](/home/arduano/m92-visual-audit-20260905/final-gate-r3/primary-visual-review-final.json)
+- Primary per-sample visual review (archived evidence)
   covers all 20 baseline/two-edit/reload comparisons plus full Jansen drag/reload and selected
   full-frame detail views. Independent products 12–16 review inspected 25 original full frames.
-- [Independent history/provenance audit](/home/arduano/m92-visual-audit-20260905/final-capture-history-audit-summary.md)
+- Independent history/provenance audit (archived evidence)
   verifies all 40 edit loops, exact exported geometry/source Undo/Redo/reload, baseline source
   equality to Git, capture timestamps and the successful log hash. Jansen's instance drag changes
   geometry while preserving source, and its terminal geometry survives reload.
-- [Measured mechanism trajectories](/home/arduano/m92-visual-audit-20260905/mechanism-audit-trajectories-r2.png)
+- Measured mechanism trajectories (archived evidence)
   presents the retained 520 native frames without clipped figure labels.
 
-Agent visual review found no blocking geometry or presentation issue within the declared
+Automated visual review found no blocking geometry or presentation issue within the declared
 workflows. Gridfinity/manifold dimension clusters, small atlas specimens and harness bend details
 need isolation and zoom; some parameter and Explorer labels remain long. Free atlas/scale source
 relationships do not imply native rigidity, reference products remain schematic 2D studies, and
@@ -651,8 +648,8 @@ removal of Prusa MINI, NEMA 17, HevORT and the twin-roller Bezier cam. All survi
 authenticated compiler envelopes remain byte-identical; the cam's tangent-offset/passive-locality
 regression remains a private fixture.
 
-The no-rebuild snapshot `/tmp/geosolve-m92-uat._8s63qiy`, external manifest SHA-256 `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9`, is
-nominated at **http://100.94.63.83:18092/**. The 16 sample workflows cover 32 measured edits and
+The no-rebuild snapshot `geosolve-m92-uat._8s63qiy`, external manifest SHA-256 `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9`, is
+nominated at the archived preview. The 16 sample workflows cover 32 measured edits and
 actual geometry/source restoration through Undo/Redo/reload. The four public mechanisms retain
 eight bounded pointer witnesses. The separate release workbench inventory remains 20 rows.
 Each frozen endpoint passes 19 ordinary workbench rows, a separate bounded Jansen workflow and
@@ -663,7 +660,6 @@ remains in progress and GitHub Pages is unchanged.
 |---|---|
 | Product source / tree | `b153a28d9e44dde934b325835913986b0e316ee7` / `f106276ebecdec1c9d2fc4c7c9937f32d2549e42` |
 | Gate receipt | `pruning-r1/gate-r2/receipt.json`; `2026-09-05T11:46:19.121966+00:00` to `2026-09-05T14:18:43.460675+00:00`, exit 0; clean unchanged source/tree |
-| Gate service / invocation | `geosolve-m92-pruning-release-gate-r2.service` / `ca0c78f37e0c46a4855c9e30a9092592` |
 | Gate log | `937,425` bytes, `15,863` lines; SHA-256 `1c4dec05cb07d66a2b829c4efb163c3bffc382e0393efc5e74c8f237007882ba` |
 | Native workspace / documentation | `2,603` passed, `0` failed; `32 existing opt-in tests ignored in the workspace phase; required opt-in release suites executed separately` |
 | Golden | 271 unchanged PASS rows, SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; candidate require-clean passes |
@@ -672,21 +668,19 @@ remains in progress and GitHub Pages is unchanged.
 | Browser gate | Workbench `20/20 (5.0 min)`, sample workflows `16/16 (15.0 min)`, language `1/1`; no hidden retries/skips |
 | Frontend/package | `8 test files, 97/97 tests`; manifest/compiler generation, TypeScript, licensing, build and dist validation `pass` |
 | Survivor preservation | `pruning-r1/survivor-preservation.json`; source/compiler bytes and private cam fixture unchanged |
-| Visual/history review | `pruning-r1/visual-review/`, `pruning-r1/visual-review-result-r2.json`, `pruning-r1/capture-history-audit.json`; `16 samples, 146 PNG captures and 36 derived sheets; all 16 history audit rows complete with no problems/pending. Agent review found no new visible defect. Crowded small dimensions and fitted-view detail limits remain; no human acceptance` |
-| Snapshot | `/tmp/geosolve-m92-uat._8s63qiy`; `10` files / `2` directories; regular immutable bytes, no symlinks/special files |
+| Visual/history review | `pruning-r1/visual-review/`, `pruning-r1/visual-review-result-r2.json`, `pruning-r1/capture-history-audit.json`; `16 samples, 146 PNG captures and 36 derived sheets; all 16 history audit rows complete with no problems/pending. Automated review found no new visible defect. Crowded small dimensions and fitted-view detail limits remain; no human acceptance` |
+| Snapshot | `geosolve-m92-uat._8s63qiy`; `10` files / `2` directories; regular immutable bytes, no symlinks/special files |
 | Frozen distribution / WASM | `26918035` bytes <30 MiB / `18128339` bytes <20 MiB; WASM SHA-256 `6acdf32ebedc4730ee6e39e5b9d8900bb7a6fdb2e1be7a5094fbeb38089fbd7c` |
-| External manifest | `/tmp/geosolve-m92-uat._8s63qiy.sha256`; SHA-256 `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9` |
+| External manifest | `geosolve-m92-uat._8s63qiy.sha256`; SHA-256 `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9` |
 | Frozen HTTP | Each endpoint: `11` routes, exact bytes/MIME, no redirects/content encoding; root equals index.html |
-| HTTP ledgers | Local SHA-256 `fdc8abab66306774aada75529aa39c89cce6c32bc7362ec1bbab76bb07257014`; Tailscale SHA-256 `fdc8abab66306774aada75529aa39c89cce6c32bc7362ec1bbab76bb07257014` |
+| HTTP ledgers | Local SHA-256 `fdc8abab66306774aada75529aa39c89cce6c32bc7362ec1bbab76bb07257014`; preview SHA-256 `fdc8abab66306774aada75529aa39c89cce6c32bc7362ec1bbab76bb07257014` |
 | Each frozen browser endpoint | 19 ordinary workbench rows + separate 1 bounded Jansen drag/history/reload; zero failures, skips, flaky or retried rows |
 | Separate pruned-menu probes | Exact 16 titles; four pruned searches absent; stale removed Recent entries absent; one surviving dust-shoe Recent entry retained |
-| New Tailscale service | `geosolve-m92-pruned-uat-18092.service`, PID `4073061`, invocation `daa4226b0d454d54902f8aef51541f1f` |
-| Old listener retirement | `/home/arduano/m92-visual-audit-20260905/pruning-r1/gate-r2/post-gate-attempt.vm2cot69/old-endpoint-superseded.json`; retired `2026-09-05T14:24:47.515287+00:00` after local verification; old immutable bytes retained |
 | Finalizer completion | `pruning-r1/gate-r2/post-gate-completion.json`, status `passed`, `2026-09-05T14:27:31.649877+00:00` |
 
 Independent `--survey` and `--check` ran against clean unchanged pruning source
 `ed4dbec2034cc414b2390de5818a35c34f79cc78` and both passed. The finalizer's
-`/home/arduano/m92-visual-audit-20260905/pruning-r1/gate-r2/post-gate-attempt.vm2cot69/golden-runtime-equivalence.json` proves that the candidate delta is exactly
+`m92-visual-audit-20260905/pruning-r1/gate-r2/post-gate-attempt.vm2cot69/golden-runtime-equivalence.json` proves that the candidate delta is exactly
 the package generator's expected-directory-count assertion from 20 to 16 plus the failed-gate
 ledger document. No runtime or oracle input changed. The final candidate independently passes
 `--require-clean`; no golden bytes were regenerated or blessed.
@@ -696,17 +690,15 @@ count. The replacement gate above reruns the complete qualification. Its actual 
 preserved in `pruning-r1/gate-r2/run.sh`; all full command environments, UTC intervals, exit
 codes and log hashes are preserved in the gate and finalizer attempt receipts.
 
-Finalizer `/home/arduano/m92-visual-audit-20260905/pruning-r1/finalize-post-gate-r6.py`, SHA-256 `736c4a1284842a7088d0b00535b60032537dd85e7c58b6a017f09507f8c1a748`, validates the completed
-gate and existing distribution, then copies it without rebuilding through the hash-pinned freeze
-helper invoked with explicit Bash. Only after all local HTTP/browser/menu checks pass does it
-retire `geosolve-m92-uat-18092.service` and start the replacement at the same Tailscale URL.
-The original `/tmp/geosolve-m92-uat.x4b870rw` snapshot and manifest
-`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` remain immutable historical
-evidence. Local staging is stopped after successful checks; the new Tailscale listener remains
-live. This is mechanical nomination and catalog curation, not human acceptance or milestone closure.
+The finalizer validated the completed gate and copied its existing distribution
+without rebuilding. Local HTTP/browser/menu checks passed before the archived
+preview was replaced. The original `geosolve-m92-uat.x4b870rw` snapshot and manifest
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` remain the recorded
+historical identity. This was mechanical nomination and catalog curation;
+human acceptance and milestone closure were recorded separately.
 
 The external evidence root for the relative paths above is
-`/home/arduano/m92-visual-audit-20260905/`. The public runtime asset removals and contiguous registry
+`m92-visual-audit-20260905/`. The public runtime asset removals and contiguous registry
 migration are in `ed4dbec`; `b153a28` corrects the package inventory assertion and preserves the
 failed first pruning gate. All 63 surviving non-manifest assets were rechecked against `552d5e9`;
 the private cam source and compiler envelope also match their pre-pruning bytes exactly. No solver
@@ -716,10 +708,10 @@ Exact release command, from the clean isolated checkout:
 
 ```bash
 NO_COLOR=true \
-GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
+GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) \
 GEOSOLVE_E2E_PORT=18197 \
-M92_BROWSER_AUDIT_OUTPUT=/home/arduano/m92-visual-audit-20260905/pruning-r1/gate-r2/browser-samples \
-nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
+M92_BROWSER_AUDIT_OUTPUT=m92-visual-audit-20260905/pruning-r1/gate-r2/browser-samples \
+nix-shell shell.nix --run 'TMPDIR=target ./scripts/release-gate.sh'
 ```
 
 This command passed format, warnings-denied workspace Clippy, locked all-feature native tests,
@@ -736,7 +728,7 @@ Post-gate capture checks ran `audit-capture-history-r2.py --gate <gate-r2> --out
 <capture-history-audit.json>` and, under `nix-shell -p python3Packages.pillow`,
 `build-visual-review.py` with the exact gate captures, candidate registry, gate receipt and
 `--crop 272,80,1147,900`. Their successful outputs record 16 complete rows and 36 derived sheets
-from 146 original PNGs. Root inspected all 16 baseline views and mechanism/atlas/scale comparison
+from 146 original PNGs. The visual review inspected all 16 baseline views and mechanism/atlas/scale comparison
 sheets; the independent product review inspected all 40 baseline/edit/reload PNG states, source
 changes and both reload pairs for all eight products. Exact viewed-image hashes and limits are in
 `visual-review-result-r2.json`, `product-visual-review.md` and `product-review-sheets/receipt.json`.
@@ -744,15 +736,14 @@ Visual inspection does not replace the independently measured native geometry or
 
 Finalizer R6 also preserves two external-harness corrections: old-server comparison uses stable
 authenticated process/snapshot identity rather than systemd's disposable command timestamps, and
-each removed-menu search waits for its own empty-result text. The local and Tailscale menu probes
-both pass and their screenshots are identical. The finalizer itself completed successfully under
-`geosolve-m92-pruning-finalize-r6.service`, invocation `35b8c9fa14fa4e5789b539f2ace9d6ca`.
+each removed-menu search waits for its own empty-result text. The local and preview menu probes
+both pass and their screenshots are identical. The finalizer completed successfully.
 
 ## M92 closure and M93 handoff — 2026-09-06
 
-The supervising user accepted and closed the 16-sample result on the existing qualified `b153a28`
+The maintainer accepted and closed the 16-sample result on the existing qualified `b153a28`
 product and immutable manifest `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9`.
-[The sign-off](M92_UAT.md#supervising-user-closure--2026-09-06) records the exact scope and human-row
+[The sign-off](M92_UAT.md#maintainer-closure--2026-09-06) records the exact scope and human-row
 disposition. Additional samples are future work. This documentation-only closeout verifies the
 unchanged clean qualified checkout and frozen manifest against existing receipts; it does not
 rerun the release gate or claim new product qualification. [M93](M93_GOALS.md) is the next

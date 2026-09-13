@@ -2,7 +2,11 @@
 
 # M63 implementation — canvas constraint visualization
 
-Status: complete as of 2026-07-30. Mechanical evidence is recorded here and supervising-human
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete as of 2026-07-30. Mechanical evidence is recorded here and maintainer
 approval is recorded in `docs/M63_UAT.md`.
 
 ## 1. Files and APIs
@@ -129,5 +133,5 @@ size. The focused human visual review is accepted.
   drafting-layout optimizer.
 - M63 does not add manual dimension-label dragging or persisted annotation placement.
 - Desktop-only workbench and existing solver/branch scope remain unchanged.
-- The supervising human explicitly approved the recorded M63 scope on 2026-07-30. M64 remains an
+- The maintainer explicitly approved the recorded M63 scope on 2026-07-30. M64 remains an
   empty placeholder and inherits none of these limitations as planned work.

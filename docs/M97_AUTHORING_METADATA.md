@@ -2,14 +2,18 @@
 
 # M97 amendment — author design intent in source
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Status and decision
 
 This is the approved design and implementation plan requested after reviewing the
-default-priority preview. The user authorized implementation and requested explicit
+default-priority preview. The accepted authoring design uses explicit
 `isKeyConstraint` / `isKeyParameter` property names. The APIs and interactions below
 are **implemented, qualified and accepted on 2026-09-09**.
 Clean product `e26270cb89e5849092145b329d0cf95821a81b27` passes all 244 obligations
-in `20260908T235146-b387d273` and is served at `http://100.94.63.83:18105/`.
+in `20260908T235146-b387d273` and is served at the archived preview.
 [Implementation and qualification evidence](M97_AUTHORING_IMPLEMENTATION.md) records
 the gate, frozen production artifact and served-byte/actual-WASM verification.
 The previous [catalog-driven preview](M97_PRIORITY_DIMENSIONS.md) remains preserved

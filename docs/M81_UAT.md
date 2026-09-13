@@ -2,8 +2,11 @@
 
 # M81 focused UAT — Core architecture consolidation
 
-Status: **accepted and closed 2026-08-20; exact GitHub Pages publication passes**. The supervising
-caller reviewed the qualified consolidation/finding summary, explicitly approved M81 and requested
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed 2026-08-20; exact GitHub Pages publication passes**. The maintainer reviewed the qualified consolidation/finding summary, explicitly approved M81 and requested
 closure. This scorecard remains bound to the exact clean-gate release snapshot used for acceptance.
 
 M81 intentionally adds no visible feature. Human UAT is a compact behavior-preservation smoke test;
@@ -11,22 +14,6 @@ mathematical, persistence, authority and ordering compatibility are owned by the
 frozen-artifact gates in `docs/M81_IMPLEMENTATION.md`.
 
 ## Candidate authority
-
-- Product source: `e4eca327fc69c92f95b1722142289302ba4f67bc`.
-- Product tree: `f3ed1bf50b793daae328adf04c0924655dc13d74`.
-- Frozen no-rebuild snapshot: `/tmp/geosolve-m81-uat.QqItRd` (directory `0555`; seven regular
-  non-symlink files `0444`).
-- Ordered file-manifest aggregate:
-  `df24deb988a31a373b3f973432081078c15e157382134f62c99aaabe96b8e49e`.
-- Historical accepted Tailscale endpoint: `http://100.94.63.83:8080/`
-  (`geosolve-m81-uat.service`, retired PID `2850776`).
-- Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 at
-  2026-08-20 11:58:14 AEST; log SHA-256
-  `43abb1e262293d607e6e37d636b90979d9be7c0807020c0d7bbc49800716797e`.
-- Exact served-byte verification: temporary
-  `/tmp/geosolve-m81-temp-verify.baolJt/results.tsv` and retained
-  `/tmp/geosolve-m81-final-verify.Z4aCP5/results.tsv`, each SHA-256
-  `7e981a47c3d02957c55e81eddb747e749e21f32d42464cdff4f6b1065e94a855`.
 
 Both verification passes covered `/` plus all seven assets: HTTP 200, zero redirects, no
 `Location` or `Content-Encoding`, exact media type/length/body, the frozen aggregate above and
@@ -56,7 +43,7 @@ or persistence change opens an exact owning-layer finding under the repository d
 withdraws the candidate. Cosmetic or feature requests unrelated to behavior preservation are
 deferred rather than folded into M81.
 
-The clean gate, frozen Tailscale verification and explicit supervising-human decision pass.
+The clean gate, frozen preview verification and explicit maintainer decision pass.
 
 ## Final public authority
 
@@ -68,5 +55,5 @@ aggregate is `c461835ac327655fd16e9355e0b42c1971e74ed9233fcf500908b8051614de72`.
 
 Root plus every hosted path at `https://arduano.github.io/geometric-constraint-solver/` exact-match
 the artifact with HTTP 200, correct media/length, no redirect or content encoding, and root equal
-to `index.html`. Pages is final public-byte authority, the Tailscale listener is retired and M81 is
+to `index.html`. Pages is final public-byte authority, the preview listener is retired and M81 is
 closed.

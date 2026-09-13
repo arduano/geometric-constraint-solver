@@ -2,12 +2,15 @@
 
 # M87 UX, code and headless-authoring audit
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **audit complete; M87 accepted and closed on 2026-08-31**. The pre-dogfood, routing-board
 and original manufacturing dirty-worktree gates remain historical evidence for their exact pre-F003
 sources. M87-F003 revises the CNC/Gridfinity sample authority and separately reviewed ledger. Exact
 post-F003 source `32c72892772ee09f8b904153484b02fd9923dc25`, tree
-`38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. The user's
-milestone-level close decision accepts U9/U10 without claiming a separate row replay. No immutable
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. maintainer acceptance accepts U9/U10 without claiming a separate row replay. No immutable
 freeze, public deployment or service retirement is claimed.
 
 ## Finding
@@ -177,7 +180,7 @@ dirty mechanical evidence. The complete dirty-worktree release gate also passed 
 2026-08-30 before F003; its exact command is recorded in `docs/M87_IMPLEMENTATION.md` and does not
 qualify the revised sources. The reviewed twelve-row code-project ledger has SHA-256
 `f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`. The bundles under
-`/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` are historical pre-F003 evidence and must be replaced
+`geosolve-m87-manufacturing-uat.K7YRaV/` are historical pre-F003 evidence and must be replaced
 for current source review. Exact post-F003 source `32c7289` passes the complete clean gate, and the
 user's milestone-level decision accepts both rows without a separate replay. Diagnosed Gridfinity
 performance/stack work was carried into M88's completed stability prerequisite.

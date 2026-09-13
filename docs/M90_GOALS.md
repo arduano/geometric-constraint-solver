@@ -2,11 +2,15 @@
 
 # M90 goals: one typed, executed sketch language
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Outcome
 
-Status: **Closed by explicit scoped supervising-user approval on 2026-09-04. The full dirty-tree
-gate and immutable Tailscale nomination pass. M90-U1 through M90-U10 transfer/defer, without pass or
-waiver, into M91's composite UAT. No GitHub Pages deployment or public push was authorized or made.**
+Status: **Closed by explicit scoped maintainer approval on 2026-09-04. The full dirty-tree
+gate and immutable preview nomination pass. M90-U1 through M90-U10 transfer/defer, without pass or
+waiver, into M91's composite UAT. No public deployment was made for this milestone.**
 
 M90 is the clean break promised by M89. A managed `sketch.ts` is one typed authoring program whose
 lexical IR and runtime recording can reproduce the complete standalone sketch. Source, structured
@@ -91,14 +95,6 @@ withdraws it from continuing UAT and its service is retired. The harness-termina
 attempt at exit `143` is not a pass or clean-source qualification. At that historical checkpoint,
 replacement release-gate passage, M90-U1 through M90-U10 and milestone closure remained pending.
 
-The replacement identity is snapshot `/tmp/geosolve-m90-uat.xk0AGnz0`, external manifest
-`/tmp/geosolve-m90-uat.xk0AGnz0.sha256`, aggregate
-`030e9f4aa98690b8cd35cdbb51a29220674f1bfcfba310192afc467f5afc38a4`, historically exact-served by
-`geosolve-m90-f001-replacement-uat-18090.service` at the Tailscale-only endpoint
-`http://100.94.63.83:18090/`. The unit is now inactive/dead; its historical PID was `3332035` and
-invocation was `258e6d4da4b14661bd6d8e44856c64a5`. `PLAN.md` and `docs/M90_UAT.md` own its
-complete WASM, route-ledger, file-mode and freeze-evidence identity.
-
 ## M90-F002 disposition
 
 The browser quota repair is implemented and mechanically qualified. Canonical project persistence
@@ -118,9 +114,8 @@ native `282/282`, focused sketch-code collateral, format, warnings-denied Clippy
 pass.
 An optimized release-WASM Chromium regression passes `1/1` with five drags, more than `5 MiB` of
 exact IndexedDB workspace data, no quota alert or legacy project key, exact reload and working Undo.
-The post-F002 build is frozen at `/tmp/geosolve-m90-uat.TN2NP9eF`, byte-verified at staging and live,
-and was historically served by `geosolve-m90-f002-replacement-uat-18090.service` at
-`http://100.94.63.83:18090/`; `PLAN.md` and `docs/M90_UAT.md` own its exact identity. At that
+The post-F002 build is frozen at `geosolve-m90-uat.TN2NP9eF`, byte-verified at staging and live,
+and was historically served as an archived preview; `PLAN.md` and `docs/M90_UAT.md` own its exact identity. At that
 historical checkpoint all M90-U1 through M90-U10 rows and explicit milestone closure remained
 pending/not run.
 
@@ -147,11 +142,10 @@ exact empty-starter circle path, import idempotence and `rad` closure, receipt f
 finite independently validated publication, one history action, Undo and immediate next-pointer
 availability. Those focused checks pass, and real optimized release-WASM browser regressions repeat
 the F003 circle and carried F001/F002 paths on staging and live. The post-F002 snapshot is now
-historical pre-F003 evidence. Fresh snapshot `/tmp/geosolve-m90-uat.yIPVNICT`, manifest
-`/tmp/geosolve-m90-uat.yIPVNICT.sha256` and aggregate
+historical pre-F003 evidence. Fresh snapshot `geosolve-m90-uat.yIPVNICT`, manifest
+`geosolve-m90-uat.yIPVNICT.sha256` and aggregate
 `d31e311c4e0e69974690d299819df6a33b7ae13b7eff5d037406e602c033f33a` are byte-verified and served
-historically by `geosolve-m90-f003-replacement-uat-18090.service` at
-`http://100.94.63.83:18090/`; M90-F004 withdraws those bytes from continuing UAT and the service is
+historically as an archived preview; M90-F004 withdraws those bytes from continuing UAT and the service is
 retired. `PLAN.md` and `docs/M90_UAT.md` own the complete historical identity. No M90-UAT row is
 accepted; at that historical checkpoint the replacement release gate remained pending and M90
 remained open.
@@ -183,11 +177,9 @@ Vitest passes `74/74`, format/diff/warnings-denied Clippy pass, and the unchange
 passes `--check`/`--require-clean`. No golden expansion is warranted because the focused owner plus
 thin frontend recovery test cover the defect without revealing a new systemic matrix dimension.
 
-The historical provisional dirty-tree replacement is `/tmp/geosolve-m90-uat.O4xZJBxg`, manifest
-`/tmp/geosolve-m90-uat.O4xZJBxg.sha256`, aggregate
-`fd0a4635edcc6bd24d36eeca831a57bbb62cdf1d67589c6245af9e7b88bf52be`. Historical unit
-`geosolve-m90-f004-replacement-uat-18090.service` served it at
-`http://100.94.63.83:18090/` until the supervising user's reboot stopped the service. M90-F005
+The historical provisional dirty-tree replacement is `geosolve-m90-uat.O4xZJBxg`, manifest
+`geosolve-m90-uat.O4xZJBxg.sha256`, aggregate
+`fd0a4635edcc6bd24d36eeca831a57bbb62cdf1d67589c6245af9e7b88bf52be`. The archived preview served those bytes until a host restart. M90-F005
 withdraws those bytes from continuing UAT while retaining the immutable identity and qualification
 ledger in `PLAN.md` and `docs/M90_UAT.md`. No solver equation, rank/DOF rule, tolerance or explicit
 branch state changed. At that historical checkpoint the replacement release gate, M90-U1 through
@@ -196,7 +188,7 @@ M90-U10 and explicit closure remained pending, and M90 was open.
 ## M90-F005 disposition
 
 The exact supplied native project reproduced release snapback across seven connected points after
-ordinary finite previews. Original `/home/arduano/Downloads/project (1).json` is `956,305` bytes at
+ordinary finite previews. Original `supplied-project.json` is `956,305` bytes at
 SHA-256 `c5f748d31c90f8fd575ab2acaddfb8b7d20bbc9f31189dc0716995ad05a46ee7`; checked-in capsule
 `crates/geosolve-demo-web/tests/fixtures/m90_f005_native_drag_repro.txt` is `86,736` bytes at
 SHA-256 `1b1dba9d039ee8756030174731ab3a03e7f77a8554853a96c29e4b10f8c49cf7` and decodes byte-exactly.
@@ -238,35 +230,21 @@ fit. Exact persisted authority was unchanged, so it was a `HARNESS_ERROR`. Fitti
 sides makes the row deterministic; it passes `5/5` repeated with persistence and Undo. The Rust F005
 owner separately proves Undo and Redo.
 
-Current immutable snapshot `/tmp/geosolve-m90-uat.EtWyWQlt`, manifest
-`/tmp/geosolve-m90-uat.EtWyWQlt.sha256` and freeze evidence
-`/tmp/geosolve-m90-f006-freeze-evidence.HqyaA7Qp` have aggregate
-`b3fd72b9ec98d318d7bfa7bf8c09d0fcbd3856ea0723d81e01e64945e301debe`, nine mode-`0444` files,
-two mode-`0555` directories and no symlinks. Its `19,990,463`-byte
-`assets/geosolve_demo_web_bg-Dc5MH04n.wasm` has SHA-256
-`bad16242c2ec0fa0c6c0ba6882428372c1bf0b7dd1a70235467b5febdfc80712`. Staging/live HTTP ledgers
-match at SHA-256 `41d11e1c56bad8dcc57edf229f0bfec20d8f5e602b3c385e5e68d54dd42c816a`, and the optimized
-release-WASM browser bundle passes `4/4` on both. Tailscale-only unit
-`geosolve-m90-f006-replacement-uat-18090.service`, PID `462021`, invocation
-`4a17e69e926446eba21439ac4dd6f4e6`, exact-serves that snapshot at
-`http://100.94.63.83:18090/`.
-
 ## M90 closeout disposition
 
 The final full dirty-tree gate command
 `env GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
 ran from `23:20:45` through `23:47:22 AEST` on 2026-09-03 and exited `0` after `1,596,726 ms`.
-Its `573,421`-byte log `/tmp/geosolve-m90-f006-full-gate.hKSTh4/release-gate.log` has SHA-256
+Its `573,421`-byte log `geosolve-m90-f006-full-gate.hKSTh4/release-gate.log` has SHA-256
 `bda7f5f92f15a5f0a0cf26ed93cb514943d9a9d1ad49bf0ba0e148c9239b205d`. The complete gate preserves
 the reviewed 271-row golden unchanged, passes the release-only 256-moving-body performance row in
 `137.82 s`, frontend Vitest `74/74`, and the optimized nine-file distribution validation. This is
 complete dirty-tree qualification, not clean-source qualification.
 
-The supervising user explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
+The maintainer explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
 remain unexecuted and transfer/defer—not pass or waive—into M91's one composite UAT. Automated
 qualification accepts no human row. The immutable F006 snapshot and service above remain the exact
-Tailscale-only closing publication; no GitHub Pages deployment or public push was authorized or
-made. M90 is closed.
+archived preview closing publication; no public deployment was made for this milestone. M90 is closed.
 
 ## Explicit non-goals
 

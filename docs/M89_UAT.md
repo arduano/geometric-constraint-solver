@@ -2,50 +2,15 @@
 
 # M89 UAT: executed, reversible managed sketches
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **Historical, superseded by M90's closed typed clean-break contract.** M89-F004/F005
 implementation, provisional dirty-tree mechanical qualification and its immutable F005 nomination
 completed, but the Compass Rose retest, targeted preflight and M89-U1 through M89-U8 were never run
 and are not retrospectively passed or waived. Every row below remains **Not run**; this scorecard
 does not constitute clean-source qualification or human acceptance.
-
-Do **not** run this scorecard against `/tmp/geosolve-m89-uat.TIPyWl`. That snapshot's aggregate
-`5b842c6541261a9386c6a060475350712326a467137f166b4c02d8782635ff6a` and release-WASM SHA-256
-`04a8b6504db1e8ce68f9c8cec864d293d95e07394dff302bc877782b4ef4ce04` are withdrawn M89-F001
-reproduction evidence; its old PID `825513` is retired while the snapshot remains preserved.
-
-Do **not** use the withdrawn F001 replacement snapshot
-`/tmp/geosolve-m89-f001-replacement-uat.IwvrBh8x`. Its nine regular files, two directories and zero
-symlinks use `0444`/`0555`; ordered-manifest aggregate is
-`7d40c31c0eba5aae0d1b6e7febf16a0b5fa44a541c82a9ddbbb0125cd8707424` and optimized release-WASM
-SHA-256 is `a2b2fd4ec4852e3d16b10ab0fa41eb8e4d64b52db430447bdbf28bb8d82f3241`.
-Freeze and HTTP/browser evidence is
-`/tmp/geosolve-m89-f001-replacement-freeze-evidence.yhuZYse1`. M89-F002 withdraws those bytes from
-continuing UAT because an ordinary Polyline expanded to transport-level source hundreds of lines
-long. Former PID `1589113`, invocation `d05d85152a4547f7b32e316b6a3d4b9a`, has been replaced; the
-historical snapshot remains preserved.
-
-The pending scorecard would have applied only to the now-historical immutable F005 candidate at
-`http://100.94.63.83:18089/`. Unit `geosolve-m89-react-uat-current.service`, PID `1007459`,
-invocation `a3fea6dddb59438795e52c6a8fab136f`, started
-`Wed 2026-09-02 20:21:15 AEST` with `WorkingDirectory=/tmp/geosolve-m89-f005-uat.hzNuDxF0` and
-serves only that snapshot. Its external manifest is
-`/tmp/geosolve-m89-f005-uat.hzNuDxF0.sha256`, aggregate
-`fb488ad2bf29e8897cf9811c002b748693e5d211bae4bb54c83ed060db5db668`, and freeze/HTTP/browser
-evidence is `/tmp/geosolve-m89-f005-freeze-evidence.VAoQDl8n`. The distribution contains nine
-regular files, including three JavaScript, one CSS and one WASM, two directories and no
-symlinks/other entries. Its `16,333,537`-byte
-`assets/geosolve_demo_web_bg-52ybei8k.wasm` has SHA-256
-`3e6f515ff1e5de0f668c13e86c02d280c0dc085bbd89b314bf9ece6c82aae575`.
-
-Strict staging and live ten-route HTTP ledgers are byte-identical at SHA-256
-`4de184eb1eb237f98997b70702567a2b110b40d96df5d0d9653f024ac5f23e8d`. Focused Fillet lifecycle
-passes `1/1` and the normal frozen product passes `15/15` on both endpoints; the normal product
-intentionally excludes the compiler-parity-only harness test. Staging PID `995137`, invocation
-`efe4de2264774f68bf5852284fa69887`, is retired. The F003 snapshot and its former PID `3637680` /
-invocation `73bdb82cf2a64436ab6f65fe76b08ccf` remain historical rollback evidence, not current authority.
-The preliminary F003 snapshot `/tmp/geosolve-m89-f003-uat.W5GIfQi7`, F002 snapshots
-`/tmp/geosolve-m89-f002-uat.bSM6Nn59` and `/tmp/geosolve-m89-f002-uat.Taocj5bI`, and every F001
-snapshot remain preserved but withdrawn. Every human row remains **Not run**.
 
 M89-F001 was reproduced exactly by opening Compass Rose, choosing Sketch → Polyline, clicking
 three right-angle points and pressing Finish. The deterministic regression uses normalized canvas
@@ -107,16 +72,6 @@ integration regression also passes after the final logical-root correction. Fina
 passes demo-web `357/357`, formatting, affected warnings-denied Clippy, the locked WASM check,
 optimized nine-file distribution validation and release-WASM Playwright `14/14`. The unchanged
 normal product passes `13/13` before freezing and against frozen staging and live endpoints.
-
-Historical F003 nomination identity: frozen path `/tmp/geosolve-m89-f003-uat.uF6Yjsc3`;
-ordered-manifest aggregate
-`c37d832a6dc076982e3fda8f2ffbcc8b2f26ed99ad6ffd0da0b7ba4f96d705ed`; optimized release-WASM
-SHA-256 `99eeaa5668276282201cb1971b042d3d0904a13b7a75d40e2357ce08a34c748a`; evidence directory
-`/tmp/geosolve-m89-f003-freeze-evidence.5TcRPlem`; endpoint
-`http://100.94.63.83:18089/`; service/PID/invocation
-`geosolve-m89-react-uat-current.service` / `3637680` /
-`73bdb82cf2a64436ab6f65fe76b08ccf`. Staging and live strict ten-route HTTP ledgers are identical
-at SHA-256 `c5efab20409773cc7f43cecdd9c6fca5b961402611d073f6bf0e8f40cca0ce1e`.
 
 M89-F004/F005 targeted preflight is **Not run** and would apply only to the historical immutable
 F005 replacement:

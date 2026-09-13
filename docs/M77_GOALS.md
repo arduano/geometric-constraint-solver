@@ -2,8 +2,12 @@
 
 # M77 — CAD curve handles and implicit-parameter editing
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete (2026-08-17); the replacement is clean-qualified, immutably frozen,
-scope-approved and exact-verified on both Tailscale and GitHub Pages**. M77 makes advanced curve
+scope-approved and exact-verified on both preview and GitHub Pages**. M77 makes advanced curve
 parameters directly manipulable in the polished demo while preserving the existing document
 model, equations and explicit branch state.
 
@@ -111,8 +115,8 @@ The initial source `51a3b95d04f27216c164febf0808a180b6775537` and its immutable 
 superseded historical evidence after replacement UAT findings. Exact replacement source
 `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean release gate and is frozen
-without rebuilding at `/tmp/geosolve-m77-uat.ARrQFw`; its seven served files byte-match aggregate
-`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`. The supervising caller
+without rebuilding at `geosolve-m77-uat.ARrQFw`; its seven served files byte-match aggregate
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`. The maintainer
 explicitly approved the current replacement and requested closure on 2026-08-17; U1-U6 pass under
 that scoped disposition. Publication descendant `66a89b7e3e0c39d50407f2a540517e6a7facdc77`
 passes GitHub Pages run `32012819635`; artifact `9283439225` and deployment `5942438795` succeed,

@@ -2,13 +2,17 @@
 
 # M97 — focused dimensions and stable annotation placement
 
-Implementation authorized on 2026-09-08; accepted and closed on 2026-09-09.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Implemented on 2026-09-08; accepted and closed on 2026-09-09.
 [M97_CLOSURE.md](M97_CLOSURE.md) records the accepted product and limits. The workbench should convey relevant measurements without
 filling general navigation with dimension widgets.
 
 The subsequent source-native authoring request has a completed
 [design and implementation plan](M97_AUTHORING_METADATA.md). That amendment is
-qualified and served at `http://100.94.63.83:18105/`; it replaces catalog priority
+qualified and served at the archived preview; it replaces catalog priority
 ownership with source metadata. The interactions below describe this current preview.
 The previous catalog-driven preview remains preserved at port 18104.
 
@@ -85,11 +89,11 @@ preservation. Bridge/frontend coverage includes mode, pins, patch parameters,
 native and source editing, groups, failed drafts and reload. Capture simple/manifold/
 dense screenshots and compare navigation performance. Run the integrated clean-source
 gate once at nomination, authenticating reuse under RELEASE_QUALIFICATION.md; review
-any golden changes individually. Final qualification and supervising-user acceptance are complete.
+any golden changes individually. Final qualification and maintainer acceptance are complete.
 
 ## Default-priority amendment
 
-On 2026-09-08 the supervising user approved the general direction and requested
+On 2026-09-08 the maintainer approved the general direction and requested
 important shape-intent measurements by default, explicitly including every
 Gridfinity measurement. This amendment changes presentation only.
 [Default-priority qualification](M97_PRIORITY_DIMENSIONS.md) records its passing
@@ -98,7 +102,7 @@ supersedes it and is accepted.
 
 ## Source-native authoring amendment — accepted and closed
 
-The supervising user requested native/intuitive authoring and an audit of adjacent
+The maintainer requested native/intuitive authoring and an audit of adjacent
 metadata that should belong in code. [M97_AUTHORING_METADATA.md](M97_AUTHORING_METADATA.md)
 defines one source owner for dimension `isKeyConstraint`, named public parameters, display
 labels/help and document title/description. Inspector actions rewrite these same
@@ -117,5 +121,5 @@ existing purpose. Personal mode/pins/visibility/camera remain outside design sou
 `e26270cb89e5849092145b329d0cf95821a81b27`, the passing 244-obligation gate
 `20260908T235146-b387d273`, and the frozen port-18105 preview's served-byte and
 actual-WASM verification. Generated per-instance overview overrides remain deferred.
-Implementation, mechanical qualification and supervising-user acceptance are complete.
+Implementation, mechanical qualification and maintainer acceptance are complete.
 M97 is closed; generated overview and performance limits remain recorded.

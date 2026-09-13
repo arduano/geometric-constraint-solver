@@ -2,10 +2,14 @@
 
 # M71 implementation — Retained drafting relations
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: M71-F005 distinct-reference cross-axis point composition and M71-F006's tighter default
 capture envelope are implemented, clean-qualified and published as the current byte-verified UAT
 candidate and approved closing product. All mechanical acceptance evidence and the scoped M71-U1
-through M71-U5 human review pass; the supervising human explicitly approved closure on
+through M71-U5 human review pass; the maintainer explicitly approved closure on
 2026-08-14. M71 is complete.
 
 Architecture owner: ADR 0035
@@ -23,36 +27,31 @@ Current F005/F006 clean product source: `f8a45ae7b355ab9874bf268c9950e369814e843
 Current F005/F006 clean product tree: `f7bccc58f301a715bc91f40115ce6424ec5f391d`
 
 Current F005/F006 clean release-gate result: **PASS**; log
-`/tmp/geosolve-m71-f005-f006-clean-gate.chbsLG.log`; log SHA-256
+`geosolve-m71-f005-f006-clean-gate.chbsLG.log`; log SHA-256
 `d99f51ce220727165760051dc95e45e9f65b3336cfc9c256a94ccdca2bfd6bb4`
 
-Current F005/F006 release distribution:
-`/tmp/geosolve-m71-f005-f006-uat.QPuMdT`; endpoint `http://100.94.63.83:8080/`; PID `3245562`;
-ordered manifest aggregate
-`657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`
-
 Historical F004 clean release-gate result: **PASS**; log
-`/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`
+`geosolve-m71-f004-clean-gate.ZGQEKU.log`
 
 Historical F004 release distribution, preserved but no longer served:
-`/tmp/geosolve-m71-f004-uat.SaXMVY`; historical endpoint `http://100.94.63.83:8080/`; ordered
+`geosolve-m71-f004-uat.SaXMVY`; historical endpoint the archived preview; ordered
 manifest aggregate
 `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`
 
 Historical F003 clean release-gate result: **PASS**
 
 Withdrawn F003 release distribution, preserved but no longer served:
-`/tmp/geosolve-m71-f003-uat.hybK8W`; historical endpoint `http://100.94.63.83:8080/`, ordered
+`geosolve-m71-f003-uat.hybK8W`; historical endpoint the archived preview, ordered
 manifest aggregate
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`
 
-Withdrawn Tailscale release distribution (preserved, no longer served and not acceptable for
-continued UAT): `/tmp/geosolve-m71-uat.yFBsnX`; historical endpoint
-`http://100.94.63.83:8080/`; ordered manifest aggregate
+Withdrawn preview release distribution (preserved, no longer served and not acceptable for
+continued UAT): `geosolve-m71-uat.yFBsnX`; historical endpoint
+the archived preview; ordered manifest aggregate
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
 All three earlier distributions remain historical evidence. Their former servers have exited,
-and the shared Tailscale endpoint now serves only the current verified F005/F006 snapshot above.
+and the shared preview endpoint now serves only the current verified F005/F006 snapshot above.
 
 ## 1. Files and APIs
 
@@ -295,7 +294,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 The sole worktree on `main` had empty status before and after the gate; HEAD and tree were
 unchanged. The gate ran from `2026-08-14T15:24:45+10:00` through
 `2026-08-14T15:33:12+10:00`. Its retained log is
-`/tmp/geosolve-m71-f005-f006-clean-gate.chbsLG.log`, SHA-256
+`geosolve-m71-f005-f006-clean-gate.chbsLG.log`, SHA-256
 `d99f51ce220727165760051dc95e45e9f65b3336cfc9c256a94ccdca2bfd6bb4`.
 
 The gate passed formatting/diff hygiene, warnings-denied workspace Clippy, every locked
@@ -307,27 +306,10 @@ regression passed 2/2. The 256-moving-body sparse crossover passed in 153.53 sec
 emitted only the longstanding non-failing `license` plus `license-file` advisories.
 
 Without rebuilding, the gate-produced seven-file `dist` was copied, byte-compared and frozen at
-`/tmp/geosolve-m71-f005-f006-uat.QPuMdT` with directory mode `0555`, file modes `0444` and no
+`geosolve-m71-f005-f006-uat.QPuMdT` with directory mode `0555`, file modes `0444` and no
 symlinks:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 14165 | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
-| `LICENSE` | 35148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-17fdb23fc2dfe564.js` | 33327 | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
-| `geosolve-demo-web-17fdb23fc2dfe564_bg.wasm` | 6013457 | `9cfee00d3939a7e30cc3e2754ee641eb5e245ae31d19872da7b35a543e87b0f` |
-| `index.html` | 22977 | `84549b9bb35b0353309e6fa7aead31ee0a91b60e8e14fd395578d52ac37974a1` |
-| `styles-36c74d05d21a90c9.css` | 29304 | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
-
-Its C-locale ordered-manifest aggregate is
-`657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`. PID `3245562` serves
-only that snapshot at `http://100.94.63.83:8080/`; its exact argv is
-`/run/current-system/sw/bin/python3 -u -m http.server 8080 --bind 100.94.63.83 --directory
-/tmp/geosolve-m71-f005-f006-uat.QPuMdT`. Proxy-disabled, cache-bypassed, identity-encoded requests
-returned HTTP 200 for all seven files and `/`; every named response matched its local file
-byte-for-byte and `/` matched `index.html`. Fetch evidence is retained at
-`/tmp/geosolve-m71-f005-f006-fetch.yPRcIT`. Historical F004 PID `2848202` has exited.
+The archived manifest records the per-file sizes and checksums.
 
 Publication-evidence documentation commit `905a414` records this already-qualified product; it is
 not part of, and must not replace, the product source identity above. The later close-off
@@ -353,7 +335,7 @@ replacement publication.
 
 `PLAN.md` items are checked only where evidence exists. The pre-F003, F003 and F004 publications
 are withdrawn from continued UAT. All mechanical qualification and publication items pass;
-the supervising human accepted M71-U1 through M71-U5 under the explicit 2026-08-14 scoped close
+the maintainer accepted M71-U1 through M71-U5 under the explicit 2026-08-14 scoped close
 decision without claiming an unrecorded exhaustive replay.
 
 ## 5. Known limitations and closure
@@ -461,51 +443,26 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 ```
 
 The sole worktree on `main` had empty status before and after the gate, and HEAD/tree were
-unchanged. The complete log is `/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`; the gate ran from
+unchanged. The complete log is `geosolve-m71-f004-clean-gate.ZGQEKU.log`; the gate ran from
 2026-08-14 13:04:17 to 13:11:13 AEST, the 256-moving-body sparse crossover passed in 125.55
 seconds, and Trunk 0.21.14 produced the authoritative seven-file `dist`. Cargo emitted only the
 longstanding non-failing `license` plus `license-file` advisories.
 
 That `dist` was copied without rebuilding, manifest-compared and frozen at
-`/tmp/geosolve-m71-f004-uat.SaXMVY` with directory mode `0555` and file mode `0444`:
+`geosolve-m71-f004-uat.SaXMVY` with directory mode `0555` and file mode `0444`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 14165 | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
-| `LICENSE` | 35148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-4c3212f5ba819fe0.js` | 33327 | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
-| `geosolve-demo-web-4c3212f5ba819fe0_bg.wasm` | 6014468 | `f5dfccd077120d4ed0876f318c4cd6a86bfc672a74c40e496a01bd232923a911` |
-| `index.html` | 22977 | `98c30dd76cb6f9cd5c33d86b41b3769e5fabbf25fe7f87b612acfbd2d865104c` |
-| `styles-36c74d05d21a90c9.css` | 29304 | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
-
-The C-locale ordered-manifest aggregate is
-`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`. At publication, PID
-`2848202` served only that snapshot with argv `/run/current-system/sw/bin/python3 -u -m
-http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m71-f004-uat.SaXMVY`, resolved
-executable `/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`, and
-listened only on `100.94.63.83:8080`; its log is
-`/tmp/geosolve-m71-f004-uat.SaXMVY.server.log`. That PID has since exited, while the immutable
-snapshot remains preserved.
+The archived manifest records the per-file sizes and checksums.
 
 Proxy-disabled, cache-bypassed, identity-encoded HTTP requests returned status 200 from remote IP
-`100.94.63.83` for all seven assets with exact recorded sizes and byte equality. A separate `/`
+the archived preview host for all seven assets with exact recorded sizes and byte equality. A separate `/`
 request equalled `index.html`. The frozen, fetched and post-fetch manifests all reproduced the
-same aggregate above. The fetched evidence is at `/tmp/geosolve-m71-f004-fetch.aDfzU7`.
+same aggregate above. The fetched evidence is at `geosolve-m71-f004-fetch.aDfzU7`.
 
 The withdrawn pre-F003 candidate `ad01912eac28275644dcfc867a2dc70030b5406d` passed:
 
 ```text
 env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
-
-That historical gate completed the same full sequence, including the unchanged 234/234 clean
-golden, both WASM transition oracles, a 144.08-second sparse crossover and Trunk 0.21.14 release
-assembly. Its seven-file release distribution remains frozen read-only at
-`/tmp/geosolve-m71-uat.yFBsnX`. At that historical checkpoint, PID `49116` served it only at
-`http://100.94.63.83:8080/`; proxy- and cache-bypassed requests for every asset and `/` byte-matched
-the snapshot, `/` equalled `index.html`, and both served and post-fetch ordered aggregates equalled
-`43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`.
 
 Those bytes predate M71-F003, are withdrawn from continued UAT and are no longer served.
 
@@ -524,7 +481,7 @@ Trunk 0.21.14 release assembly. Cargo emitted only the longstanding non-failing 
 `license-file` advisories.
 
 The exact seven-file gate output was copied without rebuilding, byte-compared and frozen at
-`/tmp/geosolve-m71-f003-uat.hybK8W` with directory mode `0555` and file mode `0444`:
+`geosolve-m71-f003-uat.hybK8W` with directory mode `0555` and file mode `0444`:
 
 | File | SHA-256 |
 | --- | --- |
@@ -535,14 +492,6 @@ The exact seven-file gate output was copied without rebuilding, byte-compared an
 | `geosolve-demo-web-f3ecc0dffeb9ce14_bg.wasm` | `53bd9bfdc0cec56f9f3520af328c45c8a5dcda3e836c43017d2b1409b48c1a9e` |
 | `index.html` | `946d66a5e03e56b22efd3ee99fc157ba9668c10ae4393695b6200274f57aace4` |
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
-
-At the F003 checkpoint PID `1202735` had exact argv `python3 -m http.server 8080 --bind
-100.94.63.83 --directory /tmp/geosolve-m71-f003-uat.hybK8W` and listened on
-`100.94.63.83:8080`. Proxy-disabled, cache-bypassed requests byte-matched all seven files; `/`
-matched `index.html`. Both local and fetched ordered manifest aggregates equalled
-`23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
-PID `1202735` has since exited and those F003 bytes are no longer served. The shared endpoint is
-now owned by the verified F005/F006 server identified above.
 
 M71 deliberately excludes broad derived-point H/V operands beyond explicit native line/polyline
 midpoint axes, M37 catalog consolidation, certified generic intersections, quadrant anchors,

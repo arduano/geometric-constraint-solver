@@ -2,10 +2,14 @@
 
 # M88 — Workflow-led authoring workbench redesign
 
-Status: **complete and accepted on 2026-09-01**. The supervising user's milestone-level close
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete and accepted on 2026-09-01**. The maintainer's milestone-level close
 decision accepts M88-U1 through M88-U10 without claiming a separately logged row-by-row replay.
-The accepted immutable F004 candidate is `/tmp/geosolve-m88-react-uat.KGhA7s`, served at
-`http://100.94.63.83:18088/`; its eight-file manifest aggregate is
+The accepted immutable F004 candidate is `geosolve-m88-react-uat.KGhA7s`, served at
+the archived preview; its eight-file manifest aggregate is
 `700ebae4aec13ce20ab8786b63254e2c5b6239204c38bdc6e9d35f11c4159071` and its optimized release-WASM
 SHA-256 is `22944f00ddf8c327e943d055a8224a1948efce42ec2896c9326891a45bfdf2ff`.
 The former port-`8080` Rust-DOM candidate remains historical rollback evidence only, and its

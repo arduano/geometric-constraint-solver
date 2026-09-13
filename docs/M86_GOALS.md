@@ -2,9 +2,13 @@
 
 # M86 — Focused bug fixes and UAT follow-up
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete, approved and publicly verified on 2026-08-29**.
 M86-F001-F003 and the bounded interaction-trace diagnostic are approved by the
-supervising user's explicit close decision. M86-U1-U8 are accepted without claiming a separately
+maintainer's explicit close decision. M86-U1-U8 are accepted without claiming a separately
 logged row-by-row replay. Accepted source `88d1b5e` passes clean qualification; approval head
 `ccf791f` passes Pages publication and exact hosted-byte verification and is final public-byte
 authority. The former F002 snapshot remains withdrawn historical evidence.
@@ -198,7 +202,7 @@ M84 ID remains stable.
   warnings-denied demo-web Clippy, formatting, the locked WASM check, release Trunk build and the
   unchanged golden `--check` pass.
 - The complete provisional dirty-worktree release gate, no-rebuild freeze and exact temporary,
-  local and Tailscale served-byte verification pass. This authorizes human UAT of the exact frozen
+  local and preview served-byte verification pass. This authorizes human UAT of the exact frozen
   patch identity. After approval and commit, accepted source `88d1b5e` / tree `09018e5` passes the
   complete clean gate, no-rebuild freeze and isolated exact HTTP verification required before
   Pages.
@@ -219,61 +223,16 @@ authority. Additional M86 bug fixes require their own confirmed finding and expl
    exposes a systemic matrix gap.
 2. Complete expanded F002 and F003 focused, collateral, native/WASM and affected-crate checks.
 3. Pass the fresh full demo-web/workspace/release gates with unchanged golden authority.
-4. Freeze the gate output without rebuild and exact-verify replacement local/Tailscale bytes before
+4. Freeze the gate output without rebuild and exact-verify replacement local/preview bytes before
    replacing any historical candidate service for UAT.
-5. Complete M86-U6 through M86-U8. The supervising user's 2026-08-29 close decision supplied
+5. Complete M86-U6 through M86-U8. The maintainer's 2026-08-29 close decision supplied
    explicit approval; the accepted descendant was committed, clean-qualified, published and
    exact-verified, then both candidate services were retired. M86 is closed.
 
-F001 passed its mechanical prerequisites on source `9050424`, tree `65e0925`, and the supervising
-user reported that candidate looked good before opening F002. Historical F002 source `dbe94da`, tree
-`77f86c0`, and snapshot `/tmp/geosolve-m86-f002-uat.CPfe9QD8` passed their then-current gate and byte
+F001 passed its mechanical prerequisites on source `9050424`, tree `65e0925`, and the maintainer reported that candidate looked good before opening F002. Historical F002 source `dbe94da`, tree
+`77f86c0`, and snapshot `geosolve-m86-f002-uat.CPfe9QD8` passed their then-current gate and byte
 verification, but the expanded F002 report withdraws them from current UAT. They remain immutable
 historical evidence.
-
-The provisional served-build identity is the saved pre-gate 160,117-byte, 2,976-line binary patch
-over HEAD `4730e156e17cf3df88b9681a22961d41b686c2ff` and tree
-`23a76c3b7141f10064d899113b97135932d23033`: patch SHA-256
-`feafcc2a717a9c1bf9ff7a708b705903b2e18c6ef67327f533d66819a8784a57`, status SHA-256
-`945ef3534016a5735c42c6fedaf72e66be2acc41ce9dc764db6e5896c3636b5a`. Saved pre/post-gate patch
-and status files are byte-identical. Subsequent documentation-only worktree edits are outside that
-served-build patch and do not alter the frozen seven-file candidate. The complete dirty-tree gate
-exits with pipeline `0 0`; log
-`/tmp/geosolve-m86-f002-f003-gate.yDrJlI8n/release-gate.log` has SHA-256
-`93b645c2a2f1850f589b406943f3618da4fc833a42ff6066884602ec3e31ddb6`. Its exact output is frozen
-without rebuild at `/tmp/geosolve-m86-f002-f003-uat.yGY3Nvly`, aggregate
-`8f5a4ffcd96819b986ba81a9467d0c83a64365b2d21338cd134e164fa4444ce4`; complete freeze/HTTP
-evidence is `/tmp/geosolve-m86-f002-f003-freeze-evidence.EsMzxE2v`. Temporary, local and Tailscale
-eight-path ledgers are identical at SHA-256
-`dca3e6eeba66e12c873ba4b5ba9b6cadd489060f0e4c7d5ce1070ed3344ec96f`. Temporary PID/invocation
-`965128`/`a06c89f580744568b0d39677ee776da1` passed on `127.0.0.1:18102` and is stopped. The combined
-candidate was then served at `http://100.94.63.83:8080/`; those listeners were later replaced by
-the trace-enabled services below. This is provisional UAT evidence, not a clean committed-source
-nomination.
-
-The accepted trace-enabled descendant is frozen at `/tmp/geosolve-m86-trace-uat.U1C0QPSf`, with
-exactly seven regular files, zero symlinks, directory/files `0555`/`0444` and ordered-manifest
-aggregate `f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`. Local and Tailscale
-PIDs/invocations were `2433761`/`3f829abfff0a46eba586c07fed507d8e` and
-`2433763`/`5f2c7c3eddac43119f380ec2e87b47c8`. `/` and all seven files matched on both endpoints; evidence
-`/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
-`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The supervising user's
-2026-08-29 close decision accepts this descendant and M86-U1-U8. It was UAT rather than clean-
-source or Pages authority before the final nomination and public closeout below.
-
-Final clean nomination (2026-08-29): accepted source
-`88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
-`09018e5aeb7e824396ae2ee2c70a3e30912414fa`, passes the complete clean Nix release gate from
-13:16:02 to 13:35:50 AEST with pipeline `0 0` and identical empty pre/post worktree status. The
-6,573-line, 438,432-byte log `/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
-`e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`. The exact no-rebuild
-seven-file output is frozen at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files
-`0555`/`0444`, zero symlinks/nested entries and ordered-manifest aggregate
-`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated temporary HTTP
-PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` on `127.0.0.1:18104` exact-verified
-all eight paths; results SHA-256 was
-`cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, and evidence is
-`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The verifier is retired.
 
 Final public closeout (2026-08-29): approval head
 `ccf791f131ba8de07a0d32df6938719cf4bcab12`, tree
@@ -284,10 +243,3 @@ artifact `9708871725`. The 4,975,804-byte ZIP has SHA-256
 tar has SHA-256 `6459745421cfa3a80038400d80d50c25cef7b46935fb37638b7ca3e7d39a80d8`. Exactly seven regular
 files, zero symlinks/non-regular entries extract with aggregate
 `ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`.
-
-Every hosted path plus `/` byte-matches that artifact with exact MIME and length; results
-`/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` have SHA-256
-`9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`. The fresh
-repository-prefixed artifact is final public authority. Both M86 services are inactive/dead with
-`MainPID=0`, and both endpoints refuse with curl exit `7`/HTTP `000`; retirement evidence is
-`/tmp/geosolve-m86-service-retirement.tLQ4hcSG`. M86 is complete.

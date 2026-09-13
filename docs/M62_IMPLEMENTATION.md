@@ -2,7 +2,11 @@
 
 # M62 CAD-style constraint and dimension authoring
 
-Status: complete as of 2026-07-29. Mechanical evidence is recorded here and supervising-human
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete as of 2026-07-29. Mechanical evidence is recorded here and maintainer
 approval is recorded in `docs/M62_UAT.md`.
 
 ## Scope
@@ -139,5 +143,5 @@ manual performance/cancellation measurements.
   dimension. The persisted dimension remains directed and branch-explicit; no schema migration is
   required.
 - Responsive/mobile behavior and browser E2E remain out of scope.
-- The supervising human explicitly approved the recorded M62 scope on 2026-07-29. M63 remains an
+- The maintainer explicitly approved the recorded M62 scope on 2026-07-29. M63 remains an
   empty placeholder and inherits none of these limitations as planned work.

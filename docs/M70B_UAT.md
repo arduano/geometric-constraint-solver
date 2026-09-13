@@ -2,12 +2,16 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: complete under the supervising human's requested scoped sign-off on 2026-08-12. Human UAT
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete under the maintainer's requested scoped sign-off on 2026-08-12. Human UAT
 opened `M70B-F003` and `M70B-F004`; both findings have authorized owner repairs, and later movement
 finding `M70B-F005` has its certificate-transport repair.
 `M70B-F001` and `M70B-F002` retain their owning-layer corrections and complete replacement
 evidence. M70B-H1 historically added a 193/193 passing constraint/dimension-authoring and scene
-oracle; its complete release gate and fresh byte-verified Tailscale publication now pass. M70B-H2
+oracle; its complete release gate and fresh byte-verified preview publication now pass. M70B-H2
 only generalized that test infrastructure and added the repo-local defect workflow; its clean release
 qualification passed without replacing or altering the then-served H1 product candidate. Test-only
 H3 historically preserved those 193 row records and added four isolated `feature.fillet` rows:
@@ -21,7 +25,7 @@ regression, 45-test feature suite, nine-test retained movement suite, focused go
 aggregate golden modes, formatting, warnings-denied all-workspace Clippy, locked all-feature
 workspace tests and the relevant WASM check pass. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate, and its fresh
-immutable seven-file Tailscale publication is byte-verified. The supervising human subsequently
+immutable seven-file preview publication is byte-verified. The maintainer subsequently
 reported the F005 movement behavior fixed and requested sign-off once the closing regressions were
 satisfactory. Clean source `48e3cc3` passes the complete release gate with the focused two-
 previously-Current transaction and CircularArc transport/domain regressions, while the 198/198
@@ -52,10 +56,8 @@ Historical published `M70B-F003/F004` replacement source:
 
 Historical published `M70B-F003/F004` integrated release-gate result: **PASS**
 
-Historical `M70B-F003/F004` Tailscale endpoint: `http://100.94.63.83:8080/`
-
 Historical published `M70B-F003/F004` read-only snapshot:
-`/tmp/geosolve-m70b-f003-f004-uat.lKC2xY`
+`geosolve-m70b-f003-f004-uat.lKC2xY`
 
 Historical `M70B-F003/F004` release distribution manifest aggregate:
 `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`
@@ -64,25 +66,15 @@ Published `M70B-F005` replacement source: `d400c4a8201f6afc531f5b504424d6430dbf3
 
 Published `M70B-F005` integrated release-gate result: **PASS**
 
-Published `M70B-F005` Tailscale endpoint: `http://100.94.63.83:8080/`
-
-Published `M70B-F005` read-only snapshot: `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`
+Published `M70B-F005` read-only snapshot: `geosolve-m70b-f005-uat.Q5c9Wi`
 
 Published `M70B-F005` release distribution manifest aggregate:
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`
 
-The snapshot directory is mode `0555` and every file is mode `0444`. At the M70B checkpoint PID
-`1841268` was bound only to the Tailscale address, and every served asset plus `/` byte-matched the
-immutable snapshot; that process has since retired.
-
-Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
-
 Prior `M70B-F001` release distribution manifest aggregate:
 `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`
 
-Historical `M70B-H1` Tailscale endpoint: `http://100.94.63.83:8080/`
-
-Historical `M70B-H1` read-only snapshot: `/tmp/geosolve-m70b-h1-uat.viSB9G`
+Historical `M70B-H1` read-only snapshot: `geosolve-m70b-h1-uat.viSB9G`
 
 Historical `M70B-H1` release distribution manifest aggregate:
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
@@ -97,12 +89,12 @@ F003/F004 as the served UAT candidate.
 
 - [x] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct `M70B-F002` qualification.
 - [x] The complete integrated release gate passes on the `M70B-F002` clean nominated source.
-- [x] An `M70B-F002` replacement read-only release distribution was served through Tailscale at its
+- [x] An `M70B-F002` replacement read-only release distribution was served through preview at its
   historical checkpoint.
 - [x] Every `M70B-F002` served asset and `/` matched the frozen local bytes at that checkpoint.
 - [x] M70B-H1's checked golden and clean-oracle gate pass with 193/193 classified rows.
 - [x] The clean M70B-H1 source passes the complete integrated release gate.
-- [x] A fresh M70B-H1 read-only distribution was served and byte-verified through Tailscale at its
+- [x] A fresh M70B-H1 read-only distribution was served and byte-verified through preview at its
   historical checkpoint.
 - [x] Historical M70B-H3 preserved all 193 H1/H2 rows and reviewed exactly four `DEFECT` rows
   carrying only `M70B-F003`/`M70B-F004` at SHA-256
@@ -120,10 +112,10 @@ F003/F004 as the served UAT candidate.
 - [x] Full workspace Clippy/tests and the relevant WASM build pass for the F005 replacement.
 - [x] Clean `main` source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete
   integrated F003/F004 release gate.
-- [x] Its immutable F003/F004 seven-file replacement distribution was served only through Tailscale
+- [x] Its immutable F003/F004 seven-file replacement distribution was served only through preview
   at that historical checkpoint, and every asset plus `/` byte-matched the frozen snapshot.
 - [x] A clean F005 replacement passes the complete release gate and a fresh immutable distribution
-  is served and byte-verified through Tailscale.
+  is served and byte-verified through preview.
 - [x] The closing focused retained-coordinator regression passes with two distinct features that
   begin `Current`, only one failing during projected dragging, complete-scene retention,
   failing-feature-only attribution, reverse recovery and last-valid release.
@@ -175,14 +167,14 @@ harness errors at SHA-256
 nine-test retained movement suite, focused golden tests, aggregate
 `--survey`/`--check`/`--require-clean`, formatting, warnings-denied all-workspace Clippy, locked
 all-feature workspace tests and the relevant WASM check pass. The clean F005 release qualification
-and fresh byte-verified Tailscale publication also pass; the scoped close record appears below.
+and fresh byte-verified preview publication also pass; the scoped close record appears below.
 
 Result: **PASS — 198/198 GOLDEN, CLEAN CLOSING GATE AND SCOPED M70B APPROVAL**
 
 ## M70B-F005 — Persistent Fillet movement continuity
 
 1. Copy the complete checked-in
-   [`m70b_f005_repro.txt`](../crates/geosolve-demo-web/tests/fixtures/m70b_f005_repro.txt) capsule
+   [`m70b_f005_repro.txt`](../crates/geosolve-constraint-editor/tests/fixtures/m70b_f005_repro.txt) capsule
    (identity `4228:0823d31f269300af`) and load it through **Load repro**.
 2. Confirm the radius-1 Fillet between the circle and line is visible immediately.
 3. Drag either line endpoint so the Fillet contact moves through the circle's nearby 90-degree/
@@ -202,7 +194,7 @@ jump. A genuine parent/fold/barrier limit holds the last complete scene and rele
 an attributed cue when possible, and recovers when dragged back. It never paints a moved line with
 its persistent Fillet missing.
 
-Result: **PASS — SUPERVISING HUMAN REPORTED THE F005 MOVEMENT BEHAVIOR FIXED**
+Result: **PASS — maintainer REPORTED THE F005 MOVEMENT BEHAVIOR FIXED**
 
 Notes:
 
@@ -439,12 +431,12 @@ the seam winding, while unrelated nonlinear branch-locality remains conservative
 
 Result: **RESOLVED HEADLESS — ACCEPTED BY SCOPED CLOSE WITHOUT AN UNRECORDED REPLAY**
 
-The supervising human reported F005 movement fixed, requested the two closing regressions, and
+The maintainer reported F005 movement fixed, requested the two closing regressions, and
 asked for M70B sign-off once the result was satisfactory. Clean source `48e3cc3` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the unchanged
 198/198 clean golden, all locked workspace tests, native/WASM parity, warnings-denied checks, the
 149.13-second sparse crossover and Trunk release assembly. The generated seven-file distribution
-byte-matches `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` at aggregate
+byte-matches `geosolve-m70b-f005-uat.Q5c9Wi` at aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`, so the human-reviewed F005
 publication remains authoritative without a republish. This scoped approval accepts M70B-U1
 through M70B-U5 and the resolved F001-F005 findings for the recorded milestone scope without

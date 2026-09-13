@@ -1,32 +1,26 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M95 acceptance and fresh-session handoff — 2026-09-07
+# M95 navigation: acceptance and closure — 2026-09-07
 
-**M95 is accepted and closed.** The supervising user stated: “I accept the UAT, please close it
-off and then ensure repo state is clean enough to hand over to a fresh session (docs and all)”.
-This accepts the delivered connected code/Explorer/canvas navigation and its documented limits.
-It does not assert an unrecorded exhaustive human replay. No next milestone is scoped or authorized.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+**M95 was accepted and closed on 2026-09-07.** Maintainer acceptance covers the
+connected code, Explorer and canvas navigation behavior and its documented limits.
+A separate exhaustive human replay was not recorded.
 
 ## Accepted checkpoint
 
 | Item | Value |
 | --- | --- |
-| Repository | `/home/arduano/programming/geometric-constraint-solver` |
-| Branch | `m92/integration` (inherited name; work is complete through M95) |
 | Accepted product source | `f18ff9ebeff2a0dcf6697aae43ade12dc5a05f21` |
 | Accepted product tree | `7e6acedd231d42685ef8b916ced8dc9f44dd27cb` |
 | Prior documentation checkpoint | `e57b178` |
 | Complete passing gate | `20260907T193542-d9094458` |
-| Accepted M95 endpoint | `http://100.94.63.83:18100/` |
-| Retained accepted M94 / M92 | `http://100.94.63.83:18096/` / `http://100.94.63.83:18092/` |
-| Frozen manifest | `/tmp/geosolve-m95-uat.zkdiegw4/production.json` |
-| Frozen files | `/tmp/geosolve-m95-uat.zkdiegw4/geosolve-production` |
 | Files SHA-256 | `43fce481d4966b1694192a1301061b93286d3c8f2b2e3eae152c8150fd772545` |
 
-The closure commit is a documentation descendant of `e57b178`; `git log -1` identifies it without
-changing accepted product bytes. No branch rename, history rewrite, merge, push or Pages deployment
-is part of this closeout. Historical worktrees and branches remain preserved; none is an M95 task
-awaiting integration. The primary worktree is the continuation point.
+The documentation-only closure preserved the accepted product bytes.
 
 ## Delivered scope and accepted limits
 
@@ -56,7 +50,7 @@ Accepted limits remain explicit:
 - Selection preserves the camera, so off-screen geometry may need explicit Fit. M95 adds no desktop
   layout redesign or automatic Pages publication.
 
-There is no outstanding M95 blocker or acceptance action. Further work needs the user's next task.
+No M95 implementation blocker or acceptance action remains.
 
 ## Closure verification
 
@@ -84,33 +78,7 @@ status; this document supplies the subsequent explicit user acceptance.
 
 ## Fresh-session instructions
 
-Start with [START_HERE.md](../START_HERE.md), this handoff and the active M95 sections of
-[PLAN.md](../PLAN.md), [ARCHITECTURE.md](../ARCHITECTURE.md),
-[ACCEPTANCE.md](../ACCEPTANCE.md) and [SCENARIOS.md](SCENARIOS.md). Before implementation, obey
-`AGENTS.md` and read its required documents. Use the repository defect-hardening skill for solver
-or headless-interaction defects. Do not restart M92, M94 or M95 qualification from historical notes.
-The external `geometric-constraint-solver-M92-HANDOVER.md` now carries a superseded banner.
-
-No Cargo, browser test, release gate or development task is left running by this closeout.
-Obsolete local development servers on ports 18097, 18098, 18108, 18109 and 18110 have stopped.
-Accepted M95 remains on port 18100 (PID 1937583 at closeout); M94 and M92 remain available.
-Check process identity before acting on recorded PIDs in a later session.
-
-Local receipts, screenshots and probes live under ignored `target/m95/`; authenticated gate inputs
-and receipts live under `target/release-gate/`. Frozen artifacts live under `/tmp` and are local,
-not committed or guaranteed across reboot/cleanup. Preserve them for continuity; the tracked
-qualification and this closure record retain the product identity if local evidence is lost.
-
-If the accepted M95 server has stopped but its frozen files remain, this repository-root command
-restarts the exact authenticated files on localhost and Tailscale without rebuilding:
-
-```bash
-M95_MANIFEST=/tmp/geosolve-m95-uat.zkdiegw4/production.json \
-M95_DIRECTORY=/tmp/geosolve-m95-uat.zkdiegw4/geosolve-production \
-node target/m95/serve-frozen.mjs
-```
-
-The local helper imports `serveArtifact` from the tracked frontend `scripts/serve-artifact.mjs`
-and binds hosts `127.0.0.1` and `100.94.63.83` at port 18100. If moving or restarting the artifact,
-repeat the `verify:artifact` command in the qualification report. If the frozen files are missing,
-a rebuilt artifact needs qualification before being described as the same accepted bytes.
+M95's acceptance and qualified source are historical records. Current setup, development
+and release instructions are maintained in the [documentation index](README.md) and
+[release guide](RELEASE_QUALIFICATION.md). Local receipts and old preview processes
+are not part of the public repository or a supported deployment contract.

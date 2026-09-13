@@ -2,9 +2,13 @@
 
 # M91 UAT: cohesive code-driven authoring
 
-Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
 
-The supervising user's explicit approval of every part of this UAT accepts M91-U1 through M91-U14
+Status: **Complete and publicly closed on 2026-09-04 after explicit maintainer approval.**
+
+The maintainer's explicit approval of every part of this UAT accepts M91-U1 through M91-U14
 as Pass at milestone level. This is blanket/composite approval of the clean-qualified immutable M91
 candidate, not a claim that a separate row-by-row replay was logged. M91-U1 through M91-U10 retain
 their origin in the transferred M90-U1 through M90-U10 assertions; this disposition does not
@@ -15,31 +19,6 @@ retroactively record those historical M90 rows as executed or passed in M90.
 The nominated implementation is commit `6d0155151133ba2540fd1dc4b2b071f141b86064`, tree
 `972ad507c2cdfad2c9cd664e49feaf79ae381c81`. `M91-F001` was resolved by `d2170c4` and the
 packaging-verifier finding `M91-F002` by `6d01551`.
-
-- clean release command:
-  `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'`;
-  result: exit `0`;
-- release log: `/home/arduano/m91-gate.t8TTq0Bj/release-gate.log`, `706,478` bytes,
-  SHA-256 `cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`;
-- reviewed golden: all 271 rows pass and `--survey`, `--check`, `--require-clean` pass; fixture
-  SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`;
-- dual-backend parity: every applicable row passes. The four reviewed non-pass exclusions remain
-  `constraint.external-line-collinear.*`, `constraint.external-point-coincident.*`,
-  `dimension.profile-offset.*` and `spline.noncanonical-knot-topology.*`; computed Fillet is not
-  excluded;
-- release WASM: `/tmp/geosolve-m91-uat.17Q5LnSg/assets/geosolve_demo_web_bg-tvc8MGYX.wasm`,
-  `18,368,160` bytes, SHA-256
-  `6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`;
-- distribution: 10 files and `27,158,025` bytes; `validate:dist` and the stricter frozen inventory
-  pass;
-- immutable snapshot/manifest: `/tmp/geosolve-m91-uat.17Q5LnSg`,
-  `/tmp/geosolve-m91-uat.17Q5LnSg.sha256`, manifest SHA-256
-  `b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`;
-- identical staging/live HTTP ledger SHA-256:
-  `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`;
-  system-Chrome qualification passes 20/20 on both endpoints;
-- Tailscale service/PID/invocation/URL: `geosolve-m91-uat-18091.service`, `2142854`,
-  `bf93a3f5dab84809a24fdc2db6f23f4f`, `http://100.94.63.83:18091/`.
 
 At nomination, the protected M90 service and served bytes remained identical and were not restarted.
 Automated nomination evidence accepted no scorecard row. After the human acceptance recorded above,

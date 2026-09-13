@@ -2,9 +2,13 @@
 
 # M86 implementation ledger — Focused bug fixes and UAT follow-up
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete, approved and publicly verified on 2026-08-29**.
 M86-F001-F003 and the bounded interaction trace are implemented and mechanically
-qualified. The supervising user's explicit “looks good, let's close the milestone” decision
+qualified. Maintainer acceptance
 accepts M86-U1-U8 without claiming a separately logged row-by-row replay. Accepted descendant
 `88d1b5e` / tree `09018e5` passes clean qualification and no-rebuild HTTP verification. The former
 F002 nomination remains withdrawn.
@@ -14,8 +18,7 @@ F002 nomination remains withdrawn.
 
 ### M86-F001 — Code-owned direct dimension edits reject after nested Intent mutation
 
-Disposition: **repaired, clean-qualified, immutably nominated and accepted by the supervising
-user's scoped “Looks good” assessment**.
+Disposition: **repaired, clean-qualified, immutably nominated and accepted by scoped maintainer acceptance**.
 
 Reproduction baseline is M85 closeout head `4b69a57`. Open PC Water Manifold, select
 `code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`,
@@ -51,7 +54,7 @@ parity, but could not express a point-versus-Fillet specificity hierarchy. First
 `geosolve-constraint-editor`; no browser-only or solver-layer correction is warranted.
 
 The first repair and candidate covered a persistent endpoint shared by both parents. During UAT the
-supervising user supplied the broader exact workflow: draw one right-angle two-span `Polyline` with
+maintainer supplied the broader exact workflow: draw one right-angle two-span `Polyline` with
 both legs length `2`, then request a Fillet radius of `2`. Exact radius `2` is the evaluator's
 tangent-at-endpoint fold boundary; accepted radius `1.99` robustly retains the same visible broad
 Fillet surface and proves that it covers both remote parent endpoints. Hover/down still returned the
@@ -142,10 +145,10 @@ Owning tests:
   check.
 - [x] Pass complete affected-crate/workspace tests, unchanged 271-case clean golden and the clean
   Nix release gate.
-- [x] Freeze the exact no-rebuild candidate and exact-verify local/Tailscale bytes.
-- [x] Record the supervising user's scoped “Looks good” assessment as acceptance of M86-U1 through
+- [x] Freeze the exact no-rebuild candidate and exact-verify local/preview bytes.
+- [x] Record scoped maintainer acceptance as acceptance of M86-U1 through
   M86-U5 without claiming a separately logged row-by-row replay.
-- [ ] Publish and exact-verify Pages only after explicit supervising-user approval; retire retained
+- [ ] Publish and exact-verify Pages only after explicit maintainer approval; retire retained
   services and close M86 afterward.
 
 ### I5 — Fillet Select specificity hierarchy
@@ -176,9 +179,9 @@ Owning tests:
   M86-F002 rows plus compact-grip, nearer-endpoint, cross-Fillet and disconnected-tie assertions.
 - [x] Pass current warnings-denied affected-crate Clippy and unchanged 271-row golden authority.
 - [x] Pass the complete provisional dirty-worktree gate, freeze its exact no-rebuild output and
-  exact-verify temporary/local/Tailscale bytes. Preserve the patch as build identity; do not call it
+  exact-verify temporary/local/preview bytes. Preserve the patch as build identity; do not call it
   a clean-source nomination.
-- [x] Complete focused replacement UAT under the supervising user's 2026-08-29 milestone-level
+- [x] Complete focused replacement UAT under the maintainer's 2026-08-29 milestone-level
   close decision without claiming a separately logged row-by-row replay.
 
 ### I6 — Causally bounded Typed Panel computed parity
@@ -328,7 +331,7 @@ the earlier focused-only checkpoint. This evidence is still not clean-source nom
 Exact product source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
 `65e092540dab82618d1129229b566a2e791aa40c`, was clean when the complete Nix gate ran from
 2026-08-28 12:04:44 through 12:24:38 AEST. The gate exits `0`; its 6,534-line, 436,494-byte log is
-`/tmp/geosolve-m86-nix-gate.CSQkgk/release-gate.log`, SHA-256
+`geosolve-m86-nix-gate.CSQkgk/release-gate.log`, SHA-256
 `4b81a1d12df503ef220b10645f3f4266891edc1eeaf87f3647071e2a77c33584`. It passes warnings-
 denied workspace Clippy, all-feature workspace tests and doc tests, the unchanged 271-case golden,
 native/WASM parity, both TypeScript packages, warnings-denied Rustdoc, benchmark compilation,
@@ -338,31 +341,23 @@ assembly.
 An earlier direct-PATH clean-gate attempt passed native workspace tests and the golden check, then
 stopped with status `101` before executing its first WASM test because
 `wasm-bindgen-test-runner` was absent from that shell's PATH. This is recorded as a harness error,
-not product evidence, at `/tmp/geosolve-m86-gate.sMkCi9/release-gate.log` (SHA-256
+not product evidence, at `geosolve-m86-gate.sMkCi9/release-gate.log` (SHA-256
 `13c924c7286e248269802145d8f175dae838dec9baa7d7e5e30bf0f2d6382195`). The complete clean Nix
 gate above supplies the actual WASM and release authority.
 
 Without rebuilding, that gate's seven-file `dist` was copied and frozen read-only at
-`/tmp/geosolve-m86-uat.vdEFAxsF`. It contains exactly seven regular files, zero symlinks or other
+`geosolve-m86-uat.vdEFAxsF`. It contains exactly seven regular files, zero symlinks or other
 non-regular entries at directory/file modes `0555`/`0444`; source, copied, frozen and post-serve
 manifests are identical. The ordered-manifest aggregate is
 `1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`; complete evidence is
-`/tmp/geosolve-m86-freeze-evidence.6fU7WpCl`.
-
-Local service PID `3879694`, invocation `c00b3e911ce54733be0b4b6a47756de1`, served only that
-snapshot at `http://127.0.0.1:18101/`. Retained Tailscale service PID `3879933`, invocation
-`e56fde25abab4481a9bd7c825d4279b6`, served the same snapshot at
-`http://100.94.63.83:8080/`. Both historical eight-path HTTP ledgers are byte-identical at SHA-256
-`b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`; every path returns 200,
-zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/` equals
-`index.html`. Those services were replaced only after temporary verification of the F002 bytes.
+`geosolve-m86-freeze-evidence.6fU7WpCl`.
 
 ### Withdrawn pre-expansion F002 qualification and nomination
 
 Historical source `dbe94daf152515169b78a310cf2286f9ea04c80b`, tree
 `77f86c0a198af12e10537dc4d6d7d90066ba48e8`, was clean when the complete Nix release gate ran from
 2026-08-28 13:46:55 through 14:20:45 AEST. The gate exits `0`; its 6,570-line, 440,856-byte log is
-`/tmp/geosolve-m86-f002-gate.wSztT0Bb/release-gate.log`, SHA-256
+`geosolve-m86-f002-gate.wSztT0Bb/release-gate.log`, SHA-256
 `34ac3e398953398495d22d480d9a11d88b03020c0235c07db61c443534fa4278`. It passes warnings-denied
 workspace Clippy, all-feature workspace tests/doc tests, unchanged 271-case golden, every native/
 WASM parity target including all then-current 15 M75 rows, both TypeScript packages, warnings-denied Rustdoc,
@@ -370,22 +365,11 @@ benchmark compilation, release performance sentinels, cargo-deny licences, packa
 and final Trunk release assembly.
 
 Without rebuilding, the gate's exact seven-file `dist` was copied and frozen at
-`/tmp/geosolve-m86-f002-uat.CPfe9QD8`. It contains seven regular files, zero symlinks or other
+`geosolve-m86-f002-uat.CPfe9QD8`. It contains seven regular files, zero symlinks or other
 non-regular entries at directory/file modes `0555`/`0444`; source, copied, frozen, post-serve and
 source-after manifests are identical. Its ordered-manifest aggregate is
 `e3f9581a05a8cbf5731b33625fa63f2b35e62f4ebcfdacb6d75a4486f80fc850`; complete evidence is
-`/tmp/geosolve-m86-f002-freeze-evidence.mSh9iwrm`.
-
-The frozen bytes first passed all eight paths on temporary local port `18102`. Local service PID
-`597410`, invocation `7cf7cbbae81a48ee8f492e1dab6e592d`, then replaced the prior candidate at
-`http://127.0.0.1:18101/`; retained Tailscale service PID `597412`, invocation
-`1a777ee174764f3cbb35f7b4863e5e95`, served the same snapshot at
-`http://100.94.63.83:8080/`. Temporary-local, final-local and Tailscale eight-path ledgers were
-identical at SHA-256 `e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`.
-Every path returned 200 with zero redirects, exact MIME/length/body, no `Location` or
-`Content-Encoding`, and `/` equalled `index.html`. Expanded M86-F002 withdraws those bytes from
-current UAT; the snapshot and ledgers remain immutable historical defect evidence. No current
-service identity or replacement nomination is inferred from those historical PIDs after reboot.
+`geosolve-m86-f002-freeze-evidence.mSh9iwrm`.
 
 ### Historical provisional combined F002/F003 UAT candidate
 
@@ -400,7 +384,7 @@ worktree edits are outside that served-build patch and do not alter the frozen s
 `env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run './scripts/release-gate.sh'`
 ran from 18:44:26 through 19:10:14 AEST on 2026-08-28. Both pipeline statuses are `0`. The
 6,582-line, 441,920-byte log
-`/tmp/geosolve-m86-f002-f003-gate.yDrJlI8n/release-gate.log` has SHA-256
+`geosolve-m86-f002-f003-gate.yDrJlI8n/release-gate.log` has SHA-256
 `93b645c2a2f1850f589b406943f3618da4fc833a42ff6066884602ec3e31ddb6`. Pre/post status and binary
 patch files compare exactly. The gate passes warnings-denied workspace Clippy; all-feature native
 tests/doc tests; unchanged 271-row golden; native/WASM parity including F002 18/18; demo-web
@@ -409,35 +393,23 @@ cargo-deny licences; package verification; and final Trunk 0.21.14 assembly. Bec
 dirty, this is provisional UAT evidence and never a clean nomination.
 
 Without rebuilding, the gate's seven-file `dist` was copied to
-`/tmp/geosolve-m86-f002-f003-uat.yGY3Nvly` and frozen with directory/files `0555`/`0444`. It has
+`geosolve-m86-f002-f003-uat.yGY3Nvly` and frozen with directory/files `0555`/`0444`. It has
 exactly seven top-level regular files, zero symlinks, nested or other entries; source, copied,
 frozen and every post-serve manifest are identical. The ordered-manifest aggregate is
 `8f5a4ffcd96819b986ba81a9467d0c83a64365b2d21338cd134e164fa4444ce4`; complete evidence is
-`/tmp/geosolve-m86-f002-f003-freeze-evidence.EsMzxE2v`.
-
-The frozen bytes first passed all eight paths on temporary `127.0.0.1:18102`, PID/invocation
-`965128`/`a06c89f580744568b0d39677ee776da1`, while both historical listeners remained live. Only then
-did local PID/invocation
-`969297`/`c1681e5beb234ce487dbf9b639cbd9dd` replace `127.0.0.1:18101`, followed by Tailscale
-PID/invocation `973390`/`c77a5b3abbe94752b864af9bda53c355` at
-`100.94.63.83:8080`. Temporary/local/Tailscale eight-path ledgers are byte-identical at SHA-256
-`dca3e6eeba66e12c873ba4b5ba9b6cadd489060f0e4c7d5ce1070ed3344ec96f`; every path returns 200,
-zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/` equals
-`index.html`. The temporary service is stopped; the two combined-candidate services subsequently
-served only that frozen snapshot and were later replaced by the trace-enabled services below. The
-withdrawn snapshot remains intact as rollback evidence.
+`geosolve-m86-f002-f003-freeze-evidence.EsMzxE2v`.
 
 ### Accepted trace-enabled UAT descendant
 
 After the snap-back remained observable in human UAT and the complete Copy repro payload became
-impractical to paste, the supervising user requested exact gesture logging. The bounded I7 trace
+impractical to paste, the maintainer requested exact gesture logging. The bounded I7 trace
 was added without changing F003's terminal-parity semantics. Focused trace tests, the real
 three-terminal regression with causal stage assertions, full demo-web 316/316, warnings-denied
 Clippy, formatting, locked WASM check, release Trunk build, browser smoke and unchanged golden
 `--check` pass.
 
 The trace-enabled release output is frozen read-only at
-`/tmp/geosolve-m86-trace-uat.U1C0QPSf`. It contains exactly seven regular files, zero symlinks or
+`geosolve-m86-trace-uat.U1C0QPSf`. It contains exactly seven regular files, zero symlinks or
 other entries, with directory/files `0555`/`0444` and ordered-manifest aggregate
 `f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`. `index.html`, JavaScript
 and WASM SHA-256 values are
@@ -445,29 +417,20 @@ and WASM SHA-256 values are
 `3bb6b395a6f053e5172063474a974dbd98a10163b45963bb736381ead6a02837` and
 `1626b3a9163f265dcaf7db0f2f0260930c9fe0ac3b9695ac749ed559e5fc435b`.
 
-Local PID/invocation `2433761`/`3f829abfff0a46eba586c07fed507d8e` served `127.0.0.1:18101`;
-Tailscale PID/invocation `2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` served
-`100.94.63.83:8080`. Both reported the frozen snapshot as their working directory. `/` plus every
-file on both endpoints matched it byte-for-byte; evidence
-`/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
-`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The temporary diagnostic
-listener on `18103` is retired. The supervising user's 2026-08-29 close decision accepts this
-trace-enabled descendant and M86-U1-U8 without inventing a separate row-by-row replay.
-
 ### Final clean committed-source nomination
 
 Accepted source `88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
 `09018e5aeb7e824396ae2ee2c70a3e30912414fa`, passes the complete clean Nix release gate from
 13:16:02 to 13:35:50 AEST with pipeline statuses `0 0` and identical empty pre/post worktree
 status. The 6,573-line, 438,432-byte log
-`/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
+`geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
 `e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`. It passes workspace
 Clippy/tests/doc tests, unchanged 271-row golden, native/WASM parity including F002 18/18,
 demo-web 316/316, both TypeScript packages, Rustdoc, licences, package verification, benchmarks,
 release-performance sentinels and final Trunk assembly.
 
 Without rebuilding, the exact seven-file output is frozen at
-`/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files `0555`/`0444`, zero symlinks/nested entries
+`geosolve-m86-clean-uat.d7DF9hcM`, directory/files `0555`/`0444`, zero symlinks/nested entries
 and ordered-manifest aggregate
 `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. The JS/WASM/index/CSS
 SHA-256 values are respectively
@@ -475,13 +438,6 @@ SHA-256 values are respectively
 `5816ea743cfeeb696ff7ee0656994a7742f02d55aacdc8d3939230ce7ecc26a7`,
 `f4f59579d86518d51b2cc3f6ac43ef2e177d94f297792c081e6f3fb252ae38c2` and
 `92059496edc2cc939c436b3361d13729e314af15a94e2e677fd8a559a3e281d1`.
-
-Isolated temporary HTTP PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` at
-`127.0.0.1:18104` exact-verified `/` and all seven files; results SHA-256 was
-`cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, with complete evidence at
-`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. It is retired, inactive/dead and `MainPID=0`;
-curl exits `7` with HTTP `000`. The accepted UAT services were deliberately retained until the
-separately rebuilt Pages artifact and hosted paths passed exact verification.
 
 ### Final public closeout
 
@@ -499,12 +455,8 @@ top-level regular files, zero symlinks/non-regular entries and ordered-manifest 
 `ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`. Every public path and `/`
 returns HTTP 200, zero redirects, exact MIME, `Content-Length` and artifact bytes, no `Location` or
 `Content-Encoding`, and root equals `index.html`. Results
-`/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` have SHA-256
+`geosolve-m86-pages-verify.NfnpNi/results.tsv` have SHA-256
 `9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`.
-
-Pages is a fresh repository-prefixed build and final public-byte authority. Both retained M86
-services are inactive/dead with `MainPID=0`; their exact addresses have no listener and curl exits
-`7`/HTTP `000`. Retirement evidence is `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`.
 
 ## Semantic-preservation ledger
 

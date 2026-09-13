@@ -1,6 +1,10 @@
 # M65 implementation: predictable bounded projected dragging
 
-Status: complete and explicitly approved by the supervising human on 2026-08-01. The reduced-scope
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete and explicitly approved by the maintainer on 2026-08-01. The reduced-scope
 implementation, replacement-candidate mechanical qualification and focused retests of
 `M65-F004` and `M65-F005` all pass.
 
@@ -204,7 +208,7 @@ The Cargo manifest warning that both `license` and `license-file` are present is
 metadata advice and is not a warnings-denied Rust/Clippy failure.
 
 Qualified replacement code source: `b6433d1`. At review time the exact code was served for focused
-UAT at `http://100.94.63.83:8080/`; that historical endpoint is not a continuing service.
+UAT at the archived preview; that historical endpoint is not a continuing service.
 
 ## 4. Acceptance criteria passed
 
@@ -218,7 +222,7 @@ The following objective acceptance areas pass:
 - release/cancel/Undo/Redo plus authoring/workspace/editability lifecycle;
 - formatting, warnings-denied Clippy, native tests, WASM, release Trunk and diff hygiene.
 
-The unaffected M65-U1 and M65-U4 areas retain the supervising-human closure-review result. M65-U2
+The unaffected M65-U1 and M65-U4 areas retain the maintainer closure-review result. M65-U2
 and M65-U3 also passed focused human retest of the replacement candidate. The discarded prototype
 does not supply acceptance evidence for this candidate.
 

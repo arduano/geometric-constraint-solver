@@ -2,7 +2,7 @@
 
 This note records the completed M16 sparse numeric and cross-hard-component
 hierarchy evidence. Continuation is covered separately by ADR 0011 and the
-core/linkage M16 regressions. ADR 0012 records the caller-approved division of
+core/linkage M16 regressions. ADR 0012 records the maintainer-approved division of
 responsibility between sparse damped steps and dense rank authority.
 
 ## Policy

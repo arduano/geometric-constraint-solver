@@ -2,11 +2,15 @@
 
 # M61 human UAT 3 — advanced geometry and topology
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Historical record: the approved selector paths and temporary candidate endpoint below describe the
 M61 review build. M64 later flattened retained fixtures into the ordinary editable **Samples**
 catalog, and the endpoint is not expected to be live.
 
-Status: complete; explicitly approved by the supervising human on 2026-07-29 for the recorded M61
+Status: complete; explicitly approved by the maintainer on 2026-07-29 for the recorded M61
 scope
 
 Candidate source: `5140f85` for the latest `M61-F005` interaction repair, with the prior
@@ -15,7 +19,7 @@ documentation-only qualification commit.
 
 ## Candidate history
 
-The first M61 candidate was withdrawn on 2026-07-29 after the supervising human found five
+The first M61 candidate was withdrawn on 2026-07-29 after the maintainer found five
 blocking gaps: fixed-only scenarios, missing representative mechanisms, third-level flyout
 clipping, missing advanced-curve authoring, and no usable canvas camera. No approval from that
 attempt is retained.
@@ -77,7 +81,7 @@ intent.
 The qualified shared endpoint at review time was:
 
 ```text
-http://100.94.63.83:8080/
+${PREVIEW_URL}
 ```
 
 For local use:
@@ -334,7 +338,7 @@ Record `Pass`, `Concern`, or `Blocker` for each:
 | Accepted-state and ordinary-workspace isolation | Pass | Approved for recorded M61 scope. |
 | Overall advanced-workflow trust and responsiveness | Pass | Approved for recorded M61 scope. |
 
-Approval record: on 2026-07-29 the supervising human explicitly closed M61 as approved for the
+Approval record: on 2026-07-29 the maintainer explicitly closed M61 as approved for the
 scope captured by this scorecard and findings ledger. Future UI improvements and cleanup are new
 milestone scope, not amendments to M61.
 

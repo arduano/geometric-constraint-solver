@@ -2,22 +2,25 @@
 
 # M92 UAT: advanced sample showcase
 
-Status: **accepted and closed by the supervising user on 2026-09-06.** U1–U8 are accepted
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed by the maintainer on 2026-09-06.** U1–U8 are accepted
 under scoped sign-off; a separate exhaustive hands-on replay is not claimed.
 
-## Supervising-user closure — 2026-09-06
+## Maintainer closure — 2026-09-06
 
-The supervising user requested: “please close off the milestone (we could make more samples
-later)”. M92 is **accepted and closed** for the qualified 16-sample `4/8/2/2` showcase at product
+Maintainer acceptance closed the milestone at its delivered sample scope. M92 is **accepted and closed** for the qualified 16-sample `4/8/2/2` showcase at product
 source `b153a28d9e44dde934b325835913986b0e316ee7`, tree
 `f106276ebecdec1c9d2fc4c7c9937f32d2549e42`. This is scoped sign-off of the delivered result and
 recorded qualification. U1–U8 are accepted collectively on that basis; no separate exhaustive
 hands-on replay is claimed. More samples are deferred to future work.
 
-The accepted immutable snapshot is `/tmp/geosolve-m92-uat._8s63qiy`, manifest SHA-256
+The accepted immutable snapshot is `geosolve-m92-uat._8s63qiy`, manifest SHA-256
 `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9`, at
-**http://100.94.63.83:18092/**. Its completed gate, 32 measured edits, 16 browser workflows,
-independent visual/history review and exact local/Tailscale checks are recorded in
+the archived preview. Its completed gate, 32 measured edits, 16 browser workflows,
+independent visual/history review and exact local/preview checks are recorded in
 [M92_VISUAL_AUDIT.md](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
 Earlier Pending/not-run dispositions remain historical nomination facts, superseded by this
 sign-off. Closure changes documentation only; the qualified product and frozen bytes are unchanged.
@@ -26,28 +29,27 @@ GitHub Pages remains the accepted M91 publication; this closeout performs no pus
 The user's next milestone is [M93 release-gate optimization](M93_GOALS.md), covering bounded
 parallelism, fail-fast checks, input-verified reuse and proportional rerun policy.
 
-
 The [authorized scope amendment](M92_GOALS.md#authorized-scope-amendment--2026-09-05) removes
 Prusa MINI, NEMA 17, HevORT and the twin-roller Bezier cam. The active scorecard below covers
 16 samples in `4/8/2/2` categories and 32 measured source edits.
 
 Clean pruned product source `b153a28d9e44dde934b325835913986b0e316ee7`, tree
 `f106276ebecdec1c9d2fc4c7c9937f32d2549e42`, passes the complete unchanged-source release gate.
-Its no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat._8s63qiy`, external manifest SHA-256
+Its no-rebuild ten-file snapshot `geosolve-m92-uat._8s63qiy`, external manifest SHA-256
 `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9`, is nominated at
-**http://100.94.63.83:18092/**. All 16 browser sample workflows, 32 measured edits and eight public
+the archived preview. All 16 browser sample workflows, 32 measured edits and eight public
 mechanism witnesses pass. Each frozen endpoint passes 19 ordinary workbench tests, the separate
 bounded Jansen workflow and exact pruned-menu/Recent checks. Fresh visual/history review covers
-all 16 samples. The supervising user has accepted this exact immutable candidate; GitHub Pages is unchanged.
+all 16 samples. The maintainer has accepted this exact immutable candidate; GitHub Pages is unchanged.
 See [qualification and nomination](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
 
 The following pre-pruning nomination is historical; its listener is retired and its bytes retained.
 
 Pre-pruning clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
 `b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
-(exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
+(exit 0). The no-rebuild ten-file snapshot `geosolve-m92-uat.x4b870rw` has manifest SHA-256
 `e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and was nominated at
-**http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
+the archived preview. Release workbench 20/20, separate sample audit 20/20 and
 language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
 separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
 All 20 samples received visual review and two measured edits each; captured geometry and source restore
@@ -56,7 +58,7 @@ GitHub Pages remains unchanged. Later documentation commits do not change these 
 
 The [final qualification and nomination](M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination) ledger preserves the gate receipt, frozen manifest,
 eleven-route HTTP byte/metadata checks on both endpoints, exact browser inventories and visual
-review. Its local staging was stopped after checks; its Tailscale listener was later retired
+review. Its local staging was stopped after checks; its preview listener was later retired
 after pruning qualification. The address now serves the replacement described above. GitHub Pages
 remains the accepted M91 publication.
 

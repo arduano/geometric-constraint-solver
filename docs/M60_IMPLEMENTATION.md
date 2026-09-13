@@ -2,6 +2,10 @@
 
 # M60 implementation report
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Date: 2026-07-29
 
 Status: complete
@@ -110,7 +114,7 @@ finite-difference Jacobian test.
 - Production topology is recomputed from the current accepted input for presentation. No stale
   profile cache is consumed.
 - Mobile and responsive behavior remain outside acceptance.
-- The next blocker is supervising-human M61 UAT. Objective qualification is complete, but no M61
+- The next blocker is maintainer M61 UAT. Objective qualification is complete, but no M61
   human approval is recorded yet.
 
 ## Post-completion M61 remediation note

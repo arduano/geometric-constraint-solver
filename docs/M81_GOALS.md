@@ -2,8 +2,12 @@
 
 # M81 — Core architecture consolidation
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and closed 2026-08-20**. Implementation, rotating review, final clean
-qualification, frozen Tailscale nomination, supervising-human acceptance, Pages publication and
+qualification, frozen preview nomination, maintainer acceptance, Pages publication and
 exact hosted-byte verification pass. M81 is a behavior-preserving cleanup after the M66–M80
 feature sequence. It changes private ownership and file boundaries only, except for the exact
 transactional-authority repair recorded as M81-F001. It adds no geometry, relation, solver policy,
@@ -110,7 +114,7 @@ opportunities.
 - Formatting, diff hygiene, warnings-denied workspace Clippy and Rustdoc, locked all-feature
   workspace tests, benchmark compilation, performance/licence/package checks, release Trunk and
   the complete clean release gate pass from committed source.
-- The exact no-rebuild release output is frozen and byte-verified over the retained Tailscale UAT
+- The exact no-rebuild release output is frozen and byte-verified over the retained preview UAT
   endpoint before nomination.
 - The worktree is clean and commits remain subsystem-sized and reviewable.
 
@@ -121,7 +125,7 @@ Final qualification satisfies this contract at exact product source
 root selected-line hash is
 `5cd55480a3d0f8a1d7175ef9359c94cc4dcd14cbf6b5d865abf1697667d1af90`. The immutable seven-file
 candidate and HTTP evidence are bound in `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md`.
-The supervising caller accepted the qualified candidate and requested closure on 2026-08-20
+The maintainer accepted the qualified candidate and requested closure on 2026-08-20
 without opening a new finding. Documentation-only approval descendant `b582b82` passes Pages run
 `32328472125`, artifact `9392295853` and exact hosted-byte verification. M81 is closed.
 

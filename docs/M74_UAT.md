@@ -2,7 +2,11 @@
 
 # M74 focused UAT — Production-style sketch reference UX
 
-Status: **M74 is complete under the supervising caller's scoped close decision on 2026-08-16**.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **M74 is complete under the maintainer's scoped close decision on 2026-08-16**.
 The exact clean gate, independent review, immutable snapshot, served-byte verification and exact
 final GitHub Pages publication are accepted as closing evidence. U1-U8 remain intentionally
 deferred to the next bug-fixing/UAT follow-up milestone and are not claimed as manually passed;
@@ -12,24 +16,14 @@ Candidate source: `55693372bea4759c9a67eee14f1af3d6a9e0690c`
 
 Candidate tree: `866fbf8b58ec19e72cbe6936e06f3615dba2f692`
 
-Tailscale endpoint at M74 nomination: `http://100.94.63.83:8080/` (now serves M75)
+preview endpoint at M74 nomination: the archived preview (historical M74 nomination)
 
-Historical server PID: `2599593` (retired when M75 was nominated)
-
-Immutable snapshot: `/tmp/geosolve-m74-uat.jFfAm4` (directory `0555`, files `0444`)
+Immutable snapshot: `geosolve-m74-uat.jFfAm4` (directory `0555`, files `0444`)
 
 Ordered-manifest aggregate:
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 16,702 | `a3b8ca5a5d5999d09a05c7910eab952929e2dc3f07eeb27ccc36b7fe3a992701` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-b110169860de7f0f.js` | 33,221 | `980c38ffa22901ee90bebec8b705f92b07b651ec92001fffd4a62ac03055b74b` |
-| `geosolve-demo-web-b110169860de7f0f_bg.wasm` | 6,102,644 | `d2932cf18e67a0e0c087ab4ccacf2ac3be086d2da74b10ac9026c53e4e64ccf4` |
-| `index.html` | 27,478 | `9968011bc0524e30d03a4c299098e047957af96336ec6289842d4ceb724a6fb5` |
-| `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
+The archived manifest records the per-file sizes and checksums.
 
 The candidate's exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 on the candidate
@@ -39,11 +33,11 @@ licensing/package checks, the 256-moving-body sparse crossover in 86.79 seconds 
 release assembly.
 
 The gate distribution was copied without rebuilding. Proxy/cache-bypassed identity requests for
-all seven files and `/` return HTTP 200 from the Tailscale address with exact media types, lengths
+all seven files and `/` return HTTP 200 from the preview address with exact media types, lengths
 and bytes; `/` equals `index.html`, and the fetched aggregate matches. The M72 compatibility and
 M74 browser scripts both pass at `1440x900` and `1024x720` with no console/page errors. The HTTP
-evidence directory is `/tmp/geosolve-m74-http-verify.85lR5D`. Historical initial M74 snapshot
-`/tmp/geosolve-m74-uat.MpvYrl` remains read-only but is no longer served or UAT authority.
+evidence directory is `geosolve-m74-http-verify.85lR5D`. Historical initial M74 snapshot
+`geosolve-m74-uat.MpvYrl` remains read-only but is no longer served or UAT authority.
 
 Final public authority is documentation-only approval descendant
 `b6b1d62b49466ea06522dbdd3f5444a324d36584`, successful Pages run `31923806117`, deployment
@@ -236,7 +230,7 @@ evidence.
 - M74-U6: **Deferred; not manually executed or marked passed**.
 - M74-U7: **Deferred; not manually executed or marked passed**.
 - M74-U8: **Deferred; not manually executed or marked passed**.
-- Final M74 approval: **Pass for scoped closure** — explicitly approved by the supervising caller
+- Final M74 approval: **Pass for scoped closure** — explicitly approved by the maintainer
   on 2026-08-16 from the automated, review and frozen-artifact evidence.
 
 This approval intentionally does not reinterpret automation as hands-on UAT. The complete U1-U8

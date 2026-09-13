@@ -2,10 +2,14 @@
 
 # M96: finite-width manifold channels and silicone grooves
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 The user reported that the PC water-manifold sample contains channel centre lines
 and an O-ring centre line instead of actual finite-width boundaries. They requested
 two reusable custom patches accepting polylines, specifically using two offsets,
-fillets at the corners and arcs at the ends. The supervising user accepted the final
+fillets at the corners and arcs at the ends. The maintainer accepted the final
 12 mm amendment and closed M96 on 2026-09-08; [M96_CLOSURE.md](M96_CLOSURE.md)
 records the accepted product, qualification and limits.
 

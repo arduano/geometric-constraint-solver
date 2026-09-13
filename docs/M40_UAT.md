@@ -2,9 +2,13 @@
 
 # M40 core sketch interaction UAT
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Status
 
-Complete and archived as of 2026-07-26. The supervising human approved M40.7 after
+Complete and archived as of 2026-07-26. The maintainer approved M40.7 after
 the F1-F5 targeted rechecks below. The then-current release-browser qualification
 passed 14/14, and no correctness, data-loss, misleading-state or basic-interaction
 blocker remained.
@@ -54,7 +58,7 @@ be restored as a current qualification path.
 ## Scorecard
 
 The archived source record did not preserve individual per-row ratings. It did
-preserve the supervising-human decision after the five targeted rechecks:
+preserve the maintainer decision after the five targeted rechecks:
 
 | Review context | Recorded result |
 | --- | --- |
@@ -62,7 +66,7 @@ preserve the supervising-human decision after the five targeted rechecks:
 | Objective browser qualification | 14/14 at that checkpoint; retired by M48 |
 | Targeted findings | UAT-C1-F1 through UAT-C1-F5 passed |
 | Decision | **Approve** |
-| Supervising human/date | supervising caller, 2026-07-26 |
+| maintainer/date | maintainer, 2026-07-26 |
 | Approval statement | No unresolved correctness, data-loss, misleading-state or basic-interaction blocker remained. |
 
 The temporary network address, browser-download instructions and blank working

@@ -2,12 +2,16 @@
 
 # M88 UAT — Workflow-led authoring workbench redesign
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **accepted and closed on 2026-09-01**. The immutable M88-F004 React replacement remains
-live as the accepted UAT identity. The supervising user's milestone-level close decision accepts
+live as the accepted UAT identity. The maintainer's milestone-level close decision accepts
 M88-U1 through M88-U10 without claiming or inventing a separately logged row-by-row replay.
 
-Historical rollback only: `/tmp/geosolve-m88-uat.nmhcRj`, preserved after reboot with its former
-transient `http://100.94.63.83:8080/` listener gone, seven-file aggregate
+Historical rollback only: `geosolve-m88-uat.nmhcRj`, preserved after reboot with its former
+transient preview listener retired, seven-file aggregate
 `6c4af7e96e30687654d691b577954c22b051fb3ad37e9472c51e16c9c002a274`, Chrome
 `151.0.7922.173`. Its automated browser preflight and five-run Gridfinity budget passed for the
 pre-React Rust-DOM workbench. Do not use that endpoint as evidence for, or overwrite it with, the
@@ -57,7 +61,7 @@ promoted to a scorecard pass.
 ## Confirmed UAT finding M88-F003
 
 Ordinary point-and-click geometry authoring was independently reproduced as broken in frozen F002
-snapshot `/tmp/geosolve-m88-react-uat.kdSCUU`, whose release-WASM SHA-256 is
+snapshot `geosolve-m88-react-uat.kdSCUU`, whose release-WASM SHA-256 is
 `7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0` and source basis is
 `71a51ee534f034e2328a07e0d80f9a9ee5e0fc62`. Direct Rust bridge clicks already committed a Segment
 and Center–Radius Circle. The React viewport instead canceled the staged interaction when the
@@ -90,87 +94,27 @@ changed.
 
 ## Current immutable M88-F004 replacement identity
 
-- Frozen path: `/tmp/geosolve-m88-react-uat.KGhA7s`.
-- Freeze/service start: `2026-09-01 00:55:59 AEST`.
-- Tailscale endpoint: `http://100.94.63.83:18088/`.
-- User service/PID: `geosolve-m88-react-uat-current.service` / `1021511`.
-- Server log: `/tmp/geosolve-m88-react-uat.KGhA7s.http.log`.
-- External sorted manifest: `/tmp/geosolve-m88-react-uat.KGhA7s.sha256`.
-- Ordered file aggregate: `700ebae4aec13ce20ab8786b63254e2c5b6239204c38bdc6e9d35f11c4159071`.
-- WASM SHA-256: `22944f00ddf8c327e943d055a8224a1948efce42ec2896c9326891a45bfdf2ff`.
-- Evidence: `/tmp/geosolve-m88-f004-freeze-evidence.ijud9T`; staging/live HTTP ledger SHA-256
-  `e838461921907cfe1252423f5a9ccf7db056dd62370698d90d6e47e0e7428531`.
-- Contents/modes: exactly eight regular files, zero symlinks, directories `0555`, files `0444`.
-- Build/browser identity: Cargo `--release`, wasm-bindgen and `wasm-opt -Oz`; Google Chrome
-  `151.0.7922.173`. No debug candidate is nominated.
-
-Build, frozen, Tailscale staging and Tailscale live manifests match exactly. Root, `/index.html` and
+Build, frozen, preview staging and preview live manifests match exactly. Root, `/index.html` and
 all eight files return HTTP 200. The live Chrome smoke proves right-click neutrality, exact
 Polyline Finish transitions, one accepted curve, no canvas rail in Code mode and no page, console,
-network or HTTP error. This endpoint is the accepted M88 identity and remains live. No public
+network or HTTP error. This artifact was the accepted M88 identity. No public
 deployment or service retirement was inferred from the close decision.
 
 ## Superseded immutable M88-F003 identity
 
-- Frozen path: `/tmp/geosolve-m88-react-uat.QkVU1k`.
-- Freeze/service start: `2026-08-31 23:02:01 AEST`.
-- Tailscale endpoint: `http://100.94.63.83:18088/`.
-- User service/PID: `geosolve-m88-react-uat-current.service` / `518679`.
-- Server log: `/tmp/geosolve-m88-react-uat.QkVU1k.http.log`.
-- External sorted manifest: `/tmp/geosolve-m88-react-uat.QkVU1k.sha256`.
-- Ordered file aggregate: `e44bd8c22ccb67e542a8c73b58f62ed8ab236ab728b2d1bc2ae1aff1895ac167`.
-- WASM SHA-256: `5f49f49a880dd8529982bfbcf68a3f1a92c79ee96f256ed56931254ca884b22a`.
-- Evidence: `/tmp/geosolve-m88-f003-freeze-evidence.bbtXoS`; local and Tailscale HTTP ledger
-  SHA-256 `340b5bfd3d7d661b877fad3d3ab97813bc9027f95a99962b6788781c68588ef5`.
-- Contents/modes: exactly eight regular files, zero symlinks, directories `0555`, files `0444`.
-- Build/browser identity: Cargo `--release`, wasm-bindgen and `wasm-opt -Oz`; Google Chrome
-  `151.0.7922.173`. No debug candidate is nominated.
-
-Final dist, frozen bytes, local HTTP and Tailscale HTTP match exactly. Root, `/index.html` and all
+Final dist, frozen bytes, local HTTP and preview HTTP match exactly. Root, `/index.html` and all
 eight files return HTTP 200. Local and frozen-endpoint Chrome smokes commit an ordinary click-click
 Segment and Center–Radius Circle, clear draft paint and report no runtime, console, network or HTTP
 error. F004 now supersedes these bytes for continuing UAT; the snapshot remains preserved.
 
 ## Withdrawn M88-F002 reproduction identity
 
-- Frozen path: `/tmp/geosolve-m88-react-uat.kdSCUU`.
-- Freeze/start: `2026-08-31 21:18:19 AEST`.
-- Tailscale endpoint: `http://100.94.63.83:18088/`.
-- User service/PID: `geosolve-m88-react-uat-current.service` / `139684`.
-- Server log: `/tmp/geosolve-m88-react-uat.kdSCUU.http.log`.
-- External sorted manifest: `/tmp/geosolve-m88-react-uat.kdSCUU.sha256`.
-- Ordered file aggregate: `d328fdded4ae963230eef2c64c5fb22459dec7a55467e0a7c051bed739b2cd47`.
-- WASM SHA-256: `7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0`.
-- Exact verification evidence: `/tmp/geosolve-m88-react-freeze-evidence.sUELzR`; eight-path
-  results SHA-256 `c5201b123ba2f06bcb9b0f6c370adfa2a9dc85c0caa750366d8b36ff33189726`.
-- Contents/modes: exactly eight regular files, zero symlinks, directories `0555`, files `0444`.
-- Build/browser identity: release WASM produced by Cargo `--release`, wasm-bindgen and
-  `wasm-opt -Oz`; Google Chrome `151.0.7922.173`. No debug candidate is nominated.
-
-At the F002 freeze, its then-final `dist`, frozen files and served files matched exactly. Every file
-plus `/` and `/index.html` returned HTTP 200 with exact frozen bytes, and a frozen-endpoint Chrome
-toolbar smoke passed before F003. PID `139684` was retired only after the corrected snapshot above
-passed local/frozen verification; the F002 snapshot itself remains preserved as reproduction
-evidence. Port `18088` now serves only the corrected identity above.
-
 ## Superseded React candidates — preserved, listeners gone after reboot
-
-Snapshot `/tmp/geosolve-m88-react-uat.TAMXyz`, endpoint
-`http://100.94.63.83:18088/`, service/PID
-`geosolve-m88-react-uat-TAMXyz.service` / `1846522`, aggregate
-`91c3a2349f1466a64720cb1cfba8a4f7d18aed0be03e9eec256ccf8c4eb0f9de` and WASM SHA-256
-`9032a07bc6ac465816b3b3f3bb44c3881f815f290e39eece88890589f2cdfe5f` remain exact historical
-evidence only. Do not use it for continuing UAT. Port `8080` and rollback PID `425555` are
-historical records; those transient listeners no longer exist after reboot. M88-F001 snapshot
-`/tmp/geosolve-m88-react-uat.nGkL4i`, aggregate
-`0bd35f3dba50c592c6eea34ed18afed1b6f908803d75feb9ca3bbb620a1572c4`, WASM SHA-256
-`beb76d47889055f9d8344ac4cdc8a01fc06a1dbd797979f636927031d3383996`, likewise remains preserved
-but is not served and must not receive continuing UAT.
 
 ## Test conditions
 
 The scorecard below records the accepted contract. Its status language is intentionally precise:
-the supervising user accepted the milestone as a whole on 2026-09-01, but did not provide or ask us
+the maintainer accepted the milestone as a whole on 2026-09-01, but did not provide or ask us
 to invent a separately logged observation for each row.
 
 | Row | Exercise | Pass condition | Status |

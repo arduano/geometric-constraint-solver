@@ -2,9 +2,13 @@
 
 # M72 implementation — Public workbench bulk fixes
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and explicitly approved on 2026-08-15**. M72-F001 through M72-F004 are
 implemented, clean-qualified and published. The complete-history secret scan, exact final hosted
-artifact byte verification and public Chromium qualification pass. The supervising caller
+artifact byte verification and public Chromium qualification pass. The maintainer
 approved the focused UAT and requested milestone closure.
 
 Implementation commits:
@@ -94,7 +98,7 @@ nix-shell shell.nix --run \
 ./scripts/golden-authoring-scene-oracle.sh --check
 ./scripts/golden-authoring-scene-oracle.sh --require-clean
 env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
-/tmp/tmp.ywhCssvJw5/actionlint .github/workflows/pages.yml
+tmp.ywhCssvJw5/actionlint .github/workflows/pages.yml
 ```
 
 Outcomes:
@@ -119,8 +123,8 @@ passed against the public endpoint. The focused 2026-08-15 UAT follow-up replace
 dismissal-on-outside-interaction contract with the implicit, persistent overlay contract recorded
 above and in `docs/M72_UAT.md`; that interaction passed local automated qualification and the
 scoped human close decision. Its replacement publication and final public checks are recorded
-below. Historical initial-run screenshots were recorded at `/tmp/m72-overlay-1440x900.png` and
-`/tmp/m72-overlay-1024x720.png`, SHA-256
+below. Historical initial-run screenshots were recorded at `m72-overlay-1440x900.png` and
+`m72-overlay-1024x720.png`, SHA-256
 `96a3f2ed0fa845688d9acf7b9e24443e41d1511e2dbf448fc0e2f329533f0024` and
 `77b7043953654cf2efab36f0e02928afcd571b7489a9cc2ad3aa3456ba2c3bd2` respectively.
 
@@ -129,7 +133,7 @@ below. Historical initial-run screenshots were recorded at `/tmp/m72-overlay-144
 The nominated clean source is commit `dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
 `38d79f5e05cb5274cc7eeb6bc6c0c2fac7d6f624`. The complete release gate ran from
 `2026-08-14T22:20:18+10:00` through `2026-08-14T22:28:29+10:00` and exited successfully. Its
-retained log is `/tmp/geosolve-m72-clean-gate.upGsYJ.log`, SHA-256
+retained log is `geosolve-m72-clean-gate.upGsYJ.log`, SHA-256
 `7758b84585c28761414efaa20422d95c4e7f9717966bb173583e06244f6b6471`. The gate includes the
 unchanged **234/234 `PASS`** golden at SHA-256
 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`, all locked workspace
@@ -137,7 +141,7 @@ tests, warnings-denied Clippy and rustdoc, native/WASM parity, performance, lice
 Trunk release assembly checks. The 256-moving-body sparse crossover passed in **152.55 seconds**.
 
 Gitleaks 8.30.1 then scanned all 266 commits reachable across the complete Git history and reported
-no leaks. Its empty `[]` report is `/tmp/geosolve-m72-gitleaks.SfZwXM.json`, SHA-256
+no leaks. Its empty `[]` report is `geosolve-m72-gitleaks.SfZwXM.json`, SHA-256
 `37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570`.
 
 `https://github.com/arduano/geometric-constraint-solver` is public, its default branch is `main`,
@@ -157,7 +161,7 @@ passed its repository-prefixed build, seven-file validation, artifact upload and
 Run URL: `https://github.com/arduano/geometric-constraint-solver/actions/runs/31802816639`.
 
 Uploaded Pages artifact `9221899077` (`github-pages`) was downloaded to
-`/tmp/geosolve-m72-pages-artifact.CaJToc`; its ordered SHA-256 manifest aggregate is
+`geosolve-m72-pages-artifact.CaJToc`; its ordered SHA-256 manifest aggregate is
 `34c647dd29e6eee31cd58111db4082a2593b67f10b2d6735a26512a617889254`. The public root and all
 seven files return HTTP 200 and byte-match that exact uploaded artifact. The HTML uses
 `/geometric-constraint-solver/` asset URLs and the WASM response is `application/wasm`.
@@ -176,7 +180,7 @@ The local and hosted WASM builds have environment-dependent WASM bytes and there
 Trunk asset names. Publication authority is the exact artifact built after the hosted complete
 gate, uploaded by the workflow and matched above; JavaScript, stylesheet and legal/API document
 content hashes are unchanged from local preflight. Finally, the public command
-`M72_BASE_URL=https://arduano.github.io/geometric-constraint-solver/ node /tmp/m72_full_browser_check.mjs`
+`M72_BASE_URL=https://arduano.github.io/geometric-constraint-solver/ node m72_full_browser_check.mjs`
 passed the initial candidate's option families, containment, focus/dismissal, Problems disclosure
 and browser-local reload persistence at `1440x900` and `1024x720` with no console or page errors.
 That run remains historical evidence for the initial candidate. The final run below supersedes it
@@ -204,8 +208,8 @@ workflow run
 that descendant. Its qualify-and-assemble job completed in **26m12s**, including the unchanged
 256-body ceiling in **160.40 seconds**, and its deployment job completed in **9s**. Uploaded Pages
 artifact `9241248173` was downloaded as
-`/tmp/geosolve-m72-final-pages.zMCyo0/artifact.tar` and extracted to
-`/tmp/geosolve-m72-final-artifact.FhTP9h`. The tar SHA-256 is
+`geosolve-m72-final-pages.zMCyo0/artifact.tar` and extracted to
+`geosolve-m72-final-artifact.FhTP9h`. The tar SHA-256 is
 `e9b874809a2f93deae19b6d7ca435e45bda92bf861adcf2ca54786f4ee2b2702`; the ordered file-manifest
 aggregate is `4a48f3cbc0269fdad2c4be91da015a6751eddbe4bdfe9bf97b5814674b9c7ff6`.
 
@@ -222,12 +226,12 @@ aggregate is `4a48f3cbc0269fdad2c4be91da015a6751eddbe4bdfe9bf97b5814674b9c7ff6`.
 The public root and all seven files return HTTP 200 and byte-match artifact `9241248173` exactly.
 JavaScript is served as `application/javascript`, WASM as `application/wasm` and CSS as `text/css`.
 The final public command
-`M72_BASE_URL=https://arduano.github.io/geometric-constraint-solver/ node /tmp/m72_full_browser_check.mjs`
+`M72_BASE_URL=https://arduano.github.io/geometric-constraint-solver/ node m72_full_browser_check.mjs`
 passes at `1440x900` and `1024x720`. It covers all 16 option families, centered implicit buttons,
 overlay persistence, idempotent re-invocation, tool-switch replacement, explicit close-to-Select,
 containment, internal scrolling, hidden-field isolation, Source/License links and browser-local
 reload persistence, with no console or page errors. Final screenshots
-`/tmp/m72-overlay-1440x900.png` and `/tmp/m72-overlay-1024x720.png` have SHA-256
+`m72-overlay-1440x900.png` and `m72-overlay-1024x720.png` have SHA-256
 `b1130166a8107a913e7d4bdfc5147e587e75db8a0027951024efffc76fbaa97e` and
 `6db6f54b3688165cf098898d33242955f017f3b94f041460e7c5f0035d02ba4a` respectively.
 
@@ -248,7 +252,7 @@ reload persistence, with no console or page errors. Final screenshots
 - The accepted `b700313` overlay follow-up passes the final local complete gate; its docs-only
   `2d15139` approval descendant passes the hosted gate, exact public artifact verification and
   two-size Chromium contract.
-- The supervising caller accepted the focused M72-U1 through M72-U4 scope and explicitly requested
+- The maintainer accepted the focused M72-U1 through M72-U4 scope and explicitly requested
   closure on 2026-08-15.
 
 ## 5. No remaining gate

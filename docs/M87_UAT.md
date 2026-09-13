@@ -2,7 +2,11 @@
 
 # M87 focused UAT — Managed controls and browser-free authoring
 
-Status: **accepted and closed on 2026-08-31**. The supervising user's explicit “Close off this
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed on 2026-08-31**. The maintainer's explicit “Close off this
 milestone” decision accepts M87-U9/U10 at milestone level without claiming a separately logged
 row-by-row visual replay. The earlier U1-U8 scoped disposition remains historical. The retained
 sound work and complete adaptive-detail/LOD removal are unchanged. M88 followed and is now
@@ -13,11 +17,11 @@ complete.
 Exact accepted product source is `32c72892772ee09f8b904153484b02fd9923dc25`, tree
 `38f7175f93c87d11422f5de00e78208f8cf315bb`. It passes the complete clean release gate at exit `0`
 with `NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. No immutable no-rebuild
-candidate or public publication was created; the mutable Tailscale development server remains
+candidate or public publication was created; the mutable preview development server remains
 collaboration evidence, not publication authority. Historical pre-F003 dirty evidence used:
 
 ```bash
-TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'
+TMPDIR=target GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=target ./scripts/release-gate.sh'
 ```
 
 That historical dirty gate does not qualify the revised fully constrained samples. The reviewed twelve-row
@@ -28,11 +32,11 @@ deployment or service-retirement claim. The manufacturing owner suite passes 3/3
 reviewed-ledger check passes 1/1 and the all-demo headless/deterministic-product suite passes 10/10.
 Fresh mutable review bundles are:
 
-- M87-U9: `/tmp/geosolve-m87-post-f003.FPHP3b/cnc`;
-- M87-U10: `/tmp/geosolve-m87-post-f003.FPHP3b/gridfinity`.
+- M87-U9: `geosolve-m87-post-f003.FPHP3b/cnc`;
+- M87-U10: `geosolve-m87-post-f003.FPHP3b/gridfinity`.
 
 The mutable development distribution was rebuilt from the current dirty source and all seven files
-served at `http://100.94.63.83:8080/` byte-match the local Trunk output. This is collaboration
+served at the archived preview byte-match the local Trunk output. This is collaboration
 infrastructure only, not a clean nomination, immutable candidate or publication result.
 
 ## Scorecard
@@ -52,14 +56,14 @@ infrastructure only, not a clean nomination, immutable candidate or publication 
 
 ## Disposition
 
-On 2026-08-30 the supervising user stated that further LOD work was putting the milestone in a
+On 2026-08-30 the maintainer stated that further LOD work was putting the milestone in a
 weird, risky state and explicitly requested complete LOD removal, a graphics audit and retention of
 the good code. That earlier scoped disposition remains historical acceptance of U1-U8 without a
 fresh row-by-row replay; M87-F002 remains resolved at the renderer owner. The later CNC/Gridfinity
 amendment created two additional visual rows. M87-F003 then replaced literal/fixed-lock authority
-with fully constrained relational designs. On 2026-08-31 the supervising user explicitly requested
+with fully constrained relational designs. On 2026-08-31 the maintainer explicitly requested
 M87 closure; that milestone-level disposition accepts U9/U10 without inventing a separate replay.
 Exact source `32c7289`, tree `38f7175`, passes the complete clean gate. No immutable artifact,
-public deployment or service-retirement result is inferred; the existing Tailscale listener remains
+public deployment or service-retirement result is inferred; the existing preview listener remains
 a mutable development service. Diagnosed Gridfinity performance/stack work is carried into active
 M88's ordered stability prerequisite.

@@ -2,8 +2,12 @@
 
 # M80 focused UAT — native topology-preserving Profile Offset
 
-Status: **accepted and closed 2026-08-20; clean qualification, immutable Tailscale evidence and
-exact GitHub Pages publication pass**. The supervising caller approved the qualified candidate,
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed 2026-08-20; clean qualification, immutable preview evidence and
+exact GitHub Pages publication pass**. The maintainer approved the qualified candidate,
 praised the final F016 behavior and explicitly requested milestone validation and closeout. All
 prior snapshots remain withdrawn historical evidence.
 
@@ -11,10 +15,7 @@ Product source: `29d8e4144b6b1eba1146e5add9e8d93b2f61dee3`
 
 Candidate tree: `44ecb9542992606e5d337dd6c35ee5c9340de305`
 
-Historical accepted Tailscale endpoint: `http://100.94.63.83:8080/`
-(`geosolve-m80-uat.service`, retired PID `1031421`)
-
-Immutable snapshot: `/tmp/geosolve-m80-uat.CPuVgx` (directory `0555`; seven regular non-symlink
+Immutable snapshot: `geosolve-m80-uat.CPuVgx` (directory `0555`; seven regular non-symlink
 files `0444`)
 
 Ordered-manifest aggregate:
@@ -25,43 +26,26 @@ exit 0 at 2026-08-19 23:24:39 AEST. It included the complete locked all-feature 
 native/WASM parity, warnings-denied Clippy/Rustdoc, reviewed 271-row golden, performance, licence
 and Trunk release-build gates.
 
-Freeze/HTTP evidence: temporary verification `/tmp/geosolve-m80-f016-temp-verify.vWAgyX` and final
-verification `/tmp/geosolve-m80-f016-final-verify.2T6bqX`. Temporary PID `1030585` first served the
-exact snapshot at `:18080`; only after all eight requests passed was the prior candidate retired and
-PID `1031421` started on `:8080`. Root plus every file returned HTTP 200 with exact media type,
-length and bytes, zero redirects, no content encoding and the frozen manifest aggregate; `/` equals
-`index.html`. The temporary listener is stopped.
-
 GitHub Pages now serves the accepted M80 descendant and is final public-byte authority.
 
 ## Withdrawn nomination history
-
-Superseded pre-F016 product source: `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree
-`4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`. Its snapshot
-`/tmp/geosolve-m80-uat.kJj5JB`, aggregate
-`8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`, and complete clean-gate
-evidence remain valid historical qualification, but `M80-F016` withdraws those bytes from current
-UAT. Recorded PID `704439` has exited and the snapshot is no longer served.
 
 Superseded pre-amendment product source: `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`
 
 Superseded candidate tree: `440d66ef07b7df963164e69ebed4b75509f56bd6`
 
-Historical service used `http://100.94.63.83:8080/`; recorded PID `3837538` has exited and those
-bytes are no longer served.
-
-Immutable snapshot: `/tmp/geosolve-m80-uat.hggNdd` (directory `0555`; seven regular non-symlink
+Immutable snapshot: `geosolve-m80-uat.hggNdd` (directory `0555`; seven regular non-symlink
 files `0444`)
 
 Ordered-manifest aggregate:
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`
 
 Superseded pre-amendment clean gate: 2026-08-19 13:38:33–13:50:00 AEST;
-`/tmp/geosolve-m80-clean-gate.b83dad2.nix.log` (262,051 bytes, 3,416 lines, SHA-256
+`geosolve-m80-clean-gate.b83dad2.nix.log` (262,051 bytes, 3,416 lines, SHA-256
 `3e44403e3f2038467aa0c06193030feb6c099cd53634b315a8308ca111113fa0`)
 
-Superseded pre-amendment freeze/HTTP evidence: `/tmp/geosolve-m80-freeze-evidence.1S2bfA`,
-`/tmp/geosolve-m80-temp-verify.mGxuDM` and `/tmp/geosolve-m80-final-verify.M0ThFH`. The temporary and
+Superseded pre-amendment freeze/HTTP evidence: `geosolve-m80-freeze-evidence.1S2bfA`,
+`geosolve-m80-temp-verify.mGxuDM` and `geosolve-m80-final-verify.M0ThFH`. The temporary and
 final eight-request result ledgers have respective SHA-256
 `1628a6c2e87ab519351598371712ace67584616d1573f510c80fbe48f3cd9bea` and
 `03e93b8fcd4d53231d7e3bafd95c6b4315ba2a12515bb8a4f763a91abc8c0b28`; root plus every file
@@ -70,7 +54,7 @@ frozen manifest aggregate. The withdrawn listener remained live until temporary 
 passed, and the temporary replacement remained live until final `:8080` verification passed.
 
 Withdrawn predecessor: source `949c3db`, tree `23a6f8d`, snapshot
-`/tmp/geosolve-m80-uat.Nnxsu7`, aggregate
+`geosolve-m80-uat.Nnxsu7`, aggregate
 `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`. It is historical, no
 longer served and must not be used for scoring.
 
@@ -258,26 +242,12 @@ Fillet to confirm an eligible corner recovers without refresh.
 
 ## Acceptance record
 
-On 2026-08-20 the supervising caller stated, “woak very nice. Please validate this milestone and
+On 2026-08-20 the maintainer stated, “woak very nice. Please validate this milestone and
 finish it off. We did multiple things here so ensure each feature is fairly distinctly clean.” That
 explicit milestone-level decision accepts U1–U7 for product source `29d8e41`, tree `44ecb95`,
-snapshot `/tmp/geosolve-m80-uat.CPuVgx` and aggregate
+snapshot `geosolve-m80-uat.CPuVgx` and aggregate
 `75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`, without reporting a new
 finding. It accepts the separately qualified Profile Offset equations/topology, face/hole and open-
 chain construction, authoring/drag/lifecycle behavior, native line-line Fillet publication,
 unchanged Offset consumption and F016 arc-angle propagation. It does not invent an unlogged row-by-
 row replay. The superseded `05b8b3b` and `b83dad2` snapshots remain ineligible for acceptance.
-
-Documentation-only approval descendant `ece6c3c6f29bb444864c9499868a817e5712951c`, tree
-`34111e0255b987907017c3503aa19000ffc8b020`, passes Pages run `32262792440`. Assembly job
-`96099838917` passes in 4m57s and deploy job `96101539654` passes in 10s at
-`https://arduano.github.io/geometric-constraint-solver/`. Artifact `9369119336` is 2,650,327 bytes
-with API SHA-256 `6a7fd10ab361f106a49f56e28e397f5be6464ecd94c0a81a53ab79b50e177b93`;
-its sole 7,761,920-byte tar has SHA-256
-`4d6c4b2325f76a542c4b09f086b0e434aecfe59066b0f3b573e5ae86b5943f3c`. Its seven flat files have
-ordered-manifest aggregate
-`5d4343d4f85aa0290f92c6fc473cc193c451b50334bb1d104ccf2af5a9bebf56`. Proxy-disabled,
-cache-busted identity requests for root and all seven paths returned HTTP 200 with no redirect or
-content encoding, exact expected media types/lengths and artifact-identical bodies; root equals
-`index.html`. Evidence is `/tmp/geosolve-m80-pages-verify.Pp2jgp`. The accepted Tailscale snapshot
-remains frozen evidence; PID `1031421` has been retired. M80 is closed.

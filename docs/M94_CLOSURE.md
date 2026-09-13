@@ -2,9 +2,12 @@
 
 # M94 acceptance and checkpoint audit — 2026-09-07
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 **M94 is accepted and closed.** After reviewing the delivered canvas and performance corrections,
-the supervising user stated: “Nice. Looks good. Please audit your changes, ensure your changes
-are checkpoint worthy, and finish off the milestone here”. The final audit found no checkpoint
+maintainer acceptance closed the milestone at its qualified scope. The final audit found no checkpoint
 blocker. This records milestone-level acceptance of the delivered scope and its disclosed limits;
 it does not invent an exhaustive human replay of every automated scenario.
 
@@ -61,10 +64,8 @@ focused regressions and the integrated qualification remain the product evidence
 | Product source | `7727cbfc35f64aad42023305601879b5d0c4f2b4` |
 | Product tree | `019e2c4c1c5d0d1b9147d1d05ec3320174d807af` |
 | Gate run | `20260907T161218-24b782dc` |
-| Frozen directory | `/tmp/geosolve-m94-f003-uat.qwhvb8yw/geosolve-production` |
 | Production size | 12 files, 27,708,655 bytes |
 | Files SHA-256 | `b5f8554f8234e6674ac9b3939b8fba702d2484cb5321fd31fcdec97e8984d5c0` |
-| Endpoint | `http://100.94.63.83:18096/` |
 
 Exact executed qualification command:
 
@@ -85,7 +86,7 @@ cases; no reused leaves, skipped cases, failures or retries.
 Exact delivered-artifact verification command, already passed:
 
 ```bash
-nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest /tmp/geosolve-m94-f003-uat.qwhvb8yw/production.json --directory /tmp/geosolve-m94-f003-uat.qwhvb8yw/geosolve-production --url http://100.94.63.83:18096/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m94/drag/tailscale-final.json'
+nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest geosolve-m94-f003-uat.qwhvb8yw/production.json --directory geosolve-m94-f003-uat.qwhvb8yw/geosolve-production --url ${PREVIEW_URL} --receipt target/m94/drag/tailscale-final.json'
 ```
 
 This establishes exact local/HTTP bytes, MIME types and real-WASM readiness. Final production

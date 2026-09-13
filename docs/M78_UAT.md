@@ -2,7 +2,11 @@
 
 # M78 focused UAT — CAD geometry tool families and authoring variants
 
-Status: **complete (closed 2026-08-18)**. The supervising caller reported that the clean-qualified,
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete (closed 2026-08-18)**. The maintainer reported that the clean-qualified,
 immutable M78-F011 replacement works correctly and requested milestone closure. U1-U8 and the
 focused F011 centre-drag recheck are accepted under that explicit milestone-level decision; final
 GitHub Pages publication and hosted-byte verification pass.
@@ -17,51 +21,25 @@ Current replacement tree: `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`
 
 Product fix: `e43aa8537f8d45533c2d445ea310f340aac5a530`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
-
-Restored closeout server PID/session: `3433169` / retained command-runner session `24394` (the
-original accepted-candidate listener `3120501` / `40375` exited after acceptance)
-
-Immutable snapshot: `/tmp/geosolve-m78-f011-uat.MOsOFy` (directory `0555`, seven regular non-
+Immutable snapshot: `geosolve-m78-f011-uat.MOsOFy` (directory `0555`, seven regular non-
 symlink files `0444`)
 
 Ordered-manifest aggregate:
 `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 23,484 | `bdbd0eaf11d96425b98d52f546417e3e4f7dbe50568568aca30d8fe34f01a30f` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-5e889f68dd26a44a.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
-| `geosolve-demo-web-5e889f68dd26a44a_bg.wasm` | 6,535,152 | `8dab4bb97047798e92bfc906694aa69d447e8ebf600d6cd83e3024ab3d770460` |
-| `index.html` | 29,143 | `5ce14e955e0ac798a61b0f06a6cccdbd44f0b2308b2aed67674d30e8e3c7b76d` |
-| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+The archived manifest records the per-file sizes and checksums.
 
 The exact clean command
 `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
 ran from 11:07:08 through 11:19:06 AEST on 2026-08-18 and exited successfully without changing
 candidate HEAD, tree or worktree. Its retained 251,148-byte, 3,280-line log is
-`/tmp/geosolve-m78-f011-clean-gate.xNKJwu.log`, SHA-256
+`geosolve-m78-f011-clean-gate.xNKJwu.log`, SHA-256
 `d8ae7648a5c1426d5d275b0c2178df49a1793130d16532c6b36214ce0fb73fc6`. The gate includes
 formatting/diff hygiene, warnings-denied workspace Clippy/Rustdoc, 1,734 passing locked all-feature
 workspace tests with zero failures and three intentional ignores, core M16 47/47, core M10 34/34,
 sketch lifecycle 26/26, sketch locality 5/5, M78 geometry variants 33/33, demo-web 143/143, carried
 native/WASM parity, unchanged 270/270 clean golden authority, benchmark/performance budgets, the
 149.39-second release sparse crossover, licence/package checks and Trunk 0.21.14 release assembly.
-
-The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
-Freeze evidence is `/tmp/geosolve-m78-f011-freeze-evidence.gS2PTc`. The snapshot first passed
-proxy-disabled, cache-bypassed, identity-encoded verification on temporary port `18081`. Only then
-was withdrawn PID `1753616` retired and accepted-candidate listener `3120501` started on `8080`;
-temporary PID `3116484` also retired. Final requests for `/` and all seven files returned HTTP 200
-with zero redirects, no content encoding, exact lengths, expected media types and snapshot-
-identical bodies. `/` equalled `index.html`. The accepted-candidate listener later exited; the
-unchanged snapshot was restored under PID `3433169` for closeout and remains byte-identical. Final
-evidence is
-`/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
-`8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`. This mechanically
-nominates the replacement candidate; it does not accept any human scorecard row.
 
 ## Final GitHub Pages publication
 
@@ -78,13 +56,13 @@ The exact seven-file manifest is recorded in `docs/M78_IMPLEMENTATION.md` and ha
 cache-busted identity requests for root plus every artifact path returned HTTP 200 with zero
 redirects, exact expected media types/lengths, no `Location` or `Content-Encoding`, and exact byte
 equality; root equals artifact `index.html`. Complete evidence is
-`/tmp/geosolve-m78-pages-verify.KpqpHi`, with the authoritative repeat under `public-complete` and
+`geosolve-m78-pages-verify.KpqpHi`, with the authoritative repeat under `public-complete` and
 `results.tsv` SHA-256 `e012272d6f852f33810123fbc5a6cd4e2f961a71a8f56860ba6d693c5ca7debf`.
-Pages is final public-byte authority; the separately built Tailscale snapshot remains immutable UAT
+Pages is final public-byte authority; the separately built preview snapshot remains immutable UAT
 candidate evidence and is intentionally not compared across builds.
 
 The withdrawn initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
-`321ca280a5f581ee9755d615733617c98c0e21d7`, snapshot `/tmp/geosolve-m78-uat.SNgu3D` and aggregate
+`321ca280a5f581ee9755d615733617c98c0e21d7`, snapshot `geosolve-m78-uat.SNgu3D` and aggregate
 `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4` remain historical evidence
 only and are no longer served.
 
@@ -228,29 +206,29 @@ displaying NaN or infinity.
 
 ## Acceptance record
 
-- U1 — family palette, variant memory and stage language: accepted under the supervising caller's
+- U1 — family palette, variant memory and stage language: accepted under the maintainer's
   milestone-level approval
-- U2 — points, segments, polylines and midpoint lines: accepted under the supervising caller's
+- U2 — points, segments, polylines and midpoint lines: accepted under the maintainer's
   milestone-level approval
-- U3 — four rectangle recipes and Shift squares: accepted under the supervising caller's
+- U3 — four rectangle recipes and Shift squares: accepted under the maintainer's
   milestone-level approval
-- U4 — circles and arcs: accepted under the supervising caller's milestone-level approval
-- U5 — ellipses, Béziers and conics: accepted under the supervising caller's milestone-level
+- U4 — circles and arcs: accepted under the maintainer's milestone-level approval
+- U5 — ellipses, Béziers and conics: accepted under the maintainer's milestone-level
   approval
-- U6 — open and periodic control NURBS: accepted under the supervising caller's milestone-level
+- U6 — open and periodic control NURBS: accepted under the maintainer's milestone-level
   approval
-- U7 — modifiers, inference cycling and recovery: accepted under the supervising caller's
+- U7 — modifiers, inference cycling and recovery: accepted under the maintainer's
   milestone-level approval
-- U8 — role, persistence and desktop polish: accepted under the supervising caller's milestone-
+- U8 — role, persistence and desktop polish: accepted under the maintainer's milestone-
   level approval
-- M78-F011 — source and created Tangent-Arc centre drag targeted recheck: passed; the caller reports
+- M78-F011 — source and created Tangent-Arc centre drag targeted recheck: passed; the maintainer reports
   that the replacement behaves correctly
-- Final supervising approval: passed on 2026-08-18; the caller accepted the current replacement and
+- Final maintainer approval: passed on 2026-08-18; the maintainer accepted the current replacement and
   requested milestone closure
 - Documentation-only approval-descendant Pages publication and hosted-byte verification: passed in
   run `32096209036`, artifact `9310104202` and deployment `5955688918`
 
 This is explicit milestone-level acceptance of the current replacement. It does not invent a
 separately logged row-by-row replay beyond the focused defect checks and interaction review
-reported by the supervising caller; exact mathematical, lifecycle, authority and persistence
+reported by the maintainer; exact mathematical, lifecycle, authority and persistence
 behavior remains owned by the qualified native/WASM regressions above.

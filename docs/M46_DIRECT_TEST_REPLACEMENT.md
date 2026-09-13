@@ -2,6 +2,10 @@
 
 # M46 direct-test replacement plan
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Status
 
 M46 is complete as the ownership-freeze milestone. This document is the frozen deletion
@@ -54,7 +58,7 @@ criteria, not unfinished work.
   contract itself must be checked. It excludes browser process, HTTP server, CDP,
   fresh browser profile, DOM query, CSS layout, and wall-clock assertions.
 - Do not move M14’s broad legacy authoring, mobile, spatial, capsule, profile, file, or
-  performance claims into M40/M44 merely to delete a script. Under the supervising-user
+  performance claims into M40/M44 merely to delete a script. Under the maintainer
   decision, assertions tied only to the legacy lab or deprecated browser delivery are
   explicitly retired; durable underlying semantics must instead have a named direct owner.
 
@@ -148,7 +152,7 @@ that native M14 tests replace browser authoring or performance behavior.
   browser-specific storage/pointer delivery. Advanced capability absence is not a blocker
   once its legacy-only assertion is explicitly retired.
 - **CDP/browser infrastructure:** delete `crates/geosolve-demo-web/e2e/`, embedded Node HTTP
-  servers, Chromium/CDP launch and wait code, fixed `/tmp/geosolve-*-browser-profile` use,
+  servers, Chromium/CDP launch and wait code, fixed `geosolve-*-browser-profile` use,
   browser environment variables, DOM scraping, timing/retry helpers, and download/blob
   interception when all three scripts are gone.
 - **Serving and release scripts:** delete `scripts/serve-m40.sh` with M40. Delete or replace

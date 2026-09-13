@@ -2,19 +2,21 @@
 
 # M62 human UAT — CAD constraint authoring
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Historical record: this is the approved M62 review procedure, not a live deployment instruction.
 The temporary endpoint is not expected to be running. M64 later made Samples ordinary editable
 workspaces, so the historical read-only scenario statement below no longer describes current UI.
 
-Status: approved by the supervising human on 2026-07-29.
+Status: approved by the maintainer on 2026-07-29.
 
 This review used the ordinary workspace. M62 added no scenario definitions or UAT-only geometry;
 at that historical checkpoint the then-existing guided scenarios were read-only.
 
-Historical temporary Tailscale endpoint:
-
 ```text
-http://100.94.63.83:8080/
+${PREVIEW_URL}
 ```
 
 At review time the release watcher served the M62 palette build. The endpoint was temporary and is
@@ -93,4 +95,4 @@ not a production deployment or current service.
 - Mechanical qualification: Pass on 2026-07-29; exact commands are recorded in
   `docs/M62_IMPLEMENTATION.md`.
 - Human rating: Pass for the recorded M62 scope.
-- Approval: explicitly approved by the supervising human on 2026-07-29.
+- Approval: explicitly approved by the maintainer on 2026-07-29.

@@ -2,9 +2,13 @@
 
 # M90 implementation: typed APIs and executed reversible authority
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **Implementation and complete dirty-tree qualification are finished; M90 closed by explicit
-scoped supervising-user approval on 2026-09-04. M90-U1 through M90-U10 transfer/defer into M91's
-composite UAT without pass or waiver. Closing publication is Tailscale-only.**
+scoped maintainer approval on 2026-09-04. M90-U1 through M90-U10 transfer/defer into M91's
+composite UAT without pass or waiver. Closing publication was an archived preview.**
 
 ## Architecture
 
@@ -227,7 +231,7 @@ axis.
 
 ## M90-F005 exact native terminal continuation
 
-The exact user payload is `/home/arduano/Downloads/project (1).json`, `956,305` bytes with SHA-256
+The exact user payload is `supplied-project.json`, `956,305` bytes with SHA-256
 `c5f748d31c90f8fd575ab2acaddfb8b7d20bbc9f31189dc0716995ad05a46ee7`. Bounded fixture
 `crates/geosolve-demo-web/tests/fixtures/m90_f005_native_drag_repro.txt` is `86,736` bytes with
 SHA-256 `1b1dba9d039ee8756030174731ab3a03e7f77a8554853a96c29e4b10f8c49cf7` and inflates byte-
@@ -332,19 +336,12 @@ scene rows pass exact rerun and complete unchanged `--check`/`--require-clean` p
 
 The monolithic dirty release gate was harness-terminated at exit `143` and is not a pass. A
 subsequent optimized release-WASM build is frozen as provisional dirty-tree replacement evidence at
-`/tmp/geosolve-m90-uat.xk0AGnz0`, external manifest
-`/tmp/geosolve-m90-uat.xk0AGnz0.sha256`, aggregate
+`geosolve-m90-uat.xk0AGnz0`, external manifest
+`geosolve-m90-uat.xk0AGnz0.sha256`, aggregate
 `030e9f4aa98690b8cd35cdbb51a29220674f1bfcfba310192afc467f5afc38a4`, with nine mode-`0444`
 files, two mode-`0555` directories and no symlinks. Its `19,958,913`-byte
 `assets/geosolve_demo_web_bg-B6mOdH7K.wasm` has SHA-256
 `9607cfd48f1ec23b2c29e120704277bbb70247bdbed6a67945c5cc64b7af8761`.
-
-All ten pre-F002 staging/live routes byte-match with correct MIME, no redirects/compression and ledger
-SHA-256 `56a5aff7b23000e1b009f2eb479b9545fcfb17dbe5d1a4f9721f7c3951a761ae`; optimized
-release-WASM two-consecutive-drag Compass passes `1/1` on each. Evidence is
-`/tmp/geosolve-m90-f001-replacement-freeze-evidence.UpMqFyrm`. Tailscale-only
-`geosolve-m90-f001-replacement-uat-18090.service` historically served that snapshot with PID
-`3332035`, invocation `258e6d4da4b14661bd6d8e44856c64a5`; it is now inactive/dead.
 
 M90-F002 adds passing project-store tests for exact large values, ordered writes, migration and
 failure retention; application tests for startup/save/replacement/uncertain-read coordination; and
@@ -356,20 +353,12 @@ green. The Chromium regression passes `1/1`: five Compass Rose drags advance Ind
 a quota alert or legacy project key, reload restores the exact saved fingerprint and point, and
 Undo changes it as expected. No solver equation, rank/DOF rule, tolerance or branch state changed.
 
-The post-F002 optimized build is frozen at `/tmp/geosolve-m90-uat.TN2NP9eF`, external manifest
-`/tmp/geosolve-m90-uat.TN2NP9eF.sha256`, aggregate
+The post-F002 optimized build is frozen at `geosolve-m90-uat.TN2NP9eF`, external manifest
+`geosolve-m90-uat.TN2NP9eF.sha256`, aggregate
 `06fb7b77e64cf1ead91b14accded0191a65a9b344fc538139e7a8eeb10b7c35f`, with nine mode-`0444`
 files, two mode-`0555` directories and no symlinks. Its `19,958,865`-byte
 `assets/geosolve_demo_web_bg-D0927Gtv.wasm` has SHA-256
 `b949a8ed46a39693e8f39132ce8eaae1bb0b29d07ead9b01603706ea8bef2a6a`.
-
-All ten staging/live routes byte-match with correct MIME, no redirects/compression and ledger
-SHA-256 `5247ef967f0a5f701181d08fa2fa9eb94a6302e17e5731ec8eacdefa3fb52ae6`; the exact frozen
-five-drag quota regression passes `1/1` on each. Evidence is
-`/tmp/geosolve-m90-f002-freeze-evidence.wZMAFe3d`. Tailscale-only
-`geosolve-m90-f002-replacement-uat-18090.service` historically served only that snapshot with PID
-`3839015`, invocation `0f6fca0683fa4ceead74c1355709b019`, on `100.94.63.83` at
-`http://100.94.63.83:18090/`.
 
 M90-F003 withdraws those bytes from continuing UAT because they predate generated-helper closure
 and direct-circle presentation-field lowering. The F002 service is inactive/dead and its immutable
@@ -382,20 +371,12 @@ retained bridge, format, warnings-denied Clippy, diff hygiene and golden `--chec
 production UI build and nine-file distribution validation. Optimized release-WASM Chromium passes
 the F003 circle and carried F001/F002 regressions `1/1` each against staging and live.
 
-The optimized release-WASM output is frozen read-only at `/tmp/geosolve-m90-uat.yIPVNICT`, with
-external manifest `/tmp/geosolve-m90-uat.yIPVNICT.sha256` and ordered aggregate
+The optimized release-WASM output is frozen read-only at `geosolve-m90-uat.yIPVNICT`, with
+external manifest `geosolve-m90-uat.yIPVNICT.sha256` and ordered aggregate
 `d31e311c4e0e69974690d299819df6a33b7ae13b7eff5d037406e602c033f33a`. It contains nine mode-
 `0444` regular files, two mode-`0555` directories and zero symlinks. Its `19,967,322`-byte
 `assets/geosolve_demo_web_bg-DuuevZyx.wasm` has SHA-256
 `c3160d7f8f6fc49db6294588cedd38ba5b520a80743d3977039957074fa8ca31`.
-
-All ten staging/live routes byte-match with correct MIME, no redirects/compression and ledger
-SHA-256 `47a0229dbf46ea0549f4e424a6ce7ccd452810eb24161db61c4cb33436107726`.
-Freeze evidence is `/tmp/geosolve-m90-f003-freeze-evidence.Y4jLQxD3`. Historical Tailscale-only
-`geosolve-m90-f003-replacement-uat-18090.service`, PID `305121`, invocation
-`f456b1c8cea044638bae1119709b94d9`, served only that snapshot on `100.94.63.83` at
-`http://100.94.63.83:18090/`. M90-F004 withdraws those bytes from continuing UAT; the service is
-inactive/dead and the immutable snapshot remains historical pre-F004 evidence.
 
 M90-F004 qualification passes the exact bridge owner `1/1`; full
 `cargo test --locked -p geosolve-demo-web --lib` at `284/284`;
@@ -406,24 +387,16 @@ all-target/all-feature Clippy; format and diff checks. The exact golden inventor
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`. The final pinned/Nix
 optimized release-WASM build, manifest/licence/build-contract checks and nine-file distribution
 validation pass. The combined F001/F002, F003 and F004 browser bundle passes `3/3` against frozen
-staging and live Tailscale bytes.
+staging and live preview bytes.
 
 The historical post-F004 optimized release-WASM output is frozen read-only at
-`/tmp/geosolve-m90-uat.O4xZJBxg`, with external manifest
-`/tmp/geosolve-m90-uat.O4xZJBxg.sha256` and ordered aggregate
+`geosolve-m90-uat.O4xZJBxg`, with external manifest
+`geosolve-m90-uat.O4xZJBxg.sha256` and ordered aggregate
 `fd0a4635edcc6bd24d36eeca831a57bbb62cdf1d67589c6245af9e7b88bf52be`. It contains nine mode-
 `0444` regular files, two mode-`0555` directories and zero symlinks. Its `19,987,485`-byte
 `assets/geosolve_demo_web_bg-CoONmEL1.wasm` has SHA-256
 `e61ff5e9183883c1872293ad5d4c38c06175bc12575668f3f770282387bcf457`. Freeze evidence is
-`/tmp/geosolve-m90-f004-freeze-evidence.F0HdfUMF`.
-
-All ten staging/live routes byte-match with correct MIME, no redirects/compression and HTTP ledger
-SHA-256 `47589602797db38fb23a70da0d1cc31c7b032b7ab0907f3688d2a39886ebe921`.
-Tailscale-only `geosolve-m90-f004-replacement-uat-18090.service` historically served only that
-snapshot with PID `792138`, invocation `ff367dd5f5bb4f24a8661dd83a26168b`, at
-`http://100.94.63.83:18090/`. The supervising user's reboot stopped the service. M90-F005
-withdraws those bytes from continuing UAT because they predate its repair; the snapshot and hashes
-remain exact historical evidence.
+`geosolve-m90-f004-freeze-evidence.F0HdfUMF`.
 
 F005/F006 collateral passes constraint-editor all-features with unit layer `439/439` plus all
 integrations, demo-web `286/286`, warnings-denied workspace and targeted demo-web Clippy,
@@ -431,44 +404,35 @@ integrations, demo-web `286/286`, warnings-denied workspace and targeted demo-we
 `37`, runtime licences `71`, frontend build contract, Vitest `74/74`, optimized release-WASM build
 and nine-file distribution validation.
 
-Current immutable optimized snapshot `/tmp/geosolve-m90-uat.EtWyWQlt`, manifest
-`/tmp/geosolve-m90-uat.EtWyWQlt.sha256` and freeze evidence
-`/tmp/geosolve-m90-f006-freeze-evidence.HqyaA7Qp` have ordered aggregate
+Current immutable optimized snapshot `geosolve-m90-uat.EtWyWQlt`, manifest
+`geosolve-m90-uat.EtWyWQlt.sha256` and freeze evidence
+`geosolve-m90-f006-freeze-evidence.HqyaA7Qp` have ordered aggregate
 `b3fd72b9ec98d318d7bfa7bf8c09d0fcbd3856ea0723d81e01e64945e301debe`, nine mode-`0444` regular
 files, two mode-`0555` directories and no symlinks. Its `19,990,463`-byte
 `assets/geosolve_demo_web_bg-Dc5MH04n.wasm` has SHA-256
 `bad16242c2ec0fa0c6c0ba6882428372c1bf0b7dd1a70235467b5febdfc80712`.
 
-Staging/live HTTP ledgers match at SHA-256
-`41d11e1c56bad8dcc57edf229f0bfec20d8f5e602b3c385e5e68d54dd42c816a`. The optimized
-release-WASM browser bundle passes `4/4` against both: empty coded Center-Radius Circle, two-circle
-snapped Segment, Compass persistence/reload and the supplied native contact-workspace drag.
-Tailscale-only unit `geosolve-m90-f006-replacement-uat-18090.service`, PID `462021`, invocation
-`4a17e69e926446eba21439ac4dd6f4e6`, exact-serves that snapshot at
-`http://100.94.63.83:18090/`.
-
 The final full dirty-tree gate command
 `env GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
 ran from `23:20:45` through `23:47:22 AEST` on 2026-09-03 and exited `0` after `1,596,726 ms`.
-Its `573,421`-byte log `/tmp/geosolve-m90-f006-full-gate.hKSTh4/release-gate.log` has SHA-256
+Its `573,421`-byte log `geosolve-m90-f006-full-gate.hKSTh4/release-gate.log` has SHA-256
 `bda7f5f92f15a5f0a0cf26ed93cb514943d9a9d1ad49bf0ba0e148c9239b205d`. The gate keeps the reviewed
 271-row golden unchanged, passes the release-only 256-moving-body performance row in `137.82 s`,
 frontend Vitest `74/74`, and the optimized nine-file distribution validation. This is complete
 dirty-tree qualification, not clean-source qualification.
 
-The supervising user explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
+The maintainer explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
 remain unexecuted and transfer/defer—not pass or waive—into M91's one composite UAT. Automated
-qualification accepts no human row. The immutable F006 snapshot and service remain exact Tailscale-
-only closing publication authority; no GitHub Pages deployment or public push was authorized or
-made. M90 is closed. `PLAN.md` owns the exact evidence and M91 intake ledger.
+qualification accepts no human row. The immutable F006 snapshot and service remain exact preview-
+only closing publication authority; no public deployment was made for this milestone. M90 is closed. `PLAN.md` owns the exact evidence and M91 intake ledger.
 
 Post-close clean-source qualification (2026-09-04) also passes. Exact commit
 `fd3a3b864422a4d014525aefafc6d0e4147fa93c`, tree
 `996ca79bc629337aba549cd6a05cf70ee5e1ee1f`, ran
 `NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from `00:20:58` through
 `00:41:06 AEST` and exited `0`. The `567,121`-byte log
-`/tmp/geosolve-m90-clean-gate.X6LGue/release-gate.log` has SHA-256
+`geosolve-m90-clean-gate.X6LGue/release-gate.log` has SHA-256
 `e7deed1da0a8f1fb139025753980e52e0621198a3d3fba73ca855ceee1b03e7b`. All nine resulting
-distribution files pass `/tmp/geosolve-m90-uat.EtWyWQlt.sha256`; the immutable F006 snapshot and
+distribution files pass `geosolve-m90-uat.EtWyWQlt.sha256`; the immutable F006 snapshot and
 service therefore remain exact candidate authority. This evidence changes no implementation,
 publication or human-UAT disposition.

@@ -2,8 +2,12 @@
 
 # M77 implementation — CAD curve handles and implicit parameters
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete (2026-08-17); the replacement is clean-qualified, immutably frozen,
-scope-approved and exact-verified on both Tailscale and GitHub Pages.**
+scope-approved and exact-verified on both preview and GitHub Pages.**
 
 ## Approved architecture
 
@@ -162,7 +166,7 @@ env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 
 ran from 18:21:03 through 18:33:22 AEST and exited successfully without changing HEAD, tree or
 worktree. The retained 243,128-byte log is
-`/tmp/geosolve-m77-replacement-clean-gate.cc99b11.log`, SHA-256
+`geosolve-m77-replacement-clean-gate.cc99b11.log`, SHA-256
 `0da2456b69951a50ba41cfe939f37764fcc211f2af45f4b9526cd5c974829301`. It passes formatting/diff,
 warnings-denied workspace Clippy and Rustdoc, every locked all-feature workspace test, unchanged
 270/270 clean golden authority, every carried native/WASM parity target through M77, demo WASM,
@@ -171,27 +175,9 @@ licensing/package contents and Trunk 0.21.14 release assembly. The only diagnost
 longstanding non-failing Cargo advisories for packages declaring both `license` and `license-file`.
 
 Without rebuilding, the exact gate output was byte-compared and frozen at
-`/tmp/geosolve-m77-uat.ARrQFw`, directory mode `0555`, seven regular non-symlink files mode `0444`:
+`geosolve-m77-uat.ARrQFw`, directory mode `0555`, seven regular non-symlink files mode `0444`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 23,216 | `841936f73b5d21fbee999ec2bc4140ae0869cd2821429816e3766bd026ad771b` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-74621b73a35eab86.js` | 33,221 | `9f28eed1331a570a1fa894f16834a40be0593ef9bd673ca80db8fbea4017eef1` |
-| `geosolve-demo-web-74621b73a35eab86_bg.wasm` | 6,426,513 | `1c4701e10d4ca672b0aa2511ff3fc4067be5c03965274de4925a711b5414e3f1` |
-| `index.html` | 28,940 | `f3740f54742d6895e204cc41c08e031d0f2b639e6dd30df30c3e08b1b878527d` |
-| `styles-d7435a6d60dc3430.css` | 34,689 | `870bde7d758fe95f4323bedc6588ff2cffaf3c826549e684718ebfd818eebcd6` |
-
-Its C-locale ordered-manifest aggregate is
-`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`; freeze evidence is
-`/tmp/geosolve-m77-replacement-freeze-evidence.2kfhjk`. PID `284248`, retained command-runner
-session `5213`, serves only that snapshot at `http://100.94.63.83:8080/`. Proxy-disabled,
-cache-bypassed identity requests for `/` and every file return HTTP 200 with zero redirects, no
-content encoding, expected media types/lengths and exact bytes; `/` equals `index.html` and the
-fetched aggregate matches. HTTP evidence is
-`/tmp/geosolve-m77-replacement-http-verify.yxgjkL`. Withdrawn PID `3912158` remained live until the
-replacement freeze was complete, then was retired before the verified replacement listener began.
+The archived manifest records the per-file sizes and checksums.
 
 The later evidence-ledger commit is a documentation descendant and does not replace `cc99b11` as
 the exact gate-qualified product source.
@@ -206,7 +192,7 @@ env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
 The clean worktree, HEAD and tree were unchanged from 15:48:17 through 16:00:06 AEST. The retained
-241,980-byte log is `/tmp/geosolve-m77-clean-gate.51a3b95.log`, SHA-256
+241,980-byte log is `geosolve-m77-clean-gate.51a3b95.log`, SHA-256
 `e28c50101df3b9c447ccf1a392f0e3e5644068e8abc460be389aaf3cff1984ed`. It passes formatting/diff,
 warnings-denied workspace Clippy and Rustdoc, all locked all-feature tests, unchanged 270/270 clean
 golden authority, every carried native/WASM parity target through M77, demo WASM, benchmark
@@ -215,18 +201,9 @@ contents and Trunk 0.21.14 release assembly. The only diagnostics are the longst
 Cargo advisories for packages declaring both `license` and `license-file`.
 
 Without rebuilding, the exact seven regular gate-output files were byte-compared and frozen at
-`/tmp/geosolve-m77-uat.1mDjQv`, directory mode `0555`, file mode `0444`, no symlinks. Its ordered
+`geosolve-m77-uat.1mDjQv`, directory mode `0555`, file mode `0444`, no symlinks. Its ordered
 manifest is recorded in `docs/M77_UAT.md`; aggregate:
 `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`.
-
-PID `3912158`, command-runner session `12828`, formerly served only that snapshot at the shared
-Tailscale endpoint. Proxy-disabled, cache-bypassed identity requests for `/` and every file returned
-HTTP 200 with zero redirects, no content encoding, expected media types/lengths and exact bytes;
-`/` equalled `index.html` and the fetched aggregate matched. Freeze evidence is
-`/tmp/geosolve-m77-freeze-evidence.qbBmc5`; HTTP evidence is
-`/tmp/geosolve-m77-http-verify.eu1KMY`. The previous M76 PID `1780608` was retired only after the
-new snapshot was ready. M77-F012/F013 supersede those product bytes for UAT; PID `3912158` is now
-retired and these bytes are historical evidence only.
 
 Corrected implementation source `f53934f` passes formatting, diff hygiene, warnings-denied
 workspace Clippy, locked all-feature workspace tests, focused sketch 11/11, controls 11/11,
@@ -241,7 +218,7 @@ properties, preview/cancellation/staleness, one-step history and persistence con
 native evidence. Weight rails, knot/degree/topology editing, generalized derived-point constraint
 targets, automatic trim/branch changes and mobile layout remain deliberate non-goals.
 
-Replacement mechanical nomination is complete. On 2026-08-17 the supervising caller explicitly
+Replacement mechanical nomination is complete. On 2026-08-17 the maintainer explicitly
 approved the current candidate and requested milestone closure. U1-U6 pass under that scoped
 disposition; this does not invent a separate row-by-row replay beyond the reported focused checks.
 The exact GitHub Pages publication and hosted-byte verification below complete the final closeout
@@ -256,7 +233,7 @@ Qualification/assembly job `95335868643` passed in 35m43s and deploy job `953449
 30s. Deployment `5942438795` reached `success` at
 `https://arduano.github.io/geometric-constraint-solver/`. This publication descendant records the
 approved scorecard; exact clean product source `cc99b11` remains the release-qualified product
-authority, and no byte identity with the separately built Tailscale snapshot is claimed.
+authority, and no byte identity with the separately built preview snapshot is claimed.
 
 Actions artifact `9283439225` is 2,225,707 bytes. Its ZIP/API SHA-256 is
 `97f842a402df255391ed096bae4b04067e55f4eb617c9840d3d2ba607e2abb08`; its sole inner
@@ -264,27 +241,19 @@ Actions artifact `9283439225` is 2,225,707 bytes. Its ZIP/API SHA-256 is
 `f0d712123c7266ff9b504aa11abf000603b56b315eeaa9a229078aa1ca12b8ff`. The extracted artifact
 contains exactly seven regular non-symlink files:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 23,275 | `5b130ea27e2897f1c38d1947d9116debe429a2708e389ee68f49a6f63f9959b9` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-f1feb79aac4ed84c.js` | 33,221 | `9f28eed1331a570a1fa894f16834a40be0593ef9bd673ca80db8fbea4017eef1` |
-| `geosolve-demo-web-f1feb79aac4ed84c_bg.wasm` | 6,426,433 | `e74a07d0466fc4a5bfad9e8e63977bf9d5c70351b065aa7b3ff9272dd25ddfd0` |
-| `index.html` | 29,080 | `1dde6ab75395787cc8a290a3ec03fdddab5869066dfed4fd2094737c3070576b` |
-| `styles-d7435a6d60dc3430.css` | 34,689 | `870bde7d758fe95f4323bedc6588ff2cffaf3c826549e684718ebfd818eebcd6` |
+The archived manifest records the per-file sizes and checksums.
 
 The C-locale ordered-manifest aggregate is
 `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Proxy-disabled,
 cache-bypassed identity requests for `/`, `/index.html` and all six other paths returned HTTP 200
 with zero redirects, no `Location` or `Content-Encoding`, exact lengths/media types and
 artifact-identical bytes; `/` equals `index.html`. Complete artifact and public evidence is in
-`/tmp/geosolve-m77-pages-verify.EhNzhE`, with the authoritative repeat under `public-complete`.
+`geosolve-m77-pages-verify.EhNzhE`, with the authoritative repeat under `public-complete`.
 The downloaded 745,242-byte workflow log has SHA-256
 `96f655e32fac6131df1c480395e22a4bdb56ea27271bae8e2bda04fcce997d32`.
 
 Retained public Chromium smokes also pass. M77-adapted M72 check
-`/tmp/m77_adapted_m72_browser_check.mjs`, SHA-256
+`m77_adapted_m72_browser_check.mjs`, SHA-256
 `f9be8940470055d9079de651250aea1acb70ef6e68383957fa819adc2b1b4c2b`, replaces only the obsolete
 numeric elliptical-arc Start-field assertions with M77's approved hidden-numeric/spatial-help
 contract and passes at `1440x900` and `1024x720`. The M76-adapted M74 check, SHA-256

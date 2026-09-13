@@ -2,9 +2,13 @@
 
 # M73 — Retained authoring semantic consolidation
 
-Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete and explicitly approved by the maintainer on 2026-08-15**. M73-F001
 through M73-F004, the clean replacement release gate, byte-verified immutable UAT snapshot,
-focused human UAT and exact final GitHub Pages publication all pass. The supervising caller
+focused human UAT and exact final GitHub Pages publication all pass. The maintainer
 accepted the original scope, focused F004 correction and final candidate. No new ADR is required
 because M73 changes no solver or persistence architecture and retires only an editor API introduced
 after the published `0.2.0` baseline.
@@ -136,10 +140,9 @@ Exact clean replacement source `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
 `fe9897153baa974b3c5c06e7a3bf5eee76e920f2`, passes the complete release gate, including editor
 325/325 plus every integration, unchanged golden 234/234, native/WASM parity and the complete
 workspace, documentation, benchmark, performance, licence, packaging and Trunk matrix. Its exact
-gate distribution is frozen read-only at `/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
+gate distribution is frozen read-only at `geosolve-m73-uat.JKAWtJ`, aggregate
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, and byte-verified at
-`http://100.94.63.83:8080/`. This replacement is the accepted closing candidate. The supervising
-caller confirmed that the focused behavior works and explicitly requested closure on 2026-08-15;
+the archived preview. This replacement is the accepted closing candidate. The maintainer confirmed that the focused behavior works and explicitly requested closure on 2026-08-15;
 M73-U1 through M73-U4 pass under that scoped decision.
 
 Documentation-only approval descendant `ef7b90feb17bfba62c45f9463ceb934fc34e6f4d`, tree

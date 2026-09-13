@@ -2,12 +2,16 @@
 
 # M85 — Responsive retained workbench presentation
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and closed on 2026-08-28**. M85-F001 through M85-F003 are repaired, exact
-product source `5c265e2` passes the clean release gate, and its immutable local/Tailscale candidate
-passes the frozen-byte browser profile plus native flat-adapter evidence. The supervising user's
+product source `5c265e2` passes the clean release gate, and its immutable local/preview candidate
+passes the frozen-byte browser profile plus native flat-adapter evidence. The maintainer's
 close decision accepts M85-U1 through M85-U12 without claiming a separately logged row-by-row
 replay. Approval head `e8dfec3` passes Pages run `33128387637`; the separately rebuilt and exactly
-verified Pages artifact is final M85 public-byte authority. The retained local and Tailscale
+verified Pages artifact is final M85 public-byte authority. The retained local and preview
 services are retired. M86 may open as a separate bug-fix milestone after this closeout commit.
 
 ## Goal
@@ -81,7 +85,7 @@ screen-space scene, laying out annotations, serializing full SVG and replacing `
 - Unit tests own deterministic coalescing, newest-sample, exact-final-camera and zero-forbidden-work
   invariants. They run in ordinary CI without a browser or wall-clock assumptions.
 - A focused candidate-only Chromium trace owns real input/callback/RAF/paint/long-task timing. It is
-  run against local/frozen Tailscale bytes, not restored as broad PR integration CI.
+  run against local/frozen preview bytes, not restored as broad PR integration CI.
 
 ### G4 — Hover, drag and terminal responsiveness
 
@@ -151,10 +155,10 @@ That historical profile is now superseded for nomination by exact frozen-byte ev
 gate ran from 06:40:49 through 07:13:16 AEST on 2026-08-28, exited `0`, and produced a 6,993-line,
 456,580-byte log with SHA-256
 `0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`. Its no-rebuild seven-file
-output is frozen at `/tmp/geosolve-m85-uat.QX8fU3Q6`, with directories/files `0555`/`0444`, zero
+output is frozen at `geosolve-m85-uat.QX8fU3Q6`, with directories/files `0555`/`0444`, zero
 symlinks and ordered-manifest aggregate
 `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and retained
-Tailscale HTTP ledgers are byte-identical at SHA-256
+preview HTTP ledgers are byte-identical at SHA-256
 `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
 
 The final frozen profile passes 5/5 in `2.2m`: 1,200/1,200 camera-only admissions, zero forbidden
@@ -169,7 +173,7 @@ mutating release. The captured profile log SHA-256 is
 
 Final-source native M85-U10 evidence passes 19/19 exact tests for flat/shared camera, hover,
 interaction, history/work-neutrality and v1-v6 normalization contracts. Evidence is
-`/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
+`geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
 `5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545`,
 `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79` and
 `ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`. Human UAT and approval pass
@@ -186,16 +190,8 @@ regular files, zero symlinks and zero other non-regular entries, with ordered-ma
 `8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`. Public `/` and all seven
 artifact paths return HTTP 200 with zero redirects, exact MIME, `Content-Length` and artifact bytes,
 no `Location` or `Content-Encoding`, and `/` equals `index.html`; hosted verification
-`/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` has SHA-256
+`geosolve-m85-pages-verify.39FJNL/results.tsv` has SHA-256
 `206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`.
-
-Pages is a fresh repo-prefixed build and is deliberately not claimed byte-identical to frozen UAT
-snapshot `/tmp/geosolve-m85-uat.QX8fU3Q6`; that snapshot's
-`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5` aggregate remains historical
-qualification evidence. Product source `5c265e2` is an ancestor of the approval head, with only
-the eight M85 closeout documents changed. Both `geosolve-m85-local-uat.service` and
-`geosolve-m85-uat.service` are stopped at inactive/dead with `MainPID=0`, and both former endpoints
-refuse connections. `docs/M85_IMPLEMENTATION.md` owns the full evidence record.
 
 ## Release sequence
 
@@ -203,8 +199,8 @@ refuse connections. `docs/M85_IMPLEMENTATION.md` owns the full evidence record.
 2. Implement and qualify camera navigation, then re-profile and harden hover/drag/terminal paths.
 3. Pass format, warnings-denied Clippy, workspace tests, relevant release performance tests, WASM
    build, clean golden checks and the complete clean release gate.
-4. Freeze the exact no-rebuild candidate, serve only those bytes on Tailscale, run the focused
+4. Freeze the exact no-rebuild candidate, serve only those bytes on preview, run the focused
    Chromium timing trace and complete the human scorecard plus native flat-adapter evidence. The
    flat retained-coordinator compatibility route has no ordinary persisted browser bootstrap.
-5. After explicit supervising-user UAT approval, publish the accepted descendant to GitHub Pages,
+5. After explicit maintainer UAT approval, publish the accepted descendant to GitHub Pages,
    exact-verify hosted bytes, retire both retained services and close M85. **Complete.**

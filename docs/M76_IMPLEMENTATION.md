@@ -2,9 +2,13 @@
 
 # M76 implementation — production-quality constraint annotations
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete (2026-08-17); final clean-qualified candidate frozen and byte-verified on
-Tailscale, scoped human approval recorded, and exact GitHub Pages publication verified**. The
-caller reviewed the initial candidate, requested two final feature refinements and explicitly
+preview, scoped human approval recorded, and exact GitHub Pages publication verified**. The
+maintainer reviewed the initial candidate, requested two final feature refinements and explicitly
 authorized closure without a separate post-refinement UAT. U1-U4 are accepted under that scoped
 approval; this record does not invent individually replayed observations. M77 is active
 subsequently and does not change this completed evidence.
@@ -21,7 +25,7 @@ subsequently and does not change this completed evidence.
 - [x] Put shared-endpoint acute/right angle annotations in the actual finite-ray interior wedge.
 - [x] Remove the redundant canvas Origin marker while retaining protected datum semantics.
 - [x] Complete clean release qualification.
-- [x] Freeze and byte-verify an immutable Tailscale candidate without rebuilding.
+- [x] Freeze and byte-verify an immutable preview candidate without rebuilding.
 - [x] Receive explicit scoped approval, including U1-U4 and no separate follow-up UAT.
 - [x] Publish the approved candidate to GitHub Pages and verify the exact public artifact.
 
@@ -92,42 +96,18 @@ property-oracle test hardening and milestone-neutral shared-runner performance-g
 neither changes M76 product behavior.
 
 The gate-produced distribution was copied without rebuilding to
-`/tmp/geosolve-m76-final-uat.65Y8J1`. The directory is mode `0555`; its exactly seven regular
+`geosolve-m76-final-uat.65Y8J1`. The directory is mode `0555`; its exactly seven regular
 non-symlink files are mode `0444`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 20,587 | `24934e6d620dc89078ab41c155acd2a31bba4260a82cfe4c37077421cc1ab853` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-55053c1ba5c6df34.js` | 33,221 | `d8974bcac131556374933e638799af9ee854a913e819e5ce492c9c0707547e0a` |
-| `geosolve-demo-web-55053c1ba5c6df34_bg.wasm` | 6,273,395 | `ceed21fb5467d43e0ca603521c4c54602458c85f0736f6c129ae63303c01b53b` |
-| `index.html` | 28,226 | `92a5e926448e82d05e3d84f1c0044513c6b70125d798374ec03fc205149ae1a5` |
-| `styles-c2e1aed7dc61439c.css` | 31,750 | `69e4241bdcafc260ec6248ecc0a94f0cdb6420155419dd103a30d49ee1d467ee` |
-
-Its C-locale ordered-manifest aggregate is
-`967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`. PID `1780608`, retained
-command-runner session `30164`, served the exact snapshot at `http://100.94.63.83:8080/` and was
-retired only after the M77 snapshot was ready.
+The archived manifest records the per-file sizes and checksums.
 
 Proxy/cache-bypassed identity requests for `/` and all seven files return HTTP 200 with exact media
 types, lengths and bytes, no redirects or content encoding; `/` equals `index.html`, and the fetched
-aggregate matches. Evidence is retained at `/tmp/geosolve-m76-final-http-verify.UwoaMK`.
-
-The prior clean-qualified source `9b4e7f72dcacefdf4d7847a22eb675c711068d26`, snapshot
-`/tmp/geosolve-m76-uat.ctgYzp` and aggregate
-`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4` are superseded historical
-evidence. Its server PID `1455071` was retired before the final snapshot took the shared endpoint.
-
-The initial nomination at source `37eade50b566f62905a395655bc80c17d9b6bef4`, tree
-`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, snapshot
-`/tmp/geosolve-m76-uat.puiPgO`, aggregate
-`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf`, is superseded historical
-evidence only. Its server PID `1077092` is retired.
+aggregate matches. Evidence is retained at `geosolve-m76-final-http-verify.UwoaMK`.
 
 ## Scoped approval record
 
-The caller reviewed the initial candidate and reported that it looked good, then requested the
+The maintainer reviewed the initial candidate and reported that it looked good, then requested the
 angle-side and Origin refinements above. After implementation and automated review, the caller
 explicitly authorized closing M76 without a separate follow-up UAT. That authority accepts U1-U4
 for scoped closure; it is not represented as a detailed post-refinement hands-on transcript.
@@ -173,9 +153,9 @@ The C-locale seven-file manifest aggregate is
 `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`. Public root and all seven
 paths return HTTP 200 with zero redirects, exact expected media types and artifact-identical bytes;
 `/` equals `index.html`, and asset references are repository-prefixed. Verification evidence is
-retained at `/tmp/geosolve-m76-pages-verify.ijOz7p` (an independent repeat is at
-`/tmp/geosolve-m76-pages-verify.hVSqQJ`). Pages rebuilds with the repository prefix, so byte
-identity with the separately frozen Tailscale artifact is neither expected nor claimed.
+retained at `geosolve-m76-pages-verify.ijOz7p` (an independent repeat is at
+`geosolve-m76-pages-verify.hVSqQJ`). Pages rebuilds with the repository prefix, so byte
+identity with the separately frozen preview artifact is neither expected nor claimed.
 
 The unchanged M72 public browser script passes at `1440x900` and `1024x720`. The original retained
 M74/M75 scripts time out only because they still require the deliberately removed Origin canvas
@@ -183,5 +163,5 @@ ring. M76-adapted temporary copies change only those obsolete Origin-canvas expe
 two canvas axes, no Origin ring and an inapplicable axes intersection. Hashes
 `4aff982c6a9e10702d7b0179c17682c6904bb6c28362ebefe967705a984c3355` and
 `161e96d541dbcc189dbbc23c47da672e3080b7c7646e45c11ef458a5e521a067` pass M74 at both desktop
-sizes and M75 6/6. GitHub Pages is final public-byte authority; the Tailscale snapshot remains the
+sizes and M75 6/6. GitHub Pages is final public-byte authority; the preview snapshot remains the
 live frozen candidate for easy follow-up through the completed closeout handoff.

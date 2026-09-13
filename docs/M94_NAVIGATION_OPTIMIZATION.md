@@ -2,9 +2,13 @@
 
 # M94-F002 — dense-fixture navigation optimization
 
-The user authorized implementation of the measured pan, zoom and hover optimizations.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+This amendment implements the measured pan, zoom and hover optimizations.
 The [diagnosis](M94_PERFORMANCE_DIAGNOSIS.md) and the original immutable M94-F001 candidate remain
-historical evidence. The correction was qualified and byte-verified at `http://100.94.63.83:18096/`; its accepted descendant is `7727cbf`. **M94 is accepted and closed on 2026-09-07** under [the final audit and acceptance record](M94_CLOSURE.md), retaining the limits below.
+historical evidence. The correction was qualified and byte-verified at the archived preview; its accepted descendant is `7727cbf`. **M94 is accepted and closed on 2026-09-07** under [the final audit and acceptance record](M94_CLOSURE.md), retaining the limits below.
 
 ## Implementation
 
@@ -55,11 +59,11 @@ nix-shell shell.nix --run 'CARGO_BUILD_JOBS=4 cargo clippy --locked -p geosolve-
 npm --prefix crates/geosolve-demo-web/frontend test -- src/lib/canvas-renderer.test.ts src/lib/canvas-renderer-pixi.test.ts
 npm --prefix crates/geosolve-demo-web/frontend test -- src/components/canvas-viewport.test.tsx
 nix-shell shell.nix --run 'npm --prefix crates/geosolve-demo-web/frontend test -- --no-cache src/lib/wasm-adapter.test.ts'
-nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18106 npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --workers=1'
+nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18106 npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --workers=1'
 ```
 
-Owner details: `/tmp/m94-bridge-result.md`, `/tmp/m94-bridge-tests.log`,
-`/tmp/m94-input-done.txt`. Browser log: `target/m94/navigation/canvas-focused-r2.log`.
+Owner details: `m94-bridge-result.md`, `m94-bridge-tests.log`,
+`m94-input-done.txt`. Browser log: `target/m94/navigation/canvas-focused-r2.log`.
 Two intermediate TypeScript checks found test-double typing errors, subsequently repaired.
 The first provisional artifact build stopped at that check; its successful WASM compilation
 was not a successful browser build. The second provisional build passes.
@@ -104,7 +108,7 @@ camera operations safely rebuild their filtered scene. Hidden items remain absen
 and picking. This pass does not weaken that owner check. Native parameter publication remains a
 separate expensive operation, as recorded in the diagnosis. A future genuinely asynchronous
 adapter would need command-wide serialization; input queue ordering alone is not that contract.
-At the F002 delivery checkpoint, M94 remained open for supervising-user acceptance; final closure is recorded above.
+At the F002 delivery checkpoint, M94 remained open for maintainer acceptance; final closure is recorded above.
 
 ## Final qualification and delivery — 2026-09-07
 
@@ -120,8 +124,8 @@ unchanged-owner evidence; the new navigation measurements below are separate fre
 The final focused frontend run passes **37/37**; the last scene-borrow refactor passes its five
 navigation-filtered native tests. Full-gate source and receipts are unchanged and authenticated.
 
-The frozen production artifact is `/tmp/geosolve-m94-f002-uat.ompe59ry/geosolve-production`,
-with manifest `/tmp/geosolve-m94-f002-uat.ompe59ry/production.json`: **12 files, 27,619,409 bytes**,
+The frozen production artifact is `geosolve-m94-f002-uat.ompe59ry/geosolve-production`,
+with manifest `geosolve-m94-f002-uat.ompe59ry/production.json`: **12 files, 27,619,409 bytes**,
 aggregate **`cd6b351b29fd6e802b7b5ba0f8e1b783f6c105d274b924f93e4528b2e6766d5b`**.
 Root plus all 12 served paths byte/MIME-match, and actual WASM startup/manifold rendering passes
 without page/console/request errors. Receipt: `target/m94/navigation/tailscale-final.json`.
@@ -150,14 +154,6 @@ no pixel-byte-equivalence claim is made. Raw final data and captures are under
 frame budget and the separate native edit-publication path.
 
 Executed final commands:
-
-```bash
-nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260907T131046-91e1a335'
-python3 /tmp/freeze-m94-f002.py 20260907T143802-fee2e639
-nix-shell shell.nix --run 'node /tmp/m94-f002-servers.mjs /tmp/geosolve-m94-f002-uat.ompe59ry/production.json /tmp/geosolve-m94-f002-uat.ompe59ry/geosolve-production'
-nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest /tmp/geosolve-m94-f002-uat.ompe59ry/production.json --directory /tmp/geosolve-m94-f002-uat.ompe59ry/geosolve-production --url http://100.94.63.83:18096/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m94/navigation/tailscale-final.json'
-nix-shell shell.nix --run 'NAV_URL=http://127.0.0.1:18096/ NAV_MANIFEST=/tmp/geosolve-m94-f002-uat.ompe59ry/production.json NAV_OUTPUT=/home/arduano/programming/geometric-constraint-solver/target/m94/navigation/final timeout 240 node /tmp/m94-navigation-probe.mjs'
-```
 
 Logs and authenticated freeze summary: `target/m94/navigation/{release-gate.log,freeze.json,
 tailscale-final.log,final.log}`. Final prose is qualified separately with the documentation-only

@@ -1,11 +1,13 @@
 # M64 editable samples UAT
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Historical record: the candidate URL below identifies the approved M64 review service and is not a
 current deployment instruction. The purpose-based editable Samples workflow remains current.
 
-Status: approved by the supervising human on 2026-07-30.
-
-Historical candidate URL: `http://100.94.63.83:8080/`
+Status: approved by the maintainer on 2026-07-30.
 
 ## Review setup
 
@@ -95,6 +97,6 @@ No findings were reported in the approval review.
 
 ## Approval
 
-Approval record (2026-07-30): the supervising human reported satisfaction with the candidate and
+Approval record (2026-07-30): the maintainer reported satisfaction with the candidate and
 explicitly asked to close M64. This approves the complete scorecard and closes M64 for its recorded
 scope.

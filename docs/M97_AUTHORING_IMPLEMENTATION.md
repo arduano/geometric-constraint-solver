@@ -2,11 +2,15 @@
 
 # M97 source-native authoring implementation
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 The source-native amendment is implemented and qualified on
 `e26270cb89e5849092145b329d0cf95821a81b27`. The verified preview is
-`http://100.94.63.83:18105/`; port 18104 preserves the prior default-priority
+the archived preview; port 18104 preserves the prior default-priority
 product. All 244 integrated obligations pass in `20260908T235146-b387d273`.
-The supervising user accepted this product and requested closure on 2026-09-09.
+The maintainer accepted this product and requested closure on 2026-09-09.
 [M97_CLOSURE.md](M97_CLOSURE.md) records the accepted milestone and continuation.
 
 ## Authoring and presentation
@@ -171,7 +175,7 @@ has not yet run.
 
 ```bash
 nix-shell shell.nix --run 'node crates/geosolve-demo-web/frontend/scripts/build-release-artifacts.mjs --out target/m97/authoring-dev-artifacts-r6 --wasm-package target/release-gate/prepared/7f6a693863d766e3cc4a9a9f2192259c198ab28b529f105a55cc4a56e8ff39ab/wasm'
-GEOSOLVE_E2E_ARTIFACT_MANIFEST=/home/arduano/programming/geometric-constraint-solver/target/m97/authoring-dev-artifacts-r6/harness.json GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome GEOSOLVE_E2E_PORT=18112 nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npx playwright test tests/e2e/workbench.spec.ts tests/e2e/m95-navigation.spec.ts tests/e2e/m92-sample-audit.spec.ts --grep "real WASM opens|click-authored|canonical Jansen|non-axis Parallel|computed Fillet|Cubic Bézier|normal pointer capture|M95 canvas and Explorer|M95 explicit|robotic-harness-backplane" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/authoring-browser-repairs-r1'
+GEOSOLVE_E2E_ARTIFACT_MANIFEST=target/m97/authoring-dev-artifacts-r6/harness.json GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) GEOSOLVE_E2E_PORT=18112 nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npx playwright test tests/e2e/workbench.spec.ts tests/e2e/m95-navigation.spec.ts tests/e2e/m92-sample-audit.spec.ts --grep "real WASM opens|click-authored|canonical Jansen|non-axis Parallel|computed Fillet|Cubic Bézier|normal pointer capture|M95 canvas and Explorer|M95 explicit|robotic-harness-backplane" --workers=1 --output=target/m97/authoring-browser-repairs-r1'
 ```
 
 ## Final integrated qualification
@@ -216,27 +220,13 @@ The signed qualification and stage records are under
 The qualified `prepare.browser` receipt authenticates the production manifest and
 its exact directory. They were copied without rebuilding into the read-only
 `target/m97/preview-20260908T235146-b387d273/` and served on
-`http://100.94.63.83:18105/`. The following commands pass:
+the archived preview. The following commands pass:
 
 ```bash
 python3 target/m97/freeze-authoring-preview.py 20260908T235146-b387d273
-GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npm run verify:artifact -- --manifest /home/arduano/programming/geometric-constraint-solver/target/m97/preview-20260908T235146-b387d273/production.json --directory /home/arduano/programming/geometric-constraint-solver/target/m97/preview-20260908T235146-b387d273/geosolve-production --url http://100.94.63.83:18105/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m97/authoring-preview-artifact-verification.json'
+GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npm run verify:artifact -- --manifest target/m97/preview-20260908T235146-b387d273/production.json --directory target/m97/preview-20260908T235146-b387d273/geosolve-production --url ${PREVIEW_URL} --receipt target/m97/authoring-preview-artifact-verification.json'
 python3 target/m97/audit-authoring-preview-artifact.py 20260908T235146-b387d273
 ```
-
-All 12 files (28,761,396 bytes) and `/` pass HTTP status, byte, MIME and base-path
-verification. Production manifest SHA-256 is
-`89c3612719ed45b894ccd68833f58157b4f3f528bff9d80e6d84237f99a7aaea`;
-file aggregate SHA-256 is
-`ffea0a9f5f22a6e7c6fc33e070ef7c9706c1c6e1820f6df57557d0acbf4ecf93`.
-Actual Chromium 151.0.7922.173 opens the manifold, reports 182 geometry entries and
-a ready WebGL2 renderer with no runtime errors. Served WASM SHA-256 is
-`8d7a7dfedb5baa73ef6747ad8fd2cc371faae595f212dbe4b86d4c3cb5e34a44`.
-The transport and authenticated binding records are
-`target/m97/authoring-preview-artifact-verification.json` and
-`target/m97/authoring-preview-artifact-binding.json`. The detached server uses
-`target/m97/serve-authoring-preview.mjs`; its log and supervisor PID record are
-`target/m97/authoring-preview-server.log` and `authoring-preview-server-pid.json`.
 
 Mechanical acceptance passes for explicit flag/default precedence, source-only
 imports, shared and distinct parameter identities, exact source transactions,
@@ -249,7 +239,7 @@ Generated per-instance overview overrides remain deferred, overview eligibility
 remains subject to collision handling, and old unmarked source has no implicit
 first-six priorities. All measurements remain discoverable. Dense-workflow timing
 varies: this successful qualification does not erase the recorded R3 timeout or claim
-a performance optimization. Supervising-user acceptance and M97 closure are complete
+a performance optimization. maintainer acceptance and M97 closure are complete
 under the recorded scope; no further M97 implementation is pending.
 
 Documentation-only continuation is checked with

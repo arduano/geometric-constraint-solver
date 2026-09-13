@@ -2,7 +2,11 @@
 
 # M68 implementation — headless Fillet direct manipulation
 
-Status: complete and explicitly approved by the supervising human on 2026-08-09. Implementation,
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete and explicitly approved by the maintainer on 2026-08-09. Implementation,
 focused direct qualification and complete release qualification pass on approved frozen candidate
 `edffb8a`.
 
@@ -174,7 +178,7 @@ sha256sum crates/geosolve-demo-web/dist/* | sha256sum
 ```
 
 The focused candidate was served from that exact distribution at the historical
-`http://100.94.63.83:8080/` endpoint for `docs/M68_UAT.md`. All seven served HTTP responses matched
+the archived preview endpoint for `docs/M68_UAT.md`. All seven served HTTP responses matched
 their local release files by SHA-256 before handoff.
 
 ### Post-UAT close-off cleanup
@@ -257,7 +261,7 @@ of at most five events. It compares exact durable feature JSON/radius/stable IDs
 and cursor, held preview revision, active pointer ownership and native sketch coordinates,
 residual/rank/DOF invariants after every transition.
 
-The complete objective mechanical gate passes. On 2026-08-09, the supervising human explicitly
+The complete objective mechanical gate passes. On 2026-08-09, the maintainer explicitly
 accepted `docs/M68_UAT.md` over the frozen build and requested M68 closure. M68-U1 through M68-U6
 and resolved findings `M68-F001` through `M68-F005` are accepted under that close decision without
 claiming a separate exhaustive replay of every scripted step.

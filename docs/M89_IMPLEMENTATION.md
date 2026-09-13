@@ -2,9 +2,13 @@
 
 # M89 implementation ledger
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **Superseded by M90's closed typed clean-break contract.** M89-F004/F005 implementation,
 provisional dirty-tree mechanical qualification and its immutable F005 nomination completed. The
-supervising-human Compass Rose retest, targeted manual preflight and M89-U1 through M89-U8 were not
+maintainer Compass Rose retest, targeted manual preflight and M89-U1 through M89-U8 were not
 run and are not retrospectively passed or waived. All M89 snapshots are preserved historical
 evidence. ADR 0043 remains the architecture record; this is not standalone M89 clean-source
 qualification or human acceptance.
@@ -163,47 +167,6 @@ which completed in `132.36 s`.
 
 ## Withdrawn initial UAT candidate
 
-M89-F001 withdrew this exact candidate after the Compass Rose Polyline flow failed to publish any
-code. Retain the values below as historical reproduction evidence only. They are not current UAT
-authority; old PID `825513` was retired only after the replacement passed temporary frozen-byte
-and browser proof, while the snapshot remains preserved.
-
-- Frozen path: `/tmp/geosolve-m89-uat.TIPyWl`; exactly nine regular files, zero symlinks,
-  two directories at `0555` and files at `0444`. The final distribution was built at
-  `2026-09-01 21:08:46 AEST`; freeze and manifest capture completed at
-  `2026-09-01T21:10:00+10:00`.
-- External manifest: `/tmp/geosolve-m89-uat.TIPyWl.sha256`; relative-path-sorted manifest aggregate
-  `5b842c6541261a9386c6a060475350712326a467137f166b4c02d8782635ff6a`.
-- Optimized release-WASM SHA-256:
-  `04a8b6504db1e8ce68f9c8cec864d293d95e07394dff302bc877782b4ef4ce04`.
-- Evidence directory: `/tmp/geosolve-m89-freeze-evidence.h3dbAC`. The pre/post-copy distribution, frozen and
-  live-Tailscale manifests are byte-identical. The HTTP ledger SHA-256 is
-  `a80f45fab8452c5ae6d605490633069a1494d5c222c66eb86a62f19d30066077`; root, explicit index and
-  every distribution file return HTTP `200` with exact bytes and expected media types. Independent
-  strict HTTP audit (zero redirects, no `Location` or `Content-Encoding`, root equal to frozen
-  index) is `live-http-strict.tsv`, SHA-256
-  `280f931df5793c39203ee266c9b87c30cf5040a40a5166711581cfd2a300a25f`.
-- Tailscale endpoint: `http://100.94.63.83:18089/`; unit
-  `geosolve-m89-react-uat-current.service`, PID `825513`, started
-  `2026-09-01 21:10:15 AEST`, invocation `9d5bdefb7e674b5792d3c95d6d1b77b1`, historically served
-  only the frozen path.
-- Final real optimized Playwright passed `12/12` before freezing via
-  `GEOSOLVE_E2E_PORT=4189 GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
-  npm run test:e2e` inside `nix-shell`. An earlier launcher-only attempt omitted the browser path
-  and reported `12` failures at about `1 ms` because the default executable lacked `libglib`; no
-  test body ran, so it was environment setup rather than product evidence. The subsequent plain
-  `npm run build && npm run validate:dist -- ../dist ./` passed and restored the normal nine-file
-  product distribution, which was frozen without rebuilding.
-- Build/tool identity: Rust/Cargo `1.95`, Node `24.19`, npm `11.17`, Chrome `151`, Cargo
-  `--release`, wasm-bindgen `0.2.121` and wasm-opt `131 -Oz`.
-- Source basis is HEAD `71a51ee534f034e2328a07e0d80f9a9ee5e0fc62` plus the intentional dirty working
-  tree (`103` status paths at nomination). This is never a clean-source claim.
-
-The M88 candidate, snapshot, unit and endpoint remain untouched: PID `1021511` still serves port
-`18088` with aggregate `700ebae4aec13ce20ab8786b63254e2c5b6239204c38bdc6e9d35f11c4159071`.
-Human UAT has not accepted any row in `docs/M89_UAT.md`; no public deployment or service retirement
-is inferred.
-
 ## M89-F001 repair and qualification
 
 ### Exact reproduction and root cause
@@ -263,7 +226,7 @@ clean golden survey/check/require-clean and optimized release-WASM Playwright `1
 ### Exact reproduction and root cause
 
 The F001 replacement correctly inserted code, but the result was not a usable authoring surface.
-Exact captures are retained at `/tmp/geosolve-m89-f002-source-evidence.x5hjHn`:
+Exact captures are retained at `geosolve-m89-f002-source-evidence.x5hjHn`:
 
 - one inferred axis: `compass-polyline-one-axis.sketch.ts`, `4,238` bytes, `172` lines, SHA-256
   `fa76f529e5bce663e54d22409498ed1cb382dc5e682ae13017a9bddede5f4925`;
@@ -406,21 +369,9 @@ The complete 25-variant source contract is now:
 
 One unchanged optimized output passed every remaining gate:
 
-- frozen snapshot `/tmp/geosolve-m89-f003-uat.uF6Yjsc3`; nine regular files, two directories, zero
-  symlinks/other entries, directory/file modes `0555`/`0444`, ordered-manifest aggregate
-  `c37d832a6dc076982e3fda8f2ffbcc8b2f26ed99ad6ffd0da0b7ba4f96d705ed`;
-- optimized release-WASM `assets/geosolve_demo_web_bg-BJyeIjFR.wasm`, SHA-256
-  `99eeaa5668276282201cb1971b042d3d0904a13b7a75d40e2357ce08a34c748a`;
-- freeze/HTTP/browser evidence `/tmp/geosolve-m89-f003-freeze-evidence.5TcRPlem`; strict staging
-  and live ten-route HTTP ledgers are byte-identical at SHA-256
-  `c5efab20409773cc7f43cecdd9c6fca5b961402611d073f6bf0e8f40cca0ce1e`;
-- Tailscale endpoint `http://100.94.63.83:18089/`, unit
-  `geosolve-m89-react-uat-current.service`, PID `3637680`, invocation
-  `73bdb82cf2a64436ab6f65fe76b08ccf`.
-
 That service identity describes the historical F003 checkpoint; F005 has replaced it at the shared
 endpoint. The F003 snapshot remains preserved as rollback evidence and is no longer current. The
-preliminary F003 snapshot `/tmp/geosolve-m89-f003-uat.W5GIfQi7`, F002 and every earlier snapshot
+preliminary F003 snapshot `geosolve-m89-f003-uat.W5GIfQi7`, F002 and every earlier snapshot
 also remain preserved but withdrawn.
 
 ## M89-F004 compact source for the persistent constraint catalog
@@ -534,10 +485,10 @@ Final focused and aggregate counts are:
 These append to rather than replace the historical F003 `109`, `3/3`, `13/13`, `357/357` and
 related counts above. The exact final no-rebuild distribution is:
 
-- snapshot `/tmp/geosolve-m89-f005-uat.hzNuDxF0`;
-- external manifest `/tmp/geosolve-m89-f005-uat.hzNuDxF0.sha256` and relative-path-sorted manifest
+- snapshot `geosolve-m89-f005-uat.hzNuDxF0`;
+- external manifest `geosolve-m89-f005-uat.hzNuDxF0.sha256` and relative-path-sorted manifest
   aggregate `fb488ad2bf29e8897cf9811c002b748693e5d211bae4bb54c83ed060db5db668`;
-- evidence directory `/tmp/geosolve-m89-f005-freeze-evidence.VAoQDl8n`;
+- evidence directory `geosolve-m89-f005-freeze-evidence.VAoQDl8n`;
 - nine regular files, including three JavaScript files, one CSS and one WASM, two directories and
   zero symlinks/other entries;
 - `assets/geosolve_demo_web_bg-52ybei8k.wasm`, `16,333,537` bytes, SHA-256
@@ -549,14 +500,8 @@ author/edit/suppress/restore/delete/Undo browser case passes `1/1` on staging an
 normal frozen product passes `15/15` on both; that normal product intentionally excludes the
 compiler-parity-only harness test.
 
-Current endpoint `http://100.94.63.83:18089/` is owned by
-`geosolve-m89-react-uat-current.service`, PID `1007459`, invocation
-`a3fea6dddb59438795e52c6a8fab136f`, started `Wed 2026-09-02 20:21:15 AEST` with
-`WorkingDirectory=/tmp/geosolve-m89-f005-uat.hzNuDxF0`. Retired staging PID `995137` had invocation
-`efe4de2264774f68bf5852284fa69887`.
-
 This is final **provisional dirty-tree** mechanical qualification and immutable UAT nomination,
-not clean-source qualification, supervising-human acceptance or milestone closure. The mandatory
+not clean-source qualification, maintainer acceptance or milestone closure. The mandatory
 Compass Rose retest, targeted manual F004/F005 preflight, M89-U1 through M89-U8 and explicit
 closeout remain pending/not run. F003 remains historical rollback evidence only.
 
@@ -564,58 +509,37 @@ closeout remain pending/not run. F003 remains historical rollback evidence only.
 
 After the reopened-Polyline ownership, TypeScript contract and declaration-catalog audit repairs,
 the validated nine-file distribution was frozen without rebuilding at
-`/tmp/geosolve-m89-f002-uat.bSM6Nn59`. It has two directories, zero symlinks/other entries,
+`geosolve-m89-f002-uat.bSM6Nn59`. It has two directories, zero symlinks/other entries,
 directories at `0555` and files at `0444`. External manifest
-`/tmp/geosolve-m89-f002-uat.bSM6Nn59.sha256` has relative-path-sorted aggregate
+`geosolve-m89-f002-uat.bSM6Nn59.sha256` has relative-path-sorted aggregate
 `0b9a4ed357a452edd79953679e5bbb68c0cb5b1261a8ba5478a1dbaa597ab433`; optimized release-WASM
 `assets/geosolve_demo_web_bg-DXbVrwxa.wasm` has SHA-256
 `77e5739cb81565d5a0bc400507e1a35f2f63ba22c1d821442b16baedcb24b72a`.
 
-Evidence directory `/tmp/geosolve-m89-f002-freeze-evidence.Xs977S3o` retains equal pre-copy,
+Evidence directory `geosolve-m89-f002-freeze-evidence.Xs977S3o` retains equal pre-copy,
 frozen and post-copy manifests, strict HTTP ledgers, service identities and no-build browser
 results. Optimized release-WASM Playwright passed `13/13`; the frozen normal product passed
-`12/12` without rebuilding. Temporary `http://100.94.63.83:18189/` and final
-`http://100.94.63.83:18089/` both passed the exact optimized release-WASM Compass regression `1/1`.
+`12/12` without rebuilding. Temporary and final preview both passed the exact optimized release-WASM Compass regression `1/1`.
 Their strict ten-route HTTP ledgers are byte-identical at SHA-256
 `2a9a939d073f63df095ebc01542eb95443f4e3b86d7df2980c0b586a571b2ba1`.
-
-Unit `geosolve-m89-react-uat-current.service`, PID `3162678`, started
-`2026-09-02 11:34:56 AEST`, invocation `90508752f8de4314a85e089ab53e3d8d`, historically served only
-the frozen F002 snapshot on port `18089` and was replaced only after exact F003 staging proof. The
-pre-audit `/tmp/geosolve-m89-f002-uat.Taocj5bI` snapshot and the F001 snapshots remain preserved but
-withdrawn. M88 stayed byte- and service-identical: PID `1021511`,
-invocation `2cd4379455f44cde99828658b44601ea`, snapshot
-`/tmp/geosolve-m88-react-uat.KGhA7s`, endpoint `http://100.94.63.83:18088/`. This is proportional
-dirty-tree historical F002 qualification, not F003 UAT authority, a clean-source full release gate
-or human acceptance.
 
 ## Withdrawn M89-F001 replacement UAT candidate
 
 The successful gate's final distribution was frozen without rebuilding at
-`/tmp/geosolve-m89-f001-replacement-uat.IwvrBh8x`. It has exactly nine regular files, two
+`geosolve-m89-f001-replacement-uat.IwvrBh8x`. It has exactly nine regular files, two
 directories, zero symlinks/other entries, directories at `0555` and files at `0444`. External
-manifest `/tmp/geosolve-m89-f001-replacement-uat.IwvrBh8x.sha256` has relative-path-sorted aggregate
+manifest `geosolve-m89-f001-replacement-uat.IwvrBh8x.sha256` has relative-path-sorted aggregate
 `7d40c31c0eba5aae0d1b6e7febf16a0b5fa44a541c82a9ddbbb0125cd8707424`; the optimized release-WASM
 `assets/geosolve_demo_web_bg-BZTEjICo.wasm` has SHA-256
 `a2b2fd4ec4852e3d16b10ab0fa41eb8e4d64b52db430447bdbf28bb8d82f3241`.
 
-Evidence directory `/tmp/geosolve-m89-f001-replacement-freeze-evidence.yhuZYse1` retains equal
+Evidence directory `geosolve-m89-f001-replacement-freeze-evidence.yhuZYse1` retains equal
 pre-copy, frozen and post-copy manifests, service identities, strict HTTP ledgers and no-build
 browser results. Every named file plus root and explicit index returned HTTP `200`, identity
 encoding, zero redirects, exact size/type/hash, no `Location` or `Content-Encoding`, and root equal
-to frozen `index.html`. Temporary `http://100.94.63.83:18189/` and final
-`http://100.94.63.83:18089/` ledgers are identical at SHA-256
+to frozen `index.html`. Temporary and final preview ledgers are identical at SHA-256
 `62ae4d760bb40fb9031ef53a8ec9ee6c8f239572242ed6ee730282e1a0f50e0b`. The exact existing Compass
 Polyline regression passed `1/1` against each frozen endpoint without a WASM/Vite rebuild.
-
-Former unit PID `1589113`, started `2026-09-02 00:38:00 AEST`, invocation
-`d05d85152a4547f7b32e316b6a3d4b9a`, served only that withdrawn replacement snapshot until the
-separately qualified F002 snapshot passed staging proof. Withdrawn PID `825513` was retired after
-the earlier staging proof; both historical snapshots remain preserved. M88 stayed byte- and
-service-identical throughout: PID `1021511`, invocation
-`2cd4379455f44cde99828658b44601ea`, snapshot `/tmp/geosolve-m88-react-uat.KGhA7s`, endpoint
-`http://100.94.63.83:18088/`. This is provisional dirty-tree nomination, not clean-source or human
-UAT acceptance.
 
 ## Known limitations and next boundary
 

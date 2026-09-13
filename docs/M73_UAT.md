@@ -2,7 +2,11 @@
 
 # M73 focused UAT — Retained authoring semantic consolidation
 
-Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. The clean,
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete and explicitly approved by the maintainer on 2026-08-15**. The clean,
 byte-verified M73-F004 replacement candidate passed the focused human review and is the accepted
 closing UAT candidate; the final GitHub Pages deployment also passes exact hosted-artifact
 verification. Direct Rust/WASM tests remain authoritative for semantic dispatch, candidate
@@ -12,24 +16,12 @@ Candidate source: `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`
 
 Candidate tree: `fe9897153baa974b3c5c06e7a3bf5eee76e920f2`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
-
-Server PID: `3870531`
-
-Immutable snapshot: `/tmp/geosolve-m73-uat.JKAWtJ` (directory `0555`, files `0444`)
+Immutable snapshot: `geosolve-m73-uat.JKAWtJ` (directory `0555`, files `0444`)
 
 Ordered-manifest aggregate:
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 15,490 | `c3ef0cedd4de5968e36d2917daaf463c450fbe2266a06bc45b0cfae2dc20b935` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-92f14bb278c26c6b.js` | 33,093 | `5647aeac2f7852f1bf4015722528386b67c7c31208f9f5ce2cccbbb7171f2988` |
-| `geosolve-demo-web-92f14bb278c26c6b_bg.wasm` | 6,021,403 | `bc1a23dd0f7917152c69a1f94e9858ceaf0d912a955db4bd68d77bca5a268342` |
-| `index.html` | 26,345 | `a2cf744c5daea9cea42c5dbd7dd58c6a27d9e508841f54e5589a4256ef7b3f40` |
-| `styles-437727272832bc26.css` | 27,010 | `9e4b1c6985f119cff35366119fbeef8abb2096b386a8db78a4cd730915316344` |
+The archived manifest records the per-file sizes and checksums.
 
 The exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` passes completely on the
@@ -38,22 +30,12 @@ native/WASM parity, workspace formatting/Clippy/tests/Rustdoc, benchmark compila
 performance, licensing/packaging, the 256-moving-body sparse crossover in 135.18 seconds and Trunk
 0.21.14 all pass.
 
-The distribution was copied from that gate without rebuilding. PID `3870531` has exact argv:
-
-```text
-python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m73-uat.JKAWtJ
-```
-
 Its executable is
-`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`. Proxy/cache-bypassed,
+`python3.14`. Proxy/cache-bypassed,
 identity-encoded requests for all seven files and `/` return HTTP 200 with expected media types and
 match the frozen bytes; `/` equals `index.html`, and the fetched aggregate matches.
 
-Historical F001-F003 source `efde645345577f44e0d6b691f7ca27eb587c4b53` and snapshot
-`/tmp/geosolve-m73-uat.5EhWNL` remain preserved, but PID `3403533` has exited and those bytes are not
-current UAT authority.
-
-The accepted Tailscale snapshot remains read-only historical evidence, but its server has retired.
+The accepted preview snapshot remains read-only historical evidence, but its server has retired.
 Final public release authority is documentation-only approval descendant
 `ef7b90feb17bfba62c45f9463ceb934fc34e6f4d`, successful Pages run `31878139709` and artifact
 `9245585021` at `https://arduano.github.io/geometric-constraint-solver/`. The public root and all
@@ -154,9 +136,9 @@ bundles, remembered-direction behavior and retained solver authority remain unch
 - M73-U2: **Accepted** under the 2026-08-15 scoped close decision.
 - M73-U3: **Accepted** under the 2026-08-15 scoped close decision.
 - M73-U4: **Accepted and mechanically complete** under the 2026-08-15 scoped close decision.
-- Final M73 approval: **Pass** — explicitly approved by the supervising caller on 2026-08-15.
+- Final M73 approval: **Pass** — explicitly approved by the maintainer on 2026-08-15.
 
-The supervising caller confirmed that the focused behavior works and explicitly requested M73
+The maintainer confirmed that the focused behavior works and explicitly requested M73
 closure. This accepts M73-U1 through M73-U4 for the recorded scope without claiming a separate
 exhaustive replay of every scripted permutation; direct automated qualification remains
 authoritative.

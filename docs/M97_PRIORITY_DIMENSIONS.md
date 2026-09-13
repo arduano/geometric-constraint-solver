@@ -2,7 +2,11 @@
 
 # M97 default design dimensions
 
-The supervising user requested important shape-intent measurements in the default
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+The maintainer requested important shape-intent measurements in the default
 Focused overview after reviewing the qualified M97 preview. Gridfinity now makes
 all 20 authored measurements eligible, including its reference plan width and
 construction projection dimensions. The manifold retains plate width/height,
@@ -44,8 +48,8 @@ DOF/rank semantics, hard/soft priorities or branch state change.
 ## Qualification status
 
 Implementation and integrated qualification pass. The amended preview is
-`http://100.94.63.83:18104/`; the prior preview at port 18103 remains preserved.
-M97 remains open for supervising-user acceptance. Visual review verifies all six
+the archived preview; the prior preview at port 18103 remains preserved.
+M97 remains open for maintainer acceptance. Visual review verifies all six
 manifold callouts in the fitted Design view and 17 readable Gridfinity callouts
 with all 20 rows retained in the Inspector. The final evidence below supersedes
 the intermediate attempts recorded here.
@@ -87,11 +91,11 @@ artifacts are retained.
 
 The browser runs use `GEOSOLVE_E2E_ARTIFACT_MANIFEST` pointing to the corresponding
 `target/m97/priority-dev-artifacts-rN/harness.json`, `GEOSOLVE_E2E_PORT=18102` and
-`GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome` in the Nix shell:
+`GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome)` in the Nix shell:
 
-- `npx playwright test tests/e2e/m97-dimensions.spec.ts --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/priority-browser-r1`: the managed edit/history/reload case passed; two overview probes failed as described above.
-- `npx playwright test tests/e2e/m97-dimensions.spec.ts --grep-invert "contextual dimension edits" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/priority-browser-r2`: Gridfinity/zoom/Hidden passed; manifold waited for the wrong Explorer name, `Middle outlet bore`, instead of the accepted declaration `middleOutlet`. No timing or visibility assertion was relaxed to resolve this selector error.
-- `npx playwright test tests/e2e/m97-dimensions.spec.ts --grep "manifold focus limits" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/priority-browser-r3`: passed in 55 seconds, covering six default rows, truthful widths, explicit inspection, nonpriority pin/reload/clear, hover/pan/transit and unchanged source/history.
+- `npx playwright test tests/e2e/m97-dimensions.spec.ts --workers=1 --output=target/m97/priority-browser-r1`: the managed edit/history/reload case passed; two overview probes failed as described above.
+- `npx playwright test tests/e2e/m97-dimensions.spec.ts --grep-invert "contextual dimension edits" --workers=1 --output=target/m97/priority-browser-r2`: Gridfinity/zoom/Hidden passed; manifold waited for the wrong Explorer name, `Middle outlet bore`, instead of the accepted declaration `middleOutlet`. No timing or visibility assertion was relaxed to resolve this selector error.
+- `npx playwright test tests/e2e/m97-dimensions.spec.ts --grep "manifold focus limits" --workers=1 --output=target/m97/priority-browser-r3`: passed in 55 seconds, covering six default rows, truthful widths, explicit inspection, nonpriority pin/reload/clear, hover/pan/transit and unchanged source/history.
 
 The first integrated amendment run, `20260908T155245-5f0fbeb8`, stopped at
 `workspace.geosolve-sketch-code::m93_retained_sample::normal`. Its historical
@@ -215,7 +219,7 @@ original failed qualification status.
 
 The authenticated production artifact is copied without rebuilding to
 `target/m97/preview-20260908T172035-7255b491/`, made read-only and served by
-`target/m97/serve-priority-preview.mjs` at **http://100.94.63.83:18104/**.
+`target/m97/serve-priority-preview.mjs` at the archived preview.
 It contains 12 files and 28,404,410 bytes, with files SHA-256
 `53c300834fa3d8a2c65256148852d9cafab982eadc6cb232b3c422020b176ee6`
 and manifest SHA-256
@@ -233,7 +237,7 @@ The server then responded successfully; the same full verification was repeated.
 The following repeated verification and binding audit pass:
 
 ```bash
-env GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npm run verify:artifact -- --manifest /home/arduano/programming/geometric-constraint-solver/target/m97/preview-20260908T172035-7255b491/production.json --directory /home/arduano/programming/geometric-constraint-solver/target/m97/preview-20260908T172035-7255b491/geosolve-production --url http://100.94.63.83:18104/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m97/priority-preview-artifact-verification.json'
+env GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npm run verify:artifact -- --manifest target/m97/preview-20260908T172035-7255b491/production.json --directory target/m97/preview-20260908T172035-7255b491/geosolve-production --url ${PREVIEW_URL} --receipt target/m97/priority-preview-artifact-verification.json'
 python3 target/m97/audit-priority-preview-artifact.py 20260908T172035-7255b491
 ```
 
@@ -269,7 +273,7 @@ remain accessible in the Inspector. Full patch widths are Inspector parameters.
 The amendment's mechanical criteria pass: authored sample priorities, all 20
 Gridfinity rows, truthful manifold widths, stable navigation/identical snapshots,
 contextual access, pins/Hidden, precise edits and persistence. **M97 remains open
-for supervising-user acceptance; this report does not close the milestone.**
+for maintainer acceptance; this report does not close the milestone.**
 
 The prose handoff passes `git diff --check` and
 `./scripts/release-gate.sh --docs-only --since fc3fdcb` for five documentation files

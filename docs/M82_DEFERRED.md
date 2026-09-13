@@ -2,6 +2,10 @@
 
 # M82 closeout — computed all-family Offset deferred
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **closed by explicit scope withdrawal on 2026-08-21; no M82 product behavior accepted**.
 
 ## Decision
@@ -47,15 +51,6 @@ contract. Mining one later requires its own scoped design and qualification.
 
 Consequences:
 
-- the reviewed authoring/scene golden returns to 271 `PASS` rows with SHA-256
-  `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`;
-- M82-only computed Offset workspace payloads are not supported by `main`; use the archive branch
-  to inspect them;
-- the rejected M82 candidate was never published to GitHub Pages, so the existing accepted M81
-  Pages deployment remains public product authority;
-- former Tailscale UAT PID `3024723` is retired, port `8080` is no longer listening, and frozen
-  snapshot `/tmp/geosolve-m82-uat.G4pmMH` remains read-only historical evidence.
-
 ## Rollback qualification
 
 The following clean committed-tree command completed with exit `0` on `fa54f30`:
@@ -70,6 +65,6 @@ benchmark compilation, M14/M32 performance budgets, the release-only 256-moving-
 crossover in 100.27 seconds, licence/package checks and Trunk 0.21.14 release assembly. Relevant
 suite totals include editor 404/404, demo 154/154, sketch 39/39 and sketch-features 46/46.
 
-No hands-on feature UAT or new feature Pages publication is claimed. The supervising caller's
+No hands-on feature UAT or new feature Pages publication is claimed. The maintainer's
 explicit decision accepts only the withdrawal, exact baseline restoration, archival preservation
 and milestone closure.

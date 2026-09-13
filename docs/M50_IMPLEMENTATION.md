@@ -35,11 +35,10 @@ Post-purge filesystem inventory (read-only):
 | Release-gate Node E2E/environment cleanup | `scripts/release-gate.sh:14-45` has Cargo, package/licence and Trunk-build gates only; no Node, E2E or `GEOSOLVE_E2E` use. |
 | CDP/server/profile/download runtime | No demo-web source/assets/script path containing an E2E directory, Node script or legacy route survives. The remaining `Trunk.toml:[serve]` is ordinary build-tool configuration, not an E2E HTTP test server. |
 
-The parent Git audit confirms tracked deletion of `e2e/m14.mjs` and `src/playground.rs`,
-modification of the demo-web manifest/assets/startup, lockfile dependency pruning and removal of
-the release-gate E2E invocation. The surviving `src/workbench/**` tree is part of the broader
-uncommitted M39-M49 stack, so aggregate Git status is not used to attribute that earlier work to
-M50. `git diff --check` passes.
+The Git audit confirms deletion of `e2e/m14.mjs` and `src/playground.rs`, updated
+demo startup and assets, dependency pruning and removal of the release-gate E2E
+invocation. The surviving workbench was implemented in M39–M49; M50 owns the
+legacy removal. `git diff --check` passed.
 
 ## Dependency and survivor audit
 

@@ -2,10 +2,14 @@
 
 # M93 implementation plan: release qualification
 
-Status: **accepted and closed by the supervising user on 2026-09-07 with the recorded C5 timing miss and historical replay limitation.**
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed by the maintainer on 2026-09-07 with the recorded C5 timing miss and historical replay limitation.**
 [M93_GOALS.md](M93_GOALS.md) owns scope, the proposed reuse matrix and measurable acceptance targets.
 
-The user accepted the delivered results with "yeah looks good to me, we can close at this".
+Maintainer acceptance covers the delivered results and documented limits.
 [M93_QUALIFICATION.md](M93_QUALIFICATION.md) owns the sign-off and exact measured scope. Earlier
 checkpoints below preserve their original pending claims as history; this acceptance supersedes
 those status claims without changing test results, timing misses or the unperformed replay.
@@ -235,8 +239,8 @@ fixtures cover writer boundaries, admission, serial fallback, failure and recove
 The combined `test_release*.py` suite passes **164 tests in 34.065 seconds** in Nix. Comparator
 fixtures pass **25/25**, benchmark coverage fixtures **9/9**, and `git diff --check` passes.
 Exact commands: `nix-shell shell.nix --run 'python3 -B -m unittest discover -s scripts/tests -p
-"test_release*.py"'`, `python3 /tmp/m93-comparator-fixture-tests.py`, and
-`python3 /tmp/m93-benchmark-coverage-tests.py`. These are focused implementation results;
+"test_release*.py"'`, `python3 m93-comparator-fixture-tests.py`, and
+`python3 m93-benchmark-coverage-tests.py`. These are focused implementation results;
 new full qualification, actual product count-repair decisions and timing/cold parity are pending.
 
 ## Corrected qualification and measured limits — 2026-09-07
@@ -262,7 +266,7 @@ checker execution plus read-only product planning, not a repaired full gate or a
 product donor. Focused signed real-child fixtures separately prove finalized failed-run donation.
 
 The original four-entry pruning replay below remains unproven: each measured prune removes one
-current Bondtech entry while retaining its private regression fixture. The supervising user subsequently
+current Bondtech entry while retaining its private regression fixture. The maintainer subsequently
 accepted closure with the C5 timing miss and that unperformed workload as limitations. The accepted M92 service is unchanged.
 
 ## Implementation order
@@ -300,7 +304,7 @@ accepted closure with the C5 timing miss and that unperformed workload as limita
 Each step is independently reviewable. Do not run another multi-hour gate after every planning
 or instrumentation edit; use focused runner/selection tests while developing, and perform the
 comprehensive parity and timing runs at the integrated acceptance boundary. The final implemented
-policy must make this distinction explicit rather than relying on agent discretion alone.
+policy must make this distinction explicit rather than relying on informal judgment.
 
 ## Parallel ownership opportunities
 

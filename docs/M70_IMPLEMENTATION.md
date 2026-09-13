@@ -2,7 +2,11 @@
 
 # M70 implementation — Headless auto-constraint drafting intelligence
 
-Status: complete and explicitly approved by the supervising human on 2026-08-10. Implementation,
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete and explicitly approved by the maintainer on 2026-08-10. Implementation,
 focused direct qualification, integrated release qualification, frozen replacement-candidate
 publication, served-byte verification and scoped human UAT all pass. `M70-F001` is resolved.
 
@@ -11,11 +15,11 @@ Architecture owner: ADR 0034
 Replacement candidate source: `3d157896c87eaf647abee1192c838100ce359ce9` on `main`
 
 Historical initial candidate: `4b16db3a885f5e28f508189b8817797375f05807`; its release evidence
-predates the supervising-human `M70-F001` finding.
+predates the maintainer `M70-F001` finding.
 
 Integrated release-gate result: **PASS**
 
-Tailscale release distribution and byte manifest: **PASS** at `http://100.94.63.83:8080/`;
+preview release distribution and byte manifest: **PASS** at the archived preview;
 aggregate `04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`
 
 ## 1. Files and APIs
@@ -207,19 +211,11 @@ completed in 151.53 seconds. Cargo emitted only the longstanding non-failing `li
 Release distribution SHA-256 manifest aggregate:
 `04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`.
 
-```text
-0632b2c7178a74a4f97938d2f08ed969152d41c7008f777d6b43ee4b94ab6e89  dist/API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  dist/LICENSE
-665e4df98334f5efea3efa83d18ea71198a182825c2d40f96dbf141e43a2a418  dist/THIRD_PARTY_LICENSES.md
-ff0797fa408bc3be7ad572af8541bb31ccc9767914d8c4629c77cd298925cefd  dist/geosolve-demo-web-881dfebee4e3e756.js
-fe8c75f390cbcc9c95777c9dc3d41ac0dc790d05bfef406a7cd5a539c8b73320  dist/geosolve-demo-web-881dfebee4e3e756_bg.wasm
-bf9e151a6d9abcfca984867615e20ec2f34e36ca9e378e49f74b429ff21a402c  dist/index.html
-cee6aac04d97f80072827c8b29a86f79071d01fa0cc523736c0c5f20e27b0e1b  dist/styles-aafdbbd399fb8c99.css
-```
+The archived manifest records the individual asset checksums.
 
-Tailscale byte verification: **PASS** at `http://100.94.63.83:8080/`. The seven manifest members
-were served from read-only snapshot `/tmp/geosolve-m70-uat.1NQkzV`, fetched through the actual
-Tailscale address with proxy and cache bypass, and matched both their expected SHA-256 values and
+preview byte verification: **PASS** at the archived preview. The seven manifest members
+were served from read-only snapshot `geosolve-m70-uat.1NQkzV`, fetched through the actual
+preview address with proxy and cache bypass, and matched both their expected SHA-256 values and
 local bytes. `/` matched `index.html`, and a post-fetch aggregate check proved the frozen
 distribution remained unchanged.
 
@@ -235,10 +231,10 @@ Milestone gate state:
 - [x] clean integrated `scripts/release-gate.sh` on replacement source
   `3d157896c87eaf647abee1192c838100ce359ce9`;
 - [x] frozen replacement-candidate hash and release Trunk distribution;
-- [x] Tailscale publication plus byte-for-byte manifest verification;
+- [x] preview publication plus byte-for-byte manifest verification;
 - [x] resolve the objective implementation/direct/release/publication requirements of `M70-F001`;
   and
-- [x] receive the targeted M70-U1 recheck and supervising-human approval of every area in
+- [x] receive the targeted M70-U1 recheck and maintainer approval of every area in
   `docs/M70_UAT.md`.
 
 The replacement candidate is mechanically qualified, published and approved. The 2026-08-10 scoped

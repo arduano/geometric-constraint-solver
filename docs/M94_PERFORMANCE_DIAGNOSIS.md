@@ -2,6 +2,10 @@
 
 # Dense canvas fixture performance diagnosis — 2026-09-07
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Both performance fixtures have substantial optimization opportunities. Navigation is dominated
 by repeated workbench/scene preparation and UI churn before GPU submission. Parameter edits
 also have a separate expensive native publication path. Changing renderer language or reducing
@@ -10,7 +14,7 @@ visual quality should not be the first intervention.
 This is diagnosis only: no production code, mathematical behavior, tests or served bytes changed.
 Source inspected: `a242f89`; qualified product: `2f1711b`; immutable artifact aggregate
 `16fb8cad31e55bde243607a8db06969287a3b3d04b19fa34586a97a8b4f439ae`.
-The ordinary endpoint is `http://100.94.63.83:18096/`; measurements used its identical localhost
+The ordinary endpoint is the archived preview; measurements used its identical localhost
 listener in fresh private browser contexts.
 
 ## Measurements
@@ -129,9 +133,9 @@ Temporary diagnostic scripts and CPU profiles are preserved under `target/m94`, 
 product build. No full gate, Cargo build or test suite was run for this diagnosis.
 
 ```bash
-nix-shell shell.nix --run 'timeout 600 node /tmp/m94-dense-profile.mjs'
-nix-shell shell.nix --run 'DENSE_OUTPUT=/home/arduano/programming/geometric-constraint-solver/target/m94/dense-performance-r3 DENSE_SAMPLES=robotic-harness-backplane timeout 180 node /tmp/m94-dense-profile.mjs'
-nix-shell shell.nix --run 'timeout 90 node /tmp/m94-dense-boundary.mjs'
+nix-shell shell.nix --run 'timeout 600 node m94-dense-profile.mjs'
+nix-shell shell.nix --run 'DENSE_OUTPUT=target/m94/dense-performance-r3 DENSE_SAMPLES=robotic-harness-backplane timeout 180 node m94-dense-profile.mjs'
+nix-shell shell.nix --run 'timeout 90 node m94-dense-boundary.mjs'
 ```
 
 The first profiled attempt retained navigation data but stopped at the default five-second

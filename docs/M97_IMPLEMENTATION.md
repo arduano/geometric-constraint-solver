@@ -2,8 +2,12 @@
 
 # M97 implementation and development evidence
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 M97 implements the approved [focused dimension contract](M97_GOALS.md). Clean-source
-qualification and the verified preview pass; supervising-user acceptance remains
+qualification and the verified preview pass; maintainer acceptance remains
 pending and M96 is the accepted product. [Final qualification](M97_QUALIFICATION.md)
 records the candidate identity. This record retains the development checks and
 failed/interrupted attempts separately from that passing nomination.
@@ -89,8 +93,8 @@ Browser commands use `GEOSOLVE_E2E_ARTIFACT_MANIFEST` pointing to the correspond
 `GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome)` from the Nix shell:
 
 ```bash
-npx playwright test tests/e2e/m97-dimensions.spec.ts --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/browser-r4
-npx playwright test tests/e2e/m97-dimensions.spec.ts --grep "contextual dimension edits" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/browser-r5
+npx playwright test tests/e2e/m97-dimensions.spec.ts --workers=1 --output=target/m97/browser-r4
+npx playwright test tests/e2e/m97-dimensions.spec.ts --grep "contextual dimension edits" --workers=1 --output=target/m97/browser-r5
 ```
 
 Earlier provisional failures are retained under ignored `target/m97/`: a reference
@@ -176,7 +180,7 @@ Focused correction checks passed:
 ```bash
 cargo fmt --all -- --check
 CARGO_BUILD_JOBS=4 CARGO_PROFILE_RELEASE_INCREMENTAL=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked --release -p geosolve-demo-web --lib actual_wasm_all_bundled_samples_match_independently_composed_production_frames --target wasm32-unknown-unknown
-node_modules/.bin/playwright test tests/e2e/canvas-renderer.spec.ts --grep "context loss retains" --workers=1 --output=/home/arduano/programming/geometric-constraint-solver/target/m97/browser-glyph-focused
+node_modules/.bin/playwright test tests/e2e/canvas-renderer.spec.ts --grep "context loss retains" --workers=1 --output=target/m97/browser-glyph-focused
 ```
 
 The WASM command passes its one all-sample case; the browser command passes its
@@ -222,8 +226,8 @@ Focused checks use the unchanged gate-prepared harness and Nix Chromium with
 `GEOSOLVE_E2E_PORT=18102` and the artifact environment described above:
 
 ```bash
-node_modules/.bin/playwright test tests/e2e/workbench.spec.ts tests/e2e/m97-dimensions.spec.ts --grep "Cubic Bézier authoring|a downloaded reproduction imports|M97 contextual dimension edits" --workers=2 --reporter=json --output=/home/arduano/programming/geometric-constraint-solver/target/m97/browser-publication-focused
-node_modules/.bin/playwright test tests/e2e/workbench.spec.ts --grep "normal pointer capture release commits Circle" --workers=2 --reporter=json --output=/home/arduano/programming/geometric-constraint-solver/target/m97/browser-circle-focused
+node_modules/.bin/playwright test tests/e2e/workbench.spec.ts tests/e2e/m97-dimensions.spec.ts --grep "Cubic Bézier authoring|a downloaded reproduction imports|M97 contextual dimension edits" --workers=2 --reporter=json --output=target/m97/browser-publication-focused
+node_modules/.bin/playwright test tests/e2e/workbench.spec.ts --grep "normal pointer capture release commits Circle" --workers=2 --reporter=json --output=target/m97/browser-circle-focused
 node_modules/.bin/playwright test --list --reporter=json
 git diff --check
 ```
@@ -241,7 +245,7 @@ in `20260908T133354-cff36f90` (38m19s, 243 fresh stages). All 271 golden cases,
 216 frontend tests and the complete 48-case browser inventory pass. There are no
 browser failures, skips or retries. The independent audit authenticates all
 9,881 referenced evidence files. The frozen 12-file production candidate passes
-HTTP bytes/MIME and actual-WASM readiness at `http://100.94.63.83:18103/`.
+HTTP bytes/MIME and actual-WASM readiness at the archived preview.
 
 The final navigation probe passes with exact persistence, zero browser errors and
 zero idle frames on all three samples. Manifold wheel/pan bridge medians improve

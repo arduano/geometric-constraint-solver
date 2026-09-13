@@ -2,6 +2,10 @@
 
 # M89 goals: executed, reversible managed sketches
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **Superseded by M90's closed typed clean-break contract.** M89-F004/F005 implementation,
 provisional dirty-tree mechanical qualification and its immutable F005 nomination completed, but
 the Compass Rose retest, targeted manual preflight and M89-U1 through M89-U8 were never run and are
@@ -90,8 +94,8 @@ retain selection, and suppress/restore plus delete/Undo reproduce exact source. 
 dirty-tree qualification passes the pinned complete gate, including sketch-code unit `114`,
 geometry `4/4`, constraint matrix `1/1`, direct Fillet `7/7`, editor insertion `19/19`, demo-web
 `358/358`, TypeScript runtime `28/28`, mutation `19/19`, Deno parity `2/2` and frontend `55/55`.
-The historical immutable F005 candidate is `/tmp/geosolve-m89-f005-uat.hzNuDxF0`, aggregate
+The historical immutable F005 candidate is `geosolve-m89-f005-uat.hzNuDxF0`, aggregate
 `fb488ad2bf29e8897cf9811c002b748693e5d211bae4bb54c83ed060db5db668`, served at
-`http://100.94.63.83:18089/`. This is not clean-source qualification or human acceptance. The
+the archived preview. This is not clean-source qualification or human acceptance. The
 Compass retest, targeted preflight, M89-U1 through M89-U8 and explicit closeout remain pending/not
 run and are owned by `docs/M89_IMPLEMENTATION.md` and `docs/M89_UAT.md`.

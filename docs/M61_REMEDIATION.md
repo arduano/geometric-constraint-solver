@@ -2,10 +2,14 @@
 
 # M61 candidate remediation report
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Date: 2026-07-29
 
 Status: complete; objective remediation directly qualified and the replacement M61 scope approved
-by the supervising human on 2026-07-29
+by the maintainer on 2026-07-29
 
 Implementation source: `1f5fd59`; targeted interaction repair: `1c314e9`
 
@@ -161,5 +165,5 @@ coordinate-derived branch rule changed.
 - NURBS creation uses deterministic clamped-open or periodic-uniform knots. Arbitrary user knot
   vectors are not exposed in this UAT control.
 - Scenario edits deliberately remain ephemeral and are reset/exit scoped.
-- The supervising human approved and closed M61 for the recorded scope on 2026-07-29. Future UI
+- The maintainer approved and closed M61 for the recorded scope on 2026-07-29. Future UI
   improvements and cleanup belong to newly scoped milestones.

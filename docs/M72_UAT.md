@@ -2,9 +2,13 @@
 
 # M72 focused UAT — Public workbench bulk fixes
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and explicitly approved on 2026-08-15**. Implementation, clean qualification,
 final public GitHub Pages deployment, exact hosted-artifact byte verification and local/public
-Chromium qualification pass. The supervising caller approved the recorded focused UAT scope
+Chromium qualification pass. The maintainer approved the recorded focused UAT scope
 against accepted follow-up commit `b700313` and requested milestone closure.
 
 Direct Rust/WASM tests are authoritative for accepted geometry, residuals, rank/DOF, branches,
@@ -20,7 +24,7 @@ passed corrected run `31802816639` attempt 2, including the unchanged 180-second
 `176.27s`. Artifact `9221899077`, all initial public HTTP responses and bytes, the WASM media type,
 both desktop Chromium sizes and browser-local reload persistence passed mechanically.
 
-The accepted follow-up passed the same two-size Chromium automation from its immutable Tailscale
+The accepted follow-up passed the same two-size Chromium automation from its immutable preview
 release snapshot before human approval. Final product source
 `b7003137960afb1b9d29c990d595df44bcd7c2d4` then passed the complete local release gate. Its
 documentation-only approval descendant `2d1513912787445ff825836705158c2b563dc7ff` passed Pages run
@@ -97,9 +101,9 @@ reload.
 - M72-U3: **Accepted** under the 2026-08-15 scoped close decision.
 - M72-U4: **Accepted and mechanically complete** — final Pages artifact `9241248173` passes exact
   public byte/media verification and the two-size Chromium contract.
-- Final M72 approval: **Pass** — explicitly approved by the supervising caller on 2026-08-15.
+- Final M72 approval: **Pass** — explicitly approved by the maintainer on 2026-08-15.
 
-The supervising caller confirmed that the presented fixes resolve the reported behavior and
+The maintainer confirmed that the presented fixes resolve the reported behavior and
 explicitly requested M72 closure. This accepts M72-U1 through M72-U4 for the recorded scope without
 claiming a separate exhaustive replay of every scripted permutation; direct automated
 qualification remains authoritative.

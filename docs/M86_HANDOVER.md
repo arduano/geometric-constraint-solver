@@ -1,28 +1,22 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M86 closeout handover
+# M86 managed editing and interaction fixes: closure summary
 
-Status: **M86 is complete, approved and publicly verified on 2026-08-29**. M86-F001-F003 and the
-bounded interaction trace are approved by the supervising user's explicit close decision. The
-former F002 nomination remains withdrawn. Accepted source `88d1b5e` is clean-qualified; approval
-head `ccf791f` is exact-published; both UAT services are retired. Do not reconstruct this state from
-chat history.
+M86 was accepted and closed on 2026-08-29, including M86-U1 through M86-U8 and the
+bounded interaction trace. Acceptance was at milestone level; a separate row-by-row
+replay was not recorded. Qualified source `88d1b5e`, tree `09018e5`, passed the
+complete clean gate. Documentation descendant `ccf791f` was verified on GitHub Pages.
 
-## Resume point
-
-Read `AGENTS.md` and its required project documents, then `docs/M86_GOALS.md`,
-`docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md`. Accepted product commits are `b1e7ea2`
-(expanded F002), `2cfee5b` (F003), and `49787f4` (bounded trace/UI/tests). Accepted-state commit
-`88d1b5e`, tree `09018e5`, passes the complete clean gate and owns the frozen nomination below.
-The supervising user's 2026-08-29 close decision authorized publication. Approval head `ccf791f`
-passes exact Pages verification and is final M86 public-byte authority.
+See [implementation](M86_IMPLEMENTATION.md) for the findings and
+[UAT](M86_UAT.md) for the acceptance scope. Earlier candidates were superseded;
+this document is a technical summary, not a service runbook.
 
 ## Delivered work
 
 - **M86-F001 — managed dimension Inspector edits:** commit `9050424` routes authenticated direct
   code-owned curve-length/diameter target edits through managed TypeScript source rewriting and
   atomic rematerialization. Invalid edits retain the last accepted scene and ordinary Undo/recovery.
-  The supervising user's “Looks good” assessment accepts this finding.
+  The finding is accepted.
 - **M86-F002 — Fillet Select specificity:** historical commit `dbe94da` repaired the shared parent
   corner, but UAT showed the same broad Fillet surface also hid the remote endpoints of a two-leg,
   length-2 right-angle Polyline near radius `2`. The current expansion keeps the compact radius grip
@@ -46,115 +40,6 @@ including transverse-orientation metadata, are outside that DTO and are not impl
 Current Typed Panel case. None of F001-F003 changes solver equations, residuals, Jacobians, branch
 semantics, persistence formats or public APIs.
 
-## Withdrawn historical candidate
-
-- Product source/tree: `dbe94daf152515169b78a310cf2286f9ea04c80b` /
-  `77f86c0a198af12e10537dc4d6d7d90066ba48e8`.
-- Complete clean release gate: exit `0`; log
-  `/tmp/geosolve-m86-f002-gate.wSztT0Bb/release-gate.log`, SHA-256
-  `34ac3e398953398495d22d480d9a11d88b03020c0235c07db61c443534fa4278`.
-- Frozen seven-file snapshot: `/tmp/geosolve-m86-f002-uat.CPfe9QD8`, aggregate
-  `e3f9581a05a8cbf5731b33625fa63f2b35e62f4ebcfdacb6d75a4486f80fc850`.
-- Historical local: `http://127.0.0.1:18101/`, PID `597410`.
-- Historical Tailscale: `http://100.94.63.83:8080/`, PID `597412`.
-- Both endpoints served the frozen snapshot at nomination; their exact eight-path ledger SHA-256 was
-  `e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`.
-
-The snapshot predates remote-parent-endpoint behavior and F003. It is withdrawn from current UAT
-and remains immutable historical defect evidence. The replacement services below did not serve it
-and are themselves retired; the snapshot remains intact as rollback evidence.
-
-## Historical provisional combined candidate
-
-- Served-build identity: saved pre-gate 160,117-byte, 2,976-line binary patch over HEAD
-  `4730e156e17cf3df88b9681a22961d41b686c2ff`, tree
-  `23a76c3b7141f10064d899113b97135932d23033`; patch SHA-256
-  `feafcc2a717a9c1bf9ff7a708b705903b2e18c6ef67327f533d66819a8784a57`; status SHA-256
-  `945ef3534016a5735c42c6fedaf72e66be2acc41ce9dc764db6e5896c3636b5a`. Saved pre/post-gate patch
-  and status files are byte-identical. Subsequent documentation-only worktree edits are outside
-  that served-build patch and do not alter the frozen seven-file candidate.
-- Complete provisional gate: `GEOSOLVE_ALLOW_DIRTY=1`, pipeline `0 0`, 2026-08-28 18:44:26 through
-  19:10:14 AEST. The 6,582-line, 441,920-byte log
-  `/tmp/geosolve-m86-f002-f003-gate.yDrJlI8n/release-gate.log` has SHA-256
-  `93b645c2a2f1850f589b406943f3618da4fc833a42ff6066884602ec3e31ddb6`. Pre/post patch and status
-  bytes compare exactly. This is comprehensive dirty-worktree evidence, not clean-source
-  nomination.
-- Exact no-rebuild snapshot: `/tmp/geosolve-m86-f002-f003-uat.yGY3Nvly`, exactly seven top-level
-  regular files, zero symlinks/nested entries, directory/files `0555`/`0444`, ordered-manifest
-  aggregate `8f5a4ffcd96819b986ba81a9467d0c83a64365b2d21338cd134e164fa4444ce4`.
-- Complete freeze/service evidence:
-  `/tmp/geosolve-m86-f002-f003-freeze-evidence.EsMzxE2v`. Temporary, local and Tailscale eight-path
-  ledgers are byte-identical at SHA-256
-  `dca3e6eeba66e12c873ba4b5ba9b6cadd489060f0e4c7d5ce1070ed3344ec96f`.
-- Historical local service: `http://127.0.0.1:18101/`, PID `969297`, invocation
-  `c1681e5beb234ce487dbf9b639cbd9dd`.
-- Historical Tailscale UAT: `http://100.94.63.83:8080/`, PID `973390`, invocation
-  `c77a5b3abbe94752b864af9bda53c355`.
-- Temporary verifier `127.0.0.1:18102`, PID `965128`, invocation
-  `a06c89f580744568b0d39677ee776da1`, passed before either listener was replaced and is stopped.
-  Those retained services pointed only at the combined frozen snapshot and were subsequently
-  replaced by the trace-enabled services below.
-
-## Accepted trace-enabled candidate
-
-The user requested bounded gesture logging after the complete reproduction payload became too
-large to paste. The resulting memory-only `Copy trace` surface records exact pointer, semantic
-route, parity, publication and rollback evidence without entering source, history, persistence or
-reproduction payloads. Its hard export bound is 128 KiB.
-
-- Frozen snapshot: `/tmp/geosolve-m86-trace-uat.U1C0QPSf`, exactly seven regular files, zero
-  symlinks, directory/files `0555`/`0444`, ordered-manifest aggregate
-  `f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`.
-- Former accepted local PID/invocation: `2433761`/`3f829abfff0a46eba586c07fed507d8e` on
-  `127.0.0.1:18101`; former Tailscale PID/invocation:
-  `2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` on `100.94.63.83:8080`.
-- `/` and all seven files matched the snapshot on both endpoints. Evidence
-  `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
-  `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`.
-- Post-trace full demo-web passes 316/316; focused trace, Clippy, formatting, WASM, release build,
-  browser-smoke and unchanged-golden checks pass. The temporary `18103` listener is retired.
-
-The supervising user's “looks good, let's close the milestone” decision accepts M86-U1-U8 and this
-trace-enabled descendant without claiming a separately logged row-by-row replay.
-
-## Clean committed-source nomination
-
-- Source/tree: `88d1b5e06a7ce8ffe38931f792492f6f837a1d74` /
-  `09018e5aeb7e824396ae2ee2c70a3e30912414fa`.
-- Complete clean Nix release gate: pipeline `0 0`, 2026-08-29 13:16:02–13:35:50 AEST; identical
-  empty pre/post status. Log `/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` is 6,573
-  lines, 438,432 bytes, SHA-256
-  `e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`.
-- Exact no-rebuild snapshot: `/tmp/geosolve-m86-clean-uat.d7DF9hcM`, exactly seven top-level regular
-  files, zero symlinks/nested entries, directory/files `0555`/`0444`, ordered-manifest aggregate
-  `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`.
-- Complete freeze/HTTP evidence: `/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. Temporary
-  `127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verified `/`
-  and all seven files; results SHA-256 was
-  `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`.
-- The isolated verifier is inactive/dead with `MainPID=0`; curl exits `7` with HTTP `000`. The
-  accepted trace UAT services remained untouched until exact Pages verification passed.
-
-## Public closeout
-
-- Approval head/tree: `ccf791f131ba8de07a0d32df6938719cf4bcab12` /
-  `be39d05c8a5dc2f76db91f6be3270f0b95dd8c5e`. Qualified source `88d1b5e` is its ancestor; only the
-  nine M86 closeout documents differ.
-- Pages run/jobs: `33232073614`; assemble `99046509230`, deploy `99047255428`, all successful.
-  Deployment/status: `6152066188`/`17489139435`; artifact `9708871725`.
-- Downloaded ZIP: 4,975,804 bytes, SHA-256
-  `182080c59b54815a11fa799de4068ed2d92cd4b3e716baae81f0c91e25d56ae7`. Sole inner tar:
-  15,267,840 bytes, SHA-256
-  `6459745421cfa3a80038400d80d50c25cef7b46935fb37638b7ca3e7d39a80d8`.
-- Extracted artifact: seven regular files, zero symlinks/non-regular entries, aggregate
-  `ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`.
-- Hosted `/` plus all seven paths match exact artifact bytes/MIME/length with no redirect,
-  `Location` or `Content-Encoding`; `/` equals `index.html`. Evidence
-  `/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` has SHA-256
-  `9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`.
-- Both M86 user services are inactive/dead with `MainPID=0`; both endpoints refuse with curl exit
-  `7`/HTTP `000`. Evidence: `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`.
-
 ## Current checkpoint evidence
 
 - `m75_hover_pointer_parity` passes 18/18 on native and 18/18 on WASM.
@@ -169,10 +54,28 @@ trace-enabled descendant without claiming a separately logged row-by-row replay.
 - The pre-trace complete demo-web run passes 307/307 plus binary, integration and doc-test targets;
   the post-trace library run passes 316/316.
 - The complete workspace/release gate, no-rebuild freeze and served-byte verification pass for the
-  exact provisional patch identity above. The later clean committed-source gate and isolated
-  no-rebuild verification also pass at `88d1b5e` / `09018e5`.
+  historical provisional candidate. The later clean committed-source gate and isolated
+  no-rebuild verification pass at `88d1b5e` / `09018e5`.
 
-## Remaining work
+## Bounded trace
 
-None for M86. Preserve the frozen snapshots and evidence as historical records; do not restart the
-retired services for this milestone.
+The memory-only `Copy trace` surface records pointer, semantic-route, parity,
+publication and rollback evidence. It is excluded from source, history, persistence
+and reproduction payloads. Exports are bounded to 128 KiB.
+
+## Clean committed-source nomination
+
+The exact source was `88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
+`09018e5aeb7e824396ae2ee2c70a3e30912414fa`. The complete clean release gate passed
+on 2026-08-29. Its seven-file artifact aggregate was
+`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`.
+
+## Public closeout
+
+Documentation descendant `ccf791f131ba8de07a0d32df6938719cf4bcab12` passed
+Pages run `33232073614`, artifact `9708871725`. Hosted root and all seven paths
+matched the downloaded artifact's bytes, MIME types and lengths. The public artifact
+aggregate was `ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`.
+
+No M86 implementation or acceptance work remains. Current release procedures are
+in the [release guide](RELEASE_QUALIFICATION.md).

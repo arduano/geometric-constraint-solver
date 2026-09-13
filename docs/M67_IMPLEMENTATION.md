@@ -2,7 +2,11 @@
 
 # M67 implementation — legacy surface and harness cleanup
 
-Status: complete and explicitly approved by the supervising human on 2026-08-08.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete and explicitly approved by the maintainer on 2026-08-08.
 
 ## 1. Files and APIs
 
@@ -82,7 +86,7 @@ nix-shell shell.nix --run 'RUSTFLAGS="-D warnings" cargo check --locked -p geoso
 Static inventory reported one `#[wasm_bindgen(start)]`, one `workbench-root`, zero forbidden
 runtime references and zero E2E directories. The seven-file distribution manifest is
 `e9d410c71290e7200595aaf9be6327523a812a1fa7d23abfa9d12c8279c176ac`; all seven HTTP
-responses matched their local SHA-256 values at the recorded Tailscale endpoint.
+responses matched their local SHA-256 values at the recorded preview endpoint.
 
 ## 4. Acceptance criteria
 
@@ -96,7 +100,7 @@ Mechanically passed:
 - canonical sketch v1-v4 and workspace v1-v4 migration behavior to remain unchanged; and
 - the full locked release gate.
 
-The supervising human explicitly approved all four focused areas in `docs/M67_UAT.md` on
+The maintainer explicitly approved all four focused areas in `docs/M67_UAT.md` on
 2026-08-08 and requested M67 closure.
 
 ## 5. Known limitations or next blocker
@@ -105,6 +109,6 @@ M67 intentionally does not address `M66-KL001`, add Offset/Mirror, redesign comp
 branches, add topology presentation elsewhere, or harden new solver behavior. Cargo continues to
 emit its pre-existing advisory that workspace packages specify both `license` and `license-file`;
 licence validation and all package-content gates pass. No blocker remains within the approved M67
-scope. At M67 close, M68 was an empty placeholder awaiting supervising-user scope. The
+scope. At M67 close, M68 was an empty placeholder awaiting maintainer scope. The
 subsequently approved scope is recorded in ADR 0032, `PLAN.md` and
 `docs/M68_IMPLEMENTATION.md`; it does not alter M67's historical acceptance record.

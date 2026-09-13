@@ -2,7 +2,11 @@
 
 # M76 — production-quality constraint annotations
 
-Status: complete (2026-08-17). Implementation, final clean qualification, immutable Tailscale
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete (2026-08-17). Implementation, final clean qualification, immutable preview
 nomination, scoped human approval, exact GitHub Pages publication and public browser verification
 all pass. M77 is active subsequently and does not change this completed evidence. This milestone
 turns the workbench annotations into a polished CAD demonstration without changing solver, sketch
@@ -65,18 +69,6 @@ WASM, carried M75 11/11 and M74 5/5 in both environments, unchanged golden 270/2
 crossover in 151.76 seconds, together with formatting, warnings-denied Clippy/Rustdoc, all
 workspace tests, benchmarks, licensing/package contents and Trunk 0.21.14 assembly.
 
-The exact no-rebuild seven-file snapshot `/tmp/geosolve-m76-final-uat.65Y8J1` is read-only
-(directory `0555`, regular non-symlink files `0444`) with ordered-manifest aggregate
-`967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`. PID `1780608`, retained
-command-runner session `30164`, served it at `http://100.94.63.83:8080/` and was retired only after
-the M77 snapshot was ready;
-`/tmp/geosolve-m76-final-http-verify.UwoaMK` proves root plus all files return HTTP 200 with exact
-media/length/bytes, no redirects or encoding, root equality and the same fetched aggregate. The
-user reviewed the initial candidate, requested the two final feature refinements, and explicitly
-authorized closure without separate post-refinement UAT. U1-U4 are accepted for scoped closure
-under that approval; individual steps were not replayed or separately logged after the final
-refinements.
-
 Pages run `31957299907` failed twice only because the old 180-second wall-clock assertion observed
 209.696267408 and 208.757508921 seconds after all semantic assertions passed. No M76 finding was
 opened. The milestone-neutral gate retains 180 seconds as its advisory reference and enforces a
@@ -89,23 +81,14 @@ Artifact `9267811418` is 2,164,829 bytes with ZIP/GitHub SHA-256
 manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`.
 Root and every public file byte-match the hosted artifact with expected media types, zero
 redirects and repository-prefixed assets. Evidence is retained at
-`/tmp/geosolve-m76-pages-verify.ijOz7p`. The unchanged M72 browser check passes at both desktop
+`geosolve-m76-pages-verify.ijOz7p`. The unchanged M72 browser check passes at both desktop
 sizes; M76-adapted retained M74 and M75 checks pass at both sizes and 6/6 respectively after only
 adapting their obsolete Origin-canvas expectations to the approved axis-intersection contract. Pages
 is final public-byte authority; its repository-prefixed rebuild is not claimed byte-identical to
-the separately frozen Tailscale output.
-
-The intermediate `9b4e7f7` candidate, snapshot `/tmp/geosolve-m76-uat.ctgYzp` and aggregate
-`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4` are retained as superseded
-historical evidence; PID `1455071` was retired before the final snapshot took the shared endpoint.
-
-The initial nomination at source `37eade50b566f62905a395655bc80c17d9b6bef4`, tree
-`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, snapshot `/tmp/geosolve-m76-uat.puiPgO` and aggregate
-`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf` is retained as superseded
-historical evidence only; its PID `1077092` was retired.
+the separately frozen preview output.
 
 ## Non-goals
 
 M76 adds no constraint, residual, geometry primitive, solver behavior, mobile layout, formula
 language or canonical sketch persistence field. Exact GitHub Pages publication followed the
-scoped human approval of the final frozen Tailscale candidate and completed the milestone.
+scoped human approval of the final frozen preview candidate and completed the milestone.

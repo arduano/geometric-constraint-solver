@@ -2,12 +2,14 @@
 
 # M68 focused UAT — Fillet direct manipulation
 
-Status: closed with explicit supervising-human approval on 2026-08-09. Implementation, focused
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: closed with explicit maintainer approval on 2026-08-09. Implementation, focused
 direct qualification and complete release qualification pass.
 
 Candidate source: `edffb8a`
-
-Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
 `77d071d711255c2c2385cee04d3b6820e5a0ed2dc4d8ffa501abcbab97657c79`
@@ -171,7 +173,7 @@ Mechanical regression: feature, editor-unit, editor-integration and demo-web sui
 tests cover two regular grouped Fillets after large source-point drags, finite rails without a
 continuation status, radius preview/publication, one history step, stable IDs and unchanged native
 sketch identity, coordinates, residuals, rank and DOF. The full release gate passes on `c82d420`,
-and the replacement frozen distribution is byte-verified at the Tailscale endpoint.
+and the replacement frozen distribution is byte-verified at the preview endpoint.
 
 Retest: Accepted under the explicit M68 close decision. The close decision records the resolved
 finding without claiming a separate exhaustive replay of every scripted step.
@@ -191,7 +193,7 @@ headless continuation support remain preserved.
 Mechanical regression: editor tests prove endpoint hover/press resolves to the visible radius
 surface rather than an invisible contact target. Web markup tests prove one central grip for the
 selected corner, no `wb-fillet-contact` elements and no circular branch-action backplates. A live
-browser reproduction over the frozen Tailscale bundle confirms the selected affordance group has
+browser reproduction over the frozen preview bundle confirms the selected affordance group has
 one circle, class `wb-fillet-radius-grip`. The full release gate passes on `5355162`.
 
 Retest: Accepted under the explicit M68 close decision. The accepted contract has one central
@@ -251,7 +253,7 @@ Mechanical regression: 37 feature tests, 170 editor unit tests, all 46 editor in
 and 68 web tests pass. Focused cases cover two adjacent Fillets sharing a middle segment, a
 line-circle Fillet that retains the complete circle, full circle/ellipse topology, a directed arc
 and an explicitly open periodic view. Strict Clippy, warnings-denied WASM checking, release Trunk
-and seven-asset Tailscale byte verification pass.
+and seven-asset preview byte verification pass.
 
 Retest: Accepted under the explicit M68 close decision. The accepted contract omits an
 uncommittable middle-segment arrow, retains valid outer actions, preserves a full circle/ellipse and
@@ -275,14 +277,14 @@ canvas or steal a gesture.
 Mechanical regression: all 69 web tests pass. A focused presentation test owns canvas DOM
 containment, absolute overlay positioning, absence of grid-flow sizing and pointer transparency.
 Formatting, strict web Clippy, warnings-denied WASM checking, release Trunk and byte verification
-of all seven Tailscale assets pass.
+of all seven preview assets pass.
 
 Retest: Accepted under the explicit M68 close decision. The accepted contract keeps the canvas and
 pointer mapping stable while the non-intercepting global card appears or disappears.
 
 ## Approval
 
-On 2026-08-09, the supervising human explicitly accepted the focused M68 UAT and requested
+On 2026-08-09, the maintainer explicitly accepted the focused M68 UAT and requested
 milestone closure. M68-U1 through M68-U6 and resolved findings `M68-F001` through `M68-F005` are
 accepted under that close decision with no new blocker recorded. This approval does not replace
 the direct qualification above or invent a separate exhaustive replay of every scripted step.

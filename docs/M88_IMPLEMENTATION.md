@@ -2,8 +2,12 @@
 
 # M88 implementation ledger — Workflow-led authoring workbench redesign
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and accepted on 2026-09-01**. The immutable M88-F004 React replacement remains
-live as the accepted UAT identity. The supervising user's milestone-level close decision accepts
+live as the accepted UAT identity. The maintainer's milestone-level close decision accepts
 M88-U1 through M88-U10 without claiming a separately logged row-by-row replay. The obsolete
 Rust-DOM compatibility surface is retired from source after that acceptance. The prior Rust-DOM candidate
 was based on
@@ -50,22 +54,22 @@ historical rollback evidence, not qualification of the current React tree.
   golden and release WASM plus React/Vite assembly from the final unchanged source.
 - [x] Freeze and byte-verify a separately identified immutable React candidate without changing,
   rebuilding or replacing the existing port-`8080` rollback service. Initial exact eight-file
-  snapshot `/tmp/geosolve-m88-react-uat.TAMXyz`, aggregate
+  snapshot `geosolve-m88-react-uat.TAMXyz`, aggregate
   `91c3a2349f1466a64720cb1cfba8a4f7d18aed0be03e9eec256ccf8c4eb0f9de`, remains preserved at
-  `http://100.94.63.83:18088/` but is superseded by M88-F001.
+  the archived preview but is superseded by M88-F001.
 - [x] Resolve M88-F001: stop serializing `IntentGraphNodeKind` through Rust `Debug`; reuse the
   semantic node-family label, remove Explorer type/detail suffixes, retain one compact Inspector
   kind and keep Explorer row/group icons non-shrinking.
 - [x] Pass the initially failing exact-leak regression, bridge `12/12`, full demo-web `384/384`,
   frontend `17/17`, real release-WASM Playwright `6/6`, focused all-feature library Clippy,
   `npm run check`, distribution validation, format and diff hygiene; freeze and exact-verify current
-  replacement `/tmp/geosolve-m88-react-uat.nGkL4i`, aggregate
+  replacement `geosolve-m88-react-uat.nGkL4i`, aggregate
   `0bd35f3dba50c592c6eea34ed18afed1b6f908803d75feb9ca3bbb620a1572c4`, at
-  `http://100.94.63.83:18089/`.
+  the archived preview.
 - [x] Resolve M88-F002 with the static Rust-owned CAD tool catalog, exact 25/13/5/2 semantic
   Sketch/Constraint/Dimension/Modify inventory, contextual role controls and canvas-local
   Grid/Fit/Origin. Freeze the exact post-reboot F002 snapshot at
-  `/tmp/geosolve-m88-react-uat.kdSCUU`; preserve it after M88-F003 withdraws it from UAT.
+  `geosolve-m88-react-uat.kdSCUU`; preserve it after M88-F003 withdraws it from UAT.
 - [x] Reproduce M88-F003 in that frozen release-WASM snapshot, distinguish ordinary browser
   `pointerup -> lostpointercapture` from genuine cancellation, repair exact frontend pointer
   retirement and bridge cancellation-effect dispatch, and regress React lifecycle, direct bridge
@@ -81,7 +85,7 @@ historical rollback evidence, not qualification of the current React tree.
   camera cancellation, Code-only rail removal, real Open/Save shortcuts, dirty-draft replacement
   and reproduction guards, browser-owned secondary click, truthful panel icons and fresh trace
   loading. Freeze, stage, byte-verify and serve the exact release output.
-- [x] Accept M88-U1 through M88-U10 at milestone scope under the supervising user's explicit close
+- [x] Accept M88-U1 through M88-U10 at milestone scope under the maintainer's explicit close
   decision without inventing separate row observations, then delete the Rust-DOM compatibility
   surface and requalify the retained React/bridge architecture.
 
@@ -197,10 +201,10 @@ GeoSolve runtime error.
   after React replacement coverage and explicit acceptance pass.
 - [x] Run formatting, warnings-denied Clippy, workspace tests, relevant native owner tests, locked
   WASM build/tests, TypeScript package checks and release React/Vite assembly.
-- [x] Record M88-U1 through M88-U10 as accepted by the supervising user's 2026-09-01 milestone-level
+- [x] Record M88-U1 through M88-U10 as accepted by the maintainer's 2026-09-01 milestone-level
   close decision, explicitly without claiming a separate row-by-row replay; retain the exact F004
   browser/build identity.
-- [x] Record known limitations and the explicit supervising-user close disposition. Publication
+- [x] Record known limitations and the explicit maintainer close disposition. Publication
   and accepted-service retirement remain separate and unrequested.
 
 ## Work and performance invariants
@@ -238,33 +242,20 @@ initial immutable served bytes. Neither section records human UAT.
   page/console/network/HTTP errors.
 
 The actual-WASM browser command requires
-`GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome` inside `nix-shell shell.nix`.
+`GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome)` inside `nix-shell shell.nix`.
 Target-only dead-code warnings arise because the legacy Rust-DOM compatibility surface is
 deliberately retained; native warnings-denied Clippy remains clean.
 
 ## Superseded initial React candidate record
 
 At `2026-08-31 18:04:53 AEST`, the unchanged Vite distribution was copied without rebuilding to
-`/tmp/geosolve-m88-react-uat.TAMXyz`. The snapshot contains exactly eight regular files and zero
+`geosolve-m88-react-uat.TAMXyz`. The snapshot contains exactly eight regular files and zero
 symlinks; directories are mode `0555` and files are mode `0444`. External manifest
-`/tmp/geosolve-m88-react-uat.TAMXyz.sha256` is the `LC_ALL=C` relative-path-sorted sequence of
+`geosolve-m88-react-uat.TAMXyz.sha256` is the `LC_ALL=C` relative-path-sorted sequence of
 `<sha256><two spaces><relative-path>\n`; its aggregate SHA-256 is
 `91c3a2349f1466a64720cb1cfba8a4f7d18aed0be03e9eec256ccf8c4eb0f9de`. The WASM file SHA-256 is
 `9032a07bc6ac465816b3b3f3bb44c3881f815f290e39eece88890589f2cdfe5f`. The current distribution
 manifest and frozen manifest are identical.
-
-User unit `geosolve-m88-react-uat-TAMXyz.service`, PID `1846522`, historically served only those bytes at
-`http://100.94.63.83:18088/`; its log is
-`/tmp/geosolve-m88-react-uat.TAMXyz.http.log`. Every frozen file plus `/` and `/index.html` returns
-HTTP 200 with exact bytes, digest, length and media type. Served root, served index and frozen
-`index.html` are identical. Build/browser identity is rustc `1.95.0 (59807616e 2026-04-14)`, Cargo
-`1.95.0 (f2d3ce0bd 2026-03-21)`, Node `v24.19.0`, npm `11.17.0`, wasm-bindgen `0.2.121` and Google
-Chrome `151.0.7922.173`.
-
-The candidate was built from the dirty working tree based on HEAD
-`71a51ee534f034e2328a07e0d80f9a9ee5e0fc62`; this records exact working bytes, not a clean-source
-claim. M88-F001 supersedes it for UAT; the snapshot remains preserved while service PID `1846522`
-and historical port-`8080` rollback PID `425555` disappeared with their transient units on reboot.
 
 ## M88-F001 historical replacement qualification
 
@@ -283,22 +274,15 @@ WASM remains built by Cargo `--release`, wasm-bindgen and `wasm-opt -Oz`; no deb
 created or nominated.
 
 At `2026-08-31 18:46:39 AEST`, the replacement distribution was copied without rebuilding to
-`/tmp/geosolve-m88-react-uat.nGkL4i`. It contains exactly eight regular files, zero symlinks,
+`geosolve-m88-react-uat.nGkL4i`. It contains exactly eight regular files, zero symlinks,
 directories mode `0555` and files mode `0444`. External manifest
-`/tmp/geosolve-m88-react-uat.nGkL4i.sha256` has aggregate SHA-256
+`geosolve-m88-react-uat.nGkL4i.sha256` has aggregate SHA-256
 `0bd35f3dba50c592c6eea34ed18afed1b6f908803d75feb9ca3bbb620a1572c4`; the WASM SHA-256 is
 `beb76d47889055f9d8344ac4cdc8a01fc06a1dbd797979f636927031d3383996`.
 
-User unit `geosolve-m88-react-uat-nGkL4i.service`, PID `2160046`, historically served the replacement at
-`http://100.94.63.83:18089/`; log `/tmp/geosolve-m88-react-uat.nGkL4i.http.log`. Current dist,
-frozen files and served files match exactly; every file plus `/` and `/index.html` returns HTTP 200
-with the verified bytes. This was the current UAT candidate before M88-F002 and the later reboot;
-its snapshot remains historical evidence while those transient listeners are gone. Every human row,
-legacy Rust-DOM deletion, public publication and milestone closure remain pending.
-
 ## M88-F002 toolbar hierarchy and post-reboot replacement
 
-The supervising user's next UAT finding was presentation hierarchy rather than missing domain
+The maintainer's next UAT finding was presentation hierarchy rather than missing domain
 capability: the React migration had discarded recognizable CAD icons and meaningful families, and
 its scissors-like miscellaneous bucket mixed Fillet/Offset with unrelated display and camera
 actions. The repair keeps Rust as command identity authority and exposes its static tool metadata
@@ -323,26 +307,19 @@ Visual/browser qualification at `1024 x 720` and `1440 x 900` covers long labels
 scrolling, active state, 12 px canvas insets, outside-click destination delivery and Escape focus
 restoration with no runtime/console/network errors.
 
-The reboot removed every former transient HTTP unit but preserved its immutable `/tmp` snapshots.
+The old transient previews were retired; their artifact identities remain historical evidence.
 After the final release build, the unchanged eight-file distribution was race-checked and frozen at
-`/tmp/geosolve-m88-react-uat.kdSCUU`, with directories/files `0555`/`0444`, zero symlinks, external
-manifest `/tmp/geosolve-m88-react-uat.kdSCUU.sha256`, aggregate
+`geosolve-m88-react-uat.kdSCUU`, with directories/files `0555`/`0444`, zero symlinks, external
+manifest `geosolve-m88-react-uat.kdSCUU.sha256`, aggregate
 `d328fdded4ae963230eef2c64c5fb22459dec7a55467e0a7c051bed739b2cd47` and WASM SHA-256
 `7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0`. Exact verification evidence
-is `/tmp/geosolve-m88-react-freeze-evidence.sUELzR`; its eight-path ledger SHA-256 is
+is `geosolve-m88-react-freeze-evidence.sUELzR`; its eight-path ledger SHA-256 is
 `c5201b123ba2f06bcb9b0f6c370adfa2a9dc85c0caa750366d8b36ff33189726`.
-
-Transient user unit `geosolve-m88-react-uat-current.service`, PID `139684`, serves only that
-snapshot on the Tailscale interface at `http://100.94.63.83:18088/`. Root/index/all eight files
-return HTTP 200 and exactly match frozen bytes; an actual Chrome frozen-endpoint toolbar smoke also
-passes. The candidate comes from the shared dirty tree at HEAD `71a51ee5`; M88-F003 now withdraws
-it from continuing UAT. It remains immutable pre-fix reproduction evidence, not a clean-source
-claim, human acceptance, public publication or milestone closure.
 
 ## M88-F003 point-and-click authoring correction
 
 The failure was reproduced independently against frozen F002 snapshot
-`/tmp/geosolve-m88-react-uat.kdSCUU`, release-WASM SHA-256
+`geosolve-m88-react-uat.kdSCUU`, release-WASM SHA-256
 `7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0`, source basis
 `71a51ee534f034e2328a07e0d80f9a9ee5e0fc62`. Selecting Segment or Center–Radius Circle and using
 ordinary clicks painted an intermediate stage but could not commit it. The same click sequences
@@ -372,21 +349,14 @@ release-WASM test for both geometries. Bridge tests pass `19/19`, the full demo-
 locked WASM check and distribution validation pass. No solver equation, geometry recipe, branch,
 persistence format or accepted-scene authority changed.
 
-The final unchanged release distribution is frozen at `/tmp/geosolve-m88-react-uat.QkVU1k` with
+The final unchanged release distribution is frozen at `geosolve-m88-react-uat.QkVU1k` with
 exactly eight regular files, zero symlinks, directories/files `0555`/`0444`, external sorted manifest
-`/tmp/geosolve-m88-react-uat.QkVU1k.sha256`, aggregate
+`geosolve-m88-react-uat.QkVU1k.sha256`, aggregate
 `e44bd8c22ccb67e542a8c73b58f62ed8ab236ab728b2d1bc2ae1aff1895ac167` and optimized release-WASM
 SHA-256 `5f49f49a880dd8529982bfbcf68a3f1a92c79ee96f256ed56931254ca884b22a`.
-Evidence directory `/tmp/geosolve-m88-f003-freeze-evidence.bbtXoS` records identical final dist,
-frozen, local-HTTP and Tailscale-HTTP bytes; both HTTP ledgers have SHA-256
+Evidence directory `geosolve-m88-f003-freeze-evidence.bbtXoS` records identical final dist,
+frozen, local-HTTP and preview-HTTP bytes; both HTTP ledgers have SHA-256
 `340b5bfd3d7d661b877fad3d3ab97813bc9027f95a99962b6788781c68588ef5`.
-
-User unit `geosolve-m88-react-uat-current.service`, PID `518679`, started at
-`2026-08-31 23:02:01 AEST` and serves only that snapshot at `http://100.94.63.83:18088/`. Root,
-index and all eight files return exact HTTP 200 bytes. Local and served Chrome smokes commit Segment
-and Center–Radius Circle with `1/2` then `2/3` accepted curves/points, zero draft paint and zero
-runtime errors. All prior snapshots remain preserved. Human UAT remains paused and every scorecard
-row stays pending.
 
 ## M88-F004 canvas-chrome and adjacent-affordance correction
 
@@ -420,27 +390,18 @@ WASM Playwright `10/10`, focused all-feature warnings-denied Clippy, locked WASM
 equation, residual, Jacobian, priority, branch, persistence format or accepted-scene validation
 changed.
 
-The unchanged eight-file distribution was frozen at `/tmp/geosolve-m88-react-uat.KGhA7s` with zero
+The unchanged eight-file distribution was frozen at `geosolve-m88-react-uat.KGhA7s` with zero
 symlinks, directory/file modes `0555`/`0444`, external manifest
-`/tmp/geosolve-m88-react-uat.KGhA7s.sha256`, aggregate
+`geosolve-m88-react-uat.KGhA7s.sha256`, aggregate
 `700ebae4aec13ce20ab8786b63254e2c5b6239204c38bdc6e9d35f11c4159071` and optimized release-WASM
 SHA-256 `22944f00ddf8c327e943d055a8224a1948efce42ec2896c9326891a45bfdf2ff`. Evidence directory
-`/tmp/geosolve-m88-f004-freeze-evidence.ijud9T` records equal final-dist, frozen, Tailscale staging
-and Tailscale live manifests; staging/live HTTP ledgers both hash to
+`geosolve-m88-f004-freeze-evidence.ijud9T` records equal final-dist, frozen, preview staging
+and preview live manifests; staging/live HTTP ledgers both hash to
 `e838461921907cfe1252423f5a9ccf7db056dd62370698d90d6e47e0e7428531`.
-
-User unit `geosolve-m88-react-uat-current.service`, PID `1021511`, started at
-`2026-09-01 00:55:59 AEST` and serves only this snapshot at `http://100.94.63.83:18088/`. Root,
-index and all eight files return exact HTTP 200 bytes. Live Chrome proves right-click neutrality,
-Polyline Finish false → false → true → false, one accepted curve, hidden Code-only canvas tools and
-zero page/console/network/HTTP errors. F003 and every earlier snapshot remain preserved. The user's
-2026-09-01 close decision accepts F004 and M88-U1 through M88-U10 at milestone scope. The
-compatibility surface is retired from source; public publication and accepted-service retirement
-remain unrequested.
 
 ## Post-acceptance compatibility retirement qualification
 
-After the supervising user's close decision, the obsolete Rust-DOM host was removed without
+After the maintainer's close decision, the obsolete Rust-DOM host was removed without
 changing the accepted React/bridge authority. The static Trunk host, DOM installer, legacy panel/
 platform/performance/PNG modules, global callback registries and DOM-only dependencies/tests are
 gone. The retained public surface is the instance-scoped `WorkbenchHandle`/`WorkbenchBridge`,
@@ -464,8 +425,8 @@ GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run \
 Standalone golden `--survey` and `--check`, canonical frontend `npm run check`,
 `npm run validate:dist -- ../dist ./` and `npm run test:e2e` also exit `0`. The rebuilt local
 distribution is qualification evidence only. It did not replace, rebuild or mutate accepted
-snapshot `/tmp/geosolve-m88-react-uat.KGhA7s`; that immutable F004 identity remains live on
-Tailscale exactly as accepted.
+snapshot `geosolve-m88-react-uat.KGhA7s`; that immutable F004 identity was verified on
+preview exactly as accepted.
 
 ## Historical pre-React qualification record
 
@@ -492,8 +453,8 @@ nix-shell shell.nix --run \
    --target wasm32-unknown-unknown'
 nix-shell shell.nix --run \
   'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release \
-   --dist /tmp/geosolve-m88-final-build.AHuCxA'
-diff -qr /tmp/geosolve-m88-final-build.AHuCxA /tmp/geosolve-m88-uat.nmhcRj
+   --dist geosolve-m88-final-build.AHuCxA'
+diff -qr geosolve-m88-final-build.AHuCxA geosolve-m88-uat.nmhcRj
 ```
 
 The demo-web native library reports `372/372`; the TypeScript packages report `40/40` and `14/14`
@@ -506,8 +467,8 @@ the release gate; warnings-denied workspace Clippy is clean.
 
 The Nix release toolchain is Rust `1.97.1`, Cargo `1.97.0`, Trunk `0.21.14`,
 `wasm-bindgen-test-runner 0.2.121` and `wasm-opt 131`. Release Trunk assembly produced seven files
-in `/tmp/geosolve-m88-final-build.AHuCxA`. The read-only no-rebuild UAT snapshot is
-`/tmp/geosolve-m88-uat.nmhcRj`, served at `http://100.94.63.83:8080/`; root and every named file
+in `geosolve-m88-final-build.AHuCxA`. The read-only no-rebuild UAT snapshot is
+`geosolve-m88-uat.nmhcRj`, served at the archived preview; root and every named file
 byte-match. Its ordered-manifest aggregate is
 `6c4af7e96e30687654d691b577954c22b051fb3ad37e9472c51e16c9c002a274`; the WASM SHA-256 is
 `cc1fc972fa6ae3cf70a1b8324b852ffa70cf65c187643798b7e08bcd6726ade9`.

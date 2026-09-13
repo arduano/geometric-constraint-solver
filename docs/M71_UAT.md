@@ -2,7 +2,11 @@
 
 # M71 focused UAT — Retained drafting relations
 
-Status: complete and explicitly approved by the supervising human on 2026-08-14. Implementation,
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete and explicitly approved by the maintainer on 2026-08-14. Implementation,
 focused and integrated mechanical qualification, immutable publication, served-byte verification
 and the scoped M71-U1 through M71-U5 review all pass. The approval accepts the recorded review
 points without claiming an unrecorded exhaustive replay of every scripted permutation below.
@@ -11,9 +15,7 @@ Qualified F005/F006 product source: `f8a45ae7b355ab9874bf268c9950e369814e8432`
 
 Qualified F005/F006 product tree: `f7bccc58f301a715bc91f40115ce6424ec5f391d`
 
-Current F005/F006 endpoint: `http://100.94.63.83:8080/`
-
-Current F005/F006 immutable snapshot: `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`
+Current F005/F006 immutable snapshot: `geosolve-m71-f005-f006-uat.QPuMdT`
 
 Current F005/F006 release distribution manifest aggregate:
 `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`
@@ -22,9 +24,9 @@ Historical qualified F004 product source: `a2e51efba7d79f684d264094ffd7dd0e37a4d
 
 Historical qualified F004 product tree: `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`
 
-Historical F004 endpoint — the shared address now serves F005/F006: `http://100.94.63.83:8080/`
+Historical F004 endpoint — the shared address now serves F005/F006: the archived preview
 
-Historical F004 immutable snapshot: `/tmp/geosolve-m71-f004-uat.SaXMVY`
+Historical F004 immutable snapshot: `geosolve-m71-f004-uat.SaXMVY`
 
 Historical F004 release distribution manifest aggregate:
 `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`
@@ -32,9 +34,9 @@ Historical F004 release distribution manifest aggregate:
 Withdrawn F003 source: `83bd2b575784c44b618fb3ad144f24e84702d764`
 
 Former F003 endpoint — the shared address now serves F005/F006; **do not use the preserved F003
-snapshot for UAT**: `http://100.94.63.83:8080/`
+snapshot for UAT**: the archived preview
 
-Preserved F003 immutable snapshot: `/tmp/geosolve-m71-f003-uat.hybK8W`
+Preserved F003 immutable snapshot: `geosolve-m71-f003-uat.hybK8W`
 
 Preserved F003 release distribution manifest aggregate:
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`
@@ -42,9 +44,9 @@ Preserved F003 release distribution manifest aggregate:
 Withdrawn pre-F003 source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
 Shared historical endpoint — the shared address now serves F005/F006; **do not use the withdrawn
-snapshot for UAT**: `http://100.94.63.83:8080/`
+snapshot for UAT**: the archived preview
 
-Withdrawn immutable snapshot: `/tmp/geosolve-m71-uat.yFBsnX`
+Withdrawn immutable snapshot: `geosolve-m71-uat.yFBsnX`
 
 Withdrawn release distribution manifest aggregate:
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
@@ -53,9 +55,6 @@ Use only the current F005/F006 endpoint, the ordinary GeoSolve Sketch Workbench 
 **Retained drafting relations** playground. Direct Rust/native-WASM tests are
 authoritative for equations, residuals, lifecycle, persistence, ranking and publication. Human
 review assesses discoverability, predictability, annotation clarity, capture feel and recovery.
-
-PID `3245562` serves the exact current snapshot. Historical PID `2848202` has exited; do not score
-U1-U5 against any preserved F003/F004 snapshot.
 
 ## M71-F005/F006 discovery and corrected contract
 
@@ -95,7 +94,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 ```
 
 It passed completely; the retained log is
-`/tmp/geosolve-m71-f005-f006-clean-gate.chbsLG.log` (SHA-256
+`geosolve-m71-f005-f006-clean-gate.chbsLG.log` (SHA-256
 `d99f51ce220727165760051dc95e45e9f65b3336cfc9c256a94ccdca2bfd6bb4`). The gate includes
 formatting/diff hygiene, warnings-denied workspace Clippy, every locked all-feature workspace test,
 the unchanged 234-row golden, native/WASM M70 and M71 transition parity, demo-web WASM,
@@ -106,35 +105,19 @@ were unchanged after the gate.
 
 Without rebuilding, exactly seven regular, non-symlink files were copied directly from that gate's
 `crates/geosolve-demo-web/dist`, byte-compared by manifest and frozen at
-`/tmp/geosolve-m71-f005-f006-uat.QPuMdT` with directory mode `0555` and file modes `0444`:
+`geosolve-m71-f005-f006-uat.QPuMdT` with directory mode `0555` and file modes `0444`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 14165 | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
-| `LICENSE` | 35148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-17fdb23fc2dfe564.js` | 33327 | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
-| `geosolve-demo-web-17fdb23fc2dfe564_bg.wasm` | 6013457 | `9cfee00d39339a7e30cc3e2754ee641eb5e245ae31d19872da7b35a543e87b0f` |
-| `index.html` | 22977 | `84549b9bb35b0353309e6fa7aead31ee0a91b60e8e14fd395578d52ac37974a1` |
-| `styles-36c74d05d21a90c9.css` | 29304 | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+The archived manifest records the per-file sizes and checksums.
 
 The C-locale ordered `sha256sum *` manifest aggregate is
 `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`.
 
-PID `3245562` serves only that immutable snapshot at `http://100.94.63.83:8080/` with argv
-`/run/current-system/sw/bin/python3 -u -m http.server 8080 --bind 100.94.63.83 --directory
-/tmp/geosolve-m71-f005-f006-uat.QPuMdT`. Its resolved executable is
-`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`; its log is
-`/tmp/geosolve-m71-f005-f006-uat.QPuMdT.server.log`. It listens only on `100.94.63.83:8080`; the
-unrelated VS Code listener on `127.0.0.1:8080` remains untouched. Historical F004 PID `2848202`
-has exited, while its immutable snapshot remains preserved.
-
 At `2026-08-14T15:36:43+10:00`, proxy-disabled and cache-bypassed requests with
 `Accept-Encoding: identity` fetched all seven assets and `/`. Every request returned HTTP 200 from
-remote IP `100.94.63.83`, each named asset had the exact recorded size and compared byte-for-byte
+the nominated preview host, each named asset had the exact recorded size and compared byte-for-byte
 equal, and `/` equalled `index.html`. The fetched aggregate, post-fetch snapshot aggregate and
 recorded aggregate all matched. Fetch evidence is retained at
-`/tmp/geosolve-m71-f005-f006-fetch.yPRcIT`.
+`geosolve-m71-f005-f006-fetch.yPRcIT`.
 
 Publication-evidence documentation commit `905a414` records the already-qualified product. It is
 not part of, and must not replace, the product source identity above; later close-off documentation
@@ -181,43 +164,26 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 ```
 
 It passed completely; the retained log is
-`/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`. The canonical golden remained unchanged at 234
+`geosolve-m71-f004-clean-gate.ZGQEKU.log`. The canonical golden remained unchanged at 234
 rows, the 256-moving-body sparse crossover took 125.55 seconds, and Trunk 0.21.14 completed the
 release assembly. Cargo emitted only the repository's longstanding non-failing `license` plus
 `license-file` advisories. HEAD, tree and empty status were unchanged after the gate.
 
 Without rebuilding, exactly seven regular, non-symlink files were copied directly from that
 gate's `crates/geosolve-demo-web/dist`, byte-compared by manifest and frozen at
-`/tmp/geosolve-m71-f004-uat.SaXMVY` with directory mode `0555` and file modes `0444`:
+`geosolve-m71-f004-uat.SaXMVY` with directory mode `0555` and file modes `0444`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 14165 | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
-| `LICENSE` | 35148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-4c3212f5ba819fe0.js` | 33327 | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
-| `geosolve-demo-web-4c3212f5ba819fe0_bg.wasm` | 6014468 | `f5dfccd077120d4ed0876f318c4cd6a86bfc672a74c40e496a01bd232923a911` |
-| `index.html` | 22977 | `98c30dd76cb6f9cd5c33d86b41b3769e5fabbf25fe7f87b612acfbd2d865104c` |
-| `styles-36c74d05d21a90c9.css` | 29304 | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+The archived manifest records the per-file sizes and checksums.
 
 The C-locale ordered `sha256sum *` manifest aggregate is
 `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`.
 
-At the F004 publication checkpoint, PID `2848202` served only that immutable snapshot at
-`http://100.94.63.83:8080/` with argv
-`/run/current-system/sw/bin/python3 -u -m http.server 8080 --bind 100.94.63.83 --directory
-/tmp/geosolve-m71-f004-uat.SaXMVY`. Its resolved executable is
-`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`; its log is
-`/tmp/geosolve-m71-f004-uat.SaXMVY.server.log`. It listened only on `100.94.63.83:8080`; the
-unrelated VS Code listener on `127.0.0.1:8080` was not part of that publication. PID `2848202`
-has since exited, while its immutable snapshot remains preserved.
-
 At `2026-08-14T13:13:48+10:00`, proxy-disabled and cache-bypassed requests with
 `Accept-Encoding: identity` fetched all seven assets and `/`. Every request returned HTTP 200 from
-remote IP `100.94.63.83`, each named asset had the exact recorded size and compared byte-for-byte
+the nominated preview host, each named asset had the exact recorded size and compared byte-for-byte
 equal, and `/` equalled `index.html`. The fetched aggregate, post-fetch snapshot aggregate and
 recorded aggregate all matched. Fetch evidence is retained at
-`/tmp/geosolve-m71-f004-fetch.aDfzU7`.
+`geosolve-m71-f004-fetch.aDfzU7`.
 
 This publication documents the already-qualified product source. The later documentation commit
 that records the evidence is not part of, and must not replace, the product source identity above.
@@ -245,7 +211,7 @@ plus decoder/doc tests, 17/17 M71 sketch relation tests and 7/7 persistence test
 only the longstanding non-failing `license` plus `license-file` advisories.
 
 This was complete development evidence but not clean nomination evidence. The implementation/test
-repair is committed as `1f542555d7fcaf98ecf92c69a10b951fbfcc3dff`, and the supervising human
+repair is committed as `1f542555d7fcaf98ecf92c69a10b951fbfcc3dff`, and the maintainer
 has granted ordinary reviewable-commit authority. At that checkpoint the complete source still had
 to be clean and the gate repeated without `GEOSOLVE_ALLOW_DIRTY`; the clean qualification and
 publication above subsequently satisfied that requirement.
@@ -278,14 +244,6 @@ Exactly seven release files were copied without rebuilding, byte-compared with t
 | `geosolve-demo-web-49ba2a1c36571a17_bg.wasm` | `c51cb77d38ab682e21b940eb5f26a4e73ff92a5ac007c5fc3de7e70323290fc2` |
 | `index.html` | `3d87c4b54efb42c8fdcb62c841140db29b9bb7b832733b197a9b4ac50cfee128` |
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
-
-At that historical checkpoint, PID `49116` served only that snapshot and listened only on
-`100.94.63.83:8080`; its log was outside the snapshot at
-`/tmp/geosolve-m71-uat.yFBsnX.server.log`. Proxy-disabled, cache-bypassed HTTP requests
-byte-matched every listed asset. A separate request for `/` byte-matched `index.html`. The
-fetched-file aggregate and post-fetch snapshot aggregate both reproduced the recorded ordered
-manifest aggregate exactly. Do not continue UAT against these withdrawn bytes. The historical
-M70B and pre-F003 M71 snapshots remain on disk but are no longer served.
 
 M71-F003 was independently reproduced at the public scene/editor/coordinator boundary: remembered
 midpoints entered tracking, but only persistent-point references could become durable H/V. The
@@ -344,15 +302,6 @@ rebuilding, byte-compared, and frozen with directory mode `0555` and file mode `
 | `index.html` | `946d66a5e03e56b22efd3ee99fc157ba9668c10ae4393695b6200274f57aace4` |
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
 
-At the F003 checkpoint PID `1202735` served only `/tmp/geosolve-m71-f003-uat.hybK8W` and listened
-only on `100.94.63.83:8080`. Proxy-disabled, cache-bypassed requests matched every listed file
-byte-for-byte. A separate request for `/` matched `index.html`. The fetched and post-fetch local
-ordered aggregates both reproduced
-`23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
-These bytes are now withdrawn because they predate M71-F004. PID `1202735` has since exited and
-that F003 server is offline; the shared endpoint now serves only the F005/F006 snapshot recorded
-above.
-
 ## Preconditions
 
 - [x] The focused F005 owner/public line and polyline regressions pass, including exact
@@ -368,7 +317,7 @@ above.
   `f8a45ae7b355ab9874bf268c9950e369814e8432`.
 - [x] That unchanged post-F005/F006 source passes `./scripts/release-gate.sh` without a dirty-tree
   override.
-- [x] Its immutable replacement release distribution is published through Tailscale and every
+- [x] Its immutable replacement release distribution is published through preview and every
   served byte is verified against the local candidate.
 
 Historical F004 evidence, preserved but insufficient for current UAT:
@@ -384,7 +333,7 @@ Historical F004 evidence, preserved but insufficient for current UAT:
   `a2e51efba7d79f684d264094ffd7dd0e37a4d089`.
 - [x] That clean post-F004 nominated source passed `./scripts/release-gate.sh` without a dirty-tree
   override.
-- [x] Its immutable release distribution was published through Tailscale and every served byte was
+- [x] Its immutable release distribution was published through preview and every served byte was
   verified against the local candidate; it is now withdrawn from continued UAT.
 
 ## M71-U1 — manual authoring and canvas presentation
@@ -461,7 +410,7 @@ authoritative.
 No case creates a fixed coordinate, zero dimension or hidden midpoint point. Suppression and
 ambiguity never commit a stale or arbitrary candidate.
 
-Result: Accepted under the explicit 2026-08-14 scoped close decision. The supervising human
+Result: Accepted under the explicit 2026-08-14 scoped close decision. The maintainer
 specifically confirmed that the two-constraint auto-placement works and reported that the
 replacement interaction works very nicely; no separate exhaustive scripted replay is claimed.
 
@@ -521,7 +470,7 @@ Notes:
 
 ## Approval
 
-On 2026-08-14, the supervising human confirmed the corrected two-constraint auto-placement,
+On 2026-08-14, the maintainer confirmed the corrected two-constraint auto-placement,
 approved the listed remaining M71 review points and explicitly requested milestone closure. This
 accepts M71-U1 through M71-U5 for the recorded scope without replacing the direct qualification or
 inventing a separate exhaustive replay. M71 is closed with no remaining finding or blocker.

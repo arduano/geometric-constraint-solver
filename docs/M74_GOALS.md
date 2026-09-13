@@ -2,8 +2,12 @@
 
 # M74 — Production-style sketch reference UX
 
-Status: **complete under the supervising caller's scoped close decision on 2026-08-16**. The
-datum/reference scope, axis-symmetry follow-up, clean release qualification, immutable Tailscale
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete under the maintainer's scoped close decision on 2026-08-16**. The
+datum/reference scope, axis-symmetry follow-up, clean release qualification, immutable preview
 candidate and exact final GitHub Pages publication pass. M74-U1 through M74-U8 remain deferred,
 not passed, and transfer with any findings to the next bug-fixing/UAT follow-up milestone, which
 was unstarted at M74 close and is now active as M75.
@@ -121,19 +125,19 @@ keyboard and viewport-edge behavior without moving solver authority into the bro
   blindly; retain the existing fixture unchanged if datum authoring is fully owned by focused tests.
 - Pass format, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
   checks, Trunk release assembly, golden survey/check/clean and the complete clean release gate.
-- Freeze and byte-verify an immutable Tailscale candidate for the focused scorecard in
+- Freeze and byte-verify an immutable preview candidate for the focused scorecard in
   `docs/M74_UAT.md`. Keep it running for follow-up fixes until explicit approval, then deploy and
   exact-verify the accepted source through GitHub Pages.
 
 Mechanical nomination record (2026-08-16): product source
 `55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
 `866fbf8b58ec19e72cbe6936e06f3615dba2f692`, passes the complete clean release gate. Its exact
-read-only snapshot `/tmp/geosolve-m74-uat.jFfAm4`, aggregate
+read-only snapshot `geosolve-m74-uat.jFfAm4`, aggregate
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, is byte-verified at
-`http://100.94.63.83:8080/` and was current focused-UAT authority at nomination. Human approval and
+the archived preview and was current focused-UAT authority at nomination. Human approval and
 public Pages publication remained pending at that checkpoint.
 
-Scoped closure record (2026-08-16): the supervising caller accepted the existing automated,
+Scoped closure record (2026-08-16): the maintainer accepted the existing automated,
 independent-review, clean-gate and frozen-artifact evidence and explicitly waived a separate M74
 hands-on UAT pass. The U1-U8 scorecard remains available but is deferred, not marked passed. Its
 future execution and any findings belong to the next bug-fixing/UAT follow-up milestone. This
@@ -161,7 +165,7 @@ repository-prefixed, media types are correct, and the public M72/M74 two-size Ch
 - The grid, camera, HUD, cursors, keyboard shortcuts and letterbox behavior pass focused
   presentation tests without adding grid snapping or browser-owned geometry. Hands-on feel review
   is retained as deferred follow-up work rather than claimed M74 evidence.
-- The clean release gate and immutable Tailscale candidate pass. The explicit scoped closure
+- The clean release gate and immutable preview candidate pass. The explicit scoped closure
   approval accepts that evidence without separate hands-on UAT; exact accepted-source Pages
   publication passes. Every M74 goal is complete under the scoped decision.
 

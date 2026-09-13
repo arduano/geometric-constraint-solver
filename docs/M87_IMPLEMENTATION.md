@@ -2,13 +2,17 @@
 
 # M87 implementation ledger — Cohesive managed parameters and browser-free design loop
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **COMPLETE and accepted on 2026-08-31**. This ledger retains the historical dirty-worktree
 implementation record over baseline `1ea4940`; exact product source
 `32c72892772ee09f8b904153484b02fd9923dc25`, tree
 `38f7175f93c87d11422f5de00e78208f8cf315bb`, now passes the complete clean release gate. The sound
 managed-control, headless, routing-board, twelve-demo CNC/Gridfinity, shared-renderer,
 graphics-audit and retained-camera recovery work remains, and the complete experimental adaptive-
-detail/LOD prototype remains deleted. The supervising user's milestone-level close decision accepts
+detail/LOD prototype remains deleted. The maintainer's milestone-level close decision accepts
 U9/U10 without a separate row replay. No immutable freeze, public deployment or service retirement
 is inferred.
 
@@ -231,7 +235,7 @@ Post-repair checkpoint evidence:
 - frozen pre-extraction renderer bytes and ordinary adaptive-grid regression — 1/1 each;
 - `cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown` —
   exit `0`, with only the established target-specific dead-code warnings;
-- `/tmp/geosolve-m87-full-detail-resize-uat.mjs` against the mutable Tailscale development server
+- `geosolve-m87-full-detail-resize-uat.mjs` against the mutable preview development server
   — exit `0`: no LOD control/attribute/CSS remains, forced retained-scene loss recovers exactly
   across `1440 x 900`, `1024 x 720` and `1920 x 1080`, and a later frame is camera-only with the
   accepted scene present.
@@ -332,7 +336,7 @@ rendering remain separately composable owners.
 
 ### M87-F003 — Relational manufacturing-sample authority
 
-The supervising user reported that the two retained samples were not properly fully constrained
+The maintainer reported that the two retained samples were not properly fully constrained
 and asked for a design-intent constraint scheme with a reasonable minimum of fix authority. The
 narrowest public cold-materialization reproduction classified this as a sample-authoring/rank-DOF
 defect: Gridfinity had 26 literal-seeded points and no native constraints, while CNC used seven
@@ -491,9 +495,9 @@ publication evidence.
   target-specific dead-code warnings.
 - `env NO_COLOR=true nix-shell ../../shell.nix --run 'trunk build --locked'` from
   `crates/geosolve-demo-web` refreshed the mutable development distribution. All seven files served
-  at `http://100.94.63.83:8080/` byte-match the local output; this is not release qualification.
+  at the archived preview byte-match the local output; this is not release qualification.
 - Fresh post-F003 products were generated at
-  `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`. Both reports independently validate Hard
+  `geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`. Both reports independently validate Hard
   residuals and Current features; the maximum normalized Hard residuals are respectively
   `7.105427357601002e-15` and `2.886579864025407e-15`.
 
@@ -558,10 +562,10 @@ satisfy the then-pending M87 visual-UAT boundary.
 The complete routing-board-amendment dirty-worktree gate was run as:
 
 ```bash
-TMPDIR=/home/arduano/.cache/geosolve-m87-tmp \
+TMPDIR=target \
 GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true \
 nix-shell shell.nix --run \
-'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'
+'TMPDIR=target ./scripts/release-gate.sh'
 ```
 
 It exited `0`. Metadata, formatting and diff hygiene, warnings-denied workspace Clippy, complete
@@ -590,11 +594,11 @@ mechanical qualification only.
   camera recovery, then pass the focused no-LOD resize/failure-recovery browser check.
 - [x] Audit the shared graphics boundary, reproduce and repair M87-F002 at its renderer owner, and
   retain the frozen compositor bytes without a speculative z-order rewrite.
-- [x] Preserve the supervising user's earlier explicit 2026-08-30 scoped disposition as historical
+- [x] Preserve the maintainer's earlier explicit 2026-08-30 scoped disposition as historical
   acceptance of U1-U8 without claiming those rows were separately replayed. It does not accept the
   later manufacturing visual rows or determine M87's final disposition.
 - [x] Record that clean exact-source nomination, immutable no-rebuild freeze, public publication
-  and service retirement were not performed. The mutable Tailscale development service remains
+  and service retirement were not performed. The mutable preview development service remains
   collaboration infrastructure, not release authority.
 - [x] Complete I8's CNC locality/generation and Gridfinity profile/Fillet owner regressions.
 - [x] Reproduce and repair M87-F003 by replacing CNC's seven unrelated fixed-point locks and
@@ -612,7 +616,7 @@ mechanical qualification only.
   and Gridfinity visual bundles without claiming human acceptance or a complete release gate.
 - [x] Preserve the pre-close record that dirty evidence did not establish clean source, freeze or
   publication; qualify exact committed source separately without weakening those distinctions.
-- [x] Record M87-U9/U10 as accepted by the supervising user's explicit milestone-level close
+- [x] Record M87-U9/U10 as accepted by the maintainer's explicit milestone-level close
   decision without inventing a separately replayed visual session.
 - [x] Run the complete clean gate on source `32c7289` / tree `38f7175`, close M87, leave immutable
   freeze/publication/service retirement unclaimed and activate M88.
@@ -649,7 +653,7 @@ After the original exhaustive inventory and reviewed ledger were complete, the t
 F003 twelve-project dirty-worktree release gate was rerun on 2026-08-30 with the exact command:
 
 ```bash
-TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'
+TMPDIR=target GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=target ./scripts/release-gate.sh'
 ```
 
 It exited `0` for those pre-F003 sources. The post-F003 reviewed twelve-row code-project
@@ -661,10 +665,10 @@ mutable development service.
 
 The following mutable review bundles predate F003 and cannot review the revised designs:
 
-- M87-U9: `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/cnc`;
-- M87-U10: `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/gridfinity`.
+- M87-U9: `geosolve-m87-manufacturing-uat.K7YRaV/cnc`;
+- M87-U10: `geosolve-m87-manufacturing-uat.K7YRaV/gridfinity`.
 
 Neither historical bundle is current, immutable or accepted. Fresh post-F003 mutable replacements
-are at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`. The user's 2026-08-31 milestone-level
+are at `geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`. The user's 2026-08-31 milestone-level
 close decision accepts U9/U10 without a separate replay; exact source `32c7289` passes the complete
 clean gate. M87 is closed; M88 followed and is now complete.

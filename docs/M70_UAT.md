@@ -2,29 +2,23 @@
 
 # M70 focused UAT — Auto-constraint drafting
 
-Status: complete and explicitly approved by the supervising human on 2026-08-10. Implementation,
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete and explicitly approved by the maintainer on 2026-08-10. Implementation,
 focused direct qualification, the complete integrated release gate, frozen replacement-candidate
 publication, served-byte verification and the scoped human review pass. `M70-F001` is resolved.
 
 Replacement candidate source: `3d157896c87eaf647abee1192c838100ce359ce9` on `main`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
-
 Release distribution manifest aggregate:
 `04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`
 
-```text
-0632b2c7178a74a4f97938d2f08ed969152d41c7008f777d6b43ee4b94ab6e89  dist/API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  dist/LICENSE
-665e4df98334f5efea3efa83d18ea71198a182825c2d40f96dbf141e43a2a418  dist/THIRD_PARTY_LICENSES.md
-ff0797fa408bc3be7ad572af8541bb31ccc9767914d8c4629c77cd298925cefd  dist/geosolve-demo-web-881dfebee4e3e756.js
-fe8c75f390cbcc9c95777c9dc3d41ac0dc790d05bfef406a7cd5a539c8b73320  dist/geosolve-demo-web-881dfebee4e3e756_bg.wasm
-bf9e151a6d9abcfca984867615e20ec2f34e36ca9e378e49f74b429ff21a402c  dist/index.html
-cee6aac04d97f80072827c8b29a86f79071d01fa0cc523736c0c5f20e27b0e1b  dist/styles-aafdbbd399fb8c99.css
-```
+The archived manifest records the individual asset checksums.
 
-All seven served assets and `/` were fetched through the Tailscale address with proxy/cache bypass
-and compared byte-for-byte with read-only snapshot `/tmp/geosolve-m70-uat.1NQkzV`. `/` matched
+All seven served assets and `/` were fetched through the preview address with proxy/cache bypass
+and compared byte-for-byte with read-only snapshot `geosolve-m70-uat.1NQkzV`. `/` matched
 `index.html`, and the local aggregate remained unchanged. Because the endpoint reuses port 8080
 from earlier milestones, perform one hard refresh before starting this scorecard.
 
@@ -147,7 +141,7 @@ Notes:
 
 Status: **Resolved and accepted**.
 
-The supervising-human UAT of frozen candidate
+The maintainer UAT of frozen candidate
 `4b16db3a885f5e28f508189b8817797375f05807` identified a missing semantic distinction at the second
 Circle click. That click supplies a radius sample; it is not an ordinary authored point operand.
 When it enters the point tolerance of an existing persistent point or line endpoint, the preview
@@ -159,12 +153,12 @@ and the gesture must not infer line contact or tangency.
 Replacement source `3d157896c87eaf647abee1192c838100ce359ce9` now implements that contract.
 Direct headless inference/commit regressions, thin presentation coverage, the complete clean
 release gate, frozen publication and served-byte verification all pass. The prior source remains
-historical discovery evidence only. The supervising human accepted the targeted U1 recheck under
+historical discovery evidence only. The maintainer accepted the targeted U1 recheck under
 the 2026-08-10 scoped close decision.
 
 ## Approval
 
-The supervising human reported that the replacement looked good and explicitly requested M70
+The maintainer reported that the replacement looked good and explicitly requested M70
 closure on 2026-08-10. This accepts M70-U1 through M70-U5 and the targeted `M70-F001` recheck for
 the recorded scope without claiming an unrecorded exhaustive replay of every scripted step. M70 is
 closed; M70B is now the qualified, frozen bounded workspace-reproduction capsule candidate

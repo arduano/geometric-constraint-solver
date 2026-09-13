@@ -2,8 +2,12 @@
 
 # M83 — Projectional sketch design intent
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and closed 2026-08-25; implementation, M83-F001 through M83-F010 repair,
-post-F007 architecture hardening, supervising-user acceptance, GitHub Pages publication and exact
+post-F007 architecture hardening, maintainer acceptance, GitHub Pages publication and exact
 hosted-byte verification pass**.
 ADR 0040 is the active architecture. The rejected chronological candidate is preserved only on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; it is not a compatibility target.
@@ -147,38 +151,9 @@ validated flat accepted scene authoritative.
   workbench remains visually responsive on the representative sample corpus.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM
   builds, the unchanged milestone-neutral golden and complete clean release gate pass.
-- The exact no-rebuild candidate is frozen and byte-verified over Tailscale. Supervising-user
+- The exact no-rebuild candidate is frozen and byte-verified over preview. maintainer
   milestone-level acceptance, GitHub Pages publication, exact hosted-byte verification and
   retained-service retirement pass.
-
-The initial `232b83a` nomination, post-F005 source `a621cdd`, post-F007 source `fafea4e`, post-
-hardening source `1e70f3f` and F008/F009 source `b0de5af` remain historical evidence after
-M83-F001 through M83-F010. Current mechanical UAT authority is clean source
-`ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`, tree
-`889f730e033ce5c728fddbac345263d8c26b8b93`. Its 5,683-line, 385,323-byte clean-gate log has
-SHA-256 `71495557ca5638000cfec265d9b97c0b0e71c72d3cbdfbbd09dbea8518484f9a`.
-The exact no-rebuild seven-file snapshot `/tmp/geosolve-m83-f010-uat.Qmrz2R36` is frozen at
-directory mode `0555` and file mode `0444`, with ordered manifest aggregate
-`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. All nine browser checks
-pass locally, on its temporary Tailscale listener and on the retained listener; the temporary and
-final eight-path HTTP ledgers both have SHA-256
-`9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`. Historical PID
-`3376452` was retired only after replacement verification and its immutable snapshot remains
-preserved. The accepted frozen F010 candidate was served at `http://100.94.63.83:8080/` by PID
-`276377` through UAT; final Pages closeout retired that service while preserving its snapshot.
-On 2026-08-25 the supervising user explicitly accepted M83 at milestone level and instructed the
-approved closeout plan to be implemented. That decision accepts M83-U1 through M83-U10 and the
-F001-F010 replacement disposition without claiming a separately logged row-by-row hands-on
-replay. Documentation-only approval descendant `2006c86b936c3522cc48fbf26cf78664d5e31e90`,
-tree `c4a59d252ec94cd9344acf1646efd3fcc62d39df`, passes Pages run `32817232564`, artifact
-`9551973351` and proxy-disabled, cache-bypassed exact hosted-byte verification. The downloaded
-12,288,000-byte artifact tar has SHA-256
-`06bce15ddea6d21048a25e3630a368ebe0ba883be98ee296869f77c47b86218b`; its seven regular files
-have ordered-manifest aggregate `75234fd6ff4349e4b75c858b90e90630002a7dd9b9171e47dfe28bc253cf23fc`,
-and the eight-path hosted ledger has SHA-256
-`bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`. PID `276377` is retired,
-the endpoint refuses connections, the immutable F010 snapshot remains preserved, and Pages is
-final M83 public-byte authority. M83 is closed.
 
 ## Non-goals
 

@@ -2,8 +2,12 @@
 
 # M80 — native topology-preserving Profile Offset
 
-Status: **complete and closed; implementation, clean qualification, immutable Tailscale evidence,
-supervising-human UAT and exact GitHub Pages publication pass**. Prior
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete and closed; implementation, clean qualification, immutable preview evidence,
+maintainer UAT and exact GitHub Pages publication pass**. Prior
 candidate evidence remains valid history but is withdrawn from acceptance. Exact qualified product
 source `29d8e41`, tree `44ecb95`, remains product authority. ADR 0037 owns the
 architecture. M80 adds the narrow constraint-friendly Offset plus one explicit native line-line
@@ -221,13 +225,12 @@ not change; workspace v6 and `GEOSOLVE_REPRO_V1` continue to use the strict draf
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
   unchanged historical persistence/golden authority, Trunk and the complete release gate pass.
 - The exact gate-produced distribution is copied without rebuilding, frozen read-only and byte-
-  verified at the shared Tailscale endpoint. This passes for source `29d8e41`, tree `44ecb95`,
-  snapshot `/tmp/geosolve-m80-uat.CPuVgx` and ordered-manifest aggregate
+  verified at the shared preview endpoint. This passes for source `29d8e41`, tree `44ecb95`,
+  snapshot `geosolve-m80-uat.CPuVgx` and ordered-manifest aggregate
   `75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`. Human UAT in
   `docs/M80_UAT.md` explicitly accepts that candidate. Approval descendant `ece6c3c` passes Pages
   run `32262792440`, artifact `9369119336` and exact hosted-byte verification. Previously
-  nominated snapshots cannot receive final M80 acceptance; retired PID `1031421` no longer serves
-  the accepted Tailscale snapshot.
+  nominated snapshots cannot receive final M80 acceptance; the final preview no longer serves the accepted preview snapshot.
 
 ## Explicit deferrals
 

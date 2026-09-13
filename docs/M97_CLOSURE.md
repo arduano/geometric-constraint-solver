@@ -1,32 +1,28 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M97 acceptance and takeover handoff — 2026-09-09
+# M97 dimension UX and authoring: acceptance and closure — 2026-09-09
 
-**M97 is accepted and closed.** The supervising user stated “very nice, I approve of
-this. Please finish off the milestone here,” then requested review and takeover of
-the existing next-milestone worktree. This accepts the delivered behavior and recorded
-limits; it does not assert an unrecorded exhaustive human replay. No M97 blocker or
-acceptance action remains.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+**M97 was accepted and closed on 2026-09-09.** Maintainer acceptance covers the
+delivered behavior and recorded limits, without claiming an unrecorded exhaustive
+human replay. No M97 implementation blocker or acceptance action remains.
 
 ## Accepted checkpoint
 
 | Item | Value |
 | --- | --- |
-| Branch | `m92/integration` (inherited name; accepted through M97) |
 | Product source | `e26270cb89e5849092145b329d0cf95821a81b27` |
 | Product tree | `de47931a170ce13d2dfd7feb2d65ddf6ba2ded81` |
 | Complete clean-source gate | `20260908T235146-b387d273` |
-| Accepted endpoint | `http://100.94.63.83:18105/` |
-| Frozen manifest | `target/m97/preview-20260908T235146-b387d273/production.json` |
-| Frozen files | `target/m97/preview-20260908T235146-b387d273/geosolve-production` |
 | Artifact | 12 files, 28,761,396 bytes |
 | Files SHA-256 | `ffea0a9f5f22a6e7c6fc33e070ef7c9706c1c6e1820f6df57557d0acbf4ecf93` |
 | Manifest SHA-256 | `89c3612719ed45b894ccd68833f58157b4f3f528bff9d80e6d84237f99a7aaea` |
 | WASM SHA-256 | `8d7a7dfedb5baa73ef6747ad8fd2cc371faae595f212dbe4b86d4c3cb5e34a44` |
 
-The closure is prose only and preserves the exact qualified product. It does not
-rebuild, merge, push or publish new application bytes. The accepted preview remains
-running; its frozen artifact and authenticated evidence must be retained.
+The documentation-only closure preserved the exact qualified product.
 
 ## Delivered files, API and behavior
 
@@ -80,7 +76,7 @@ Closure commands:
 
 ```bash
 python3 target/m97/audit-authoring-preview-artifact.py 20260908T235146-b387d273
-curl --fail --silent --show-error --output /dev/null http://100.94.63.83:18105/
+curl --fail --silent --show-error --output /dev/null ${PREVIEW_URL}
 nix-shell shell.nix --run './scripts/release-gate.sh --docs-only --since 151f837'
 git diff --check
 git status --short
@@ -107,18 +103,7 @@ documentation descendant.
   final fixture workflow passes in 226 seconds with the original six-minute limit;
   this is not a general performance improvement claim.
 
-The user now requests takeover of `m98/file-workspace`, clean at
-`cb581b50ac10b1e5edeb4da4c86761405577cd7e` in
-`/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace`.
-Its six commits descend from `d80bf22264f74b60870f2e99feb8cc6ccb9d0133`, before M97's
-implementation. It contains a local plaintext folder adapter and bounded 2D baked-profile
-export, with focused prototype evidence. Read its `docs/M98_GOALS.md`,
-`docs/M98_HANDOFF.md`, `docs/M98_BAKE_CONTRACT.md` and `docs/M98_BAKE_HANDOFF.md`.
-M98 is not accepted or release-qualified. Integrating the accepted M97 source/metadata
-and Inspector APIs is a future M98 step, not part of this closure's product identity.
-
-The accepted preview launcher is `target/m97/serve-authoring-preview.mjs`, with
-location, log and PID records under `target/m97/authoring-preview-*`. After reboot,
-restart those exact frozen bytes and repeat the bounded transport/readiness check.
-No historical artifact or running service should be replaced as part of takeover
-inspection. M98's private artifacts and demo state belong to its separate worktree.
+M98 subsequently integrated the source metadata and Inspector APIs with local-folder
+authoring and baked-profile export. Its current historical disposition is recorded
+in [M98 qualification](M98_QUALIFICATION.md); the prototype was not part of M97's
+qualified product identity.

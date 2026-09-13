@@ -2,9 +2,13 @@
 
 # M77 focused UAT — CAD curve handles and implicit parameters
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and publicly verified (2026-08-17)**. UAT findings M77-F012 and M77-F013
 supersede the initial candidate. Their corrections and review follow-ups pass the complete clean
-gate, immutable freeze and served-byte verification below. The supervising caller explicitly
+gate, immutable freeze and served-byte verification below. The maintainer explicitly
 approved the current replacement and requested milestone closure; exact GitHub Pages publication
 and hosted-byte verification now pass.
 
@@ -14,44 +18,23 @@ Product source: `cc99b11071dc62732e02b630ba7a1381d754b04c`
 
 Candidate tree: `3315a2bdd0137f59657ea2500962ef971a23ea15`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
-
-Server PID/session: `284248` / retained command-runner session `5213`
-
-Immutable snapshot: `/tmp/geosolve-m77-uat.ARrQFw` (directory `0555`, seven regular non-symlink
+Immutable snapshot: `geosolve-m77-uat.ARrQFw` (directory `0555`, seven regular non-symlink
 files `0444`)
 
 Ordered-manifest aggregate:
 `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 23,216 | `841936f73b5d21fbee999ec2bc4140ae0869cd2821429816e3766bd026ad771b` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-74621b73a35eab86.js` | 33,221 | `9f28eed1331a570a1fa894f16834a40be0593ef9bd673ca80db8fbea4017eef1` |
-| `geosolve-demo-web-74621b73a35eab86_bg.wasm` | 6,426,513 | `1c4701e10d4ca672b0aa2511ff3fc4067be5c03965274de4925a711b5414e3f1` |
-| `index.html` | 28,940 | `f3740f54742d6895e204cc41c08e031d0f2b639e6dd30df30c3e08b1b878527d` |
-| `styles-d7435a6d60dc3430.css` | 34,689 | `870bde7d758fe95f4323bedc6588ff2cffaf3c826549e684718ebfd818eebcd6` |
+The archived manifest records the per-file sizes and checksums.
 
 The exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` ran from 18:21:03 through
 18:33:22 AEST and exited successfully without changing HEAD, tree or worktree. Its retained
-243,128-byte log is `/tmp/geosolve-m77-replacement-clean-gate.cc99b11.log`, SHA-256
+243,128-byte log is `geosolve-m77-replacement-clean-gate.cc99b11.log`, SHA-256
 `0da2456b69951a50ba41cfe939f37764fcc211f2af45f4b9526cd5c974829301`. The gate includes formatting
 and diff hygiene, warnings-denied workspace Clippy/Rustdoc, every locked all-feature workspace test,
 unchanged 270/270 clean golden, native/WASM M70/M71/M74/M75/M76/M77 parity, demo WASM, benchmark
 compilation, M14/M32 workloads, the 138.34-second 256-body sparse crossover, licence/package checks
 and Trunk 0.21.14 release assembly.
-
-The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
-Freeze evidence is `/tmp/geosolve-m77-replacement-freeze-evidence.2kfhjk`. Proxy-disabled,
-cache-bypassed, identity-encoded requests for `/` and all seven files return HTTP 200 with zero
-redirects, no content encoding, exact expected media types/lengths and snapshot-identical bytes.
-`/` equals `index.html`, and the fetched manifest has the same aggregate. HTTP evidence is
-`/tmp/geosolve-m77-replacement-http-verify.yxgjkL`. Withdrawn PID `3912158` stayed live until the
-replacement snapshot was ready and is now retired. The evidence-ledger commit is a documentation
-descendant; exact source `cc99b11` remains the mechanically qualified product authority.
 
 ## Final GitHub Pages publication
 
@@ -68,8 +51,8 @@ The seven-file ordered manifest is recorded in `docs/M77_IMPLEMENTATION.md` and 
 cache-bypassed identity requests for root plus every artifact path returned HTTP 200 with zero
 redirects, exact expected media types/lengths, no `Location` or `Content-Encoding`, and exact byte
 equality; root also equals artifact `index.html`. Complete evidence is
-`/tmp/geosolve-m77-pages-verify.EhNzhE`, with the authoritative eight-request repeat under
-`public-complete`. Pages is final public-byte authority; the separately built immutable Tailscale
+`geosolve-m77-pages-verify.EhNzhE`, with the authoritative eight-request repeat under
+`public-complete`. Pages is final public-byte authority; the separately built immutable preview
 snapshot remains candidate evidence and is intentionally not compared across builds.
 
 ## Superseded initial candidate
@@ -80,43 +63,23 @@ Candidate tree: `8d154a147a08c7d6bc79008f19b74311cd60905a`
 
 These bytes are no longer served. Do not use them for current UAT.
 
-Historical Tailscale endpoint: `http://100.94.63.83:8080/`
-
-Former server PID/session: `3912158` / command-runner session `12828` (retired)
-
-Immutable snapshot: `/tmp/geosolve-m77-uat.1mDjQv` (directory `0555`, seven regular non-symlink
+Immutable snapshot: `geosolve-m77-uat.1mDjQv` (directory `0555`, seven regular non-symlink
 files `0444`)
 
 Ordered-manifest aggregate:
 `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 23,124 | `f72319b7b0b0364c5ebcf3921e34d0a706f459771a182ce65b16918a805ea07e` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-be28d696c867467c.js` | 33,221 | `d5fe43e24f03ebc2301c9d560520220b4d6d1f5a43ee75400c640da8dba9cb6f` |
-| `geosolve-demo-web-be28d696c867467c_bg.wasm` | 6,412,353 | `943a8bb78cc6d6d0883c9628e537b143c7703c409e975c4ce8af343391823bc1` |
-| `index.html` | 29,020 | `071852cb148efae46d4ace99a83ed2595e55f4677a0407765572b1685b7dd070` |
-| `styles-d7435a6d60dc3430.css` | 34,689 | `870bde7d758fe95f4323bedc6588ff2cffaf3c826549e684718ebfd818eebcd6` |
+The archived manifest records the per-file sizes and checksums.
 
 The exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` ran from 15:48:17 to
 16:00:06 AEST and exited successfully without changing HEAD, tree or worktree. Its log is
-`/tmp/geosolve-m77-clean-gate.51a3b95.log`, SHA-256
+`geosolve-m77-clean-gate.51a3b95.log`, SHA-256
 `e28c50101df3b9c447ccf1a392f0e3e5644068e8abc460be389aaf3cff1984ed`. The gate includes formatting
 and diff hygiene, warnings-denied workspace Clippy/Rustdoc, every locked all-feature workspace
 test, unchanged 270/270 clean golden, native/WASM M70/M71/M74/M75/M76/M77 parity, demo WASM,
 benchmark compilation, M14/M32 workloads, the 150.55-second 256-body sparse crossover,
 licence/package checks and Trunk 0.21.14 release assembly.
-
-The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
-Freeze evidence is `/tmp/geosolve-m77-freeze-evidence.qbBmc5`. Proxy-disabled, cache-bypassed,
-identity-encoded requests for `/` and all seven files return HTTP 200 with zero redirects, no
-content encoding, exact expected media types/lengths and snapshot-identical bytes. `/` equals
-`index.html`, and the fetched manifest has the same aggregate. HTTP evidence is
-`/tmp/geosolve-m77-http-verify.eu1KMY`. Superseded M76 PID `1780608` exited before this listener
-started; its immutable snapshot remains unchanged historical evidence.
 
 M77-F012 reproduced the reported blank/no-op drag at the ordinary retained browser-composition
 boundary. M77-F013 records the approved spatial elliptical-arc authoring enhancement. Review then
@@ -233,19 +196,19 @@ and canvas hover must not steal focus.
 
 ## Acceptance record
 
-- U1 — visibility, ownership and visual language: accepted under the supervising caller's scoped
+- U1 — visibility, ownership and visual language: accepted under the maintainer's scoped
   approval
-- U2 — trim endpoints: accepted under the supervising caller's scoped approval
-- U3 — rational and stored control cages: accepted under the supervising caller's scoped approval
-- U4 — size handles and domains: accepted under the supervising caller's scoped approval
-- U5 — cancellation, stale work and history: accepted under the supervising caller's scoped approval
-- U6 — persistence and desktop polish: accepted under the supervising caller's scoped approval
-- Final supervising approval: passed on 2026-08-17; the caller approved the current replacement and
+- U2 — trim endpoints: accepted under the maintainer's scoped approval
+- U3 — rational and stored control cages: accepted under the maintainer's scoped approval
+- U4 — size handles and domains: accepted under the maintainer's scoped approval
+- U5 — cancellation, stale work and history: accepted under the maintainer's scoped approval
+- U6 — persistence and desktop polish: accepted under the maintainer's scoped approval
+- Final maintainer approval: passed on 2026-08-17; the maintainer approved the current replacement and
   requested closure
 - GitHub Pages publication and hosted-byte verification: passed in run `32012819635`, artifact
   `9283439225` and deployment `5942438795`
 
 This is an explicit milestone-level acceptance of the current replacement. It does not claim a
 separately logged row-by-row replay beyond the focused defects and interaction checks reported by
-the supervising caller; exact boundary, lifecycle and stale-authority behavior remains owned by the
+the maintainer; exact boundary, lifecycle and stale-authority behavior remains owned by the
 qualified native/WASM regressions above.

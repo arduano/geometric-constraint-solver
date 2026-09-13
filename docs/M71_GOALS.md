@@ -2,7 +2,11 @@
 
 # M71 goals — Retained drafting relations
 
-Status: complete and explicitly approved by the supervising human on 2026-08-14. Cross-axis
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete and explicitly approved by the maintainer on 2026-08-14. Cross-axis
 point-pair composition and the tighter default capture envelope are clean-qualified, published as
 a byte-verified immutable replacement and accepted under the scoped M71 close decision. Earlier
 publications remain historical.

@@ -2,12 +2,16 @@
 
 # M91 goals: cohesive code-driven authoring
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Outcome
 
-Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit maintainer approval.**
 
 The implementation is mechanically qualified and its immutable candidate is published on the
-Tailscale-only UAT endpoint below. The supervising user's blanket approval of every part of the UAT
+archived UAT snapshot. The maintainer's blanket approval of every part of the UAT
 accepts M91-U1 through M91-U14 as Pass without claiming a separately logged row-by-row replay.
 
 M91 combines five independently owned improvements into one code-authoritative workbench and one
@@ -47,7 +51,7 @@ M90-U1 through M90-U10 transfer unchanged into this milestone.
 Closure requires locked all-feature Rust tests, formatting, warnings-denied Clippy, package and
 frontend checks, fixture/declaration drift checks, dual-backend golden `--survey`, `--check` and
 `--require-clean`, optimized release WASM, distribution validation and the complete clean-source
-release gate. The nominated artifact must be an immutable byte-verified Tailscale-only snapshot.
+release gate. The nominated artifact must be an immutable byte-verified archived preview snapshot.
 Automated evidence does not accept a human UAT row. After explicit human acceptance, the approved
 descendant must publish through GitHub Pages, pass artifact and hosted-byte verification, and only
 then retire the accepted UAT services; those public closeout steps are still pending.
@@ -105,25 +109,10 @@ complete final gate pass. This was packaging infrastructure, not a solver defect
 
 Nomination evidence:
 
-- source commit/tree: `6d0155151133ba2540fd1dc4b2b071f141b86064`,
-  `972ad507c2cdfad2c9cd664e49feaf79ae381c81`;
-- clean release log: `/home/arduano/m91-gate.t8TTq0Bj/release-gate.log`, SHA-256
-  `cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`;
-- frozen snapshot/manifest: `/tmp/geosolve-m91-uat.17Q5LnSg`,
-  `/tmp/geosolve-m91-uat.17Q5LnSg.sha256`, manifest SHA-256
-  `b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`;
-- frozen WASM: `/tmp/geosolve-m91-uat.17Q5LnSg/assets/geosolve_demo_web_bg-tvc8MGYX.wasm`,
-  `18,368,160` bytes, SHA-256
-  `6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`;
-- identical staging/live HTTP ledger SHA-256:
-  `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`;
-- Tailscale service `geosolve-m91-uat-18091.service`, PID `2142854`, invocation
-  `bf93a3f5dab84809a24fdc2db6f23f4f`, URL `http://100.94.63.83:18091/`.
-
 The frozen candidate passed 20/20 Chromium checks on both staging and live endpoints. M90 remained
 byte-identical and was not restarted. At nomination, no public deployment or GitHub Pages
 publication had occurred, and automated evidence accepted none of the 14 human UAT rows. On
-2026-09-04 the supervising user separately accepted M91-U1 through M91-U14 by blanket/composite
+2026-09-04 the maintainer separately accepted M91-U1 through M91-U14 by blanket/composite
 approval, without claiming a separately logged row-by-row replay. GitHub Actions run `33878060784`
 published artifact `9938976843` as deployment `6265455733` from descendant
 `177227941af97f24307fe4229797bbd84857e458`; downloaded archive SHA-256 is

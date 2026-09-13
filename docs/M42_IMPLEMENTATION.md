@@ -2,7 +2,11 @@
 
 # M42 implementation record: typed host parameters
 
-Status: completed and globally qualified 2026-07-27. The supervising caller approved
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: completed and globally qualified 2026-07-27. The maintainer approved
 completing executable dimensionless bindings in M42 before M43-M44 integration so the next
 human UAT would evaluate the complete parameter model rather than an intentionally reduced
 one. That review was later relocated to post-cleanup M53. The

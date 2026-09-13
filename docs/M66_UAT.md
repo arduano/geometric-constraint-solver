@@ -2,7 +2,11 @@
 
 # M66 focused UAT: computed 2D Fillet features
 
-Status: closed with explicit scoped supervising-human approval on 2026-08-08. The implementation
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: closed with explicit scoped maintainer approval on 2026-08-08. The implementation
 and mechanical qualification are Pass. U1-U5 are accepted under the scoped close decision below;
 this record does not claim a complete post-PF004 replay of every scripted step. Do not use the
 archived `1034afc` build for this scorecard.
@@ -11,7 +15,6 @@ Candidate source: `ac31791` (`Keep Fillet preview drags out of support collectio
 editable-playground candidate `02649cc` and resolving `M66-PF004` after
 `M66-PF001`/`M66-PF002`/`M66-PF003`.
 
-Historical Tailscale endpoint: `http://100.94.63.83:8080/` (release service was live-rebuilt from
 `ac31791` and HTTP verified on 2026-08-08; the served HTML contained the scoped non-draggable SVG
 marker). The service is not a continuing post-close requirement.
 
@@ -242,7 +245,7 @@ compatibility evidence, but their mechanically qualified disposition does not qu
 
 ## Approval
 
-On 2026-08-08, the supervising human explicitly approved and closed M66 for its mechanically
+On 2026-08-08, the maintainer explicitly approved and closed M66 for its mechanically
 qualified computed-Fillet scope, accepting `M66-KL001` as a deferred interaction limitation. This
 does not claim a complete post-PF004 replay of every scripted UAT step.
 

@@ -2,7 +2,11 @@
 
 # M91 implementation: parallel workstreams and integration
 
-Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **Complete and publicly closed on 2026-09-04 after explicit maintainer approval.**
 
 ## Integration order
 
@@ -175,53 +179,14 @@ required every row to pass and matched the unchanged reviewed bytes.
 
 ### Final evidence
 
-- source commit/tree: `6d0155151133ba2540fd1dc4b2b071f141b86064`,
-  `972ad507c2cdfad2c9cd664e49feaf79ae381c81`;
-- `cargo fmt --all -- --check`: passed;
-- `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`:
-  passed;
-- `cargo test --locked --workspace --all-features`: passed all workspace tests and doctests;
-- golden `--survey`: 271/271 `PASS`; golden `--check`: matched; golden `--require-clean`:
-  matched with no non-pass row. The 272-line fixture (header plus 271 rows) remains SHA-256
-  `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`;
-- full release command:
-  `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'`;
-  result: exit `0` from the clean nominated source;
-- release log: `/home/arduano/m91-gate.t8TTq0Bj/release-gate.log`, `706,478` bytes,
-  SHA-256 `cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`;
-- package checks: all workspace package contents and the isolated `geosolve-sketch-code` package
-  verifier passed; frontend: language-service Chromium 1/1, Vitest 94/94, manifest/licence/build
-  contracts, production build and `validate:dist` passed;
-- declaration drift: TypeScript `5.9.2` declarations matched SHA-256
-  `32e84bbbfad1d9e3d704ab8a78c7df5b686e0315132018ff287abae55f3e9093`;
-- samples: all 37 source-authoritative entries passed native-reference, cold-materialization,
-  edit/Undo and source/IR/artifact checks; release-WASM transition/sample parity passed 2/2;
-- dual-backend parity: every applicable row passed. The reviewed ledger contains exactly
-  `constraint.external-line-collinear.*`, `constraint.external-point-coincident.*`,
-  `dimension.profile-offset.*` and `spline.noncanonical-knot-topology.*`; exclusions are not passes
-  and computed Fillet was exercised rather than excluded;
-- release WASM: `/tmp/geosolve-m91-uat.17Q5LnSg/assets/geosolve_demo_web_bg-tvc8MGYX.wasm`,
-  `18,368,160` bytes, SHA-256
-  `6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`;
-- distribution: 10 files, 4 JavaScript, 1 CSS and 1 WASM, `27,158,025` total bytes;
-  `validate:dist` and the stricter freeze inventory passed, with no `compiler-parity.html`;
-- immutable snapshot/manifest: `/tmp/geosolve-m91-uat.17Q5LnSg`,
-  `/tmp/geosolve-m91-uat.17Q5LnSg.sha256`, manifest SHA-256
-  `b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`;
-- staging/live HTTP ledger SHA-256:
-  `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`;
-  frozen Chromium qualification passed 20/20 on both endpoints;
-- Tailscale service/PID/invocation/URL: `geosolve-m91-uat-18091.service`, `2142854`,
-  `bf93a3f5dab84809a24fdc2db6f23f4f`, `http://100.94.63.83:18091/`.
-
 The first frozen staging-browser attempt selected Playwright's unwrapped bundled binary and exited
 before any test body because its host `libglib` was unavailable. The retained harness-error log is
-`/tmp/geosolve-m91-freeze-evidence.xQrNE9UJ/staging-browser-harness-error.log`; rerunning with the
+`geosolve-m91-freeze-evidence.xQrNE9UJ/staging-browser-harness-error.log`; rerunning with the
 same system-Chrome wrapper used by the clean gate passed 20/20 on staging and live. This is harness
 evidence, not an M91 defect. The protected M90 unit, process identity, snapshot manifest, inventory
 and served root remained byte-identical before and after publication and were never restarted.
 At nomination, no public push or GitHub Pages deployment was made and all 14 human UAT rows remained
-unrun. On 2026-09-04 the supervising user's explicit blanket/composite approval accepted M91-U1
+unrun. On 2026-09-04 the maintainer's explicit blanket/composite approval accepted M91-U1
 through M91-U14 as Pass at milestone level without claiming a separately logged row-by-row replay.
 Pages publication and accepted-service retirement are complete. GitHub Actions run `33878060784`
 (build `101039695274`, deploy `101042386558`) published artifact `9938976843` as deployment

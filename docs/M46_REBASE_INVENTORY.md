@@ -2,11 +2,15 @@
 
 # M46 cleanup rebase inventory
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Status
 
 Rebase decisions are complete and applied to the authoritative roadmap: M45 completed
 without human approval; M46-M53 completed the cleanup/UAT sequence; after M53 approval the
-preserved functional sequence was renumbered, and a later supervising-user decision inserted the
+preserved functional sequence was renumbered, and a later maintainer decision inserted the
 new M55 alpha action-parity gate. The mapping below is a historical record and was superseded on
 2026-07-29 when M61 closed with approval and the forecast M62-M64 hardening sequence was removed.
 Those old numbers below do not define active milestones; M62 and M63 were subsequently scoped and

@@ -2,6 +2,10 @@
 
 # M70B-H1–H3 test hardening and defect survey
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: the bounded H1 test-only survey, complete release qualification and byte-verified UAT
 publication remain historically clean. H2 preserved that exact 193-row corpus under
 milestone-neutral names. Subsequent human UAT opened `M70B-F003` in computed-Fillet authoring and
@@ -16,7 +20,7 @@ suite, nine-test retained movement suite, focused golden tests, all aggregate go
 formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
 relevant WASM check pass. Clean source `d400c4a8201f6afc531f5b504424d6430dbf3937`
 passes the complete release gate, and its fresh immutable seven-file publication is byte-verified
-through Tailscale. The supervising human subsequently reported the F005 movement behavior fixed and
+through preview. The maintainer subsequently reported the F005 movement behavior fixed and
 requested sign-off once the closing regressions were satisfactory. Clean closing source `48e3cc3`
 passes the complete release gate with the focused two-previously-Current projected-drag transaction
 and CircularArc transport/domain parity regressions. The unchanged 198/198 golden and byte-identical
@@ -171,7 +175,7 @@ The three operator modes are:
 discovery checkpoint it therefore failed intentionally on the four reviewed findings even though
 `--check` succeeded. The current fixture contains no expected non-`PASS` row, and its aggregate
 `--check` and `--require-clean` reruns both pass. Scratch output lives
-under the ignored workspace `target/` tree so a full system `/tmp` cannot turn semantic results
+under the ignored workspace `target/` tree so a full system `temporary storage` cannot turn semantic results
 into false harness failures. `GEOSOLVE_GOLDEN_ORACLE_CASE` selects exactly one row inside each
 child. Every authoring PASS fingerprint is `input-<fnv1a64>` over the effective post-scheduling
 variant; the golden therefore detects seed/scheduling drift instead of recording an uninformative
@@ -224,7 +228,7 @@ This clean result is evidence for the bounded representative matrix, not a claim
 or every family-by-primitive Cartesian product is complete. Existing M55/M62 regressions retain
 their broader applicability and curve-family ownership; M70B-F001 and M70B-F002 retain their exact
 payload-derived regressions, while resolved M70B-F003 and M70B-F004 retain focused positive
-headless regressions. M70B is closed under the supervising human's requested scoped sign-off
+headless regressions. M70B is closed under the maintainer's requested scoped sign-off
 recorded below.
 
 Historical H3 F003 discovery evidence used the negative test name below:
@@ -412,7 +416,7 @@ Nominated source `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` passed:
 
 ```text
 env NO_COLOR=true \
-  TMPDIR=/home/arduano/programming/geometric-constraint-solver/target \
+  TMPDIR=target \
   nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
@@ -422,8 +426,8 @@ compilation, M14/M32 performance budgets, package/licence and single-workbench/G
 the 256-moving-body sparse crossover in `123.32s`, and Trunk 0.21.14 release assembly. Only the
 pre-existing non-failing Cargo `license` plus `license-file` notices appeared.
 
-The fresh read-only seven-file snapshot was `/tmp/geosolve-m70b-h1-uat.viSB9G`, served at
-`http://100.94.63.83:8080/`. Its exact file hashes are:
+The fresh read-only seven-file snapshot was `geosolve-m70b-h1-uat.viSB9G`, served at
+the archived preview. Its exact file hashes are:
 
 | File | SHA-256 |
 | --- | --- |
@@ -438,7 +442,7 @@ The fresh read-only seven-file snapshot was `/tmp/geosolve-m70b-h1-uat.viSB9G`, 
 The ordered manifest aggregate is
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`.
 Because H1 changes test infrastructure only, these release bytes intentionally match the F002
-candidate. Proxy- and cache-bypassed requests through the actual Tailscale address byte-compared
+candidate. Proxy- and cache-bypassed requests through the actual preview address byte-compared
 `/` and every asset with the frozen snapshot. Human UAT remained pending at that historical
 checkpoint.
 
@@ -463,7 +467,7 @@ The golden SHA-256 remains
 `803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`. Every generated release
 file retains the H1 hash listed above, and the ordered manifest aggregate remains
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. H2 therefore left the
-then-served H1 product candidate unchanged and required no Tailscale republish. Human UAT remained
+then-served H1 product candidate unchanged and required no preview republish. Human UAT remained
 pending at that historical checkpoint.
 
 ### M70B-H3 discovery, F003/F004 gate and F005 qualified state
@@ -496,7 +500,7 @@ all-feature workspace tests, the 197/197 clean golden oracle, native/WASM transi
 demo-web WASM check, warnings-denied rustdoc, benchmark compilation, performance budgets,
 package/licence and Git-hygiene checks, and release Trunk assembly.
 
-The immutable replacement snapshot is `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY`; the directory is
+The immutable replacement snapshot is `geosolve-m70b-f003-f004-uat.lKC2xY`; the directory is
 mode `0555` and each of its exactly seven files is mode `0444`:
 
 | File | SHA-256 |
@@ -508,14 +512,6 @@ mode `0555` and each of its exactly seven files is mode `0444`:
 | `geosolve-demo-web-f582f5825ff9a317_bg.wasm` | `48a0382678ccffee08c15621e9d5c34708d4d9aedfbdad1fa519806974c75836` |
 | `index.html` | `fb7ea6cddc7603a876ad90d6537d42434b82565a8245606217af593598f1ab79` |
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
-
-The ordered manifest aggregate is
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. The historical publication
-was bound only to the Tailscale address. Proxy- and cache-bypassed fetches proved that `/` matched
-`index.html` and every served asset byte-matched its immutable local counterpart. F005 superseded
-that publication, so no obsolete PID or claim that it still occupies the shared endpoint is
-retained. The F003/F004 targeted human rechecks and supervising-human approval remained pending at
-that checkpoint.
 
 ### M70B-F005 replacement qualification and publication
 
@@ -532,7 +528,7 @@ package/licence and Git-hygiene checks, the 256-moving-body sparse crossover in 
 Trunk 0.21.14 release assembly. Only the pre-existing non-failing Cargo `license` plus
 `license-file` notices appeared.
 
-The immutable replacement snapshot is `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`; the directory is mode
+The immutable replacement snapshot is `geosolve-m70b-f005-uat.Q5c9Wi`; the directory is mode
 `0555` and each of its exactly seven files is mode `0444`:
 
 | File | SHA-256 |
@@ -544,15 +540,6 @@ The immutable replacement snapshot is `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`; the 
 | `geosolve-demo-web-b2164249dc1c486_bg.wasm` | `622a2f77e63574b624aecb94919994464f58671115cdbd4802283ada80c20907` |
 | `index.html` | `5088006b11625fab097b3a38c6abad8d7cf0d3c3d91875b3fcf17626dbe34c1d` |
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
-
-The ordered manifest aggregate is
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` served that
-snapshot at `http://100.94.63.83:8080/` and was bound only to the Tailscale address at the M70B
-checkpoint; that process has since retired. Proxy- and cache-bypassed fetches proved that `/`
-matched `index.html` and every served asset byte-matched its immutable local counterpart. This
-candidate supersedes the F003/F004 snapshot for the F005
-movement-continuity recheck in `docs/M70B_UAT.md`. The supervising human reported that movement
-behavior fixed and requested sign-off once the focused closing regressions were satisfactory.
 
 ### Closing multi-feature transaction audit
 
@@ -572,16 +559,3 @@ and reject a same-orientation supporting-circle root that lies beyond the native
 remains focused owner coverage, not a sixth golden row. The public integration regression is
 `circular_arc_transport_crosses_stale_cell_and_stops_at_endpoint_in_both_orders` in
 `crates/geosolve-sketch-features/tests/m70b_circular_arc_transport.rs`.
-
-Clean source `48e3cc3` passes
-`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` with both additions. The
-gate includes the unchanged 198/198 clean golden, 276/276 editor library tests, the 45/45 feature
-library suite plus the new finite-arc integration test, all locked workspace tests, native/WASM
-parity, warnings-denied Clippy and rustdoc, benchmark/package/licence checks, the 149.13-second
-256-moving-body sparse crossover and Trunk 0.21.14 release assembly. The generated seven-file
-distribution byte-matches `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` at ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` remained live
-on the Tailscale-only endpoint at M70B close, so no republish was required then; that process has
-since retired. The supervising human requested these regressions and sign-off once satisfactory;
-that scoped decision closes M70B without claiming an unrecorded exhaustive replay of every
-prepared UAT step.

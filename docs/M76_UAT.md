@@ -2,8 +2,12 @@
 
 # M76 focused UAT — production-quality annotations
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete (2026-08-17); scoped human acceptance and exact public publication pass, and
-separate post-refinement hands-on UAT was explicitly waived**. The caller reviewed the initial
+separate post-refinement hands-on UAT was explicitly waived**. The maintainer reviewed the initial
 candidate, reported that it looked good, requested two final feature refinements and authorized
 closure after they were implemented. U1-U4 are accepted under that authority; no individual
 step-by-step replay was logged or is claimed.
@@ -16,25 +20,14 @@ M76 feature-refinement commit: `a9fd6f6a71edf5be9d9fb5856074d291192a898d`
 
 M76 feature-refinement tree: `2627e1d0ffdc500166bbcee50626fc9d65e05b67`
 
-Historical M76 endpoint at acceptance: `http://100.94.63.83:8080/`
+Historical M76 endpoint at acceptance: the archived preview
 
-Retired server PID: `1780608` (retained command-runner session `30164`; retired only after the M77
-snapshot was ready)
-
-Immutable snapshot: `/tmp/geosolve-m76-final-uat.65Y8J1` (directory `0555`, files `0444`)
+Immutable snapshot: `geosolve-m76-final-uat.65Y8J1` (directory `0555`, files `0444`)
 
 Ordered-manifest aggregate:
 `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 20,587 | `24934e6d620dc89078ab41c155acd2a31bba4260a82cfe4c37077421cc1ab853` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-55053c1ba5c6df34.js` | 33,221 | `d8974bcac131556374933e638799af9ee854a913e819e5ce492c9c0707547e0a` |
-| `geosolve-demo-web-55053c1ba5c6df34_bg.wasm` | 6,273,395 | `ceed21fb5467d43e0ca603521c4c54602458c85f0736f6c129ae63303c01b53b` |
-| `index.html` | 28,226 | `92a5e926448e82d05e3d84f1c0044513c6b70125d798374ec03fc205149ae1a5` |
-| `styles-c2e1aed7dc61439c.css` | 31,750 | `69e4241bdcafc260ec6248ecc0a94f0cdb6420155419dd103a30d49ee1d467ee` |
+The archived manifest records the per-file sizes and checksums.
 
 The exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 at the accepted
@@ -43,11 +36,6 @@ parity 5/5 each, M75 native/WASM 11/11 each, M74 native/WASM 5/5 each, and the r
 remains unchanged at 270/270. The 151.76-second sparse crossover, formatting, warnings-denied
 Clippy and Rustdoc, locked workspace tests, benchmarks, licensing/package-content checks and Trunk
 0.21.14 assembly also pass. The seven files above are the gate output frozen without rebuilding.
-
-Proxy/cache-bypassed identity requests for `/` and every file return HTTP 200 with exact media
-types, lengths and bytes, no redirects or content encoding; `/` equals `index.html`, and the
-fetched aggregate matches. Evidence is retained at `/tmp/geosolve-m76-final-http-verify.UwoaMK`.
-The superseded server PIDs `1077092` and `1455071` were retired before this candidate was served.
 
 ## Refinements included after initial review
 
@@ -61,12 +49,12 @@ The superseded server PIDs `1077092` and `1455071` were retired before this cand
 
 The initial reviewed nomination at source `37eade50b566f62905a395655bc80c17d9b6bef4`, tree
 `d6ad2f453d672accbcc3848a1a16d2039b3511d1`, snapshot
-`/tmp/geosolve-m76-uat.puiPgO`, aggregate
+`geosolve-m76-uat.puiPgO`, aggregate
 `fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf`, is superseded evidence
 only. It is not the accepted final candidate.
 
 The intermediate clean-qualified source `9b4e7f72dcacefdf4d7847a22eb675c711068d26`, snapshot
-`/tmp/geosolve-m76-uat.ctgYzp` and aggregate
+`geosolve-m76-uat.ctgYzp` and aggregate
 `337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4` are also superseded
 historical evidence.
 
@@ -83,9 +71,9 @@ Artifact `9267811418` is 2,164,829 bytes with ZIP/GitHub SHA-256
 manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`.
 The public root and every file return HTTP 200 with expected media types, zero redirects and
 artifact-identical bytes; `/` equals `index.html`. Evidence is retained at
-`/tmp/geosolve-m76-pages-verify.ijOz7p` and independently repeated at
-`/tmp/geosolve-m76-pages-verify.hVSqQJ`. The repository-prefixed Pages rebuild is public-byte
-authority and is not claimed byte-identical to the frozen Tailscale output.
+`geosolve-m76-pages-verify.ijOz7p` and independently repeated at
+`geosolve-m76-pages-verify.hVSqQJ`. The repository-prefixed Pages rebuild is public-byte
+authority and is not claimed byte-identical to the frozen preview output.
 
 The unchanged M72 public Chromium check passes at `1440x900` and `1024x720`. M76-adapted copies of
 the retained M74/M75 checks change only their obsolete Origin-canvas expectations to the approved
@@ -135,15 +123,15 @@ deterministic automatic layout.
 
 ## Acceptance record
 
-- U1: Accepted under the caller's scoped closure; not individually replayed/logged after the final
+- U1: Accepted under the maintainer's scoped closure; not individually replayed/logged after the final
   refinements.
-- U2: Accepted under the caller's scoped closure; not individually replayed/logged after the final
+- U2: Accepted under the maintainer's scoped closure; not individually replayed/logged after the final
   refinements.
-- U3: Accepted under the caller's scoped closure; not individually replayed/logged after the final
+- U3: Accepted under the maintainer's scoped closure; not individually replayed/logged after the final
   refinements.
-- U4: Accepted under the caller's scoped closure; not individually replayed/logged after the final
+- U4: Accepted under the maintainer's scoped closure; not individually replayed/logged after the final
   refinements.
-- Final supervising approval: Received 2026-08-17, including explicit waiver of separate
+- Final maintainer approval: Received 2026-08-17, including explicit waiver of separate
   post-refinement UAT.
 - GitHub Pages publication: Passed and exact-verified at source `a7769e4` through run
   `31961652265`, artifact `9267811418` and deployment `5933831093`.

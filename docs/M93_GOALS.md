@@ -2,7 +2,11 @@
 
 # M93 goals: fast, proportional release qualification
 
-Status: **accepted and closed by the supervising user on 2026-09-07 with the measured C5 timing miss and unperformed historical replay retained as limitations.** M92 is closed with its accepted 16-sample catalog.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed by the maintainer on 2026-09-07 with the measured C5 timing miss and unperformed historical replay retained as limitations.** M92 is closed with its accepted 16-sample catalog.
 Further sample expansion is future work and does not block this milestone.
 
 The original targets below remain the measurement contract. [The qualification and sign-off ledger](M93_QUALIFICATION.md)
@@ -124,7 +128,7 @@ retries, not just the fastest successful run.
    comprehensive fresh-results gate on the recorded host, versus M92's roughly 152 minutes. Measure
    a cold run too. Use repeated representative runs (at least three for fast paths and two full
    fresh runs, one of them serial/reference as needed for parity); show each result and cache state.
-   Missing a target remains an explicit blocker/tradeoff for caller review, not a reason to weaken
+   Missing a target remains an explicit blocker/tradeoff for maintainer review, not a reason to weaken
    checks or quietly redefine the workload.
 7. **M93-C7 — immutable release:** any new nominee receives fresh artifact inventory/size/hash,
    HTTP byte/MIME/base-path and targeted runtime verification. Moving identical bytes does not
@@ -135,6 +139,6 @@ No residual equation, finite validation, Hard tolerance, branch choice, rank/DOF
 transaction/history invariant, test assertion, golden disposition or bundle ceiling may be weakened
 for speed. Profile expensive fixtures, batching and test execution profiles before changing them;
 any behavioral solver defect follows the owning-layer defect-hardening workflow. New samples and
-solver-feature work remain outside M93. The supervising user accepted the measured workflow on
+solver-feature work remain outside M93. The maintainer accepted the measured workflow on
 2026-09-07 and closed M93 with the recorded timing and replay limitations. Original targets and
 all qualification outcomes remain preserved in the ledger.

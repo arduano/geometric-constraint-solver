@@ -2,16 +2,18 @@
 
 # M67 focused UAT — cleaned workbench
 
-Status: closed with explicit supervising-human approval on 2026-08-08.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: closed with explicit maintainer approval on 2026-08-08.
 
 Candidate source: `3d52b29fc11f5cef572fe86f58a95897ec8c8214` on `main`.
-
-Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest: `e9d410c71290e7200595aaf9be6327523a812a1fa7d23abfa9d12c8279c176ac`
 
 The clean release gate built the seven-file distribution. A non-watching static server exposed
-only those completed files on the Tailscale address, and all seven HTTP responses matched their
+only those completed files on the preview address, and all seven HTTP responses matched their
 local SHA-256 values before handoff. The endpoint is not a continuing post-close requirement.
 Direct Rust/WASM tests remain the correctness authority.
 
@@ -71,7 +73,7 @@ Result: Accepted under the explicit M67 close decision.
 
 ## Approval
 
-On 2026-08-08, the supervising human explicitly approved the focused cleanup scope and requested
+On 2026-08-08, the maintainer explicitly approved the focused cleanup scope and requested
 M67 closure. M67-U1 through M67-U4 are accepted under that close decision with no new finding
 recorded. This approval does not replace the direct qualification recorded above or invent a
-separate per-step replay beyond the supervising-human close decision.
+separate per-step replay beyond the maintainer close decision.

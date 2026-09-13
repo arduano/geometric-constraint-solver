@@ -1,13 +1,15 @@
 # M65 focused UAT
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Historical record: the endpoint and candidate language below describe the approved M65 review
 session. The endpoint is not expected to remain live.
 
-Status: complete and explicitly approved by the supervising human on 2026-08-01.
+Status: complete and explicitly approved by the maintainer on 2026-08-01.
 
 Candidate code source: `b6433d1`.
-
-Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
 The review used only the ordinary workbench candidate recorded above. This scorecard is a
 focused human behavior check after direct native, WASM and release qualification; it does not
@@ -15,7 +17,7 @@ replace those gates.
 
 Mechanical qualification (2026-08-01): formatting, warnings-denied locked workspace Clippy,
 locked all-feature workspace tests, the all-feature `wasm32-unknown-unknown` check, the optimized
-Trunk 0.21.14 release bundle and `git diff --check` pass. A verified GET from the Tailscale
+Trunk 0.21.14 release bundle and `git diff --check` pass. A verified GET from the preview
 endpoint returns the ordinary GeoSolve Sketch Workbench built from the code source recorded above.
 
 ## UAT scorecard
@@ -53,7 +55,7 @@ Result: Pass (2026-08-01 focused retest approval against `b6433d1`).
 
 Notes: Holding the opposite arm stationary while dragging either one-DOF side control is the
 accepted M65 locality policy. `M65-F005` fixes the separate numerical rejection that made natural
-off-manifold upper-guide drags appear mostly immovable. The supervising human approved this
+off-manifold upper-guide drags appear mostly immovable. The maintainer approved this
 focused result.
 
 ### M65-U3 — symmetric twin-roller independence and recovery
@@ -72,7 +74,7 @@ keeps the full last valid preview, and permits same-gesture recovery.
 Result: Pass (2026-08-01 focused retest approval against `b6433d1`).
 
 Notes: `M65-F004` restores direct access to the left roller where its driving-radius annotation
-overlaps the center or canonical circumference handle. The supervising human approved this
+overlaps the center or canonical circumference handle. The maintainer approved this
 focused result.
 
 ### M65-U4 — ordinary lifecycle, authoring and persistence
@@ -133,7 +135,7 @@ are not reused below.
 
 ## Approval
 
-The supervising human explicitly approved the two outstanding focused tests and asked to proceed
+The maintainer explicitly approved the two outstanding focused tests and asked to proceed
 to M66 on 2026-08-01. M65-U1 through M65-U4 are therefore all Pass against mechanically qualified
 source `b6433d1`; `M65-F004` and `M65-F005` have direct regressions and accepted human retests.
 M65 is closed without broadening its recorded scope or treating any inherent alternate-assembly

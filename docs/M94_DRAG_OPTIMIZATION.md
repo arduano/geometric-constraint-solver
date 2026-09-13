@@ -2,9 +2,13 @@
 
 # M94-F003 — dense backplane dragging
 
-Status: **M94 accepted and closed on 2026-09-07**, including F003/F004 qualified and delivered from `7727cbf`. [The closure record](M94_CLOSURE.md) records supervising-user acceptance, final audit and retained performance limits.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
 
-The supervising user reported dragging in the dense robotic harness taking about two seconds per
+Status: **M94 accepted and closed on 2026-09-07**, including F003/F004 qualified and delivered from `7727cbf`. [The closure record](M94_CLOSURE.md) records maintainer acceptance, final audit and retained performance limits.
+
+The maintainer reported dragging in the dense robotic harness taking about two seconds per
 move and authorized a correction if it fits M94. The reproduced delay is principally the release
 of an ordinary point drag. Continuous point previews also exceed a 60 Hz frame budget.
 
@@ -149,7 +153,7 @@ Commands run in the pinned Nix shell (logs in `target/m94/drag/`):
 nix-shell shell.nix --run 'CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG=line-tables-only cargo test --locked -p geosolve-sketch-code --lib session::tests:: -- --test-threads=2'
 nix-shell shell.nix --run 'CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG=line-tables-only cargo test --locked -p geosolve-demo-web --lib workbench::persistence::tests:: -- --test-threads=2'
 nix-shell shell.nix --run 'cargo fmt --all -- --check && CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG=line-tables-only cargo test --locked -p geosolve-demo-web --lib workbench::bridge::tests:: -- --test-threads=2 && CARGO_BUILD_JOBS=4 cargo clippy --locked -p geosolve-demo-web -p geosolve-sketch-code --lib --tests -- -D warnings'
-nix-shell shell.nix --run 'cargo fmt --all -- --check && CARGO_BUILD_JOBS=4 cargo clippy --locked -p geosolve-demo-web -p geosolve-sketch-code --lib --tests -- -D warnings && CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG=line-tables-only cargo test --locked -p geosolve-demo-web --lib point_preview_ -- --test-threads=2 && CARGO_BUILD_JOBS=4 npm --prefix crates/geosolve-demo-web/frontend run build:release-artifacts -- --out /home/arduano/programming/geometric-constraint-solver/target/m94/drag/provisional-r1'
+nix-shell shell.nix --run 'cargo fmt --all -- --check && CARGO_BUILD_JOBS=4 cargo clippy --locked -p geosolve-demo-web -p geosolve-sketch-code --lib --tests -- -D warnings && CARGO_BUILD_JOBS=4 CARGO_PROFILE_TEST_OPT_LEVEL=1 CARGO_PROFILE_TEST_DEBUG=line-tables-only cargo test --locked -p geosolve-demo-web --lib point_preview_ -- --test-threads=2 && CARGO_BUILD_JOBS=4 npm --prefix crates/geosolve-demo-web/frontend run build:release-artifacts -- --out target/m94/drag/provisional-r1'
 ```
 
 Results: six code-session tests; 37 persistence tests; 61 bridge tests with one existing ignored
@@ -162,7 +166,7 @@ an unsupported `LocalKey` method and was corrected before these passing runs.
 The actual provisional production artifact also passes all four canvas browser tests:
 
 ```bash
-nix-shell shell.nix --run 'GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18106/ GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --workers=1'
+nix-shell shell.nix --run 'GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18106/ GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --workers=1'
 ```
 
 Result: 4/4 passed in 42.1 seconds, including actual WebGL2 point pixels/idle behavior,
@@ -199,7 +203,7 @@ first draw following restoration and recreates retained paint/text resources onc
 batching and translation reuse remain enabled. Unsupported cache structure fails visibly.
 
 ```bash
-nix-shell shell.nix --run 'npm --prefix crates/geosolve-demo-web/frontend run check:types && npm --prefix crates/geosolve-demo-web/frontend run test -- --no-cache src/lib/canvas-renderer-pixi.test.ts && GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18107/ GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --workers 1 --output /tmp/m94-f004-canvas'
+nix-shell shell.nix --run 'npm --prefix crates/geosolve-demo-web/frontend run check:types && npm --prefix crates/geosolve-demo-web/frontend run test -- --no-cache src/lib/canvas-renderer-pixi.test.ts && GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18107/ GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --workers 1 --output m94-f004-canvas'
 ```
 
 Typecheck, five renderer resource tests and all four canvas cases pass (browser 48.0 seconds).
@@ -232,14 +236,13 @@ The unaffected exclusive performance stage is authenticated reuse. No source cha
 
 The exact qualified 12-file production artifact (27,708,655 bytes), aggregate
 `b5f8554f8234e6674ac9b3939b8fba702d2484cb5321fd31fcdec97e8984d5c0`, is frozen read-only at
-`/tmp/geosolve-m94-f003-uat.qwhvb8yw/geosolve-production` and served at
-**http://100.94.63.83:18096/** (also loopback 18096). Only the previous M94-F002 server was replaced;
-accepted M92 on 18092 remains running. The F002 nomination is retained in
+`geosolve-m94-f003-uat.qwhvb8yw/geosolve-production` and served at
+the archived preview. The F003 candidate supersedes the earlier F002 delivery. The F002 nomination is retained in
 `target/m94/drag/nomination-f002.json`; the current nomination is `target/m94/nomination.json`.
 
 ```bash
-nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest /tmp/geosolve-m94-f003-uat.qwhvb8yw/production.json --directory /tmp/geosolve-m94-f003-uat.qwhvb8yw/geosolve-production --url http://100.94.63.83:18096/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m94/drag/tailscale-final.json'
-nix-shell shell.nix --run 'DRAG_URL=http://100.94.63.83:18096/ DRAG_MANIFEST=/tmp/geosolve-m94-f003-uat.qwhvb8yw/production.json DRAG_OUTPUT=/home/arduano/programming/geometric-constraint-solver/target/m94/drag/final node target/m94/drag/final-point-probe.mjs'
+nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest geosolve-m94-f003-uat.qwhvb8yw/production.json --directory geosolve-m94-f003-uat.qwhvb8yw/geosolve-production --url ${PREVIEW_URL} --receipt target/m94/drag/tailscale-final.json'
+nix-shell shell.nix --run 'DRAG_URL=${PREVIEW_URL} DRAG_MANIFEST=geosolve-m94-f003-uat.qwhvb8yw/production.json DRAG_OUTPUT=target/m94/drag/final node target/m94/drag/final-point-probe.mjs'
 ```
 
 Served file/root byte and MIME checks and actual WASM startup pass. Same actual GPU, viewport,
@@ -274,11 +277,11 @@ Final direct-WASM check on the served artifact also passes both exact point term
 source bytes and empty Problems; pointer-up takes 942.5ms and 883.8ms in these separate calls.
 
 ```bash
-nix-shell shell.nix --run 'DRAG_URL=http://100.94.63.83:18096/ DRAG_MANIFEST=/tmp/geosolve-m94-f003-uat.qwhvb8yw/production.json DRAG_OUTPUT=/home/arduano/programming/geometric-constraint-solver/target/m94/drag/final node target/m94/drag/direct-probe.mjs'
+nix-shell shell.nix --run 'DRAG_URL=${PREVIEW_URL} DRAG_MANIFEST=geosolve-m94-f003-uat.qwhvb8yw/production.json DRAG_OUTPUT=target/m94/drag/final node target/m94/drag/direct-probe.mjs'
 ```
 
 Temporary development servers on 18106 and 18107 are retired. The qualified 18096 candidate and
 accepted M92 18092 service remain available. Documentation-only closeout uses `./scripts/release-gate.sh --docs-only --since 7727cbf`
 and passed diff/link/input checks for the three prose nomination files. It did not rebuild or replace the qualified
-bytes. Log: `target/m94/drag/docs-only.log`. Subsequent supervising-user acceptance and the final
+bytes. Log: `target/m94/drag/docs-only.log`. Subsequent maintainer acceptance and the final
 documentation-only checkpoint audit are recorded in [M94_CLOSURE.md](M94_CLOSURE.md).

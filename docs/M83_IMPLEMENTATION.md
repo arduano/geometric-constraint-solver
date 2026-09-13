@@ -2,8 +2,12 @@
 
 # M83 implementation ledger — Projectional sketch design intent
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and closed 2026-08-25; implementation, M83-F001 through M83-F010 repair,
-post-F007 architecture hardening, supervising-user acceptance, GitHub Pages publication and exact
+post-F007 architecture hardening, maintainer acceptance, GitHub Pages publication and exact
 hosted-byte verification pass**. This ledger records implementation and qualification against ADR
 0040 and `docs/M83_GOALS.md`. Pages is final M83 public-byte authority.
 
@@ -138,7 +142,7 @@ Post-F005 mechanical qualification and nomination completed. Inventory, order-in
 reservation/tombstone, retained-failure, cold/warm differential,
 construction/application/operation, Fillet/Offset, persistence, native/WASM RPC, TypeScript and
 split pointer/terminal performance suites pass. The exact clean-gate release output was frozen
-without rebuilding, verified first on a temporary Tailscale listener and independently verified
+without rebuilding, verified first on a temporary preview listener and independently verified
 again at the retained UAT endpoint. F006/F007 subsequently withdraw that candidate. The clean
 post-F007 gate, no-rebuild freeze, 5/5 frozen-browser checks and temporary/retained served-byte
 verification pass; F008/F009 later supersede that candidate. Human M83-U1 through M83-U9 review
@@ -259,7 +263,7 @@ served-byte evidence are recorded in the F008/F009 qualification section below.
 
 ## Findings
 
-All ten replacement findings are mechanically resolved and accepted under the supervising user's
+All ten replacement findings are mechanically resolved and accepted under the maintainer's
 2026-08-25 milestone-level close decision. That disposition does not claim a separately logged
 row-by-row hands-on replay. The I7 work predates and is separate from the actual M83-F008/F009
 findings: its regressions were found by independent review before renewed UAT rather than by a
@@ -345,7 +349,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 ```
 
 The gate ran from 2026-08-24 14:31:13 to 14:52:37 AEST. Its 376,943-byte, 5,554-line log is
-`/tmp/geosolve-m83-gate.0So8w1Mo/release-gate.log`, SHA-256
+`geosolve-m83-gate.0So8w1Mo/release-gate.log`, SHA-256
 `b6547c1bbbb99175d108c5a2a506f6146a8b01b133a3953c472c9705dd5caeae`. It passed formatting and
 diff hygiene, warnings-denied locked all-target/all-feature workspace Clippy, locked all-feature
 workspace tests, exact 271-row golden `--require-clean`, the M70/M71/M74/M75/M76/M77/M79 and demo
@@ -363,44 +367,14 @@ clean throughout its qualification.
 ## Withdrawn initial candidate and served-byte evidence
 
 Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
-`/tmp/geosolve-m83-uat.DFamHN` and byte-compared before and after freezing. The directory is `0555`;
+`geosolve-m83-uat.DFamHN` and byte-compared before and after freezing. The directory is `0555`;
 all seven entries are regular non-symlink files at `0444`. Complete source/freeze metadata is in
-`/tmp/geosolve-m83-freeze-evidence.QX4H66`. The C-locale ordered `sha256sum *` manifest aggregate is
+`geosolve-m83-freeze-evidence.QX4H66`. The C-locale ordered `sha256sum *` manifest aggregate is
 `4bb4bf4f22caefae429b514cfffda1d92ac3704e6f3474c5022413ec0f242989`:
 
-```text
-7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-2b04bb132eb756898a0d313442a86019949b8d2b3ef7e302798039864ef6d657  geosolve-demo-web-fdac61e779feddb4.js
-9eb17134bdd1c43fe02594f34b291c533b6dd391092260b1c54426b05c151498  geosolve-demo-web-fdac61e779feddb4_bg.wasm
-0c48bd6d73d0420d767d5cfbe761902cec1debfe9462f05ebef9c16323e2817d  index.html
-b1311b3d99e27cecee11beb86a8cb32251f7132a615cbcead5be9815aa4c49f4  styles-105fdd951cbee1a1.css
-```
+The archived manifest records the individual asset checksums.
 
-| File | Bytes |
-| --- | ---: |
-| `API_COMPATIBILITY.md` | 28,079 |
-| `LICENSE` | 35,148 |
-| `THIRD_PARTY_LICENSES.md` | 3,120 |
-| `geosolve-demo-web-fdac61e779feddb4.js` | 37,314 |
-| `geosolve-demo-web-fdac61e779feddb4_bg.wasm` | 11,599,582 |
-| `index.html` | 32,577 |
-| `styles-105fdd951cbee1a1.css` | 45,114 |
-
-Temporary service `geosolve-m83-temp-uat.service`, PID `2740811`, first served only that snapshot
-at `100.94.63.83:18083`. Proxy-disabled, cache-bypassed identity requests for `/` and all seven
-files returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected
-media type and length, and snapshot-identical bytes; `/` equals `index.html`. Evidence is
-`/tmp/geosolve-m83-temp-verify.2ogZzJ/results.tsv`, SHA-256
-`6d57de9beadd0114afb2d1f101b0f9a542c876ea45aa9f9efda11724b351ce97`.
-
-Only after that ledger passed, `geosolve-m83-uat.service`, PID `2747514`, began serving the same
-immutable directory at `http://100.94.63.83:8080/`. The same eight checks passed independently;
-final evidence is `/tmp/geosolve-m83-final-verify.GG1MfU/results.tsv`, with the same result-ledger
-SHA-256 because every asserted path/status/type/length/body hash is identical. The temporary
-listener was retired and the retained `:8080` service was live for focused human UAT at that
-checkpoint. The unrelated loopback VS Code listener was not changed.
+The archived manifest records the per-file sizes and checksums.
 
 This initial artifact is no longer UAT authority and its former process is retired. Its bytes and
 ledgers remain historical evidence only.
@@ -442,7 +416,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 
 The replacement gate ran from 2026-08-24 17:09:15 to 17:24:39 AEST in 924 seconds. Its
 372,195-byte, 5,519-line log is
-`/tmp/geosolve-m83-f001-final-gate.uR6Ei0/release-gate.log`, SHA-256
+`geosolve-m83-f001-final-gate.uR6Ei0/release-gate.log`, SHA-256
 `1043356cb2480944314566eab7fb92e5d560f48ee606ce3ca15ea4753f16af1d`. It passed formatting,
 diff hygiene, warnings-denied locked all-target/all-feature workspace Clippy, locked all-feature
 workspace tests, exact 271-row golden `--require-clean`, native/WASM parity, all-feature WASM,
@@ -458,52 +432,28 @@ exact terminal values were 5.315 ms, 7.666 ms and 92.326 ms against 4000/6000/30
 ## Post-F005 immutable candidate and served-byte evidence (withdrawn)
 
 Without rebuilding, the gate-produced `dist` was copied to
-`/tmp/geosolve-m83-f005-uat.ge07gw`, byte-compared before and after freezing, and made immutable for
+`geosolve-m83-f005-uat.ge07gw`, byte-compared before and after freezing, and made immutable for
 UAT: directory mode `0555`, seven regular non-symlink files at `0444`. Complete freeze metadata is
-`/tmp/geosolve-m83-f005-freeze-evidence.EdVqUj`. The ordered manifest aggregate is
+`geosolve-m83-f005-freeze-evidence.EdVqUj`. The ordered manifest aggregate is
 `720ea687a7002a9f1dbc818147263d9b003cc03bd79cefb2cf8e6aca2597b89b`:
 
-```text
-7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-670ea0707236efb16588039cd12c2b9c8edae74b92f4b1f51951138d95ec8244  geosolve-demo-web-27a5256c4c16b7b9.js
-6d6f13d0017e6f41ff79dbbebb571d7ad5a8da87c39e86ca5b1d1d7332339765  geosolve-demo-web-27a5256c4c16b7b9_bg.wasm
-68a079db5b5a48c0916a16ebcd8521d2ea92bda8093651878c7be792c476e032  index.html
-368d50605a0f14d4e67784e711cd5d920cd56a715fe82d09e68f2bd974caaf24  styles-4251c5b53d199c44.css
-```
+The archived manifest records the individual asset checksums.
 
-| File | Bytes |
-| --- | ---: |
-| `API_COMPATIBILITY.md` | 28,079 |
-| `LICENSE` | 35,148 |
-| `THIRD_PARTY_LICENSES.md` | 3,120 |
-| `geosolve-demo-web-27a5256c4c16b7b9.js` | 37,314 |
-| `geosolve-demo-web-27a5256c4c16b7b9_bg.wasm` | 11,638,103 |
-| `index.html` | 32,577 |
-| `styles-4251c5b53d199c44.css` | 45,555 |
+The archived manifest records the per-file sizes and checksums.
 
 The frozen artifact passed 3/3 Playwright checks: six repeated accepted point drops with delayed
 capture loss and Undo/Redo; adjacent Outline before/after drops with invariant geometry; and three
 curve-property drops with exact Undo restoration.
 
 ```bash
-NODE_PATH=/home/arduano/.npm/_npx/420ff84f11983ee5/node_modules \
-  node /home/arduano/.npm/_npx/420ff84f11983ee5/node_modules/@playwright/test/cli.js \
-  test --config=/tmp/m83-pw/playwright.config.js
+  node node_modules/@playwright/test/cli.js \
+  test --config=m83-pw/playwright.config.js
 ```
 
-Temporary Tailscale service `geosolve-m83-f005-temp-uat.service` first served the frozen snapshot
-at `100.94.63.83:18085`. Proxy-disabled, cache-bypassed checks of `/` and all seven files returned
+A temporary preview first served the frozen snapshot. Proxy-disabled, cache-bypassed checks of `/` and all seven files returned
 HTTP 200, zero redirects, no `Location`/`Content-Encoding`, exact type/length/body and root equality
-with `index.html`. Evidence `/tmp/geosolve-m83-f005-temp-verify.YYwD99/results.tsv` has SHA-256
+with `index.html`. Evidence `geosolve-m83-f005-temp-verify.YYwD99/results.tsv` has SHA-256
 `585aa1571a1bc4440fcce609afa17435382ad1ee8d8f9d60e128229f18313a87`.
-
-Only after that pass, `geosolve-m83-uat.service`, PID `3331431`, began serving the same directory at
-`http://100.94.63.83:8080/`. Independent final evidence
-`/tmp/geosolve-m83-f005-final-verify.EGsGQD/results.tsv` has the identical ledger SHA-256. Temporary
-Tailscale and loopback browser listeners were retired; at that checkpoint `:8080` remained live for
-focused human UAT. F006/F007 later retired and replaced that service.
 
 The documentation-only descendant recording that evidence did not replace its product source/tree
 or rebuild its artifact. GitHub Pages deliberately remains on accepted M81 bytes until explicit
@@ -525,7 +475,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 ```
 
 The gate ran from 2026-08-24 20:14:40 to 20:30:47 AEST in 967 seconds. Its 373,070-byte,
-5,530-line log is `/tmp/geosolve-m83-f007-gate.aGkBUu/release-gate.log`, SHA-256
+5,530-line log is `geosolve-m83-f007-gate.aGkBUu/release-gate.log`, SHA-256
 `20807697a2df8941d59c9033c1604063940284e7b89f10ad19b1aeddcf25a7f4`. It passed formatting,
 diff hygiene, warnings-denied locked all-target/all-feature workspace Clippy, locked all-feature
 workspace tests, the exact unchanged 271-row golden `--require-clean`, native/WASM parity,
@@ -539,24 +489,16 @@ were 4.827 ms, 6.654 ms and 17.961 ms; their exact terminal values were 5.680 ms
 95.628 ms, all within their independent ceilings.
 
 Without rebuilding, the gate-produced `dist` was copied to
-`/tmp/geosolve-m83-f007-uat.52r7H7`, byte-compared and frozen. Freeze metadata is in
-`/tmp/geosolve-m83-f007-freeze-evidence.y5GbCJ`; the ordered manifest aggregate is
+`geosolve-m83-f007-uat.52r7H7`, byte-compared and frozen. Freeze metadata is in
+`geosolve-m83-f007-freeze-evidence.y5GbCJ`; the ordered manifest aggregate is
 `bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`. The directory is `0555`
 and all seven entries are regular non-symlink files at `0444`:
 
-```text
-7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-f8519fe21e7edc0229555df8c89f280840583bc72c2208f691ad9b6cba93d9dd  geosolve-demo-web-119c7106611e4e18.js
-112f69b748b8ba807f7a927dddcc64cbb34ade35260810442342582d111caa8a  geosolve-demo-web-119c7106611e4e18_bg.wasm
-879f052749c88707c26ae42b417ecac4923b42590d4ec8297efe7f6a50809697  index.html
-368d50605a0f14d4e67784e711cd5d920cd56a715fe82d09e68f2bd974caaf24  styles-4251c5b53d199c44.css
-```
+The archived manifest records the individual asset checksums.
 
 The existing 3/3 frozen Playwright suite passes against those bytes. Temporary served-byte
 verification passed at the replacement listener;
-`/tmp/geosolve-m83-f007-temp-verify.3CjjqM/results.tsv` has SHA-256
+`geosolve-m83-f007-temp-verify.3CjjqM/results.tsv` has SHA-256
 `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`.
 
 The new external frozen-browser harness passes 2/2 on both the temporary and retained endpoints:
@@ -565,11 +507,10 @@ durable/transient state, selects Select and persists the empty workspace. The re
 
 ```bash
 set -o pipefail
-env -u FORCE_COLOR NO_COLOR=1 M83_BASE_URL=http://100.94.63.83:8080/ \
-  NODE_PATH=/home/arduano/.npm/_npx/420ff84f11983ee5/node_modules \
-  node /home/arduano/.npm/_npx/420ff84f11983ee5/node_modules/@playwright/test/cli.js \
-  test --config=/tmp/m83-f007-pw/playwright.config.js 2>&1 | \
-  tee /tmp/m83-f007-pw/final-artifact-run.log
+env -u FORCE_COLOR NO_COLOR=1 M83_BASE_URL=${PREVIEW_URL} \
+  node node_modules/@playwright/test/cli.js \
+  test --config=m83-f007-pw/playwright.config.js 2>&1 | \
+  tee m83-f007-pw/final-artifact-run.log
 ```
 
 The configuration SHA-256 is
@@ -579,15 +520,6 @@ is `7b36eaeef0600b07e6da410485ff8bbc8521da2da2a17984c6eeee1fd2df2b33`, and the f
 Both rows passed in 6.2 seconds. A control run against the old F005 endpoint failed both rows with
 the reported defects, proving harness sensitivity. This remains thin frozen-adapter parity; Rust
 owner regressions are the semantic and solver oracle, and no repository E2E harness is restored.
-
-Only after the temporary byte and 2/2 browser passes, `geosolve-m83-uat.service`, PID `4006665`,
-began serving the frozen directory at `http://100.94.63.83:8080/`. Independent final evidence
-`/tmp/geosolve-m83-f007-final-verify.nHhejs/results.tsv` has the same SHA-256 as the temporary
-ledger, `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. Both ledgers cover `/`
-and all seven files with HTTP 200, zero redirects, no `Location` or `Content-Encoding`, exact media
-type/length/body, and root equality with `index.html`. Temporary services are retired; `:8080`
-remained live until the post-hardening replacement passed. That process is now retired; its
-snapshot and ledgers remain historical evidence. GitHub Pages remains on accepted M81.
 
 ## Superseded post-hardening qualification and immutable nomination
 
@@ -600,7 +532,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 ```
 
 The gate ran from 2026-08-25 04:55:41 to 05:14:03 AEST in 1,102 seconds. Its 386,013-byte,
-5,667-line log is `/tmp/geosolve-m83-post-hardening-gate.fCN9ie7B/release-gate.log`, SHA-256
+5,667-line log is `geosolve-m83-post-hardening-gate.fCN9ie7B/release-gate.log`, SHA-256
 `53e9da5f91978d90899c2a54a6a01c9b16f0616c9b76ea93dde8d57b78416136`. It passed formatting and
 diff hygiene, warnings-denied locked all-target/all-feature workspace Clippy, locked all-feature
 workspace tests, the unchanged 271-row golden with `--require-clean`, every native/WASM parity
@@ -615,47 +547,14 @@ were 1.284 ms, 3.256 ms and 11.996 ms; exact terminals were 0.517 ms, 0.711 ms a
 remain inside their independent 250/400/150 ms frame and 4000/6000/3000 ms terminal ceilings.
 
 Without rebuilding, the gate-produced `dist` was copied to
-`/tmp/geosolve-m83-post-hardening-uat.R821Vpjj`, byte-compared before and after freezing, and made
+`geosolve-m83-post-hardening-uat.R821Vpjj`, byte-compared before and after freezing, and made
 immutable for UAT: directory mode `0555`, seven regular non-symlink files at `0444`. Complete
-evidence is in `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`. The ordered manifest
+evidence is in `geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`. The ordered manifest
 aggregate is `63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`:
 
-```text
-02920ba6b2e0a180c3502d2fbe51274f897db766f530ef469019e1f9527fe5f9  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-5a1ef428cae7e62ae40161b46cbbdd240a2b3175507c73682142fe94440af522  geosolve-demo-web-b903543072525cfa.js
-76c40562bac1a9644d5e2abaa88952ba05881bd021fc0e113048631281e7b16a  geosolve-demo-web-b903543072525cfa_bg.wasm
-7c9b5312e8e6db41d726dd643932674ab175d2141634c05bc09fecf70ea8bcd1  index.html
-368d50605a0f14d4e67784e711cd5d920cd56a715fe82d09e68f2bd974caaf24  styles-4251c5b53d199c44.css
-```
+The archived manifest records the individual asset checksums.
 
-| File | Bytes |
-| --- | ---: |
-| `API_COMPATIBILITY.md` | 31,680 |
-| `LICENSE` | 35,148 |
-| `THIRD_PARTY_LICENSES.md` | 3,120 |
-| `geosolve-demo-web-b903543072525cfa.js` | 37,314 |
-| `geosolve-demo-web-b903543072525cfa_bg.wasm` | 11,967,734 |
-| `index.html` | 32,577 |
-| `styles-4251c5b53d199c44.css` | 45,555 |
-
-The existing browser suite passes 3/3 and the focused F006/F007 suite passes 2/2 against those
-frozen bytes. The focused 2/2 suite also passes independently on both temporary and retained
-Tailscale endpoints. Temporary service `geosolve-m83-post-hardening-temp-uat.service`, PID
-`2400110`, first served the snapshot at `100.94.63.83:18088`; it was retired after its byte and
-browser passes. Temporary evidence
-`/tmp/geosolve-m83-post-hardening-temp-verify.iED2TLx3/results.tsv` has SHA-256
-`5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`.
-
-Only after those checks passed was historical PID `4006665` retired and
-`geosolve-m83-uat.service`, PID `2404961`, started on `http://100.94.63.83:8080/`. Independent final
-evidence `/tmp/geosolve-m83-post-hardening-final-verify.456o9Uey/results.tsv` has the identical
-SHA-256. Both ledgers cover `/` plus all seven assets with HTTP 200, zero redirects, no `Location`
-or `Content-Encoding`, exact media type/length/body, and root equality with `index.html`. The
-temporary and loopback verification services are retired. F008/F009 later retired that retained
-service only after their replacement passed; the snapshot remains historical evidence. GitHub
-Pages deliberately remains on accepted M81.
+The archived manifest records the per-file sizes and checksums.
 
 The documentation-only descendant that recorded this historical F008/F009 qualification does not
 replace product source
@@ -674,7 +573,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 ```
 
 The gate ran from 2026-08-25 09:17:35 to 09:33:51 AEST in 975 seconds. Its 381,514-byte,
-5,645-line log is `/tmp/geosolve-m83-f008-f009-release-gate.log`, SHA-256
+5,645-line log is `geosolve-m83-f008-f009-release-gate.log`, SHA-256
 `fc07730eed2c158c234828700ea9fbed1b6c7f0e396c5464baab20063e967ed1`. It passed formatting and
 diff hygiene, warnings-denied locked workspace Clippy/Rustdoc, locked all-feature workspace tests,
 the unchanged golden with `--require-clean`, every carried native/WASM parity cut, actual demo
@@ -688,51 +587,21 @@ were 1.389 ms, 4.202 ms and 11.357 ms; exact terminals were 0.567 ms, 0.836 ms a
 remain inside their independent 250/400/150 ms frame and 4000/6000/3000 ms terminal ceilings.
 
 Without rebuilding, the gate-produced `dist` was copied to
-`/tmp/geosolve-m83-f008-f009-uat.zLfB22EK`, byte-compared before and after freezing, and made
+`geosolve-m83-f008-f009-uat.zLfB22EK`, byte-compared before and after freezing, and made
 immutable for UAT: directory mode `0555`, seven regular non-symlink files at `0444`. Complete
-evidence is in `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`. The ordered manifest
+evidence is in `geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`. The ordered manifest
 aggregate is `f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`:
 
-```text
-f44495a743fbffd216b252024c19d63d3f1a013f7fa8326cc1942df62a1d3a22  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-3092d2ea99bf0bfb2ed432f2e721697b8b615a5989d76563414440c9c8cd457b  geosolve-demo-web-2267ffc90ca12789.js
-8a85dfce8403d2dfde09446a5c3fc302bc4bf5238337d6516c55d5a11aaa7389  geosolve-demo-web-2267ffc90ca12789_bg.wasm
-cb186bfb0ee541662307370d8024d23b02b66cca12ab954881d1bef3010db741  index.html
-368d50605a0f14d4e67784e711cd5d920cd56a715fe82d09e68f2bd974caaf24  styles-4251c5b53d199c44.css
-```
+The archived manifest records the individual asset checksums.
 
-| File | Bytes |
-| --- | ---: |
-| `API_COMPATIBILITY.md` | 31,831 |
-| `LICENSE` | 35,148 |
-| `THIRD_PARTY_LICENSES.md` | 3,120 |
-| `geosolve-demo-web-2267ffc90ca12789.js` | 37,314 |
-| `geosolve-demo-web-2267ffc90ca12789_bg.wasm` | 11,975,996 |
-| `index.html` | 32,577 |
-| `styles-4251c5b53d199c44.css` | 45,555 |
+The archived manifest records the per-file sizes and checksums.
 
 The existing browser suite passes 3/3, the focused F006/F007 suite passes 2/2 and the focused
 F008/F009 suite passes 2/2 locally against those frozen bytes: 7/7 total. Both focused suites pass
-on the temporary and retained Tailscale endpoints: 4/4 at each. The F008 browser path proves exact
+on the temporary and retained preview endpoints: 4/4 at each. The F008 browser path proves exact
 workspace-v8/history Copy-New-Load round trip and atomic corrupt-checksum rejection. The F009 path
 creates a rectangle Fillet, suppresses it, verifies all native parents and no stale canvas failure,
 then exercises exact Undo/Redo.
-
-Temporary service `geosolve-m83-f008-f009-temp-uat.service`, PID `3349639`, first served the
-snapshot at `100.94.63.83:18089`; it was retired after its byte and browser passes. Temporary
-evidence `/tmp/geosolve-m83-f008-f009-temp-verify.uNTvzMdz/results.tsv` has SHA-256
-`b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`.
-
-Only after those checks passed was historical PID `2404961` retired and
-`geosolve-m83-uat.service`, PID `3376452`, started on `http://100.94.63.83:8080/`. Independent final
-evidence `/tmp/geosolve-m83-f008-f009-final-verify.na1TWg0E/results.tsv` has the identical SHA-256.
-Both ledgers cover `/` plus all seven assets with HTTP 200, zero redirects, exact media type,
-length and body, and root equality with `index.html`. F010 retired retained PID `3376452` only
-after its replacement passed; the historical immutable snapshot remains preserved. GitHub Pages
-deliberately remains on accepted M81, and M83-U1 through M83-U10, F001-F010 human rechecks,
-publication and milestone closure remain pending.
 
 The documentation-only descendant recording this qualification does not replace product source
 `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
@@ -752,8 +621,8 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 The gate ran from 2026-08-25 13:33:46 to 13:52:11 AEST in 1,105 seconds with exit 0. Its
 385,323-byte, 5,683-line log has SHA-256
 `71495557ca5638000cfec265d9b97c0b0e71c72d3cbdfbbd09dbea8518484f9a`; the original is
-`/tmp/geosolve-m83-f010-gate.X6Nd9WM4/release-gate.log` and the evidence-package copy is
-`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww/release-gate.log`. It passed formatting and diff
+`geosolve-m83-f010-gate.X6Nd9WM4/release-gate.log` and the evidence-package copy is
+`geosolve-m83-f010-freeze-evidence.nIFsx9ww/release-gate.log`. It passed formatting and diff
 hygiene, warnings-denied locked workspace Clippy/Rustdoc, locked all-feature workspace tests, the
 exact 271-row golden `--require-clean`, native/WASM parity, actual demo WASM, 40/40 TypeScript
 tests, benchmark compilation, licence/package checks, performance examples, the ignored
@@ -796,34 +665,23 @@ adds runtime protocol rejection and compile-time recursive object/array shape te
 Jacobian, branch, materialization or golden-scene row changes.
 
 Without rebuilding, the gate-produced `dist` was copied to
-`/tmp/geosolve-m83-f010-uat.Qmrz2R36`, compared byte-for-byte before and after freezing, and made
+`geosolve-m83-f010-uat.Qmrz2R36`, compared byte-for-byte before and after freezing, and made
 immutable for UAT: directory mode `0555`, seven regular non-symlink files at `0444`. Its ordered
 manifest aggregate is `e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`;
 source, pre-freeze and frozen seven-file manifests are byte-identical. Complete source, gate,
 freeze, browser, HTTP and service evidence is in
-`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`.
+`geosolve-m83-f010-freeze-evidence.nIFsx9ww`.
 
-All nine frozen-browser checks pass against the local artifact, the temporary Tailscale listener
-and the retained Tailscale listener. They cover the carried F001-F009 interaction set plus F010
+All nine frozen-browser checks pass against the local artifact, the temporary preview listener
+and the retained preview listener. They cover the carried F001-F009 interaction set plus F010
 Segment/NURBS semantic parity and multi-corner Fillet arrays/closed enums. The local, temporary and
 final logs have SHA-256 respectively
 `e8e2a2fa286a3fbfa334fbcc1d9816257ebbb45c2b8790afea55b8c9005fb1f3`,
 `b18a21a4f9855593c86dff4fb97a035b13c688ce3a5da8ff2e5b39a801fbc7fa` and
 `99ac24a1dd441937be4d9003f8021d3c7114854fcf23bd00e5dcd5a24e45695b`.
 
-Temporary service `geosolve-m83-f010-temp-uat.service`, PID `224467`, first served the frozen
-snapshot on port `18090`; it was retired after its byte and 9/9 browser passes. Temporary evidence
-`/tmp/geosolve-m83-f010-temp-verify.fa7xynxe/results.tsv` has SHA-256
-`9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`.
-Only then was historical retained PID `3376452` retired and preserved, and
-`geosolve-m83-uat.service`, PID `276377`, started at `http://100.94.63.83:8080/` from the immutable
-F010 snapshot. Independent final evidence
-`/tmp/geosolve-m83-f010-final-verify.jKSWm8xi/results.tsv` has the identical SHA-256. Both ledgers
-cover `/` plus all seven files with HTTP 200, zero redirects, exact media type, length and body,
-and root equality with `index.html`.
-
 This completes the F010 mechanical qualification and immutable replacement nomination. On
-2026-08-25 the supervising user explicitly approved the implementation plan that closes M83 from
+2026-08-25 the maintainer explicitly approved the implementation plan that closes M83 from
 this evidence and instructed it to be implemented. The decision accepts M83-U1 through M83-U10
 and F001-F010 at milestone level without claiming a separately logged row-by-row hands-on replay.
 The documentation-only approval descendant does not replace the qualified product source/tree or
@@ -835,7 +693,7 @@ Approval descendant `2006c86b936c3522cc48fbf26cf78664d5e31e90`, tree
 `c4a59d252ec94cd9344acf1646efd3fcc62d39df`, passes GitHub Pages run `32817232564`, build job
 `97707877103` and deploy job `97709242120`. Artifact `9551973351` reports 3,960,865 bytes through
 the Actions API. The downloaded 12,288,000-byte
-`/tmp/geosolve-m83-pages-artifact.NgAszX6o/artifact.tar` has SHA-256
+`geosolve-m83-pages-artifact.NgAszX6o/artifact.tar` has SHA-256
 `06bce15ddea6d21048a25e3630a368ebe0ba883be98ee296869f77c47b86218b`; extraction yields exactly
 seven regular files, no symlinks, and ordered-manifest aggregate
 `75234fd6ff4349e4b75c858b90e90630002a7dd9b9171e47dfe28bc253cf23fc`.
@@ -844,11 +702,5 @@ Proxy-disabled, cache-bypassed verification at
 `https://arduano.github.io/geometric-constraint-solver/` proves `/` and all seven artifact paths
 return HTTP 200 with zero redirects, exact media type/length/artifact body, no `Location` or
 `Content-Encoding`, and root bytes equal artifact `index.html`. The 1,005-byte results ledger
-`/tmp/geosolve-m83-pages-verify.trWHdsHU/results.tsv` has SHA-256
+`geosolve-m83-pages-verify.trWHdsHU/results.tsv` has SHA-256
 `bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`.
-
-Only after public verification passed was retained `geosolve-m83-uat.service`, PID `276377`,
-retired. Its former endpoint now refuses connections, while immutable snapshot
-`/tmp/geosolve-m83-f010-uat.Qmrz2R36` remains preserved. Qualified product source `ee18dbd`, tree
-`889f730`, remains implementation authority; approval descendant `2006c86` records acceptance and
-publication without replacing it. Pages is final M83 public-byte authority and M83 is closed.

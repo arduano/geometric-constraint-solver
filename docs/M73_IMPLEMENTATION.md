@@ -2,9 +2,13 @@
 
 # M73 implementation — Retained authoring semantic consolidation
 
-Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete and explicitly approved by the maintainer on 2026-08-15**. M73-F001
 through M73-F004, the clean replacement release gate, byte-verified immutable UAT snapshot,
-focused human UAT and exact final GitHub Pages publication all pass. The supervising caller
+focused human UAT and exact final GitHub Pages publication all pass. The maintainer
 accepted the corrected scope and closing candidate.
 
 Activation baseline source: `daea43de51c9a1a720da1a245747e67735448f7d`
@@ -179,7 +183,7 @@ completed in 124.36 seconds; the unchanged 234/234 golden, complete workspace ma
 parity, licensing, packaging and Trunk 0.21.14 release assembly all passed.
 
 The gate-produced distribution was copied without rebuilding to read-only snapshot
-`/tmp/geosolve-m73-uat.5EhWNL` (directory mode `0555`, files `0444`):
+`geosolve-m73-uat.5EhWNL` (directory mode `0555`, files `0444`):
 
 | File | SHA-256 |
 | --- | --- |
@@ -190,11 +194,6 @@ The gate-produced distribution was copied without rebuilding to read-only snapsh
 | `geosolve-demo-web-e4b791bbd99777b2_bg.wasm` | `77f232d4b41c5bbe6a5e4db0982d987e20d1ca88c89335f4155565b496e2a34c` |
 | `index.html` | `067d186896a12889f35b11f99331088eb04d8f4ce05149e2663b223cfd40d5c7` |
 | `styles-437727272832bc26.css` | `9e4b1c6985f119cff35366119fbeef8abb2096b386a8db78a4cd730915316344` |
-
-The C-locale ordered-manifest aggregate is
-`371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`.
-PID `3403533` served only that snapshot on Tailscale and has since exited. The immutable snapshot
-remains as historical evidence.
 
 M73-F004 withdraws this snapshot and endpoint from current UAT authority. The bytes, hashes and
 clean-gate result remain historical F001-F003 evidence; they are not a replacement candidate for
@@ -223,34 +222,12 @@ That run passed:
 - the Trunk **0.21.14** release build.
 
 The exact gate-produced distribution was copied without rebuilding to
-`/tmp/geosolve-m73-uat.JKAWtJ` (directory mode `0555`, files `0444`):
+`geosolve-m73-uat.JKAWtJ` (directory mode `0555`, files `0444`):
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 15,490 | `c3ef0cedd4de5968e36d2917daaf463c450fbe2266a06bc45b0cfae2dc20b935` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-92f14bb278c26c6b.js` | 33,093 | `5647aeac2f7852f1bf4015722528386b67c7c31208f9f5ce2cccbbb7171f2988` |
-| `geosolve-demo-web-92f14bb278c26c6b_bg.wasm` | 6,021,403 | `bc1a23dd0f7917152c69a1f94e9858ceaf0d912a955db4bd68d77bca5a268342` |
-| `index.html` | 26,345 | `a2cf744c5daea9cea42c5dbd7dd58c6a27d9e508841f54e5589a4256ef7b3f40` |
-| `styles-437727272832bc26.css` | 27,010 | `9e4b1c6985f119cff35366119fbeef8abb2096b386a8db78a4cd730915316344` |
+The archived manifest records the per-file sizes and checksums.
 
 The C-locale `sha256sum *` aggregate is
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`.
-
-At nomination, PID `3870531` served only this snapshot at `http://100.94.63.83:8080/` with exact
-argv:
-
-```text
-python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m73-uat.JKAWtJ
-```
-
-Its executable is
-`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`.
-Proxy/cache-bypassed, identity-encoded requests for all seven files and `/` return HTTP 200 with
-the expected media types and compare byte-for-byte. `/` equals `index.html`, and the fetched
-aggregate equals the frozen aggregate. This replacement was current UAT authority at nomination;
-the PID has since retired and the read-only snapshot remains historical evidence.
 
 ## Final GitHub Pages publication
 
@@ -269,12 +246,12 @@ in **8s**; deployment `5919487026` reports success at
 `https://arduano.github.io/geometric-constraint-solver/`.
 
 GitHub Pages artifact `9245585021`, name `github-pages`, was downloaded to
-`/tmp/geosolve-m73-pages-verify.8i4JgR/github-pages.zip`. The ZIP is **2,076,014 bytes**, contains
+`geosolve-m73-pages-verify.8i4JgR/github-pages.zip`. The ZIP is **2,076,014 bytes**, contains
 only `artifact.tar`, and has SHA-256
 `fcfdb7f573bbfde86f70bc56126fe5c800428bc58991eb445eba33f122bf2222`, matching GitHub's digest.
-The inner tar at `/tmp/geosolve-m73-pages-verify.8i4JgR/outer/artifact.tar` is **6,174,720 bytes**
+The inner tar at `geosolve-m73-pages-verify.8i4JgR/outer/artifact.tar` is **6,174,720 bytes**
 with SHA-256 `d6c210b50aa9bb7e257555f931016551402fb7a8faa5d4ccfe267c68c44ceb56`.
-It extracts to exactly seven regular files under `/tmp/geosolve-m73-pages-verify.8i4JgR/site`, with
+It extracts to exactly seven regular files under `geosolve-m73-pages-verify.8i4JgR/site`, with
 no extra entries or links:
 
 | Final hosted artifact file | Bytes | SHA-256 |
@@ -296,7 +273,7 @@ Every named response compares byte-for-byte with artifact `9245585021`, and `/` 
 `/geometric-constraint-solver/` repository prefix. JavaScript is served as
 `application/javascript`, WASM as `application/wasm` and CSS as `text/css`; HTML, Markdown and
 license responses also have matching lengths and expected media types. GitHub Pages reports public
-workflow publication with HTTPS enforcement. The still-live Tailscale distribution remains the
+workflow publication with HTTPS enforcement. The still-live preview distribution remains the
 accepted immutable UAT snapshot; the downloaded hosted artifact above is public-byte authority,
 and no local/public byte identity is claimed.
 
@@ -309,7 +286,7 @@ and no local/public byte identity is claimed.
 - [x] Pass formatting, diff hygiene, warnings-denied workspace Clippy, locked all-feature tests,
   native/WASM parity and the complete clean release gate.
 - [x] Rerun the clean gate on the committed historical F001-F003 nomination/status source, freeze
-  the exact seven release files and verify their Tailscale publication byte-for-byte; retain that
+  the exact seven release files and verify their preview publication byte-for-byte; retain that
   withdrawn candidate as historical F001-F003 evidence.
 - [x] Freeze public regression `m73_f004_span_axis_precedence` and complete the focused
   Horizontal/Vertical durable point/midpoint precedence, early-suppression, budget/latch,
@@ -325,7 +302,7 @@ and no local/public byte identity is claimed.
 
 ## Closure record
 
-On 2026-08-15 the supervising caller confirmed that the focused behavior works and explicitly
+On 2026-08-15 the maintainer confirmed that the focused behavior works and explicitly
 requested milestone closure. M73-U1 through M73-U4 are accepted under that scoped close decision.
 This is approval of the qualified candidate and recorded interaction scope, not a claim that every
 scripted permutation received a separate manual replay; direct Rust/WASM qualification remains

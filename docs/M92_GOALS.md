@@ -2,7 +2,11 @@
 
 # M92 goals: advanced sample showcase and scale corpus
 
-Status: **accepted and closed on 2026-09-06** under the [supervising-user sign-off](M92_UAT.md#supervising-user-closure--2026-09-06).
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed on 2026-09-06** under the [maintainer sign-off](M92_UAT.md#maintainer-closure--2026-09-06).
 Further samples are future work; [M93](M93_GOALS.md) is release-gate optimization.
 
 ## Outcome
@@ -14,7 +18,7 @@ one inspectable model.
 
 ## Authorized scope amendment — 2026-09-05
 
-The supervising user authorized pruning `prusa-mini-interface`, `nema-17-motor-interface`,
+The maintainer authorized pruning `prusa-mini-interface`, `nema-17-motor-interface`,
 `hevort-datum-study` and `twin-roller-bezier-cam` from the public catalog. This supersedes the
 original frozen 20-entry inventory. The active distribution is `4/8/2/2`, with two meaningful
 measured source edits per survivor (32 edits). Survivor keys, source and authenticated compiler
@@ -23,7 +27,7 @@ envelopes stay unchanged; manifest ordinals become contiguous `1..=16`.
 The cam's tangent-offset and passive-follower-locality regression remains a private test fixture,
 outside the runtime catalog. The previous 20-sample qualification and immutable snapshot remain
 historical pre-pruning evidence. [Fresh qualification and replacement immutable nomination](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
-pass; the supervising user subsequently accepted the delivered scope and closed M92.
+pass; the maintainer subsequently accepted the delivered scope and closed M92.
 
 ## Active inventory
 
@@ -67,5 +71,5 @@ used as-is; new geometry, residuals, solids, CAM, collision, LOD and optimizatio
 
 ## Release boundary
 
-All mechanical gates and one immutable Tailscale UAT must pass before human review. GitHub Pages is
-not updated until the supervising user accepts the composite UAT.
+All mechanical gates and one immutable preview UAT must pass before human review. GitHub Pages is
+not updated until the maintainer accepts the composite UAT.

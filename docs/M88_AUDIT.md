@@ -2,6 +2,10 @@
 
 # M88 audit — Workflow-led authoring workbench redesign
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **historical pre-redesign audit complete; M88 closed and was accepted on 2026-09-01**.
 M87 closed on clean-qualified source
 `32c72892772ee09f8b904153484b02fd9923dc25`, tree
@@ -108,7 +112,7 @@ These are diagnosis facts and ordered M88 prerequisites, not repaired behavior.
   stack-depth defect rather than invalid sketch mathematics. This proxy does not by itself prove an
   actual browser/WASM stack contract.
 - The captured cold-open profile is
-  `/tmp/geosolve-gridfinity-open.cpuprofile.json`, SHA-256
+  `geosolve-gridfinity-open.cpuprofile.json`, SHA-256
   `d7be3dcaad3fcf63342de0263b44c79bd7f95927b28ee5d59ab656244b0601f`.
 - Cold project open restores the same checkpoint twice and immediately encodes/saves an unchanged
   checkpoint. Structural edit also checkpoint/restores and rehydrates.

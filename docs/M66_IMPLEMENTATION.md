@@ -2,7 +2,11 @@
 
 # M66 implementation: computed 2D Fillet features
 
-Status: complete. On 2026-08-08, the supervising human explicitly approved and closed M66 for its
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: complete. On 2026-08-08, the maintainer explicitly approved and closed M66 for its
 mechanically qualified computed-Fillet scope, accepting `M66-KL001` as a deferred interaction
 limitation. This does not claim a complete post-PF004 replay of every scripted UAT step.
 
@@ -185,7 +189,7 @@ fail Clippy. The old `1034afc` qualification belongs solely to the archived arch
 
 ## 4. Acceptance status
 
-Mechanical acceptance passed. U1-U5 are accepted under the explicit 2026-08-08 supervising-human
+Mechanical acceptance passed. U1-U5 are accepted under the explicit 2026-08-08 maintainer
 scoped close decision; `M66-PF001` through `M66-PF004` are mechanically closed by the direct
 regressions below rather than represented as individually repeated human tests. Direct
 qualification covers:
@@ -219,9 +223,9 @@ qualification covers:
 - ordinary-UI absence of M28 associations, trim views, constraints and radius dimensions; and
 - M27/M28/M30/M58 backward compatibility.
 
-The Tailscale UAT service was live-rebuilt from `ac31791`; its served HTML was verified to contain
+The preview UAT service was live-rebuilt from `ac31791`; its served HTML was verified to contain
 the scoped canvas marker (`draggable="false"`) at the historical endpoint
-`http://100.94.63.83:8080/`. The endpoint is not a continuing post-close requirement.
+the archived preview. The endpoint is not a continuing post-close requirement.
 
 ## 5. Known limitations or next blocker
 

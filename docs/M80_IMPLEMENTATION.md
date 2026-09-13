@@ -2,8 +2,12 @@
 
 # M80 implementation — native topology-preserving Profile Offset
 
-Status: **complete and closed; implementation, clean qualification, immutable Tailscale evidence,
-supervising-human UAT and exact GitHub Pages publication pass**. The
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete and closed; implementation, clean qualification, immutable preview evidence,
+maintainer UAT and exact GitHub Pages publication pass**. The
 completed Profile Offset implementation and prior nomination records remain valid historical
 evidence, but `M80-F016` withdraws the `05b8b3b` snapshot from acceptance and it is no longer
 served. Exact replacement source `29d8e41`, tree `44ecb95`, remains qualified product authority;
@@ -158,9 +162,9 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 - [x] Pass warnings-denied Rustdoc, Trunk and the exact complete clean release gate from committed
   F016 replacement source `29d8e41`, tree `44ecb95`.
 - [x] Copy the exact amended gate-produced distribution without rebuilding, freeze and byte-verify
-  it on temporary Tailscale port `18080`, then serve and reverify those same bytes on `:8080`.
+  it on temporary preview port `18080`, then serve and reverify those same bytes on `:8080`.
   Record the exact source/tree/gate/manifest/server authority here and in `docs/M80_UAT.md`.
-- [x] Receive explicit supervising-human UAT/scoped-close direction for the F016 replacement.
+- [x] Receive explicit maintainer UAT/scoped-close direction for the F016 replacement.
 - [x] Publish approval descendant `ece6c3c` through Pages run `32262792440`, verify artifact
   `9369119336` and every hosted byte, retire the UAT listener and mark M80 complete.
 
@@ -535,60 +539,31 @@ compilation, M14/M32 budgets, the 116.64-second 256-body sparse crossover, licen
 and Trunk 0.21.14 release assembly. The only diagnostics were the longstanding non-failing Cargo
 notices for packages declaring both `license` and `license-file`.
 
-Without rebuilding, the gate-produced `dist` was copied to `/tmp/geosolve-m80-uat.CPuVgx`,
+Without rebuilding, the gate-produced `dist` was copied to `geosolve-m80-uat.CPuVgx`,
 byte-compared, and frozen as directory `0555` with seven regular non-symlink files `0444`. Its
 C-locale ordered-manifest aggregate is
 `75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 27,327 | `12861ad65e947547f3ac9b3566717cd228bb7c7177c7138b6340b6005b624d88` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-31b56afde4878e35.js` | 33,750 | `a38e64303db375907a421cf466acb7af1cc194b0f7a3cb345e1e9e86095f4e66` |
-| `geosolve-demo-web-31b56afde4878e35_bg.wasm` | 7,578,159 | `cf549c47b4b891370c5bf5968aed325af73f79af558e2aeb34b9908c43ed7d13` |
-| `index.html` | 31,033 | `66e80630ca387574a0ee1f1bab2975656851379913e7cedb75e64575b1b925f0` |
-| `styles-a41d7984178d1121.css` | 38,291 | `957c7809eab90b61a2a72266af8f8660390b8c04fcce7b6c9e06398582097bbf` |
-
-Temporary PID `1030585` served only that snapshot at `100.94.63.83:18080`. All seven assets and
-root passed proxy-disabled identity-encoded HTTP 200, exact media/length/body, no redirect or
-content-encoding checks; root equalled `index.html`. Evidence is
-`/tmp/geosolve-m80-f016-temp-verify.vWAgyX`. Only then was PID `704439` retired and PID `1031421`
-started the same snapshot at `http://100.94.63.83:8080/`; identical final verification passed into
-`/tmp/geosolve-m80-f016-final-verify.2T6bqX` before the temporary listener stopped. PID `1031421`
-served the accepted snapshot through human UAT and was retired after exact Pages publication.
+The archived manifest records the per-file sizes and checksums.
 
 This exact replacement withdraws `05b8b3b` from current UAT. Later documentation-only commits do
 not replace `29d8e41` as product-source authority.
 
 ## Final acceptance and public publication
 
-The 2026-08-20 supervising-human decision accepts U1-U7 without a new finding. Fresh closeout
+The 2026-08-20 maintainer decision accepts U1-U7 without a new finding. Fresh closeout
 validation keeps the major deliverables distinct: Offset equations/audits 21, operand topology 16,
 deterministic construction/topology barriers 18, native Fillet sketch 9, native-Fillet topology 1,
 unchanged Offset consumption 2, accepted-preview authority 1, Offset authoring 12, retained native-
 Fillet authority 9 and demo 154 all pass. The stable 271-row golden survey is entirely `PASS` and
 exact check/clean modes, formatting and diff hygiene pass.
 
-Documentation-only approval descendant `ece6c3c6f29bb444864c9499868a817e5712951c`, tree
-`34111e0255b987907017c3503aa19000ffc8b020`, passes Pages run `32262792440`, assembly job
-`96099838917` in 4m57s and deploy job `96101539654` in 10s. Artifact `9369119336` is 2,650,327
-bytes with API SHA-256 `6a7fd10ab361f106a49f56e28e397f5be6464ecd94c0a81a53ab79b50e177b93`;
-its sole 7,761,920-byte tar has SHA-256
-`4d6c4b2325f76a542c4b09f086b0e434aecfe59066b0f3b573e5ae86b5943f3c` and exact seven-file
-aggregate `5d4343d4f85aa0290f92c6fc473cc193c451b50334bb1d104ccf2af5a9bebf56`.
-Proxy-disabled cache-busted identity requests to
-`https://arduano.github.io/geometric-constraint-solver/` and all seven paths return HTTP 200 with
-no redirect/content encoding, expected media types/lengths and artifact-identical bodies; root
-equals `index.html`. Evidence is `/tmp/geosolve-m80-pages-verify.Pp2jgp`. Pages is final public-byte
-authority, the frozen Tailscale snapshot remains accepted evidence and PID `1031421` is retired.
-
 ## Withdrawn pre-F016 amended nomination evidence
 
 Exact product source `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree
 `4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`, ran the complete clean gate inside the repository's
 pinned `shell.nix` from 2026-08-19 20:55:13 through 21:14:59 AEST. The 269,339-byte, 3,498-line log
-`/tmp/geosolve-m80-clean-gate.05b8b3b.nix.log` has SHA-256
+`geosolve-m80-clean-gate.05b8b3b.nix.log` has SHA-256
 `df1bdd31f2bbafe949f2340e6ec93a23c730feac34a1e39cebe36ad56fee578a`. The gate passes formatting
 and diff hygiene, warnings-denied workspace Clippy and Rustdoc, locked all-feature workspace tests,
 the 403-test editor and 154-test demo suites, all seven native/WASM parity binaries, the unchanged
@@ -598,37 +573,16 @@ and Trunk 0.21.14 release assembly. The only diagnostics are the longstanding no
 notices for packages declaring both `license` and `license-file`.
 
 Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was copied to
-`/tmp/geosolve-m80-uat.kJj5JB`, byte-compared before and after freezing the directory `0555` and all
+`geosolve-m80-uat.kJj5JB`, byte-compared before and after freezing the directory `0555` and all
 seven regular non-symlink files `0444`. Freeze evidence is
-`/tmp/geosolve-m80-freeze-evidence.nfn0t9`; the C-locale ordered manifest has aggregate SHA-256
+`geosolve-m80-freeze-evidence.nfn0t9`; the C-locale ordered manifest has aggregate SHA-256
 `8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 27,327 | `12861ad65e947547f3ac9b3566717cd228bb7c7177c7138b6340b6005b624d88` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-abeac0a70befff59.js` | 33,750 | `a38e64303db375907a421cf466acb7af1cc194b0f7a3cb345e1e9e86095f4e66` |
-| `geosolve-demo-web-abeac0a70befff59_bg.wasm` | 7,578,089 | `1a8baaf2c4e32a701a286142e3310155f3760795fe2a447f4f67c0fda99170df` |
-| `index.html` | 31,033 | `1b726dc66a5239664c37297eca27b9e7170fd1da9668847c14485399be278736` |
-| `styles-a41d7984178d1121.css` | 38,291 | `957c7809eab90b61a2a72266af8f8660390b8c04fcce7b6c9e06398582097bbf` |
-
-Temporary service `geosolve-m80-temp.service`, PID `701584`, first served only that snapshot on
-`100.94.63.83:18080`. Proxy-disabled, cache-bypassed, identity-encoded requests for `/` and every
-file returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact media type
-and length, snapshot-identical bodies and `/` equal to `index.html`. Only after that proof did
-`geosolve-m80-uat.service`, PID `704439`, start the same immutable snapshot at
-`http://100.94.63.83:8080/`; the complete final ledger passed before the temporary listener was
-retired. Temporary evidence `/tmp/geosolve-m80-temp-verify.XAdkcr/results.tsv` has SHA-256
-`239a8f3c793aa6bf62d8dfdda8e98cdc16e2f0f32a473d8a51a3b1cf135078b1`; final evidence
-`/tmp/geosolve-m80-final-verify.a7QGvU/results.tsv` has SHA-256
-`a8e44bae9a5c23ad952c69b2b402505fb836324956669dc45a71b555feeb82a4`. Both fetched manifests
-have the frozen aggregate above. This was the current listener before `M80-F016`; PID `704439` has
-now exited and those bytes are no longer served.
+The archived manifest records the per-file sizes and checksums.
 
 This remains historical mechanical qualification, not human acceptance. `M80-F016` replaced its
 product-source authority and UAT snapshot. No GitHub Pages publication or milestone closure is
-authorized until the supervising human accepts `docs/M80_UAT.md` or explicitly records another
+authorized until the maintainer accepts `docs/M80_UAT.md` or explicitly records another
 scoped decision.
 
 ## Withdrawn pre-amendment replacement nomination evidence
@@ -636,7 +590,7 @@ scoped decision.
 Exact product source `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`, tree
 `440d66ef07b7df963164e69ebed4b75509f56bd6`, ran the complete clean gate inside the repository's
 pinned `shell.nix` from 2026-08-19 13:38:33 through 13:50:00 AEST. The 262,051-byte, 3,416-line log
-`/tmp/geosolve-m80-clean-gate.b83dad2.nix.log` has SHA-256
+`geosolve-m80-clean-gate.b83dad2.nix.log` has SHA-256
 `3e44403e3f2038467aa0c06193030feb6c099cd53634b315a8308ca111113fa0`. It passes formatting,
 warnings-denied workspace Clippy and Rustdoc, locked all-feature workspace tests, unchanged
 270/270 golden `--require-clean` authority, all seven native/WASM parity suites, demo WASM,
@@ -645,43 +599,16 @@ licence/package checks and the release Trunk assembly.
 
 An earlier direct-shell invocation reached the matching 270-row oracle and then stopped before its
 first WASM test because `wasm-bindgen-test-runner` was absent from that ambient `PATH`; its retained
-log is `/tmp/geosolve-m80-clean-gate.b83dad2.log`. The WASM binary never executed, the source tree
+log is `geosolve-m80-clean-gate.b83dad2.log`. The WASM binary never executed, the source tree
 remained clean and unchanged, and the pinned-Nix gate above is the sole passing release claim.
 
 Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was copied to
-`/tmp/geosolve-m80-uat.hggNdd`, byte-compared before and after freezing the directory `0555` and all
+`geosolve-m80-uat.hggNdd`, byte-compared before and after freezing the directory `0555` and all
 seven regular non-symlink files `0444`. Freeze evidence is
-`/tmp/geosolve-m80-freeze-evidence.1S2bfA`; the C-locale ordered `sha256sum *` manifest aggregate is
+`geosolve-m80-freeze-evidence.1S2bfA`; the C-locale ordered `sha256sum *` manifest aggregate is
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`:
 
-```text
-12861ad65e947547f3ac9b3566717cd228bb7c7177c7138b6340b6005b624d88  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-7edcf614931091f70fcb718e7a5653168f47cf4fa8702f240281ff13bfcea4aa  geosolve-demo-web-ffbd27c03aa5ac90.js
-23dc7f48d992f73d6714cefd22757f2cfb4240190751e78c56b7515cfeced2af  geosolve-demo-web-ffbd27c03aa5ac90_bg.wasm
-438bd2732d52b23388be0fba1b7eaa061f1819d363e1fb911cf14197c6d711ea  index.html
-696181924c67ef61038f01c91c5c091eb7686160a24e10b833f22f9b13eabd38  styles-d9987f1e32f4927.css
-```
-
-Temporary service PID `3831926` first served only that snapshot on `100.94.63.83:18080`. Root plus
-all seven assets passed proxy-disabled, cache-bypassed identity requests before former PID
-`1946736` was retired. Final service `geosolve-m80-uat.service`, PID `3837538`, served the same
-snapshot at the pre-amendment nomination checkpoint on `http://100.94.63.83:8080/`; the temporary
-service was retained until the final ledger passed and is now stopped. Temporary evidence
-`/tmp/geosolve-m80-temp-verify.mGxuDM/results.tsv`
-has SHA-256 `1628a6c2e87ab519351598371712ace67584616d1573f510c80fbe48f3cd9bea`;
-final historical evidence `/tmp/geosolve-m80-final-verify.M0ThFH/results.tsv` has SHA-256
-`03e93b8fcd4d53231d7e3bafd95c6b4315ba2a12515bb8a4f763a91abc8c0b28`. Every request returned
-HTTP 200 from `100.94.63.83` with zero redirects, no `Location` or `Content-Encoding`, exact media
-type and length, snapshot-identical bytes and the same manifest aggregate; `/` equals
-`index.html`. At that historical checkpoint GitHub Pages remained on accepted M79. The native-
-Fillet scope amendment withdraws
-this candidate from acceptance even though its recorded gate and bytes remain valid. The recorded
-PID `3837538` has exited and the historical snapshot is not served; the service name is now reused
-only by the later accepted candidate and immutable directory `/tmp/geosolve-m80-uat.CPuVgx` above;
-that final listener has also now been retired after Pages publication.
-The historical snapshot may not receive final human UAT acceptance.
+The archived manifest records the individual asset checksums.
 
 ## Withdrawn first nomination evidence
 
@@ -692,34 +619,16 @@ AEST. The complete gate passed formatting, warnings-denied Clippy and Rustdoc, l
 workspace tests, the focused native/WASM matrices, unchanged 270/270 golden check/clean authority,
 benchmarks, M14/M32 budgets, the 113.70-second 256-body sparse crossover, licence/package checks
 and Trunk 0.21.14. The retained 263,727-byte, 3,427-line log is
-`/tmp/geosolve-m80-clean-gate.949c3db.log`, SHA-256
+`geosolve-m80-clean-gate.949c3db.log`, SHA-256
 `389f590c52fba4bc436c4910056e2610d34d6d0fbf1b10dd4b960d985bd8c962`.
 
 The gate-produced `crates/geosolve-demo-web/dist` was copied without rebuilding to
-`/tmp/geosolve-m80-uat.Nnxsu7`. Source and copy matched per file before the directory was frozen
+`geosolve-m80-uat.Nnxsu7`. Source and copy matched per file before the directory was frozen
 `0555` and all seven regular non-symlink files `0444`. Freeze evidence is retained at
-`/tmp/geosolve-m80-freeze-evidence.GWHVEQ`; the C-locale ordered manifest has aggregate SHA-256
+`geosolve-m80-freeze-evidence.GWHVEQ`; the C-locale ordered manifest has aggregate SHA-256
 `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`:
 
-```text
-12861ad65e947547f3ac9b3566717cd228bb7c7177c7138b6340b6005b624d88  API_COMPATIBILITY.md
-ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
-61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
-2511e6d4fe9333fc3a1614a107338c67ef0d372346b9ac6d81163cfcb543cd7f  geosolve-demo-web-29072a7472852a87.js
-19d0d3959e6c497d0a61a063d949e9dec23146900800ae41addee862b50933cf  geosolve-demo-web-29072a7472852a87_bg.wasm
-645e3e393ebee1bd7d30f2e90587561fdd0d92f7f17962d11394e267773ada28  index.html
-88eba0838350e15dada19778c71f53d740558a7ae24d574c1f8661d63b55a59a  styles-a142ac484ea610ba.css
-```
-
-M80 first ran on temporary Tailscale port `18080` under PID `1940172`. Root and every file passed
-proxy-disabled, cache-bypassed identity requests before M79 PID `40049` was retired. Final PID
-`1946736` served the unchanged snapshot at `http://100.94.63.83:8080/` until the replacement passed
-temporary verification. Both temporary and final eight-request ledgers have SHA-256
-`af8eb2f377450feaa7a12baef23f8d06ff034c739421bd80cdeaf4e9ad7c88fa`; evidence lives at
-`/tmp/geosolve-m80-temp-verify.f6vjdf` and `/tmp/geosolve-m80-final-verify.crUf79`. Every response
-is HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected media type and
-length, snapshot-identical body, root equality and the same fetched aggregate. The temporary unit
-was retired only after final verification.
+The archived manifest records the individual asset checksums.
 
 This was mechanical nomination, not human acceptance. `M80-F006` through `M80-F009` withdrew this
 snapshot before UAT acceptance. It remains historical and is no longer served; GitHub Pages

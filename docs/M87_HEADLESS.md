@@ -2,6 +2,10 @@
 
 # Browser-free authoring loop
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 `geosolve-headless` runs managed-code expansion, the native solver, independent acceptance checks,
 scene fitting, SVG composition and PNG rasterization without a browser, web server, DOM, network,
 Node or TypeScript runtime. These pure-Rust `inspect` and `render` paths are suitable for an AI
@@ -75,7 +79,7 @@ permitted semantic delta. The command writes a compiler request to stdout and ch
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  prepare-edit --sample theo-jansen-leg --edit batch.json > /tmp/geosolve-prepared.json
+  prepare-edit --sample theo-jansen-leg --edit batch.json > geosolve-prepared.json
 ```
 
 Build the pinned TypeScript package, then pass the complete prepared request to the Deno mutation
@@ -90,7 +94,7 @@ has no solver or publication authority:
   npm run build
   deno run --no-config --no-lock --no-prompt --cached-only --no-remote \
     --node-modules-dir=manual --ignore-env scripts/mutate-managed-deno.mjs \
-    < /tmp/geosolve-prepared.json > /tmp/geosolve-receipt.json
+    < geosolve-prepared.json > geosolve-receipt.json
 )
 ```
 
@@ -101,9 +105,9 @@ native Intent, solves, independently validates, and only then atomically publish
 ```bash
 cargo run --locked -p geosolve-headless -- \
   resolve-edit --sample theo-jansen-leg \
-  --prepared /tmp/geosolve-prepared.json \
-  --receipt /tmp/geosolve-receipt.json \
-  --out /tmp/geosolve-jansen-r2
+  --prepared geosolve-prepared.json \
+  --receipt geosolve-receipt.json \
+  --out geosolve-jansen-r2
 ```
 
 A stale token, mismatched input, tampered request or receipt, wrong type/unit, non-finite value,
@@ -115,14 +119,14 @@ For the next stateless iteration, inspect the emitted `project.json`, then use i
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  inspect --project /tmp/geosolve-jansen-r2/project.json > inspection-r2.json
+  inspect --project geosolve-jansen-r2/project.json > inspection-r2.json
 ```
 
 ## Render products
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  render --project project.json --out /tmp/geosolve-generation-new
+  render --project project.json --out geosolve-generation-new
 ```
 
 The destination must be a new directory. On Linux, Android, Apple platforms and Redox,
@@ -158,7 +162,7 @@ cargo run --locked -p geosolve-headless -- \
   inspect --sample robotic-harness-backplane > backplane-inspection.json
 
 cargo run --locked -p geosolve-headless -- \
-  render --sample gridfinity-bin-section --out /tmp/geosolve-gridfinity-new
+  render --sample gridfinity-bin-section --out geosolve-gridfinity-new
 ```
 
 The headless regressions open, inspect and render all twenty entries through the ordinary managed

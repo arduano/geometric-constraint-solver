@@ -2,10 +2,14 @@
 
 # M96 manifold implementation and development evidence
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 The PC liquid-cooling manifold now has three **12 mm** passages joined to one
 reservoir, a separate **12 mm two-bend stair passage** between two ports, and a
 **2.4 mm** perimeter silicone groove. The user positively reviewed the initial
-6 mm version and requested this 2026-09-08 amendment. The supervising user accepted
+6 mm version and requested this 2026-09-08 amendment. The maintainer accepted
 the amended layout and closed M96 on 2026-09-08. [M96_CLOSURE.md](M96_CLOSURE.md)
 records the clean-qualified product and frozen artifact; this implementation ledger
 retains the earlier development evidence, including failed and interrupted attempts.
@@ -91,7 +95,7 @@ the fresh results below; earlier timings are not claims about the amended layout
 | `cargo run --locked -p geosolve-headless -- render --sample pc-water-manifold --out target/m96/manifold-render` | Passed native SVG/PNG/project export |
 | `npm --prefix crates/geosolve-demo-web/frontend run wasm:release` | Passed optimized WASM build |
 | `GEOSOLVE_BROWSER_COMPILER_HARNESS=1 VITE_GEOSOLVE_MOCK=0 npm --prefix crates/geosolve-demo-web/frontend run build:ui` | Passed browser compiler-harness build |
-| `GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18101 GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) M92_BROWSER_AUDIT_OUTPUT=/home/arduano/programming/geometric-constraint-solver/target/m96/browser-audit npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/m92-sample-audit.spec.ts --grep "M92 visual workflow: pc-water-manifold" --workers=1` | 1 passed in 2.3 minutes: both edits, Undo/Redo/reload, selection and group visibility |
+| `GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18101 GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) M92_BROWSER_AUDIT_OUTPUT=target/m96/browser-audit npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/m92-sample-audit.spec.ts --grep "M92 visual workflow: pc-water-manifold" --workers=1` | 1 passed in 2.3 minutes: both edits, Undo/Redo/reload, selection and group visibility |
 
 Focused warnings-denied Clippy passed for features, channel lowering/validation,
 restoration tests and navigation. `cargo fmt --all -- --check`, generated fixture
@@ -114,7 +118,7 @@ Integrated run `20260908T012505-e9d6c999` passes all 243 stages (20 fresh and
 223 authenticated reused successes). Source remained unchanged throughout.
 This dirty-tree run is provisional development evidence, not a clean release claim.
 The exact production artifact is frozen at `target/m96/preview-20260908T010723-6a0a9164/` and
-served at `http://100.94.63.83:18101/`. Fresh HTTP byte/MIME and actual-WASM
+served at the archived preview. Fresh HTTP byte/MIME and actual-WASM
 readiness verification passes. The independent receipt/evidence audit is
 `target/m96/qualification-audit.json`; the served artifact receipt is
 `target/m96/preview-20260908T010723-6a0a9164-verification.json`. The audit checks
@@ -126,7 +130,7 @@ to the authenticated prepared output and successful transport receipt.
 ```bash
 nix-shell shell.nix --run 'GEOSOLVE_ALLOW_DIRTY=1 ./scripts/release-gate.sh --resume 20260908T010723-6a0a9164'
 python3 target/m96/audit-qualification.py 20260908T012505-e9d6c999
-node crates/geosolve-demo-web/frontend/scripts/verify-artifact.mjs --manifest target/m96/preview-20260908T010723-6a0a9164/production.json --directory target/m96/preview-20260908T010723-6a0a9164/geosolve-production --url http://100.94.63.83:18101/ --receipt target/m96/preview-20260908T010723-6a0a9164-verification.json
+node crates/geosolve-demo-web/frontend/scripts/verify-artifact.mjs --manifest target/m96/preview-20260908T010723-6a0a9164/production.json --directory target/m96/preview-20260908T010723-6a0a9164/geosolve-production --url ${PREVIEW_URL} --receipt target/m96/preview-20260908T010723-6a0a9164-verification.json
 ```
 
 The verification command ran in the pinned Nix shell with absolute filesystem

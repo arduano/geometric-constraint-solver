@@ -2,8 +2,12 @@
 
 # M44 implementation record: host-state workbench integration
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: complete (2026-07-27). Focused native/WASM/browser M44 qualification passes. The
-supervising user explicitly removed the costly legacy full-M14 carry-forward run from M45
+maintainer explicitly removed the costly legacy full-M14 carry-forward run from M45
 preparation; its incomplete runs remain non-passing historical evidence. M45 later closed as
 a cleanup investigation without human approval, and the intended review moved to M53. M43
 remains complete.
@@ -182,7 +186,7 @@ activity entries while skipping closure traversal when the reason map is empty.
 After that correction, five isolated tower runs measured `62`, `42`, `37`, `39` and
 `44 ms`. `cargo fmt --all -- --check`, the locked all-feature M41 test, the release native
 M14 tower test and release Trunk build passed. A full post-correction M14 browser run was
-stopped by the supervising user after desktop layout and did not print the final pass
+stopped by the maintainer after desktop layout and did not print the final pass
 line, so it is not acceptance evidence. The 100 ms budget, historical desktop/mobile
 assertions and correctness thresholds were unchanged at that checkpoint. The only
 `m14.mjs` source diff then was the required default-route adjustment to `/#/dev/lab`
@@ -190,7 +194,7 @@ after the workbench became `/`. During M45 preparation, a release WASM rebuild, 
 all six fresh-profile M44 browser groups passed again, including exact host-input finding
 capture. The copied shell initially lacked a `chromium` command; an explicit Chrome run
 was stopped after desktop layout and still did not produce the M14 final-pass line. The
-supervising user then explicitly authorized avoiding the costly legacy suite and
+maintainer then explicitly authorized avoiding the costly legacy suite and
 fast-tracking to M45. M44 is complete on focused evidence, not on a retroactive M14 pass.
-Human UAT remains owned by the supervising user. Its historical M45 preparation and completed M53
+Human UAT remains owned by the maintainer. Its historical M45 preparation and completed M53
 scorecard are consolidated in `docs/M53_UAT.md`.

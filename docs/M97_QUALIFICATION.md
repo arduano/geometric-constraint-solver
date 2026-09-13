@@ -2,11 +2,14 @@
 
 # M97 qualification and review preview
 
-This records the prior M97 candidate, preserved at **http://100.94.63.83:18103/**.
-The user-requested default-priority amendment is now qualified and verified at
-**http://100.94.63.83:18104/**; [its report](M97_PRIORITY_DIMENSIONS.md) owns the
-current behavior and evidence. The details below describe the prior candidate.
-Supervising-user acceptance remains pending; M97 is open and M96 remains accepted.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+This records the original focused-dimension M97 candidate. The subsequent
+[default-priority amendment](M97_PRIORITY_DIMENSIONS.md) and
+[source-authored metadata amendment](M97_AUTHORING_IMPLEMENTATION.md) supersede it.
+[M97 closure](M97_CLOSURE.md) identifies the accepted final product.
 
 ## Files, APIs and behavior
 
@@ -48,8 +51,6 @@ domain geometry or explicit branch semantics changed. No golden row changed.
 | Qualified source | `a39f35ade58c3d5a272899dfb4e616d6578a9d14` |
 | Qualified tree | `e1918da331ebd7e54568ede8d0863bf0b65df5dd` |
 | Signed gate run | `20260908T133354-cff36f90` |
-| Frozen manifest | `target/m97/preview-20260908T133354-cff36f90/production.json` |
-| Frozen directory | `target/m97/preview-20260908T133354-cff36f90/geosolve-production` |
 | Artifact | 12 files, 28,392,001 bytes |
 | Files SHA-256 | `53266b0d9ae8cb2288196cbc701fb4189ec975558ecbb0b8dffaf3d58ad64c24` |
 | Manifest SHA-256 | `4837f58da4d3f746473d8999eed0f96e9e8b059348baaf7bf9f7f6072621b8fb` |
@@ -90,13 +91,9 @@ evidence files**, passing in 19.3 s. Its report is
 
 ## Frozen preview and served-byte verification
 
-The production files were copied from the authenticated preparation without a
-rebuild, made read-only and served by `target/m97/serve-preview.mjs`. Its detached
-process was PID 3765605 at nomination; the launch log and PID are under `target/m97/`.
-
 ```bash
 python3 target/m97/freeze-preview.py 20260908T133354-cff36f90
-nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) node crates/geosolve-demo-web/frontend/scripts/verify-artifact.mjs --manifest target/m97/preview-20260908T133354-cff36f90/production.json --directory target/m97/preview-20260908T133354-cff36f90/geosolve-production --url http://100.94.63.83:18103/ --receipt target/m97/preview-artifact-verification.json'
+nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) node crates/geosolve-demo-web/frontend/scripts/verify-artifact.mjs --manifest target/m97/preview-20260908T133354-cff36f90/production.json --directory target/m97/preview-20260908T133354-cff36f90/geosolve-production --url ${PREVIEW_URL} --receipt target/m97/preview-artifact-verification.json'
 python3 target/m97/audit-preview-artifact.py 20260908T133354-cff36f90
 ```
 
@@ -165,5 +162,5 @@ of seconds and block the UI. Scheduling/completion corrections qualify functiona
 results; they do not fix that product cost. Crowded callouts can remain available
 only in the Inspector. Six ordinary callouts and four pins are deliberate bounds.
 
-**Supervising-user acceptance remains pending.** The implementation, mechanical
+**maintainer acceptance remains pending.** The implementation, mechanical
 qualification and verified preview are ready for review; M97 is not closed.

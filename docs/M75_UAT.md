@@ -2,6 +2,10 @@
 
 # M75 focused UAT — hover and primary pointer-owner parity
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete (2026-08-16); the post-F002 replacement and focused F001/F002 hover recheck are
 accepted for scoped closure and exact-verified on GitHub Pages**.
 The caller also accepted U1-U12 for scoped closure, but no separate step-by-step transcript was
@@ -11,24 +15,14 @@ Withdrawn initial candidate source: `f3affff1b62b1cb484a59647c4072c94c3b12ada`
 
 Withdrawn initial candidate tree: `7662abc8b7c71130f54fbf2745afa60f0d286431`
 
-Historical initial snapshot endpoint: `http://100.94.63.83:8080/` (no longer serving these bytes)
+Historical initial snapshot endpoint: the archived preview (no longer serving these bytes)
 
-Historical initial server PID: `3801058` (exited; retained command-runner session `47845`)
-
-Withdrawn immutable snapshot: `/tmp/geosolve-m75-uat.hUSaG7` (directory `0555`, files `0444`)
+Withdrawn immutable snapshot: `geosolve-m75-uat.hUSaG7` (directory `0555`, files `0444`)
 
 Withdrawn ordered-manifest aggregate:
 `69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 17,616 | `be4769bf0f57d1f27d7068e6e1e47a41305a320d08948fa306a38ca620db92b3` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-fc3fd24fd70a16aa.js` | 33,221 | `1e24182d7c61f3681b5fd62591a2f33b4ada6e3a1d3fd2fe884ad3484a2060bc` |
-| `geosolve-demo-web-fc3fd24fd70a16aa_bg.wasm` | 6,109,194 | `76944eddca4ca6c95ad967c0b5b8dc215d292ca07515740fe3914588c1f4f70b` |
-| `index.html` | 27,478 | `e00a829f0f954422fd9c5454110fd67d979b5fde42934ac230fbf34822c18430` |
-| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+The archived manifest records the per-file sizes and checksums.
 
 The initial candidate's exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 at the candidate
@@ -40,7 +34,7 @@ rebuilding and contains exactly seven regular non-symlink files.
 
 Proxy/cache-bypassed identity requests for all seven files and `/` return HTTP 200 with exact media
 types, lengths and bytes, no redirect or content encoding; `/` equals `index.html`, and the fetched
-aggregate matches. Evidence is retained at `/tmp/geosolve-m75-http-verify.sQGN1B`. The unchanged
+aggregate matches. Evidence is retained at `geosolve-m75-http-verify.sQGN1B`. The unchanged
 M72 compatibility and M74 Chromium scripts pass at `1440x900` and `1024x720`; their SHA-256 values
 are `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`. These mechanical checks do
@@ -57,26 +51,16 @@ Withdrawn replacement source: `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`
 
 Withdrawn replacement tree: `7bff59c5d4d36d1acb687a93d78707b32e323d65`
 
-Served historical endpoint: `http://100.94.63.83:8080/`
+Served historical endpoint: the archived preview
 
-Historical server PID: `4026985` (retired)
+Server log: `geosolve-m75-f001-uat.2Ju7gq.server.log`
 
-Server log: `/tmp/geosolve-m75-f001-uat.2Ju7gq.server.log`
-
-Withdrawn immutable snapshot: `/tmp/geosolve-m75-f001-uat.2Ju7gq` (directory `0555`, files `0444`)
+Withdrawn immutable snapshot: `geosolve-m75-f001-uat.2Ju7gq` (directory `0555`, files `0444`)
 
 Withdrawn ordered-manifest aggregate:
 `9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 18,270 | `b2c503a0ca2ad33c0fcc137666a349a773630fb712a4cdd50f8fea64454614d0` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-41f4150de02af486.js` | 33,221 | `39eebb2d778b7470d0b2bd552ab7716cb12e38fe072bca05905e1f936fc81f09` |
-| `geosolve-demo-web-41f4150de02af486_bg.wasm` | 6,117,357 | `cc194398055211d420a82b058fb83cf3d3e2e54bcded5c6c5116cca086be3d7d` |
-| `index.html` | 27,478 | `fa50308533c8a98f2c8f37b63a72414ddba2f33d9a2f4339157779a7a2e875bc` |
-| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+The archived manifest records the per-file sizes and checksums.
 
 The exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 on the source
@@ -86,7 +70,7 @@ gate-produced seven files were frozen without rebuilding.
 
 Proxy/cache-bypassed identity requests for `/` and every file return HTTP 200 with exact media
 types, lengths and bytes, no redirect or content encoding; `/` equals `index.html` and the fetched
-aggregate matches. Evidence is retained at `/tmp/geosolve-m75-f001-http-verify.kXc5g5`. The
+aggregate matches. Evidence is retained at `geosolve-m75-f001-http-verify.kXc5g5`. The
 unchanged M72 and M74 Chromium scripts pass at both desktop sizes; their SHA-256 values are
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`.
@@ -100,7 +84,7 @@ radius gesture. The corrected provisional build enumerates the complete paint st
 uncaptured Fillet authoring, reconciles the exact headless `SceneFilletHit::Radius` owner through
 one move/down helper, otherwise retains the top painted item without promoting an owner, and leaves
 the coordinator as final authority. Demo-web 117/117, native/WASM M75 11/11, focused Clippy, WASM,
-formatting, diff and unchanged-golden checks pass. `/tmp/m75_f001_browser_check.mjs`, SHA-256
+formatting, diff and unchanged-golden checks pass. `m75_f001_browser_check.mjs`, SHA-256
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes 6/6 on that
 provisional local build.
 
@@ -115,26 +99,16 @@ Accepted product source: `553fd912730b1de3b39736c49b669e94cabdd2c3`
 
 Accepted product tree: `83df4efb99ca66cf0cebc0caec4515b61afd33cf`
 
-Historical accepted endpoint: `http://100.94.63.83:8080/` (now serving M76 bytes)
+Historical accepted endpoint: the archived preview (historical M75 acceptance)
 
-Historical server PID: `37152` (retired before the M76 nomination)
+Server log: `geosolve-m75-f002-uat.hlSQYT.server.log`
 
-Server log: `/tmp/geosolve-m75-f002-uat.hlSQYT.server.log`
-
-Immutable snapshot: `/tmp/geosolve-m75-f002-uat.hlSQYT` (directory `0555`, files `0444`)
+Immutable snapshot: `geosolve-m75-f002-uat.hlSQYT` (directory `0555`, files `0444`)
 
 Ordered-manifest aggregate:
 `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 18,564 | `b99a56b9c1aa8679538726c95b1ed29729174ff2945a44be1ea07b08d6f22cf2` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-35551745a5e20011.js` | 33,221 | `ade1f75e65ca2636f29259c7b3716d375e0b3886a6ba1bdf61817686b2dad2d2` |
-| `geosolve-demo-web-35551745a5e20011_bg.wasm` | 6,117,030 | `9d01af2fee2d7ce3884020579187037eb617fe73ede243e491842ba044adf9dc` |
-| `index.html` | 27,478 | `9bff14da5388601e8d48a175e65c033141f383736fcd9da4065350eb9baebf33` |
-| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+The archived manifest records the per-file sizes and checksums.
 
 The exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 in 480.94 seconds
@@ -142,26 +116,15 @@ on the source above. Demo-web passes 117/117, M75 parity passes 11/11 natively a
 reviewed golden remains unchanged at 270/270, the sparse crossover completes in 141.82 seconds and
 Trunk release assembly passes. The seven files above are the gate output frozen without rebuilding.
 
-PID `37152` served the exact argv before retirement:
-
-```text
-/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m75-f002-uat.hlSQYT
-```
-
-Old PID `4026985` is retired. Proxy/cache-bypassed identity requests for `/` and all seven files
-return HTTP 200 with exact media types, lengths and bytes, no redirect or content encoding; `/`
-equals `index.html`, and the fetched aggregate matches. Evidence is retained at
-`/tmp/geosolve-m75-f002-http-verify.1nRxtz`.
-
-The unchanged M72 and M74 browser scripts pass over Tailscale at both desktop sizes; their SHA-256
+The unchanged M72 and M74 browser scripts pass over preview at both desktop sizes; their SHA-256
 values are `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`. M75 script
-`/tmp/m75_f001_browser_check.mjs`, SHA-256
+`m75_f001_browser_check.mjs`, SHA-256
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes 6/6 on the same
 frozen bytes, including native authoring and grip/spoke/rail hover/capture/release.
 
 This evidence made the snapshot ready for human UAT; mechanical evidence alone did not pass a
-scorecard item. The supervising caller subsequently reported the candidate looking good and
+scorecard item. The maintainer subsequently reported the candidate looking good and
 authorized closure. The scoped approval below accepts the current candidate, focused F001/F002
 hover recheck and U1-U12 without claiming a separately recorded observation for every prepared
 step. At that approval checkpoint, GitHub Pages remained accepted M74 authority until M75
@@ -183,8 +146,8 @@ in `docs/M75_IMPLEMENTATION.md`.
 The public root and every artifact path return HTTP 200 with zero redirects and match the artifact
 byte-for-byte; `/` equals `index.html`, asset URLs are repository-prefixed and media types are
 correct. M72/M74 checks pass at both desktop sizes and M75 passes 6/6 on the public URL. Evidence is
-retained at `/tmp/geosolve-m75-pages-verify.NkQwem`. GitHub Pages is final public-byte authority;
-the frozen Tailscale snapshot remains accepted candidate evidence but is no longer served at the
+retained at `geosolve-m75-pages-verify.NkQwem`. GitHub Pages is final public-byte authority;
+the frozen preview snapshot remains accepted candidate evidence but is no longer served at the
 shared endpoint.
 
 ## Review matrix
@@ -432,32 +395,32 @@ and never looks like an unrelated Select-mode highlight.
 
 Carried deferred items:
 
-- M74-U1 / M75-U1: **Pass for scoped closure under supervising approval**.
-- M74-U2 / M75-U2: **Pass for scoped closure under supervising approval**.
-- M74-U3 / M75-U3: **Pass for scoped closure under supervising approval**.
-- M74-U4 / M75-U4: **Pass for scoped closure under supervising approval**.
-- M74-U5 / M75-U5: **Pass for scoped closure under supervising approval**.
-- M74-U6 / M75-U6: **Pass for scoped closure under supervising approval**.
-- M74-U7 / M75-U7: **Pass for scoped closure under supervising approval**.
-- M74-U8 / M75-U8: **Pass for scoped closure under supervising approval**.
+- M74-U1 / M75-U1: **Pass for scoped closure under maintainer approval**.
+- M74-U2 / M75-U2: **Pass for scoped closure under maintainer approval**.
+- M74-U3 / M75-U3: **Pass for scoped closure under maintainer approval**.
+- M74-U4 / M75-U4: **Pass for scoped closure under maintainer approval**.
+- M74-U5 / M75-U5: **Pass for scoped closure under maintainer approval**.
+- M74-U6 / M75-U6: **Pass for scoped closure under maintainer approval**.
+- M74-U7 / M75-U7: **Pass for scoped closure under maintainer approval**.
+- M74-U8 / M75-U8: **Pass for scoped closure under maintainer approval**.
 
 New M75 items:
 
-- M75-U9: **Pass for scoped closure under supervising approval**.
-- M75-U10: **Pass for scoped closure under supervising approval**.
-- M75-U11: **Pass for scoped closure under supervising approval**.
-- M75-U12: **Pass for scoped closure under supervising approval**.
+- M75-U9: **Pass for scoped closure under maintainer approval**.
+- M75-U10: **Pass for scoped closure under maintainer approval**.
+- M75-U11: **Pass for scoped closure under maintainer approval**.
+- M75-U12: **Pass for scoped closure under maintainer approval**.
 - M75-F001 targeted recheck: **Pass** on the accepted post-F002 candidate.
 - M75-F002 targeted recheck: **Pass** on the accepted post-F002 candidate, including the
   grip/spoke/rail correction.
-- Final M75 approval: **Pass for scoped closure** — the supervising caller reported “Looking good”
+- Final M75 approval: **Pass for scoped closure** — the maintainer reported “Looking good”
   and authorized closure on 2026-08-16.
 - Exact GitHub Pages publication and hosted-byte verification: **Pass** — run `31939764951`,
   artifact `9261974799`, deployment `5929879555`, with all public bytes and browser matrices
   verified.
 
-These dispositions come from explicit supervising-human approval, not automated evidence alone.
+These dispositions come from explicit maintainer approval, not automated evidence alone.
 The detailed U1-U12 steps were not individually logged, so their scoped passes must not be read as
 a step-by-step execution transcript. The exact accepted source/tree, immutable manifest and
 endpoint remain recorded above. The final public artifact is recorded separately because its
-repository-prefixed assembly differs from the frozen Tailscale candidate.
+repository-prefixed assembly differs from the frozen preview candidate.

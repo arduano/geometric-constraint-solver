@@ -2,9 +2,13 @@
 
 # M75 — hover and primary pointer-owner parity
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete (2026-08-16); accepted for scoped closure and exact-verified on GitHub Pages**.
 The accepted product is the clean-qualified, byte-verified
-post-F002 candidate below. The caller accepted that candidate, the focused F001/F002 hover recheck
+post-F002 candidate below. the maintainer accepted that candidate, the focused F001/F002 hover recheck
 and U1-U12 for scoped closure; this is not a claim that every prepared UAT step was individually
 executed or logged. Exact public publication passes below. M76 subsequently reached scoped
 approval, final qualification and exact public verification. Final M76 source
@@ -129,24 +133,11 @@ a separate step-by-step human transcript.
   pointer-down action itself.
 - Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant
   native/WASM checks, unchanged golden check/clean, Trunk and the complete clean release gate.
-- Freeze and byte-verify an immutable Tailscale candidate. Run `docs/M75_UAT.md` at both supported
+- Freeze and byte-verify an immutable preview candidate. Run `docs/M75_UAT.md` at both supported
   desktop sizes and multiple zoom/tolerance fringes, including every deferred M74-U1 through
   M74-U8 item and accessibility review. Keep the candidate live through follow-up fixes.
-- After explicit supervising-human approval, deploy the exact accepted source through GitHub
+- After explicit maintainer approval, deploy the exact accepted source through GitHub
   Pages and verify the hosted artifact byte-for-byte before closing M75.
-
-Initial mechanical nomination record (2026-08-16; withdrawn for hands-on use by M75-F001): exact
-clean product source
-`f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
-`7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete release gate, including the
-unchanged 270-row golden oracle and native/WASM M75 parity. The gate-produced distribution was
-copied without rebuilding to seven-file read-only snapshot `/tmp/geosolve-m75-uat.hUSaG7`, whose
-C-locale ordered-manifest aggregate is
-`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`. It was served at
-`http://100.94.63.83:8080/` by PID `3801058`, which has since exited; direct byte/media verification
-and both retained two-size Chromium checks pass. This record satisfies only the mechanical portion
-of M75-Q001. M74-U1 through M74-U8, M75-U9 through M75-U12, final human approval and GitHub Pages
-publication remain open.
 
 Finding M75-F001 (2026-08-16): on that candidate, Fillet clicks accepted native lines and points
 while uncaptured authoring pointer moves were deliberately discarded, leaving no
@@ -154,19 +145,6 @@ while uncaptured authoring pointer moves were deliberately discarded, leaving no
 replacement shares the exact authoring candidate resolution between move and down, carries a
 painted computed-corner hint only as independently authenticated intent, and keeps captured radius
 movement editor-owned. Focused native and WASM parity pass 11/11.
-
-M75-F001 replacement qualification/nomination record (2026-08-16; withdrawn by M75-F002): exact
-clean product source `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`, tree
-`7bff59c5d4d36d1acb687a93d78707b32e323d65`, passes the complete release gate with native/WASM
-M75 parity 11/11, demo-web 116/116, unchanged 270-row golden evidence and the 143.27-second sparse
-crossover. Its gate-produced seven-file snapshot `/tmp/geosolve-m75-f001-uat.2Ju7gq` has ordered
-aggregate `9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967` and was served at
-`http://100.94.63.83:8080/` by PID `4026985`, which is retired, with historical log
-`/tmp/geosolve-m75-f001-uat.2Ju7gq.server.log`. HTTP evidence is retained at
-`/tmp/geosolve-m75-f001-http-verify.kXc5g5`; the unchanged M72 and M74 scripts, hashes
-`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
-`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`, pass at both desktop sizes.
-This artifact is now historical evidence and not human-UAT authority.
 
 Finding M75-F002 (2026-08-16): in `fillet-workshop`, collecting point
 `6600000000000000000000000000004f` and curve `66000000000000000000000000000038`
@@ -178,7 +156,7 @@ authoring, reconciles the exact headless `SceneFilletHit::Radius` owner through 
 move and down, and otherwise falls back to the top painted item with no promoted owner. The
 coordinator remains final authority. Demo-web passes 117/117, native/WASM M75 parity remains 11/11,
 and focused Clippy, WASM, formatting, diff and unchanged-golden checks pass. Browser script
-`/tmp/m75_f001_browser_check.mjs` at SHA-256
+`m75_f001_browser_check.mjs` at SHA-256
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6 on the
 provisional corrected local build.
 
@@ -187,27 +165,6 @@ and spoke markup, so those visible surfaces could not enter the paint reconcilia
 shared radius-affordance group now carries the same `FeatureCorner` identity as its grip; the
 presentation regression freezes grip, rail and spoke extraction, and the same browser run samples
 the visible spoke and rail through hover/capture/release before replacement qualification.
-
-Post-F002 replacement qualification/nomination record (2026-08-16): exact clean product source
-`553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
-`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes the complete release gate in 480.94 seconds,
-including demo-web 117/117, M75 native/WASM 11/11, unchanged 270/270 golden, the 141.82-second
-sparse crossover and Trunk. The exact seven-file gate output was frozen without rebuilding to
-`/tmp/geosolve-m75-f002-uat.hlSQYT` at directory mode `0555`/file mode `0444`, ordered aggregate
-`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`. PID `37152` served it at
-`http://100.94.63.83:8080/` with log `/tmp/geosolve-m75-f002-uat.hlSQYT.server.log`; old PID
-`4026985` was already retired. PID `37152` was subsequently retired before M76 took the shared
-endpoint. HTTP evidence `/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies exact
-status/media/length/bytes for `/` and all seven files, no redirect/content encoding, root equality
-and fetched aggregate. Tailscale M72/M74 checks pass at both desktop sizes with script hashes
-`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
-`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`; M75 hash
-`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6. This snapshot is
-the accepted M75 product candidate. On 2026-08-16 the supervising caller reported it looking good
-and authorized final closure. That scoped decision accepts the current candidate, focused
-F001/F002 hover recheck and U1-U12 without representing the detailed scorecard as an individually
-logged replay. At that approval checkpoint, Pages stayed on accepted M74 until publication of the
-accepted product and hosted-byte verification completed.
 
 Final public publication record (2026-08-16): documentation-only approval descendant
 `f80235978fbcdccd58c45a08bccf3969a20110c9`, tree
@@ -219,7 +176,7 @@ Final public publication record (2026-08-16): documentation-only approval descen
 `8ac419fbea39c306e6ee529309f2d3965c93d4ff0459fd2e21179714e9b89c1d`; the seven-file manifest
 aggregate is `4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`. Every public file and
 root exact-verifies, and M72/M74 two-size plus M75 6/6 Chromium checks pass. GitHub Pages was M75's
-final public-byte authority at closure; completed M76 now supersedes it. The frozen M75 Tailscale
+final public-byte authority at closure; completed M76 now supersedes it. The frozen M75 preview
 snapshot remains accepted historical candidate evidence.
 
 ## Acceptance

@@ -2,34 +2,19 @@
 
 # M85 implementation ledger — Responsive retained workbench presentation
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete and closed on 2026-08-28**. Exact product source `5c265e2` passes the clean
-release gate; its no-rebuild immutable candidate passes local and Tailscale byte verification, the
-frozen-byte browser profile and native M85-U10 flat-adapter evidence. The supervising user's close
+release gate; its no-rebuild immutable candidate passes local and preview byte verification, the
+frozen-byte browser profile and native M85-U10 flat-adapter evidence. The maintainer's close
 decision accepts M85-U1 through M85-U12 without claiming a separately logged row-by-row replay.
 Approval head `e8dfec3` passes Pages publication and exact hosted-byte verification, the retained
 services are retired, and Pages is final M85 public-byte authority. `docs/M85_GOALS.md` owns the
 contract.
 
 ## Exact accepted product candidate
-
-- Source: `5c265e211e20dabc8a27f6402d530f5d645ff15c`.
-- Tree: `b55d012443f4dbf7551e30041da2912e666de9db`.
-- Source state at qualification: clean.
-- Product nomination: **accepted by milestone-level supervising-user approval**.
-- Frozen distribution: `/tmp/geosolve-m85-uat.QX8fU3Q6`, directories/files `0555`/`0444`, seven
-  regular files, zero symlinks, ordered-manifest aggregate
-  `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`.
-- Nomination evidence: `/tmp/geosolve-m85-freeze-evidence.uj9HviX1`.
-- Historical local endpoint: `http://127.0.0.1:18100/`, PID `2008536`, invocation
-  `d9fdcccfa9ce46deafcf46f7b6148e6e`.
-- Historical retained Tailscale endpoint: `http://100.94.63.83:8080/`, PID `2008538`, invocation
-  `2c70402e2b2a45a5810ea29722f25f95`.
-- Both services served only the same immutable snapshot; their complete eight-path HTTP ledgers are
-  byte-identical at SHA-256
-  `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
-- Both services are stopped: `geosolve-m85-local-uat.service` and `geosolve-m85-uat.service` are
-  inactive/dead with `MainPID=0`, and both former endpoints return `000`/refuse connections.
-- GitHub Pages publication: **passed and exact-verified; final M85 public-byte authority**.
 
 ## Findings
 
@@ -40,7 +25,7 @@ under the milestone-level scorecard**.
 
 Reproduction authority is exact M84-F012 source `84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`,
 tree `429ed56d2a5b3988d6604079d19e1002f9049d64` and immutable snapshot
-`/tmp/geosolve-m84-f012-uat.nMOymIIM`. Open the PC Water Manifold with annotations visible, then
+`geosolve-m84-f012-uat.nMOymIIM`. Open the PC Water Manifold with annotations visible, then
 middle-button pan or issue a wheel burst. The original focused Chromium diagnosis recorded:
 
 | Operation | Raw samples | Elapsed | Viewport child replacements | p95 frame gap |
@@ -223,14 +208,14 @@ The following focused browser command exited `0`, 5/5 in `2.2m`, but ran against
 pre-F003 implementation ancestor rather than source `fd2c560` or frozen final bytes:
 
 ```bash
-cd /tmp/m85-pw
-NO_COLOR=1 npx playwright test --config=/tmp/m85-pw/m85-final-profile.config.cjs
+cd m85-pw
+NO_COLOR=1 npx playwright test --config=m85-pw/m85-final-profile.config.cjs
 ```
 
 Harness SHA-256 is `0248cf43dfae7d49c2f834b2b900a5cd0faa8b85209e40f77cfc5b31cede0947`;
 configuration SHA-256 is
 `2093af3a2dad08968ebfe64c6265b931c5b51215627ba90b4d0f36f1191c0079`. Evidence directory is
-`/tmp/geosolve-m85-profile.4X1M57ap`; the complete captured log is
+`geosolve-m85-profile.4X1M57ap`; the complete captured log is
 `profile.typescript`, SHA-256
 `8cab5533122f07667076ce0577115a0d00da88ac64cc8d85a7a4d90683559979`.
 
@@ -250,22 +235,12 @@ The exact clean Nix release gate for source
 `b55d012443f4dbf7551e30041da2912e666de9db`, ran from
 `2026-08-28T06:40:49.038108300+10:00` through
 `2026-08-28T07:13:16.391445220+10:00` and exited `0`. Its 6,993-line, 456,580-byte log is
-`/tmp/geosolve-m85-gate.8vK5wDu4/release-gate.log`, SHA-256
+`geosolve-m85-gate.8vK5wDu4/release-gate.log`, SHA-256
 `0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`. The gate passes workspace
 warnings-denied Clippy/tests/doc tests, unchanged 271-row golden checks, WASM parity and adapter
 checks, TypeScript Intent/sketch-code/package verification, warnings-denied Rustdoc, benchmark
 compilation, release performance, 256-body linkage crossover, cargo-deny licences and the final
 Trunk release build.
-
-Without rebuilding, the gate-produced `dist` is frozen at `/tmp/geosolve-m85-uat.QX8fU3Q6`.
-It contains exactly seven regular files and zero symlinks at directory/file modes `0555`/`0444`;
-its ordered-manifest aggregate is
-`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Complete freeze evidence is
-`/tmp/geosolve-m85-freeze-evidence.uj9HviX1`. Local service PID `2008536`, invocation
-`d9fdcccfa9ce46deafcf46f7b6148e6e`, serves that snapshot at `http://127.0.0.1:18100/`; retained
-Tailscale service PID `2008538`, invocation `2c70402e2b2a45a5810ea29722f25f95`, serves the same
-snapshot at `http://100.94.63.83:8080/`. Both complete eight-path HTTP ledgers have SHA-256
-`305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
 
 The final frozen-byte Playwright profile passes 5/5 in `2.2m`. Its captured log SHA-256 is
 `d1174515c320e1f3a0e006bbaad47cc47ba0aeda52fe9bf05c956d91750951c7`, and summary SHA-256 is
@@ -282,7 +257,7 @@ Final-source native flat-adapter evidence passes 19/19 exact tests. It covers ca
 one-paint work admission, projectional/flat toolbar and terminal-pan parity, authenticated retained
 hover and pointer leave, transient/terminal history and work neutrality, shared retained-
 coordinator receipts, flat v6 compatibility bootstrap and strict v1-v6 history-free normalization.
-Evidence is `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
+Evidence is `geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
 `5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545`,
 `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79` and
 `ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`.
@@ -292,10 +267,10 @@ Evidence is `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-
 - [x] Pass workspace tests, WASM parity/checks, unchanged 271-row clean golden, release performance,
   warnings-denied workspace Clippy/Rustdoc and the complete clean release gate from final committed
   source.
-- [x] Freeze the gate-produced distribution without rebuild, exact-verify local/Tailscale service
+- [x] Freeze the gate-produced distribution without rebuild, exact-verify local/preview service
   bytes and pass the five-test browser profile against those exact bytes.
 - [x] Record final-source native flat-adapter M85-U10 evidence and nominate the immutable candidate.
-- [x] Receive milestone-level supervising-user approval for M85-U1 through M85-U12 on 2026-08-28.
+- [x] Receive milestone-level maintainer approval for M85-U1 through M85-U12 on 2026-08-28.
   This accepts the qualified candidate without claiming a separately logged row-by-row replay.
 - [x] After approval, publish the accepted descendant to GitHub Pages, download and exact-verify
   the separately rebuilt artifact and hosted paths, retire both retained services and close M85.
@@ -314,16 +289,8 @@ aggregate is `8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`.
 
 Public `/` and all seven artifact paths return HTTP 200 with zero redirects, exact MIME,
 `Content-Length` and artifact bytes, no `Location` or `Content-Encoding`, and `/` is byte-identical
-to `index.html`. Evidence `/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` has SHA-256
+to `index.html`. Evidence `geosolve-m85-pages-verify.39FJNL/results.tsv` has SHA-256
 `206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`.
-
-This Pages artifact is a fresh repo-prefixed build and is not byte-identical to the frozen UAT
-snapshot. The snapshot aggregate
-`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5` remains historical
-candidate evidence rather than public-byte authority. Product source `5c265e2` is an ancestor of
-approval head `e8dfec3`; only the eight M85 closeout documents differ. Both user services are now
-inactive/dead with `MainPID=0`, and both former endpoints refuse connections. M85 is complete and
-closed; M86 may open as a separate bug-fix milestone after this closeout commit.
 
 ## Semantic-preservation ledger
 

@@ -2,6 +2,10 @@
 
 # M45 cleanup investigation record
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Status
 
 M45 is complete as an investigation and UAT-point-capture checkpoint; it records no human
@@ -103,7 +107,7 @@ host-semantics consumer evidence at that checkpoint.
 5. M49 extracted retained legacy semantics and completed a zero-unowned-assertion ledger (complete).
 6. M50 removed the old E2E stack, `#/dev/lab`, playground code and obsolete glue (complete).
 7. M51 hardened one workbench, M52 direct-qualified the minimal UAT candidate and M53 completed
-   supervising-human UAT (complete).
+   maintainer UAT (complete).
 
 This ordering removes the legacy application without losing regression authority or
 pretending browser-only delivery is a durable product capability.

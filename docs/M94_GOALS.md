@@ -2,7 +2,11 @@
 
 # M94 — accelerated canvas viewport
 
-Status: **accepted and closed on 2026-09-07**. [M94_CLOSURE.md](M94_CLOSURE.md) records supervising-user acceptance, final audit, exact product qualification and retained limits. M93 remains accepted and closed.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **accepted and closed on 2026-09-07**. [M94_CLOSURE.md](M94_CLOSURE.md) records maintainer acceptance, final audit, exact product qualification and retained limits. M93 remains accepted and closed.
 
 ## Outcome and ownership
 
@@ -25,7 +29,7 @@ parallel DOM scene is an implementation path. Native SVG/PNG export APIs remain 
 5. Migrate browser geometry witnesses to typed presented-frame evidence plus actual canvas pixels;
    preserve complete source/workspace witnesses, numeric drag assertions and all test obligations.
 6. Qualify the stable candidate using M93's proportional policy, review visuals, and deliver a
-   separate candidate for supervising-user acceptance. Accepted M92 service remains untouched.
+   separate candidate for maintainer acceptance. Accepted M92 service remains untouched.
 
 ## Acceptance
 
@@ -61,7 +65,7 @@ Exact implementation evidence and remaining work belong in [M94_IMPLEMENTATION.m
 
 ## Authorized navigation optimization — 2026-09-07
 
-The supervising user requested implementation of the measured dense-fixture optimizations,
+The maintainer requested implementation of the measured dense-fixture optimizations,
 prioritizing non-mutating pan, zoom and hover. M94-F002 follows the reproduced bridge and renderer
 bottlenecks in [the diagnosis](M94_PERFORMANCE_DIAGNOSIS.md). Keep document/UI projections out of
 camera updates, reproject authenticated retained scenes, retain GPU paths across exact
@@ -77,7 +81,7 @@ This work is included in the accepted M94 scope; its measured dense-frame limits
 
 ## Authorized dense-backplane drag optimization — 2026-09-07
 
-The supervising user requested a further performance audit and a correction if it fits this
+The maintainer requested a further performance audit and a correction if it fits this
 milestone. M94-F003 reproduces the reported two-second pause principally at point-drag release
 and identifies repeated checkpoint validation/serialization and full preview UI publication.
 The bounded correction reuses validated immutable internal state and the existing frame-only

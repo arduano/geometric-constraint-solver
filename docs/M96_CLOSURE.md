@@ -1,30 +1,28 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M96 acceptance and fresh-session handoff — 2026-09-08
+# M96 water channels: acceptance and closure — 2026-09-08
 
-**M96 is accepted and closed.** The supervising user stated “sounds good yeah, close the
-milestone please” after reviewing the completed 12 mm manifold amendment. This accepts the
-delivered layout and documented limits; it does not assert an unrecorded exhaustive human
-replay. No further milestone is scoped by this closeout.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+**M96 was accepted and closed on 2026-09-08.** Maintainer acceptance covers the
+amended 12 mm water channels, separate stair-shaped passage, silicone groove and
+recorded limits. A separate exhaustive human replay was not recorded.
 
 ## Accepted checkpoint
 
 | Item | Value |
 | --- | --- |
-| Branch | `m92/integration` (inherited name; accepted through M96) |
 | Product source | `d77228559f9b860ce69cc03ceea6a5d34d8a3660` |
 | Product tree | `bb221d35892a82d0bd4a89d63c190fb3c1ce381f` |
 | Complete clean-source gate | `20260908T090848-ddc447b8` |
-| Accepted endpoint | `http://100.94.63.83:18101/` |
-| Frozen manifest | `target/m96/preview-20260908T010723-6a0a9164/production.json` |
-| Frozen files | `target/m96/preview-20260908T010723-6a0a9164/geosolve-production` |
 | Artifact | 12 files, 28,117,782 bytes |
 | Files SHA-256 | `ac6725a875bee99d3536ec239f519165a82c35cab7312c1a3f26e6c163552dc1` |
 | Manifest SHA-256 | `802e70ec15c4ad5aa2d0d8f08e99bf38282d682097dc0830f46082b09e0b90df` |
 
 The closure commit contains prose only; `git log -1` identifies that documentation descendant.
-Its checks preserve the qualified product and frozen bytes. The primary worktree remains the
-continuation point. No branch rename, history rewrite, merge, push or Pages publication is part
+Its checks preserve the qualified product and frozen bytes.
 of this closeout.
 
 ## Delivered files, API and geometry
@@ -83,7 +81,7 @@ Executed qualification and closeout commands:
 ```bash
 nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260908T012505-e9d6c999'
 python3 target/m96/audit-clean-qualification.py 20260908T090848-ddc447b8
-nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) node crates/geosolve-demo-web/frontend/scripts/verify-artifact.mjs --manifest /home/arduano/programming/geometric-constraint-solver/target/m96/preview-20260908T010723-6a0a9164/production.json --directory /home/arduano/programming/geometric-constraint-solver/target/m96/preview-20260908T010723-6a0a9164/geosolve-production --url http://100.94.63.83:18101/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m96/closure-artifact-verification.json'
+nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) node crates/geosolve-demo-web/frontend/scripts/verify-artifact.mjs --manifest target/m96/preview-20260908T010723-6a0a9164/production.json --directory target/m96/preview-20260908T010723-6a0a9164/geosolve-production --url ${PREVIEW_URL} --receipt target/m96/closure-artifact-verification.json'
 python3 target/m96/audit-closure-artifact.py 20260908T090848-ddc447b8
 ./scripts/release-gate.sh --docs-only --since d77228559f9b860ce69cc03ceea6a5d34d8a3660
 git diff --check
@@ -110,18 +108,7 @@ evidence and needs no rebuild or repeat solver/browser qualification.
   It preserves existing rank policy and actual free motion; a general speedup for rank-deficient
   models is not claimed. The existing active-bound positive-cost control remains fail-closed.
 
-No M96 implementation blocker or acceptance action remains. Read this handoff, [START_HERE.md](../START_HERE.md),
-[PLAN.md](../PLAN.md), [ARCHITECTURE.md](../ARCHITECTURE.md), [ACCEPTANCE.md](../ACCEPTANCE.md)
-and [SCENARIOS.md](SCENARIOS.md) before further implementation, following `AGENTS.md`.
-The previous M95 checkpoint remains documented in [M95_CLOSURE.md](M95_CLOSURE.md).
-
-Local receipts, screenshots and the frozen product live under ignored `target/m96/`;
-authenticated gate evidence lives under `target/release-gate/`. Preserve both for continuity.
-If an older saved workspace is open, load a fresh **PC liquid-cooling manifold** sample.
-Frozen local files and serving processes are not guaranteed to survive cleanup or reboot.
-Moving or restarting identical artifact bytes requires the bounded transport/readiness check
-from [RELEASE_QUALIFICATION.md](RELEASE_QUALIFICATION.md); do not rebuild and describe new bytes
-as the same accepted artifact. Restart the preserved files, if needed, with
-`node target/m96/serve-preview.mjs` after checking listener ownership. The launcher reads
-`target/m96/preview-location.json`. No build, test or release-gate process is left running
-by this closeout; the accepted preview service remains available.
+No M96 implementation blocker or acceptance action remains. The previous checkpoint
+is documented in [M95 closure](M95_CLOSURE.md). Current setup and qualification use
+the [documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Archived local receipts and previews are not current deployment instructions.

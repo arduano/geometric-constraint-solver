@@ -2,6 +2,10 @@
 
 # M40 headless-editor qualification record
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Status
 
 Complete and historical as of 2026-07-26. The requirements, proposed APIs, gap tables,
@@ -483,7 +487,7 @@ digest. Native and WASM harnesses must consume those bytes unchanged.
    behavior and accessibility. It must invoke the WASM corpus runner rather than
    compute picks, snaps, projections, applicability or lifecycle expectations in JS.
 4. Obtain the missing sketch-owned accepted redundancy/conflict presentation DTO (or
-   explicitly narrow M40 only with caller-approved acceptance/plan change). Wire it
+   explicitly narrow M40 only with maintainer-approved acceptance/plan change). Wire it
    through coordinator DTOs before adding its matrix row’s tests.
 5. Add a source-policy assertion for any newly introduced adapter module and run the
    manifest validator in the normal native and browser gate. Clear the unrelated
@@ -744,5 +748,5 @@ Qualification passes: `cargo fmt --all -- --check`, `git diff --check`, locked
 warnings-denied workspace Clippy, full locked workspace tests, locked
 `wasm32-unknown-unknown` check, supported release Trunk build, and release
 `e2e/m40.mjs` 14/14. Cargo's existing duplicate `license`/`license-file` warnings are
-unchanged. Mechanical remediation is complete; the supervising human subsequently
+unchanged. Mechanical remediation is complete; the maintainer subsequently
 passed the targeted UAT-C1-F5 recheck and explicitly approved M40.7 on 2026-07-26.

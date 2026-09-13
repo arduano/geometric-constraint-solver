@@ -1,5 +1,9 @@
 # M64 editable sample library implementation
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: implementation, mechanical qualification and human UAT complete as of 2026-07-30.
 
 ## 1. Files and APIs
@@ -65,5 +69,5 @@ source or bundle.
 - The workbench is still a non-authoritative desktop UAT consumer.
 - Samples intentionally contain no tutorial flow or protected starting state; reopening a sample
   is the way to obtain its pristine document.
-- `docs/M64_UAT.md` records supervising-human approval. M65 awaits its detailed
+- `docs/M64_UAT.md` records maintainer approval. M65 awaits its detailed
   core-hardening/performance scope.

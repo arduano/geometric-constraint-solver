@@ -2,10 +2,14 @@
 
 # M95 implementation and qualification
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **accepted and closed on 2026-09-07**; [M95_CLOSURE.md](M95_CLOSURE.md) records
 explicit UAT acceptance and the fresh-session handoff.
 [M95_QUALIFICATION.md](M95_QUALIFICATION.md) records the final `f18ff9e` product, complete gate,
-frozen Tailscale candidate and performance evidence. The ledger below preserves the development
+frozen preview candidate and performance evidence. The ledger below preserves the development
 and failed-run history from accepted M94 closure source `d4438a9`; those intermediate statuses
 are superseded by final qualification and user acceptance. M94 remains served at port 18096.
 
@@ -61,16 +65,16 @@ integration builds. They are focused development evidence, not a clean integrate
   owner/Fillet refinements in `target/m95/clippy-final-r2.log`; integrated qualification remains.
 - Frontend types passed; App/editor/source conversion/adapter suites passed **85 tests**. The
   subsequently repaired selection-delta/adapter validation suites passed **16 tests**. Logs:
-  `/tmp/m95-frontend-final-unit.log`, `/tmp/m95-wasm-adapter.log`, and source-agent transport logs.
+  `m95-frontend-final-unit.log`, `m95-wasm-adapter.log`, and source transport logs.
 - `cargo fmt --all` and `git diff --check`: passed during development.
-- Optimized WASM plus harness/production build passed into `/tmp/geosolve-m95-dev-r1`, using
+- Optimized WASM plus harness/production build passed into `geosolve-m95-dev-r1`, using
   `CARGO_PROFILE_RELEASE_INCREMENTAL=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 npm --prefix
-  crates/geosolve-demo-web/frontend run build:release-artifacts -- --out /tmp/geosolve-m95-dev-r1`.
+  crates/geosolve-demo-web/frontend run build:release-artifacts -- --out geosolve-m95-dev-r1`.
   Log: `target/m95/dev-build-r1.log`. Subsequent source refinements are not in that provisional build.
 
 All three new browser workflows now pass on the provisional candidate: explicit source/dirty/layout
-in `/tmp/m95-browser-r2.log`, canvas/Explorer/pixels and dense generated navigation in
-`/tmp/m95-browser-r3.log`. Initial failures were harness assumptions: unnormalized source, builder
+in `m95-browser-r2.log`, canvas/Explorer/pixels and dense generated navigation in
+`m95-browser-r3.log`. Initial failures were harness assumptions: unnormalized source, builder
 expression ranges, partial whole-declaration coverage after a span-only pick, and a generated scalar
 port incorrectly expected to paint a curve. Corrected assertions keep actual selected-stroke pixels,
 exact saved bytes and geometry, cursor/focus/layout and Unicode navigation requirements.
@@ -80,9 +84,8 @@ with one visible and one deselected hidden descendant. Focused regressions now r
 Fillet to toggle off completely and a mixed-visibility group to complete its partial selection.
 Multiple empty generated siblings resolve to their common declaration rather than a lexical child.
 
-Clean integrated qualification, final dense comparison, frozen Tailscale candidate and
-supervising-user acceptance remain outstanding.
-
+Clean integrated qualification, final dense comparison, frozen preview candidate and
+maintainer acceptance remain outstanding.
 
 ## Visual review and preflight interruption
 
@@ -109,7 +112,6 @@ both runs preserve exact complete persistence. These are synchronous bridge phas
 not end-to-end FPS. The richer new behavior and differing payloads are disclosed; final artifact
 pan/zoom/drag checks remain. Raw evidence: `target/m95/performance-{m94,provisional}/selection.json`.
 
-
 **M95-F002 — retained hidden selection lost its partial group marker.** With two hidden circles,
 select both rows, toggle the second off, then create a dirty source draft. Accepted logical
 selection survives index reconciliation, but the ancestor row omitted that logical coverage.
@@ -123,7 +125,6 @@ Run `20260907T182205-867074e5` was deliberately interrupted in `prepare.workspac
 one-line correction after all six preflight stages passed. Its incomplete qualification is
 retained honestly; the next nomination resumes with input-authenticated successes. No completed
 domain/golden/browser suite was repeated due to either preflight interruption.
-
 
 ## Integrated workbench collateral findings
 
@@ -173,7 +174,7 @@ remains active. Toolbar locators now scope to `Primary tools`; those workflows e
 to Select. The Fillet Inspector assertion follows the selected source declaration's displayed name.
 The first focused pass is **4/5**, and the remaining Fillet workflow passes **1/1** after that
 heading correction. Commands use `GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18109/
-GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix
+GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) npm --prefix
 crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/workbench.spec.ts --grep
 'outside dismissal|Rust-owned CAD|computed Fillet authoring|normal pointer capture release|canvas
 chrome exposes' --workers=1`; the follow-up grep is `computed Fillet authoring`.
@@ -200,15 +201,15 @@ by all **10/10** `m95_` bridge cases. Commands inside `nix-shell shell.nix --run
 `CARGO_BUILD_JOBS=4 cargo test --locked -p geosolve-demo-web --lib TEST_FILTER -- --nocapture`.
 Strict `cargo clippy --locked -p geosolve-demo-web --lib --tests -- -D warnings` and formatting
 pass after a behavior-equivalent match simplification. Logs: `target/m95/visibility-{owner,clippy}.log`.
-The repaired development release is `/tmp/geosolve-m95-visibility-r1`; its full field/browser
+The repaired development release is `geosolve-m95-visibility-r1`; its full field/browser
 recheck and replacement nomination remain pending below.
 
 The repaired browser replay passes **4/4 in 5.8 minutes**: the unchanged perforated-field
 workflow (5.4 minutes) plus all three M95 cases. Exact command:
-`GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18110/ GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome
+`GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18110/ GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome)
 npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/m92-sample-audit.spec.ts
 tests/e2e/m95-navigation.spec.ts --grep 'perforated-fixture-field|M95' --workers=1
---output=/home/arduano/programming/geometric-constraint-solver/target/m95/visibility-browser`.
+--output=target/m95/visibility-browser`.
 Log: `target/m95/visibility-browser.log`. The native
 `m91_reprojected_isolate_restores_surviving_child_visibility_after_reload` regression also passes
 **1/1** with the same Cargo test invocation pattern (`target/m95/visibility-history.log`).

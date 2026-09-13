@@ -2,12 +2,16 @@
 
 # M78 implementation — CAD geometry tool families and authoring variants
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete (closed 2026-08-18)**. Initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete release qualification and immutable
-Tailscale nomination, but M78-F011 withdraws it from current UAT. The focused Tangent-Arc
+preview nomination, but M78-F011 withdraws it from current UAT. The focused Tangent-Arc
 centre-drag correction passes owner regressions; replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the complete clean gate and immutable,
-byte-verified Tailscale nomination. Human UAT and the focused F011 recheck are accepted.
+byte-verified preview nomination. Human UAT and the focused F011 recheck are accepted.
 Documentation-only approval descendant `a6d504e` passes exact GitHub Pages publication and hosted-
 byte verification without replacing the qualified product source.
 
@@ -333,7 +337,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 
 ran from 02:14:05 through 02:26:24 AEST on 2026-08-18 and exited successfully in 12m19s without
 changing HEAD, tree or worktree. The retained 250,089-byte, 3,269-line log is
-`/tmp/geosolve-m78-clean-gate.8n2Fik.log`, SHA-256
+`geosolve-m78-clean-gate.8n2Fik.log`, SHA-256
 `da48367b41084007637b08290e56fadd889dd1200f7918b83550237bf76d5fe3`.
 
 The gate passes formatting/diff hygiene, warnings-denied workspace Clippy and Rustdoc, 1,730
@@ -346,29 +350,15 @@ and Trunk 0.21.14 release assembly. The only diagnostics are the longstanding no
 warnings for packages declaring both `license` and `license-file`.
 
 Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was byte-compared and
-frozen at `/tmp/geosolve-m78-uat.SNgu3D`, directory mode `0555`, as seven regular non-symlink files
+frozen at `geosolve-m78-uat.SNgu3D`, directory mode `0555`, as seven regular non-symlink files
 mode `0444`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 23,484 | `bdbd0eaf11d96425b98d52f546417e3e4f7dbe50568568aca30d8fe34f01a30f` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-59998f0c1a23e0f9.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
-| `geosolve-demo-web-59998f0c1a23e0f9_bg.wasm` | 6,535,148 | `0441c6fc9e931d0fe75358ac24d6f78b465008a04792475547840f9003699ae1` |
-| `index.html` | 29,143 | `1598ad7ce70d892496a55a3ea86b45ceb23fbbf9763278993f1e79f4cb5974d5` |
-| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
-
-Its C-locale ordered-manifest aggregate is
-`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`; freeze evidence is
-`/tmp/geosolve-m78-freeze-evidence.IRltTB`. The previous M77 PID `284248` remained live until this
-snapshot was fully frozen, then retired. PID `1753616`, retained command-runner session `76097`,
-served only the immutable M78 snapshot at `http://100.94.63.83:8080/`.
+The archived manifest records the per-file sizes and checksums.
 
 Proxy-disabled, cache-bypassed, identity-encoded requests for `/` and every frozen file returned
 HTTP 200 with zero redirects, no content encoding, exact lengths, expected media types and
 snapshot-identical bodies. `/` exactly equalled `index.html`, and the fetched ordered manifest had
-the same aggregate. HTTP evidence is `/tmp/geosolve-m78-http-verify.wpLUFR`. The evidence-ledger
+the same aggregate. HTTP evidence is `geosolve-m78-http-verify.wpLUFR`. The evidence-ledger
 commit is a documentation descendant and does not replace `1b2ce0f` as the exact initial
 mechanically qualified authority. F011 subsequently withdraws that authority from current UAT;
 the snapshot remains historical evidence and its listener is retired.
@@ -386,7 +376,7 @@ env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
 
 ran from 11:07:08 through 11:19:06 AEST on 2026-08-18 and exited successfully without changing
 HEAD, tree or worktree. The retained 251,148-byte, 3,280-line log is
-`/tmp/geosolve-m78-f011-clean-gate.xNKJwu.log`, SHA-256
+`geosolve-m78-f011-clean-gate.xNKJwu.log`, SHA-256
 `d8ae7648a5c1426d5d275b0c2178df49a1793130d16532c6b36214ce0fb73fc6`.
 
 The gate passes formatting/diff hygiene, warnings-denied workspace Clippy and Rustdoc, 1,734
@@ -399,37 +389,10 @@ The only diagnostics are the longstanding non-failing Cargo warnings for package
 `license` and `license-file`.
 
 Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was byte-compared and
-frozen at `/tmp/geosolve-m78-f011-uat.MOsOFy`, directory mode `0555`, as seven regular non-symlink
+frozen at `geosolve-m78-f011-uat.MOsOFy`, directory mode `0555`, as seven regular non-symlink
 files mode `0444`:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 23,484 | `bdbd0eaf11d96425b98d52f546417e3e4f7dbe50568568aca30d8fe34f01a30f` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-5e889f68dd26a44a.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
-| `geosolve-demo-web-5e889f68dd26a44a_bg.wasm` | 6,535,152 | `8dab4bb97047798e92bfc906694aa69d447e8ebf600d6cd83e3024ab3d770460` |
-| `index.html` | 29,143 | `5ce14e955e0ac798a61b0f06a6cccdbd44f0b2308b2aed67674d30e8e3c7b76d` |
-| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
-
-Its C-locale ordered-manifest aggregate is
-`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`; freeze evidence is
-`/tmp/geosolve-m78-f011-freeze-evidence.gS2PTc`. Temporary PID `3116484`, retained session `81879`,
-first served the snapshot on port `18081`. Proxy-disabled, cache-bypassed, identity-encoded
-requests for `/` and all seven files passed exact status, redirect, content-encoding, length,
-media-type and byte checks before any cutover.
-
-Only then was withdrawn PID `1753616` retired and replacement PID `3120501`, retained command-
-runner session `40375`, started at `http://100.94.63.83:8080/`. The same final verification passed;
-`/` exactly equalled `index.html`, all asset bodies matched the frozen files and no temporary
-listener remained on `18081`. That listener later exited after human acceptance. The unchanged
-snapshot was restored without rebuilding for closeout under PID `3433169`, retained command-runner
-session `24394`, and remains byte-identical at the same URL. Temporary evidence is
-`/tmp/geosolve-m78-f011-temp-verify.bri3pd/results.tsv`; final evidence is
-`/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`. Each has SHA-256
-`8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`.
-The documentation-only evidence-ledger descendant does not replace `793e9de` as the exact clean
-gate-qualified and immutable UAT source.
+The archived manifest records the per-file sizes and checksums.
 
 ## Closeout evidence
 
@@ -437,8 +400,8 @@ Focused A1-A8 and M78-F001 through M78-F011 owner regressions pass with the exac
 above. Known scope limits remain the explicit deferrals in `docs/M78_GOALS.md`; there is no
 interior/periodic Tangent Arc or multi-tangent circle workflow. The unchanged golden survey/check/
 require-clean sequence still matches. F011 replacement clean workspace/release qualification and
-exact no-rebuild Tailscale verification pass; the earlier candidate evidence above is withdrawn
-historical evidence. On 2026-08-18 the supervising caller accepted U1-U8, reported the focused
+exact no-rebuild preview verification pass; the earlier candidate evidence above is withdrawn
+historical evidence. On 2026-08-18 the maintainer accepted U1-U8, reported the focused
 F011 centre-drag replacement behaving correctly and requested milestone closure.
 
 Documentation-only approval descendant
@@ -450,7 +413,7 @@ without rerunning the already-qualified complete integration gate. Deploy job `9
 from 03:43:24 through 03:43:35 UTC in 11s. Deployment `5955688918` reached `success` at
 `https://arduano.github.io/geometric-constraint-solver/` at 03:43:35 UTC. The approval descendant
 records the accepted scorecard; exact clean product source `793e9de` remains release authority,
-and no byte identity with the separately built Tailscale candidate is claimed.
+and no byte identity with the separately built preview candidate is claimed.
 
 Actions artifact `9310104202` (`github-pages`) is 2,267,050 bytes. Its API digest and independently
 downloaded outer-ZIP SHA-256 are both
@@ -459,22 +422,14 @@ downloaded outer-ZIP SHA-256 are both
 `8e6ddd73fb11fe2efbdbc90f20b46fdd53f20282358d3be70717c3f6ad60a4ff`. The tar extracts to exactly
 seven flat regular non-symlink files:
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 25,248 | `d7b1786e26f328e40de0608cd63cdc2dc341fd396dcde103b15f3ef7495fd0ac` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-b2ee90b4d3e13fe6.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
-| `geosolve-demo-web-b2ee90b4d3e13fe6_bg.wasm` | 6,535,072 | `34f671f38f9399a53e70334f9bfb5452ec07ea2cb0835086f9b5e1b47b1eb6eb` |
-| `index.html` | 29,283 | `a1ae44f9b26bbe56a27f73bd538d9fb260ce856aeb26e172f7a6c24c94c53db5` |
-| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+The archived manifest records the per-file sizes and checksums.
 
 The C-locale ordered-manifest aggregate is
 `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. A fresh proxy-disabled,
 cache-busted, identity-encoded repeat for `/`, `/index.html` and all six other artifact paths
 returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected media
 types and lengths, and artifact-identical bodies; `/` equals artifact `index.html`. Complete
-evidence is `/tmp/geosolve-m78-pages-verify.KpqpHi`, with the authoritative repeat under
+evidence is `geosolve-m78-pages-verify.KpqpHi`, with the authoritative repeat under
 `public-complete`; its `results.tsv` has SHA-256
 `e012272d6f852f33810123fbc5a6cd4e2f961a71a8f56860ba6d693c5ca7debf`. The retained 155,222-byte
 workflow log has SHA-256 `31b5bd026a6311fe4195a3af55aa37e932b540aadb2898b7829bad90a2f334e0`.

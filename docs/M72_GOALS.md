@@ -2,7 +2,11 @@
 
 # M72 — Public workbench bulk fixes
 
-Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. This
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete and explicitly approved by the maintainer on 2026-08-15**. This
 milestone replaced the previously prepared semantic-consolidation proposal, which moved without
 implementation to `docs/M73_GOALS.md` and was activated separately after M72 closed.
 
@@ -59,7 +63,7 @@ publish the qualified desktop workbench at
 - Chromium UAT at `1440x900` and approximately `1024x720` confirms the repairs, accessibility and
   containment. The public site loads with correct prefixed assets and preserves a browser-local
   scene across reload.
-- The supervising caller approves the focused M72 UAT before final milestone closure.
+- The maintainer approves the focused M72 UAT before final milestone closure.
 
 ## Non-goals
 

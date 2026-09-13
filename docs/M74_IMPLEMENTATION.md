@@ -2,9 +2,13 @@
 
 # M74 implementation — Production-style sketch reference UX
 
-Status: **complete under the supervising caller's scoped close decision on 2026-08-16**.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+Status: **complete under the maintainer's scoped close decision on 2026-08-16**.
 Point-pair symmetry across intrinsic axes passes focused native/WASM and complete clean release
-qualification, its immutable Tailscale candidate is byte-verified, and exact final GitHub Pages
+qualification, its immutable preview candidate is byte-verified, and exact final GitHub Pages
 publication passes. M74-U1 through M74-U8 and any findings remain deferred to the next
 bug-fixing/UAT follow-up milestone, which is now active as M75.
 
@@ -148,8 +152,8 @@ env NO_COLOR=true nix-shell shell.nix --run \
   'cd crates/geosolve-demo-web && trunk build --release --locked'
 # Trunk 0.21.14 release build passed
 
-M72_BASE_URL=http://127.0.0.1:8094/ node /tmp/m72_full_browser_check.mjs
-M74_BASE_URL=http://127.0.0.1:8094/ node /tmp/m74_browser_check.mjs
+M72_BASE_URL=http://127.0.0.1:8094/ node m72_full_browser_check.mjs
+M74_BASE_URL=http://127.0.0.1:8094/ node m74_browser_check.mjs
 # Chromium passed at 1440x900 and 1024x720 with no console or page errors
 ```
 
@@ -199,47 +203,26 @@ distribution successfully.
 ## 4. Historical initial UAT candidate
 
 The seven files produced by that successful gate were copied without rebuilding to
-`/tmp/geosolve-m74-uat.MpvYrl`. The directory is mode `0555`; every file is mode `0444`; all entries
+`geosolve-m74-uat.MpvYrl`. The directory is mode `0555`; every file is mode `0444`; all entries
 are regular, non-symlink files.
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 16,385 | `180092f5db68423f14760db12265d06b81786df5ed3d3ba6f5ecd745e36ad567` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-90bff110a4eada3.js` | 33,221 | `115760f338139851520a5978ddaad4acb7441a5ec81a83d793885f81651eff16` |
-| `geosolve-demo-web-90bff110a4eada3_bg.wasm` | 6,091,298 | `f8389efd2c34519f38b0b3195a1efffe9a822c7641c124361997ab9131936b92` |
-| `index.html` | 27,474 | `a53bd7f661e92e5ba856ebdaca686c53ab3e1566d5c1ad32cc2a90065930c56a` |
-| `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
+The archived manifest records the per-file sizes and checksums.
 
 The C-locale `sha256sum * | sha256sum` aggregate is
 `2ceaa9f8707a54aa9bcbf62771a5cd0c3f6dd594bd5ba2829ffc370ee7588546`.
 
-PID `969003` historically served only this snapshot at `http://100.94.63.83:8080/` with exact argv:
-
-```text
-python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m74-uat.MpvYrl
-```
-
-Its executable was
-`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`.
-The process has exited. The former M73 server PID `3870531` exited only after the initial M74
-snapshot was complete. Historical snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains read-only with
-its unchanged aggregate
-`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`.
-
-Proxy- and cache-bypassed, identity-encoded Tailscale requests for `/` and all seven named files
-returned HTTP 200 directly from `100.94.63.83`. Every response had the exact expected length and
+Proxy- and cache-bypassed, identity-encoded preview requests for `/` and all seven named files
+returned HTTP 200 directly from the archived preview host. Every response had the exact expected length and
 media type (`text/html`, `text/markdown`, `application/octet-stream`, `text/javascript`,
 `application/wasm` or `text/css`), matched the frozen file byte-for-byte, and had no redirect or
 compressed encoding. `/` equals `index.html`; the fetched seven-file aggregate equals the frozen
-aggregate. The retained HTTP evidence directory is `/tmp/geosolve-m74-http-verify.EiuhSE`.
+aggregate. The retained HTTP evidence directory is `geosolve-m74-http-verify.EiuhSE`.
 
-The candidate also passed both browser scripts directly over Tailscale:
+The candidate also passed both browser scripts directly over preview:
 
 ```text
-M72_BASE_URL=http://100.94.63.83:8080/ node /tmp/m72_full_browser_check.mjs
-M74_BASE_URL=http://100.94.63.83:8080/ node /tmp/m74_browser_check.mjs
+M72_BASE_URL=${PREVIEW_URL} node m72_full_browser_check.mjs
+M74_BASE_URL=${PREVIEW_URL} node m74_browser_check.mjs
 # both passed at 1440x900 and 1024x720 with no console or page errors
 ```
 
@@ -253,60 +236,38 @@ longer current UAT authority. It must not receive human approval for the replace
 ## 5. Current F001 replacement UAT candidate
 
 The successful replacement gate's exact seven files were copied without rebuilding to
-`/tmp/geosolve-m74-uat.jFfAm4`. The directory is mode `0555`; every file is mode `0444`; all entries
+`geosolve-m74-uat.jFfAm4`. The directory is mode `0555`; every file is mode `0444`; all entries
 are regular, non-symlink files.
 
-| File | Bytes | SHA-256 |
-| --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 16,702 | `a3b8ca5a5d5999d09a05c7910eab952929e2dc3f07eeb27ccc36b7fe3a992701` |
-| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
-| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-b110169860de7f0f.js` | 33,221 | `980c38ffa22901ee90bebec8b705f92b07b651ec92001fffd4a62ac03055b74b` |
-| `geosolve-demo-web-b110169860de7f0f_bg.wasm` | 6,102,644 | `d2932cf18e67a0e0c087ab4ccacf2ac3be086d2da74b10ac9026c53e4e64ccf4` |
-| `index.html` | 27,478 | `9968011bc0524e30d03a4c299098e047957af96336ec6289842d4ceb724a6fb5` |
-| `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
+The archived manifest records the per-file sizes and checksums.
 
 The C-locale `sha256sum * | sha256sum` aggregate is
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`.
 
-At M74 nomination, PID `2599593` served only this snapshot at
-`http://100.94.63.83:8080/` with exact argv:
-
-```text
-python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m74-uat.jFfAm4
-```
-
 Proxy/cache-bypassed identity requests for `/` and all seven files return HTTP 200 with exact media
 types, lengths and bytes. `/` equals `index.html`, the fetched aggregate matches the frozen
 aggregate, and no response redirects or applies content encoding. HTTP evidence is retained at
-`/tmp/geosolve-m74-http-verify.85lR5D`.
+`geosolve-m74-http-verify.85lR5D`.
 
-The unchanged reviewed browser scripts also pass directly over Tailscale at `1440x900` and
+The unchanged reviewed browser scripts also pass directly over preview at `1440x900` and
 `1024x720` with no console/page errors:
 
 ```text
-M72_BASE_URL=http://100.94.63.83:8080/ node /tmp/m72_full_browser_check.mjs
-M74_BASE_URL=http://100.94.63.83:8080/ node /tmp/m74_browser_check.mjs
+M72_BASE_URL=${PREVIEW_URL} node m72_full_browser_check.mjs
+M74_BASE_URL=${PREVIEW_URL} node m74_browser_check.mjs
 ```
-
-Their SHA-256 values remain
-`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
-`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc` respectively. This candidate
-is the accepted closing product candidate; the historical initial M74 snapshot remains read-only
-and unserved. PID `2599593` was retired when M75 was nominated; the F001 snapshot also remains
-read-only and unserved.
 
 ## 6. Scoped closure and deferred UAT
 
-On 2026-08-16 the supervising caller explicitly approved closing M74 from the existing automated,
+On 2026-08-16 the maintainer explicitly approved closing M74 from the existing automated,
 independent-review, clean-gate and frozen-artifact evidence without waiting for separate hands-on
 UAT. M74-U1 through M74-U8 are intentionally **deferred**, not inferred to have passed. Their
 future execution and any resulting findings belong to the next bug-fixing/UAT follow-up milestone.
 This handoff does not activate, scope or otherwise start that milestone.
 
 The accepted product remains exact source `55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
-`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, and frozen Tailscale snapshot
-`/tmp/geosolve-m74-uat.jFfAm4`. No objective defect or unresolved mechanical blocker is carried by
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, and frozen preview snapshot
+`geosolve-m74-uat.jFfAm4`. No objective defect or unresolved mechanical blocker is carried by
 the M74 close decision.
 
 ## 7. Final GitHub Pages publication
@@ -326,12 +287,12 @@ the 256-moving-body sparse crossover in **176.43s**, and repository-prefixed art
 `https://arduano.github.io/geometric-constraint-solver/` with HTTPS enforcement.
 
 GitHub Pages artifact `9257602997`, name `github-pages`, was downloaded to
-`/tmp/geosolve-m74-pages-verify.euXzjA/github-pages.zip`. The ZIP is **2,101,342 bytes**, contains
+`geosolve-m74-pages-verify.euXzjA/github-pages.zip`. The ZIP is **2,101,342 bytes**, contains
 only `artifact.tar`, and has SHA-256
 `60cf4c4985e08517c6a9a949bdacb4faf31f7069079a65e9b5e8c8f7ef21f955`, matching GitHub's digest.
-The inner tar at `/tmp/geosolve-m74-pages-verify.euXzjA/outer/artifact.tar` is **6,256,640 bytes**
+The inner tar at `geosolve-m74-pages-verify.euXzjA/outer/artifact.tar` is **6,256,640 bytes**
 with SHA-256 `14ef2ae52b641620f958fb9df66bb40570f0b26911da695e632ac747bb7a9985`.
-It extracts to exactly seven regular files under `/tmp/geosolve-m74-pages-verify.euXzjA/site`, with
+It extracts to exactly seven regular files under `geosolve-m74-pages-verify.euXzjA/site`, with
 no links or extra payload files:
 
 | Final hosted artifact file | Bytes | SHA-256 |
@@ -356,9 +317,9 @@ license responses also have exact lengths and expected media types. The reviewed
 and M74 reference-UX Chromium scripts pass against the public URL at `1440x900` and `1024x720`
 with no console or page errors.
 
-The frozen M74 Tailscale distribution remains accepted immutable candidate evidence but was
+The frozen M74 preview distribution remains accepted immutable candidate evidence but was
 retired from service when M75 was nominated. The downloaded hosted artifact above is public-byte
-authority, and no Tailscale/Pages byte identity is claimed. Hands-on UAT remains deferred exactly
+authority, and no preview/Pages byte identity is claimed. Hands-on UAT remains deferred exactly
 as recorded in section 6.
 
 ## 8. Compatibility result

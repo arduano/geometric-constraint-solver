@@ -2,8 +2,12 @@
 
 # M95 — connected code, Explorer and canvas selection
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **accepted and closed on 2026-09-07**. [M95_CLOSURE.md](M95_CLOSURE.md) records the
-user's UAT acceptance. The separate frozen product is at `http://100.94.63.83:18100/`; [M95_QUALIFICATION.md](M95_QUALIFICATION.md) records
+user's UAT acceptance. The separate frozen product is at the archived preview; [M95_QUALIFICATION.md](M95_QUALIFICATION.md) records
 its exact product and evidence. M94 remains accepted at port 18096.
 
 ## Outcome
@@ -51,7 +55,7 @@ selection preserves the current workspace layout. Code-to-canvas navigation uses
   development. Nominate one clean candidate with integrated format/Clippy/native/WASM/golden/
   browser/build checks and authenticated unaffected reuse under RELEASE_QUALIFICATION.md.
 - Preserve all 271 golden rows and existing browser obligations; freeze and byte-verify a separate
-  Tailscale candidate, retaining M94. Supervising-user acceptance closes M95 after delivery.
+  preview candidate, retaining M94. maintainer acceptance closes M95 after delivery.
 
 ## Boundaries
 

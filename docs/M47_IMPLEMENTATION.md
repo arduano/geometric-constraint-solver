@@ -2,6 +2,10 @@
 
 # M47 implementation record
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 ## Status
 
 Complete as of 2026-07-28. The five named direct fixture groups pass, and the authorized
@@ -58,7 +62,7 @@ of the five direct fixture-group owners above (some points deliberately share a 
 | Fixture-only controls/hooks | Remove `m44-load`, `m44-role-profile`, `m44-role-construction`, `m44-parameter-valid`, `m44-parameter-invalid`, `m44-parameter-inactive`, `m44-parameter-stale`, `m44-external-missing`, `m44-external-topology`, `m44-external-stale`, `m44-external-rebind`, `m44-external-valid`, `m44-suppress`, `m44-reactivate`, `m44-dimension-driving`, and `m44-dimension-reference`; remove their corresponding DOM buttons/hooks, including `#m44-load` and every `data-wb-action` carrying these names. Source dispatch evidence: `mod.rs:437-505`; browser selector/action evidence: `e2e/m44.mjs:106-120,171-293`. | These exist solely to drive the temporary composition. Generic workbench actions (`new`, undo/redo, cancel, finish, delete, constraint, dimension, problems, capture-finding) remain (`mod.rs:430-467,500-507`). |
 | Fixture-labelled markup/hooks | Delete the M44 identity/profile/activity/external coverage labels and fixture-loaded flag: `data-coverage-id="m44-three-identities"`, `m44-input-stamps`, `m44-parameters`, `m44-activity`, `m44-external`, `m44-accepted-profile`, `data-fixture-loaded`, and `data-profile-span-list="accepted"` only where introduced for M44 qualification (`panels.rs:177-248,251-361,364-468`). Delete the M45 capture marker, `M45*` payload types, `capture_m45`, and M45-only three-file package (`evidence.rs:31-68,145-242`). | Keep generic lifecycle/host-state presentation data as ordinary, directly tested output, but remove test-ID/fixture marker contracts. M47 capture is typed deterministic content, not HTML/DOM/download evidence. |
 | Fixture-coupled inline tests | Rewrite/remove tests importing `HostState`: `panels.rs:553-598` and `scene.rs:292-342`; replacement tests belong to the matrix. | Preserve non-fixture scene and panel behavior under direct inputs. |
-| M44 browser artifact | Delete `crates/geosolve-demo-web/e2e/m44.mjs` entirely, including its static forbidden/required-string scan, Node HTTP server, Chromium/CDP connection, `/tmp/geosolve-m44-browser-profile`, `M44_PORT`, `M44_DEBUG_PORT`, `CHROMIUM`, DOM polling/scraping, mutation timing, and download interception (`e2e/m44.mjs:3-17,34-166,263-302`). | M47 deletion is limited to this script and its exclusively referenced machinery; retain no M44 browser profile/server helper. |
+| M44 browser artifact | Delete `crates/geosolve-demo-web/e2e/m44.mjs` entirely, including its static forbidden/required-string scan, Node HTTP server, Chromium/CDP connection, `geosolve-m44-browser-profile`, `M44_PORT`, `M44_DEBUG_PORT`, `CHROMIUM`, DOM polling/scraping, mutation timing, and download interception (`e2e/m44.mjs:3-17,34-166,263-302`). | M47 deletion is limited to this script and its exclusively referenced machinery; retain no M44 browser profile/server helper. |
 
 #### Must remain (not M47 deletion)
 

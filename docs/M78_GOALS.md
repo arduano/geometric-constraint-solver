@@ -2,10 +2,14 @@
 
 # M78 — CAD geometry tool families and authoring variants
 
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
 Status: **complete (closed 2026-08-18)**. Initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn historical evidence. Replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` remains qualified product authority, and its immutable
-Tailscale snapshot remains accepted UAT evidence. M78 turns the demo's flat collection of geometry
+preview snapshot remains accepted UAT evidence. M78 turns the demo's flat collection of geometry
 buttons into a polished CAD-style family palette while keeping recipe meaning, inference, branch
 state and atomic publication in reusable headless Rust.
 
@@ -193,9 +197,9 @@ Initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 Clippy/Rustdoc, locked all-feature workspace tests, relevant native/WASM parity, clean golden
 authority, demo WASM, performance/licence/package gates and Trunk 0.21.14 through the complete
 clean release gate. Its exact no-rebuild seven-file output is frozen at
-`/tmp/geosolve-m78-uat.SNgu3D`, ordered-manifest aggregate
+`geosolve-m78-uat.SNgu3D`, ordered-manifest aggregate
 `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`, and byte-verified over
-the retained Tailscale endpoint. `docs/M78_UAT.md` remained open at that checkpoint. F011 withdraws
+the retained preview endpoint. `docs/M78_UAT.md` remained open at that checkpoint. F011 withdraws
 these bytes permanently from current UAT; they remain historical evidence.
 
 Replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
@@ -203,9 +207,9 @@ Replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
 locked all-feature workspace tests, three intentional ignores, unchanged 270/270 golden authority,
 warnings-denied Clippy/Rustdoc, native/WASM parity, demo WASM, performance/licence/package checks,
 the 149.39-second sparse crossover and Trunk 0.21.14. Its exact no-rebuild seven-file output is
-frozen at `/tmp/geosolve-m78-f011-uat.MOsOFy`, ordered-manifest aggregate
+frozen at `geosolve-m78-f011-uat.MOsOFy`, ordered-manifest aggregate
 `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`, and byte-verified live at
-`http://100.94.63.83:8080/`. On 2026-08-18 the supervising caller accepted U1-U8, reported the
+the archived preview. On 2026-08-18 the maintainer accepted U1-U8, reported the
 focused F011 replacement behaving correctly and requested closure. GitHub Pages publication from
 documentation-only approval descendant `a6d504e` now passes: run `32096209036`, artifact
 `9310104202` and deployment `5955688918` exact-verify root plus all seven public paths at ordered-

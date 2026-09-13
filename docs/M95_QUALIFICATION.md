@@ -2,10 +2,13 @@
 
 # M95 connected navigation — accepted product
 
-**Accepted and closed on 2026-09-07.** [M95_CLOSURE.md](M95_CLOSURE.md) records explicit UAT
-acceptance. The frozen accepted product remains available
-at **http://100.94.63.83:18100/**. Accepted M94 remains at port 18096, and M92 at port 18092.
-No Pages publication or subsequent milestone is included.
+Historical milestone record. For current setup and qualification, see the
+[documentation index](README.md) and [release guide](RELEASE_QUALIFICATION.md).
+Local artifact names below identify archived evidence; they are not current preview locations.
+
+**M95 was accepted and closed on 2026-09-07.** [M95 closure](M95_CLOSURE.md)
+records maintainer acceptance. This report preserves the qualified product identity,
+coverage and accepted performance limits.
 
 ## Delivered files, APIs and behavior
 
@@ -41,8 +44,6 @@ M95-F001–F005, focused reproductions, harness corrections and failed/interrupt
 | Product source | `f18ff9ebeff2a0dcf6697aae43ade12dc5a05f21` |
 | Product tree | `7e6acedd231d42685ef8b916ced8dc9f44dd27cb` |
 | Gate run | `20260907T193542-d9094458` |
-| Frozen manifest | `/tmp/geosolve-m95-uat.zkdiegw4/production.json` |
-| Frozen directory | `/tmp/geosolve-m95-uat.zkdiegw4/geosolve-production` |
 | Artifact | 12 files, 27,944,519 bytes |
 | Files SHA-256 | `43fce481d4966b1694192a1301061b93286d3c8f2b2e3eae152c8150fd772545` |
 | Manifest SHA-256 | `3a3bc70d46fa2844d9fbc59e56345eba24f0c75f53944719ce1a941d1660ad7d` |
@@ -68,20 +69,16 @@ The audit authenticates every stage receipt and hashes all **9,884** referenced 
 it passes in 6.55 seconds. `target/m95/qualification-audit.json` records that independent audit.
 
 The exact production files were copied without rebuilding, made read-only, served on localhost
-and Tailscale, then verified with:
+and preview, then verified with:
 
 ```bash
-GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
+GEOSOLVE_CHROMIUM_PATH=$(command -v google-chrome) \
   npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- \
-  --manifest /tmp/geosolve-m95-uat.zkdiegw4/production.json \
-  --directory /tmp/geosolve-m95-uat.zkdiegw4/geosolve-production \
-  --url http://100.94.63.83:18100/ \
-  --receipt /home/arduano/programming/geometric-constraint-solver/target/m95/tailscale-final.json
+  --manifest geosolve-m95-uat.zkdiegw4/production.json \
+  --directory geosolve-m95-uat.zkdiegw4/geosolve-production \
+  --url ${PREVIEW_URL} \
+  --receipt target/m95/tailscale-final.json
 ```
-
-This passes exact local/HTTP byte, MIME, base-path and actual-WASM readiness checks.
-`target/m95/nomination.json` binds the candidate to its original signed preparation and frozen copy.
-The service is PID 1937583, launched by `target/m95/serve-frozen.mjs` with authenticated routes only.
 
 ## Final performance and visual evidence
 
@@ -127,7 +124,7 @@ Executed probes use `NAV_MANIFEST`, `NAV_URL`, `NAV_OUTPUT` with
 `node target/m94/navigation/probe.mjs` and `node target/m95/selection-probe.mjs`; point drags use
 `DRAG_MANIFEST`, `DRAG_URL`, `DRAG_OUTPUT` with `node target/m94/drag/direct-probe.mjs`.
 Final M95 inputs are the frozen manifest above and `http://127.0.0.1:18100/`; M94 inputs are
-`/tmp/geosolve-m94-f003-uat.qwhvb8yw/production.json` and `http://127.0.0.1:18096/`.
+`geosolve-m94-f003-uat.qwhvb8yw/production.json` and `http://127.0.0.1:18096/`.
 Reports and screenshots remain under `target/m95/performance-final`, `performance-final-drag`,
 `performance-m94-drag` and `performance-m94-final`, with named logs under `target/m95/`.
 
@@ -136,7 +133,7 @@ Reports and screenshots remain under `target/m95/performance-final`, `performanc
 All mechanical M95 criteria pass: exact accepted ownership, source/Explorer/canvas agreement,
 truthful multi-owner Inspector, modifier/group/generated/hidden behavior, stale/dirty/Unicode
 handling, tool/capture guards, history/replacement reconciliation, saved-byte preservation and
-qualified canvas performance. No implementation blocker remains. The supervising user explicitly
+qualified canvas performance. No implementation blocker remains. The maintainer explicitly
 accepted UAT and requested closure on 2026-09-07. This accepts the qualified milestone and its
 disclosed limits without asserting an unrecorded exhaustive human replay; see
 [M95_CLOSURE.md](M95_CLOSURE.md).
