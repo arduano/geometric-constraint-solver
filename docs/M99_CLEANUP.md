@@ -7,6 +7,11 @@ including coordinated clean breaks to experimental Rust/TypeScript APIs. M98's
 human U02 recheck and acceptance remain open; this authorization does not record
 those outcomes. Work continues in the existing `m98/file-workspace` checkout.
 
+**Implementation and mechanical qualification complete on 2026-09-13.**
+[Final qualification](M99_QUALIFICATION.md) records clean product `eb4d2e0`,
+297/297 integrated obligations, exact offline installation and both final
+MiniCAD consumer runs. This does not close M98's outstanding human acceptance.
+
 ## Contract
 
 Standalone, folder and collaborative editors share native authoring, source
@@ -42,7 +47,7 @@ consumers migrate.
 - [x] Migrate MiniCAD runners to packaged CLI provenance and baked-profile output.
 - [x] Remove superseded implementations and scaffolding after coverage mapping;
   shorten active docs while retaining linked historical evidence.
-- [ ] Pass focused owner checks and integrated clean-source qualification;
+- [x] Pass focused owner checks and integrated clean-source qualification;
   verify offline package installation, actual browser readiness and consumer use.
 
 ## Acceptance
@@ -64,7 +69,11 @@ implementation imports or `target/m98` runtime paths. Completion requires removi
 duplicate owners, not merely moving files. Follow `RELEASE_QUALIFICATION.md`;
 targeted checks are development evidence, not integrated qualification.
 
-## Implementation evidence
+## Historical implementation evidence
+
+The following progress entries retain their original focused results and failed
+attempts. Their intermediate pending/underway statements are superseded by the
+[complete final qualification](M99_QUALIFICATION.md), not new outstanding work.
 
 Baseline: clean `1925143`, with qualified M98 product `b49e339` and unchanged live
 previews. Implementation and exact check results are recorded below as work lands.

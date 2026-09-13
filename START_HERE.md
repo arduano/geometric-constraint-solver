@@ -1,15 +1,21 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # GeoSolve active handoff
 
-**Active work: [M99 shared authoring and host cleanup](docs/M99_CLEANUP.md).**
+**Latest completed implementation: [M99 shared authoring and host cleanup](docs/M99_CLEANUP.md).**
 The supervising user authorized the full cleanup and coordinated experimental API
 changes on 2026-09-13. Continue in the `m98/file-workspace` worktree at
 `/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace`.
 Preserve the primary checkout, existing previews, user source, drafts and history.
 
-M99 is in implementation. Focused checks are recorded in its cleanup document and
-`target/m99/`; it has no integrated nomination or release claim yet. Complete the
-remaining host migrations and qualification before reporting this cleanup finished.
+M99 implementation and mechanical qualification are complete. Qualified product
+`eb4d2e06933a7ed5e02533f0359abff28040991a`, run `20260913T155413-41e9f715`, passes
+297/297 obligations (32 fresh, 265 authenticated reused). Four exact archives were
+installed offline and all 285 shipped files byte-verified. MiniCAD's consumer
+migration `46c2662` passes both final pipelines at descendant `dde56658`, with exact
+consumer source hashes and evidence in `output/bridge-m99` and `output/pi-case-m99`.
+[M99 qualification](docs/M99_QUALIFICATION.md) records the commands, identities
+and limitations. No supervising-user signoff is
+recorded, and M98's human acceptance and existing previews remain unchanged.
 
 ## Product and ownership
 

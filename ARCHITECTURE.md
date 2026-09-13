@@ -3088,12 +3088,13 @@ and finite nonzero span directions. Ordinary terminal parity, cold reconstructio
 and independent residual validation still gate publication. This seam is shared
 by the headless engine and standalone workbench and adds no protocol authority.
 
-## M99 shared authoring and host cleanup — implementation in progress
+## M99 shared authoring and host cleanup
 
-The [active cleanup contract](docs/M99_CLEANUP.md) preserves the M98 protocol and
-all durable project, sidecar, history and recovery formats. Experimental APIs may
-change as consumers migrate. Qualification and supervising-user acceptance remain
-separate from this architecture description.
+The [completed cleanup](docs/M99_CLEANUP.md) preserves the M98 protocol and
+all durable project, sidecar, history and recovery formats. Standalone, folder
+and collaborative consumers use the consolidated experimental APIs.
+[Mechanical qualification](docs/M99_QUALIFICATION.md) and supervising-user
+acceptance remain separate records; M98 human acceptance is unchanged.
 
 Native construction receipts retain defining samples, operands, branches and
 created declaration correspondence. `geosolve-sketch-code` owns source names,
@@ -3106,13 +3107,24 @@ and captured navigation belong to `geosolve-constraint-editor`; they hold no sol
 compiler or publication capability. The renderer paints prepared accepted or
 provisional presentation. Read-only engine inspection retains exact accepted
 source/native authority, and source navigation belongs to the source owner.
-Accepted browsing and remaining standalone/folder semantic migrations are tracked
-as unfinished work in M99 rather than implied complete here.
+`AcceptedBrowsingSession` retains exact accepted source/native authority and an
+independent personal view. Standalone and folder semantic hosts use the engine's
+`EditableSession`; collaborative publication retains its authority and contribution
+history policies over the same authoring services. Engine interaction seeds let
+the browser initialize read-only chrome and detached rendering locally.
+
+Native workspace and reproduction codecs belong to `geosolve-constraint-editor`;
+source checkpoint admission and the existing compressed source-workspace wire
+belong to `geosolve-sketch-code`. Engine persistence uses those public owners,
+preserving unfinished text, accepted authority and complete personal history.
 
 React consumes a capability-based `WorkbenchSession`. Browser persistence,
 folder disk receipts/leases and collaborative text/outbox/personal history keep
 separate policy owners. Node production hosting/build/package output belongs to
-`packages/geosolve-cli`; remaining semantic dependence on demo execution is being
-removed. Worker lifecycle helpers share correlation, stale-generation fencing,
-settlement and teardown mechanics. Their callers retain the different ordered
-editing, coalesced presentation, text admission and durable-callback drain policies.
+`packages/geosolve-cli`; semantic Node hosts consume the engine/compiler packages
+without a demo-WASM execution runtime. Installed CLI archives also own the browser
+distribution. MiniCAD consumes public `geosolve bake` output with exact installed
+package and source provenance. Worker lifecycle helpers share correlation,
+stale-generation fencing, settlement and teardown mechanics. Their callers retain
+the different ordered editing, coalesced presentation, text admission and
+durable-callback drain policies.

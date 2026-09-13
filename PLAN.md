@@ -8594,8 +8594,8 @@ or production release qualification is included.
 
 ## M99 — shared authoring and host infrastructure
 
-Status: **implementation authorized on 2026-09-13**. The supervising user approved
-the [cleanup contract and ordered implementation](docs/M99_CLEANUP.md), including
+Status: **implementation and mechanical qualification complete**. The supervising
+user approved the [cleanup contract and ordered implementation](docs/M99_CLEANUP.md), including
 coordinated clean breaks to experimental APIs. This cleanup adds no primitives
 and does not imply M98 human acceptance or close its outstanding U02 recheck.
 
@@ -8605,7 +8605,17 @@ and does not imply M98 human acceptance or close its outstanding U02 recheck.
 - [x] Migrate collaboration, folder and standalone hosts behind one session interface.
 - [x] Package production Node hosting independently of the demo/frontend runtime.
 - [x] Migrate MiniCAD and remove superseded code/documentation coupling.
-- [ ] Complete integrated qualification and installed-product verification.
+- [x] Complete integrated qualification and installed-product verification.
+
+[Final qualification](docs/M99_QUALIFICATION.md) passes 297/297 obligations
+(32 fresh, 265 authenticated reused) for product `eb4d2e06933a7ed5e02533f0359abff28040991a`,
+run `20260913T155413-41e9f715`. Offline installation verifies all 285 shipped files
+from four authenticated archives. MiniCAD's migration `46c2662` passes the final
+bridge and case pipelines against those installed bytes at descendant `dde56658`;
+its exact owned source hashes are retained. Results occupy `output/bridge-m99` and
+`output/pi-case-m99`. All host migrations are complete; no new mathematics or
+golden changes were introduced. Existing previews and M98 human acceptance remain
+unchanged. This records mechanical completion, without supervising-user signoff.
 
 ## Explicit non-goals
 
