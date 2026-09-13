@@ -51,7 +51,11 @@ const cargoArguments = [
   "--target",
   target,
 ];
-if (release) cargoArguments.push("--release");
+if (release) {
+  // The adapter has no solver equations. Optimize its chrome/transport glue for
+  // download size while the shared numerical/domain crates retain level 3.
+  cargoArguments.push("--release", "--config", 'profile.release.package.geosolve-demo-web.opt-level="z"');
+}
 run("cargo", cargoArguments);
 
 const metadata = JSON.parse(

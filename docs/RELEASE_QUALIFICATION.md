@@ -55,7 +55,11 @@ the default level 1 applies to native and non-release WASM tests and retains deb
 evidence and are recorded, not silently compared as identical builds. Tests retain source-line
 backtraces with `line-tables-only` debug information. Release and benchmark compilation enables
 Cargo incremental artifacts and explicitly retains the original 16 codegen units and level-3
-optimization. Test assertions and overflow checks remain enabled; release semantics remain unchanged.
+optimization. M99's demo-WASM build explicitly uses size optimization (`z`) for the
+`geosolve-demo-web` adapter alone; the solver/domain crates retain level 3. Its
+build command and exact artifacts are authenticated inputs, and existing size,
+browser and performance limits remain mandatory. Test assertions and overflow checks
+remain enabled; release semantics remain unchanged.
 Profile overrides are authenticated inputs and force new qualification. These settings are being
 measured against M93's proportional-latency target; configuration alone is not a speedup claim.
 

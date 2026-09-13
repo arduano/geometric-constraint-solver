@@ -464,3 +464,21 @@ The focused regression passes in `history-native-auth-r3.log` (1/1, 8.83 s).
 This corrects the fixture without changing product decoding, diagnostics, formats
 or acceptance assertions. The failed integrated attempt remains failed; its
 independently successful stages are eligible only for authenticated runner reuse.
+
+Resume `20260913T142222-1ea44813` passes all 247 workspace and seven additional
+headless obligations, optimized demo-WASM and host-package preparation, and all
+three WASM lifecycle tests. Browser preparation then rejects the 21,555,333-byte
+demo module against its unchanged 20 MiB ceiling. Additional Binaryen convergence,
+function merging, control-flow reorganization and ThinLTO experiments do not meet
+that budget. Optimizing only the equation-free demo adapter at Rust level `z`
+produces 20,794,782 bytes (19.831 MiB); shared numerical/domain crates retain level 3,
+16 codegen units and the existing Binaryen `-Oz` pass. The ordinary release build
+script now records that per-package setting. No size limit, golden expectation,
+functional assertion or performance budget is relaxed. The resumed gate must
+qualify these exact new browser bytes before any release claim.
+
+The ordinary size-adjusted WASM command and both browser distributions pass in
+`wasm-size-build-final.log`: harness 27 files (18 JS, one CSS, three WASM),
+production 24 files (16 JS, one CSS, three WASM). Existing per-module, complete
+asset, license and distribution limits pass. This is focused artifact preparation;
+full browser, package, golden and performance qualification remains outstanding.
