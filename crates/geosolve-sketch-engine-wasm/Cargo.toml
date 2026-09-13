@@ -19,6 +19,9 @@ serde.workspace = true
 geosolve-sketch-engine = { version = "0.2.0", path = "../geosolve-sketch-engine" }
 serde_json.workspace = true
 
+[dev-dependencies]
+geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "=0.2.121"
 console_error_panic_hook = "0.1.7"

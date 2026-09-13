@@ -988,6 +988,7 @@ name = "geosolve-sketch-engine-wasm"
 version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
+ "geosolve-constraint-editor",
  "geosolve-sketch-code",
  "geosolve-sketch-engine",
  "serde",

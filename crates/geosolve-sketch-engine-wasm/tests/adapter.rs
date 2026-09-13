@@ -36,7 +36,14 @@ fn string_adapter_preserves_accepted_output_and_explicit_result_lifetime() {
     let scene: Value = serde_json::from_str(seed["scene"].as_str().unwrap()).unwrap();
     assert_eq!(scene["points"][0]["model_position"], json!([4.0, 7.0]));
     let workspace = adapter.export_result_workspace(id).unwrap();
-    let restored = geosolve_sketch_code::restore_editor_checkpoint(&workspace).unwrap();
+    let checkpoint =
+        geosolve_constraint_editor::workspace_persistence::WorkspaceSnapshot::decode(&workspace)
+            .unwrap();
+    let restored =
+        geosolve_constraint_editor::workspace_persistence::projectional_editor_from_snapshot(
+            &checkpoint,
+        )
+        .unwrap();
     assert_eq!(
         restored
             .coordinator()
@@ -47,8 +54,9 @@ fn string_adapter_preserves_accepted_output_and_explicit_result_lifetime() {
             .unwrap()
             .document()
             .points()[0]
-            .position,
-        [4.0, 7.0]
+            .position
+            .map(f64::to_bits),
+        [4.0_f64, 7.0].map(f64::to_bits)
     );
     assert!(
         adapter

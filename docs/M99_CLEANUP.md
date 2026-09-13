@@ -440,3 +440,13 @@ Preflight `20260913T135018-a662db92` passes all five stages: inventory (186 runn
 and 13 oracle-harness tests), metadata/format, managed, frontend and catalog/build
 contracts. The implementation is locally checkpointed for clean integrated
 nomination; the complete gate and final MiniCAD consumer run remain open.
+
+The first clean integrated run `20260913T135512-c56378ed` passed all five
+preflight stages, then caught a newly expanded WASM adapter test compiling against
+the wrong checkpoint argument type. The full native exported workspace contains
+nested history, so its test now uses the existing full native workspace decoder
+through a test-only editor dependency. The source-history delegated decoder keeps
+its stricter rejection. Adapter 4/4 passes in `adapter-export-regression-final-r3.log`;
+its subsequent exact-float Clippy finding is fixed with bitwise coordinate equality,
+and strict all-target WASM-adapter Clippy passes in `adapter-export-clippy-r4.log`.
+These are test corrections; no product decoding or acceptance rules changed.
