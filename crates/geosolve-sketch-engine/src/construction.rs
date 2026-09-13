@@ -11,14 +11,12 @@ use geosolve_sketch::{
     DocumentArcSweep, DocumentBSplineForm, DocumentHyperbolaBranch, GeometryRole,
 };
 use geosolve_sketch_code::{
-    CodeProject, CodeSessionIdentity, EditorBootstrapDeclaration, ManagedDeclarationDraft,
-    ManagedSketchMutation, PreparedManagedMutationReceipt, PreparedManagedMutationRequest,
-    SemanticSymbol, prepare_editor_declaration_insertions,
+    CodeProject, EditorBootstrapDeclaration, ManagedDeclarationDraft, ManagedSketchMutation,
+    PreparedManagedMutationReceipt, PreparedManagedMutationRequest, SemanticSymbol,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::terminal::PreparedDeclarationLabelProjection;
-use crate::{AcceptedEvaluation, EditableSession, EngineError, PreparedAuthoringMutation};
+use crate::{AcceptedEvaluation, EditableSession, EngineError};
 
 pub const MAX_CONSTRUCTION_SAMPLES: usize = 4096;
 // Matches the retained WASM construction reservation; option arrays cannot
@@ -29,96 +27,27 @@ fn error(value: impl std::fmt::Display) -> EngineError {
     EngineError::Admission(value.to_string())
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ConstructionTool {
-    SketchPoint,
-    Segment,
-    Polyline,
-    MidpointLine,
-    TwoPointAlignedRectangle,
-    ThreePointCornerRectangle,
-    CenterRectangle,
-    ThreePointCenterRectangle,
-    CenterRadiusCircle,
-    TwoPointDiameterCircle,
-    ThreePointCircle,
-    CenterArc,
-    ThreePointArc,
-    TangentArc,
-    CenterAxesEllipse,
-    AxisEndpointsEllipse,
-    CenterAxesEllipticalArc,
-    AxisEndpointsEllipticalArc,
-    QuadraticBezier,
-    CubicBezier,
-    RationalQuadraticConic,
-    Parabola,
-    Hyperbola,
-    OpenControlNurbs,
-    PeriodicControlNurbs,
-}
-impl ConstructionTool {
-    /// Every existing native construction recipe in palette order.
-    pub const ALL: [Self; 25] = [
-        Self::SketchPoint,
-        Self::Segment,
-        Self::Polyline,
-        Self::MidpointLine,
-        Self::TwoPointAlignedRectangle,
-        Self::ThreePointCornerRectangle,
-        Self::CenterRectangle,
-        Self::ThreePointCenterRectangle,
-        Self::CenterRadiusCircle,
-        Self::TwoPointDiameterCircle,
-        Self::ThreePointCircle,
-        Self::CenterArc,
-        Self::ThreePointArc,
-        Self::TangentArc,
-        Self::CenterAxesEllipse,
-        Self::AxisEndpointsEllipse,
-        Self::CenterAxesEllipticalArc,
-        Self::AxisEndpointsEllipticalArc,
-        Self::QuadraticBezier,
-        Self::CubicBezier,
-        Self::RationalQuadraticConic,
-        Self::Parabola,
-        Self::Hyperbola,
-        Self::OpenControlNurbs,
-        Self::PeriodicControlNurbs,
-    ];
-    /// Exact native recipe; no legacy family coalescing.
-    #[must_use]
-    pub const fn variant(self) -> GeometryToolVariant {
-        match self {
-            Self::SketchPoint => GeometryToolVariant::SketchPoint,
-            Self::Segment => GeometryToolVariant::Segment,
-            Self::Polyline => GeometryToolVariant::Polyline,
-            Self::MidpointLine => GeometryToolVariant::MidpointLine,
-            Self::TwoPointAlignedRectangle => GeometryToolVariant::TwoPointAlignedRectangle,
-            Self::ThreePointCornerRectangle => GeometryToolVariant::ThreePointCornerRectangle,
-            Self::CenterRectangle => GeometryToolVariant::CenterRectangle,
-            Self::ThreePointCenterRectangle => GeometryToolVariant::ThreePointCenterRectangle,
-            Self::CenterRadiusCircle => GeometryToolVariant::CenterRadiusCircle,
-            Self::TwoPointDiameterCircle => GeometryToolVariant::TwoPointDiameterCircle,
-            Self::ThreePointCircle => GeometryToolVariant::ThreePointCircle,
-            Self::CenterArc => GeometryToolVariant::CenterArc,
-            Self::ThreePointArc => GeometryToolVariant::ThreePointArc,
-            Self::TangentArc => GeometryToolVariant::TangentArc,
-            Self::CenterAxesEllipse => GeometryToolVariant::CenterAxesEllipse,
-            Self::AxisEndpointsEllipse => GeometryToolVariant::AxisEndpointsEllipse,
-            Self::CenterAxesEllipticalArc => GeometryToolVariant::CenterAxesEllipticalArc,
-            Self::AxisEndpointsEllipticalArc => GeometryToolVariant::AxisEndpointsEllipticalArc,
-            Self::QuadraticBezier => GeometryToolVariant::QuadraticBezier,
-            Self::CubicBezier => GeometryToolVariant::CubicBezier,
-            Self::RationalQuadraticConic => GeometryToolVariant::RationalQuadraticConic,
-            Self::Parabola => GeometryToolVariant::Parabola,
-            Self::Hyperbola => GeometryToolVariant::Hyperbola,
-            Self::OpenControlNurbs => GeometryToolVariant::OpenControlNurbs,
-            Self::PeriodicControlNurbs => GeometryToolVariant::PeriodicControlNurbs,
+macro_rules! define_construction_tools {
+    ($( $family:ident => ($family_key:literal, $default:ident) {
+        $( $variant:ident => $key:literal, )*
+    } )*) => {
+        /// Wire projection of the complete native construction inventory.
+        #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        pub enum ConstructionTool { $( $( $variant, )* )* }
+        impl ConstructionTool {
+            /// Every existing native construction recipe in palette order.
+            pub const ALL: [Self; GeometryToolVariant::ALL.len()] = [$( $( Self::$variant, )* )*];
+            /// Exact native recipe; no legacy family coalescing.
+            #[must_use]
+            pub const fn variant(self) -> GeometryToolVariant {
+                match self { $( $( Self::$variant => GeometryToolVariant::$variant, )* )* }
+            }
         }
-    }
+    };
 }
+geosolve_constraint_editor::geometry_tool_catalog!(define_construction_tools);
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ConstructionEvent {
@@ -294,7 +223,6 @@ pub struct ConstructionPrediction {
     last_pointer: Option<[f64; 2]>,
     diagnostic: Option<String>,
     sample_bytes: usize,
-    circle_authoring_points: Vec<[f64; 2]>,
 }
 #[derive(Debug)]
 pub struct ConstructionTerminal {
@@ -312,45 +240,38 @@ impl ConstructionTerminal {
 /// Exact server replay plus one compiler ticket, held privately until resolution.
 #[derive(Debug)]
 pub struct PreparedConstruction {
-    expected: CodeSessionIdentity,
-    mutation: PreparedAuthoringMutation,
-    editor: Box<ProjectionalEditorSession>,
-    projections: Vec<PreparedDeclarationLabelProjection>,
+    operation: crate::authoring_commit::PreparedNativeAuthoring,
 }
 impl PreparedConstruction {
     pub fn request(&self) -> &PreparedManagedMutationRequest {
-        self.mutation.request()
+        self.operation.mutation.request()
     }
     pub fn declarations(&self) -> impl ExactSizeIterator<Item = &SemanticSymbol> {
-        self.projections
+        self.operation
+            .projections
             .iter()
             .map(|projection| &projection.declaration)
     }
 }
 #[derive(Debug)]
 pub struct PreparedConstructionCommit {
-    expected: CodeSessionIdentity,
-    candidate: EditableSession,
-    project: String,
-    design: crate::EditableDesign,
-    digest: String,
-    declarations: Vec<SemanticSymbol>,
+    operation: crate::authoring_commit::PreparedNativeAuthoringCommit,
 }
 impl PreparedConstructionCommit {
     pub fn result(&self) -> &crate::EngineAcceptedResult {
-        self.candidate.accepted().result()
+        self.operation.candidate.accepted().result()
     }
     pub fn project_json(&self) -> &str {
-        &self.project
+        &self.operation.project
     }
     pub fn design(&self) -> &crate::EditableDesign {
-        &self.design
+        &self.operation.design
     }
     pub fn source_design_digest(&self) -> &str {
-        &self.digest
+        &self.operation.digest
     }
     pub fn declarations(&self) -> &[SemanticSymbol] {
-        &self.declarations
+        &self.operation.declarations
     }
 }
 
@@ -411,7 +332,6 @@ impl EditableSession {
             last_pointer: None,
             diagnostic: None,
             sample_bytes: 0,
-            circle_authoring_points: Vec::new(),
         })
     }
 
@@ -438,7 +358,17 @@ impl EditableSession {
         if command.samples.is_empty() || command.samples.len() > MAX_CONSTRUCTION_SAMPLES {
             return Err(error("construction sample count is outside bounds"));
         }
-        let terminal = self.trace_construction(command)?;
+        let mut terminal = self.trace_construction(command)?;
+        if terminal.command.expected_declarations != command.expected_declarations {
+            // Retained history can advance native default-label allocation without
+            // changing the public source/design basis. Authenticate a cold client's
+            // entire command independently; only native-proven default labels may
+            // then transfer to the retained terminal. Operands/branches stay exact.
+            let cold = self.cold_prediction_basis()?.trace_construction(command)?;
+            if cold.command.expected_declarations == command.expected_declarations {
+                retain_original_default_labels(&cold, &mut terminal);
+            }
+        }
         if terminal.command.expected_declarations != command.expected_declarations {
             return Err(error(
                 "construction replay resolved different semantic operands or branch intent",
@@ -489,32 +419,15 @@ impl EditableSession {
         &self,
         terminal: ConstructionTerminal,
     ) -> Result<PreparedConstruction, EngineError> {
-        let mutation = self.prepare_managed_mutation(
-            ManagedSketchMutation::InsertDeclarations {
-                declarations: terminal.command.expected_declarations,
-            },
-            terminal.high_water,
-        )?;
-        let graph = terminal.editor.coordinator().intent().graph();
-        let projections = terminal
-            .declarations
-            .iter()
-            .map(|declaration| {
-                let node = graph
-                    .node(declaration.node)
-                    .ok_or_else(|| error("construction declaration disappeared"))?;
-                Ok(PreparedDeclarationLabelProjection {
-                    node: declaration.node,
-                    terminal_symbol: node.symbol.clone(),
-                    declaration: declaration.symbol.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>, EngineError>>()?;
         Ok(PreparedConstruction {
-            expected: self.token().clone(),
-            mutation,
-            editor: terminal.editor,
-            projections,
+            operation: self.prepare_native_authoring(
+                terminal.editor,
+                &terminal.declarations,
+                ManagedSketchMutation::InsertDeclarations {
+                    declarations: terminal.command.expected_declarations,
+                },
+                terminal.high_water,
+            )?,
         })
     }
 
@@ -529,30 +442,13 @@ impl EditableSession {
         prepared: &PreparedConstruction,
         receipt: PreparedManagedMutationReceipt,
     ) -> Result<PreparedConstructionCommit, EngineError> {
-        if self.token() != &prepared.expected {
-            return Err(error("construction preparation is stale or foreign"));
-        }
-        let mut candidate = self.fork_for_preparation();
-        candidate.apply_managed_mutation(&prepared.mutation, receipt)?;
-        let materialized = &candidate.accepted().0.materialized;
-        crate::terminal::validate_construction_parity(
-            &prepared.editor,
-            &materialized.editor,
-            &materialized.expansion,
-            &prepared.projections,
-        )
-        .map_err(error)?;
         Ok(PreparedConstructionCommit {
-            expected: prepared.expected.clone(),
-            project: candidate.export_project_json()?,
-            design: candidate.design(),
-            digest: candidate.source_design_digest()?,
-            candidate,
-            declarations: prepared
-                .projections
-                .iter()
-                .map(|projection| projection.declaration.clone())
-                .collect(),
+            operation: self.resolve_native_authoring(
+                &prepared.operation,
+                receipt,
+                "construction",
+                "Apply project",
+            )?,
         })
     }
 
@@ -564,7 +460,7 @@ impl EditableSession {
         &mut self,
         prepared: PreparedConstructionCommit,
     ) -> Result<AcceptedEvaluation, EngineError> {
-        self.install_prepared_session(&prepared.expected, prepared.candidate)
+        self.install_native_authoring(prepared.operation)
     }
 }
 
@@ -631,13 +527,7 @@ impl ConstructionPrediction {
             .editor
             .scene(next_viewport, CHORD_TOLERANCE_PIXELS)
             .map_err(error)?;
-        let prior_stages = self
-            .editor
-            .editor()
-            .geometry_draft_status()
-            .map_or(0, |status| status.completed_stages);
-        let input = sample.input.clone();
-        let effects = self.event_effects(gesture_id, input.clone(), &scene, pointer)?;
+        let effects = self.event_effects(gesture_id, sample.input.clone(), &scene, pointer)?;
         if matches!(
             sample.input,
             ConstructionEvent::Click { .. } | ConstructionEvent::StepBack
@@ -646,32 +536,7 @@ impl ConstructionPrediction {
         }
         self.sample_bytes += sample_bytes;
         self.command.samples.push(sample);
-        let resolved_position = self
-            .editor
-            .editor()
-            .draft_inference_resolution()
-            .map(|resolution| resolution.adjusted_model_position);
         self.diagnostic = self.dispatch_effects(effects)?;
-        if self.command.tool == ConstructionTool::ThreePointCircle {
-            let next_stages = self
-                .editor
-                .editor()
-                .geometry_draft_status()
-                .map_or(0, |status| status.completed_stages);
-            match input {
-                ConstructionEvent::Click { position, .. }
-                    if self.diagnostic.is_none()
-                        && (self.completed || next_stages > prior_stages) =>
-                {
-                    self.circle_authoring_points
-                        .push(resolved_position.unwrap_or(position));
-                }
-                ConstructionEvent::StepBack if next_stages < prior_stages => {
-                    self.circle_authoring_points.pop();
-                }
-                _ => {}
-            }
-        }
         Ok(self.frame())
     }
 
@@ -742,7 +607,6 @@ impl ConstructionPrediction {
             ConstructionEvent::Reset => {
                 self.preferred_candidate = None;
                 self.last_pointer = None;
-                self.circle_authoring_points.clear();
                 self.editor.editor_mut().cancel()
             }
             ConstructionEvent::Move {
@@ -940,92 +804,16 @@ impl ConstructionPrediction {
             return Err(error("construction has no accepted terminal"));
         }
         let origin = &self.origin.0.materialized;
-        let accepted_nodes = origin.editor.coordinator().intent().graph().nodes();
-        let added = self
-            .editor
-            .coordinator()
-            .intent()
-            .graph()
-            .nodes()
-            .values()
-            .filter(|node| !accepted_nodes.contains_key(&node.id))
-            .collect::<Vec<_>>();
-        if added.is_empty() || added.len() > geosolve_sketch_code::MANAGED_MUTATION_BATCH_LIMIT {
-            return Err(error("construction declaration count is outside bounds"));
-        }
-        let (declarations, high_water) =
-            crate::construction_names::allocate_canvas_declaration_names(
+        let (declarations, high_water, drafts) =
+            geosolve_sketch_code::prepare_editor_source_insertion(
                 &self.project,
-                &added,
-                self.project.managed.declaration_name_high_water,
+                &origin.expansion,
+                &origin.editor,
+                &self.editor,
             )
-            .map_err(error)?;
-        let mut insertion = prepare_editor_declaration_insertions(
-            &self.project,
-            &origin.expansion,
-            &origin.editor,
-            &self.editor,
-            &declarations,
-        )
-        .map_err(error)?;
-        // Three-point Circle's native recipe stores the derived center/radius.
-        // Retain the actual resolved authoring triplet, instead of deriving a
-        // second equilateral triplet whose recomputation can change last bits.
-        // This is replayed source intent, not a tolerance in terminal validation.
-        if self.command.tool == ConstructionTool::ThreePointCircle {
-            let [first, second, third] = self.circle_authoring_points.as_slice() else {
-                return Err(error(
-                    "three-point circle lost its authenticated authoring samples",
-                ));
-            };
-            let source = declarations
-                .iter()
-                .find(|declaration| {
-                    self.editor
-                        .coordinator()
-                        .intent()
-                        .graph()
-                        .node(declaration.node)
-                        .is_some_and(|node| {
-                            matches!(
-                                node.kind,
-                                geosolve_sketch_intent::IntentNodeKind::Geometry {
-                                    recipe:
-                                        geosolve_sketch_intent::GeometryRecipeKind::ThreePointCircle
-                                }
-                            )
-                        })
-                })
-                .ok_or_else(|| error("three-point circle lost its source declaration"))?;
-            let declaration = insertion
-                .declarations
-                .iter_mut()
-                .find(|declaration| declaration.symbol == source.symbol)
-                .ok_or_else(|| error("three-point circle source insertion disappeared"))?;
-            let geosolve_sketch_code::ManagedValue::Object(arguments) = &mut declaration.arguments
-            else {
-                return Err(error(
-                    "three-point circle source arguments are not an object",
-                ));
-            };
-            for (name, position) in [("first", first), ("second", second), ("third", third)] {
-                arguments.insert(
-                    name.into(),
-                    geosolve_sketch_code::ManagedValue::Array(
-                        position
-                            .iter()
-                            .copied()
-                            .map(geosolve_sketch_code::ManagedValue::Number)
-                            .collect(),
-                    ),
-                );
-            }
-        }
-        self.command.expected_declarations = insertion
-            .declarations
-            .into_iter()
-            .map(ManagedDeclarationDraft::from)
-            .collect();
+            .map_err(error)?
+            .into_parts();
+        self.command.expected_declarations = drafts;
         Ok(ConstructionTerminal {
             command: self.command,
             editor: self.editor,
@@ -1169,83 +957,16 @@ fn project_preview(preview: ConstructionPreview) -> ConstructionGuide {
     }
 }
 
-/// Draft labels default to private native allocation symbols. Preserve the exact
-/// original authenticated display label while allocating latest persistent names.
-/// This is restricted to unrenamed newly created nodes; arbitrary metadata never
-/// participates in alpha normalization.
 fn retain_original_default_labels(
     original: &ConstructionTerminal,
     latest: &mut ConstructionTerminal,
 ) {
-    if original.command.expected_declarations.len() != latest.command.expected_declarations.len() {
-        return;
-    }
-    let default_symbol =
-        |terminal: &ConstructionTerminal, draft: &ManagedDeclarationDraft| -> Option<String> {
-            let declaration = terminal
-                .declarations
-                .iter()
-                .find(|value| value.symbol.0 == draft.symbol)?;
-            let intent = terminal.editor.coordinator().intent();
-            let node = intent.graph().node(declaration.node)?;
-            if intent
-                .organization()
-                .node_names()
-                .get(&declaration.node)
-                .is_some_and(|name| name != &node.symbol)
-            {
-                return None;
-            }
-            Some(
-                intent
-                    .graph()
-                    .node(declaration.node)?
-                    .symbol
-                    .as_str()
-                    .to_owned(),
-            )
-        };
-    let old_defaults = original
-        .command
-        .expected_declarations
-        .iter()
-        .map(|draft| default_symbol(original, draft))
-        .collect::<Vec<_>>();
-    let new_defaults = latest
-        .command
-        .expected_declarations
-        .iter()
-        .map(|draft| default_symbol(latest, draft))
-        .collect::<Vec<_>>();
-    for (((old, new), old_default), new_default) in original
-        .command
-        .expected_declarations
-        .iter()
-        .zip(&mut latest.command.expected_declarations)
-        .zip(old_defaults)
-        .zip(new_defaults)
-    {
-        let (Some(old_default), Some(new_default)) = (old_default, new_default) else {
-            continue;
-        };
-        let (
-            geosolve_sketch_code::ManagedValue::Object(old_fields),
-            geosolve_sketch_code::ManagedValue::Object(new_fields),
-        ) = (&old.arguments, &mut new.arguments)
-        else {
-            continue;
-        };
-        if old_fields.get("label")
-            == Some(&geosolve_sketch_code::ManagedValue::String(
-                old_default.clone(),
-            ))
-            && new_fields.get("label")
-                == Some(&geosolve_sketch_code::ManagedValue::String(new_default))
-        {
-            new_fields.insert(
-                "label".into(),
-                geosolve_sketch_code::ManagedValue::String(old_default),
-            );
-        }
-    }
+    geosolve_sketch_code::retain_editor_default_labels(
+        &original.editor,
+        &original.declarations,
+        &original.command.expected_declarations,
+        &latest.editor,
+        &latest.declarations,
+        &mut latest.command.expected_declarations,
+    );
 }

@@ -3,15 +3,15 @@
 //! Working text and accepted source/history are never changed by this module.
 
 use geosolve_constraint_editor::{
-    DelegatedPointDragProposal, EditorEffect, IntentNativeBinding, InteractionWorkReceipt,
-    Modifiers, PointerInput, ProjectionalEditorSession, Viewport,
+    DelegatedPointDragProposal, EditorEffect, InteractionWorkReceipt, Modifiers, PointerInput,
+    ProjectionalEditorSession, Viewport,
 };
 use geosolve_sketch::{DesignPointId, SketchHardValidity};
+use geosolve_sketch_code::editor_terminal::expanded_port_point;
 use geosolve_sketch_code::{
-    CodePointEdit, CodeRectangleCorner, CodeWritableAddress, ExpandedPort, ExpandedWritablePoint,
+    CodePointEdit, CodeRectangleCorner, CodeWritableAddress, ExpandedWritablePoint,
     materialize_code_project_incremental_with_overlay,
 };
-use geosolve_sketch_intent::IntentPortKind;
 use serde::{Deserialize, Serialize};
 
 use crate::{EditableSession, EngineError};
@@ -499,33 +499,6 @@ fn accepted_point(
         .and_then(|accepted| accepted.document().point(point))
         .map(|point| point.position)
         .ok_or_else(|| error("point gesture has no independently accepted native position"))
-}
-
-pub(super) fn expanded_port_point(
-    editor: &ProjectionalEditorSession,
-    handle: &ExpandedPort,
-) -> Option<DesignPointId> {
-    if handle.kind != IntentPortKind::Point {
-        return None;
-    }
-    let node = editor
-        .coordinator()
-        .intent()
-        .graph()
-        .node_by_symbol(&handle.alias)?;
-    let port = node.port_by_selector(handle.selector)?;
-    if port.kind != handle.kind {
-        return None;
-    }
-    match editor
-        .coordinator()
-        .accepted_materialization()?
-        .ownership
-        .port(port.as_ref(node.id))?
-    {
-        IntentNativeBinding::Point(point) => Some(point),
-        _ => None,
-    }
 }
 
 fn same_semantic_address(a: &CodeWritableAddress, b: &CodeWritableAddress) -> bool {

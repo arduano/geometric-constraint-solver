@@ -3,10 +3,10 @@
 //! Navigation owns no solver. Browsing can describe source edits but cannot publish them.
 
 use super::*;
+#[cfg(test)]
+use geosolve_constraint_editor::CurvePickContext;
 use geosolve_constraint_editor::{
-    AnnotationLayoutState, ConstraintEditor, CurvePickContext, DimensionDisplayMode,
-    DimensionPresentationContext, DimensionPresentationState, GeometryInteractionPolicy,
-    SelectionPresentationState, Viewport,
+    DimensionPresentationState, GeometryInteractionPolicy, SelectionPresentationState, Viewport,
 };
 use std::collections::BTreeMap;
 
@@ -15,62 +15,20 @@ mod presence;
 #[cfg(test)]
 mod replacement_tests;
 mod visibility;
+pub(super) use visibility::browsing_visibility_seed;
 #[cfg(test)]
 mod visibility_tests;
-use visibility::{VisibilitySeed, VisibilityState};
 
 const FORMAT: &str = "geosolve-local-interaction-v1";
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct LocalDimensionSeed {
-    pub state: DimensionPresentationState,
-    pub context: DimensionPresentationContext,
-    pub layout: AnnotationLayoutState,
-    pub ids: BTreeMap<String, geosolve_constraint_editor::AnnotationLayoutKey>,
-}
+pub(super) use geosolve_constraint_editor::DetachedDimensionPresentation as LocalDimensionSeed;
+use geosolve_constraint_editor::PresentationMapping;
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct InteractionSeed {
-    format: String,
-    scene_key: String,
-    scene: String,
-    title: String,
-    host_size_received: bool,
-    semantic_preview: bool,
-    selection: Vec<SelectionItem>,
-    curve_picks: Vec<CurvePickContext>,
-    grid_visible: bool,
-    policy: GeometryInteractionPolicy,
-    dimensions: LocalDimensionSeed,
-    #[serde(default)]
-    visibility_seed: VisibilitySeed,
-    #[serde(default)]
-    visibility: VisibilityState,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    point_targets: BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    presence_bindings: BTreeMap<String, Vec<geosolve_constraint_editor::IntentNativeBinding>>,
-}
-
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct InteractionState {
-    format: String,
-    scene_key: String,
-    viewport: Viewport,
-    selection: Vec<SelectionItem>,
-    curve_picks: Vec<CurvePickContext>,
-    grid_visible: bool,
-    dimension_mode: String,
-    dimension_pins: Vec<String>,
-    dimension_focus: Option<String>,
-    #[serde(default)]
-    visibility: VisibilityState,
-}
+use geosolve_constraint_editor::detached_interaction::{
+    DetachedCanvas, DetachedCanvasState, DetachedFrameContext,
+    DetachedInteractionSeed as InteractionSeed, DetachedInteractionState as InteractionState,
+    DetachedInteractionUpdate, camera, mode,
+};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,38 +37,6 @@ struct InteractionUpdate {
     state: InteractionState,
     selection_changed: bool,
     server_frame_compatible: bool,
-}
-
-fn mode_name(mode: DimensionDisplayMode) -> &'static str {
-    match mode {
-        DimensionDisplayMode::Focused => "focused",
-        DimensionDisplayMode::All => "all",
-        DimensionDisplayMode::Hidden => "hidden",
-    }
-}
-fn mode(value: &str) -> Result<DimensionDisplayMode, String> {
-    match value {
-        "focused" => Ok(DimensionDisplayMode::Focused),
-        "all" => Ok(DimensionDisplayMode::All),
-        "hidden" => Ok(DimensionDisplayMode::Hidden),
-        _ => Err("Unknown dimension mode".into()),
-    }
-}
-fn camera(viewport: Viewport) -> Result<super::super::scene::CanvasCamera, String> {
-    if viewport
-        .screen_size
-        .iter()
-        .any(|v| !v.is_finite() || *v <= 0.0 || *v > MAX_HOST_EXTENT)
-    {
-        return Err("Invalid local viewport extent".into());
-    }
-    let mut camera = super::super::scene::CanvasCamera::new(
-        viewport.model_center,
-        viewport.pixels_per_model_unit,
-    )
-    .ok_or("Invalid local camera")?;
-    camera.resize(viewport.screen_size);
-    Ok(camera)
 }
 
 impl WorkbenchBridge {
@@ -166,7 +92,7 @@ impl WorkbenchBridge {
             grid_visible: self.grid_visible,
             policy: self.editor().editor().geometry_interaction_policy(),
             dimensions: self.local_dimension_seed(),
-            visibility_seed: VisibilitySeed::new(self, scene),
+            visibility_seed: visibility::visibility_seed(self, scene),
             visibility: self.local_visibility_state(),
             bindings: self.editor().presentation_bindings(),
             point_targets: self
@@ -252,279 +178,7 @@ impl WorkbenchBridge {
     }
 }
 
-/// Per-tab retained chrome; construction validates one complete accepted model.
-/// No editing, compiler or gesture method is exposed by this adapter.
-pub(crate) struct BrowsingPresentation {
-    bridge: WorkbenchBridge,
-    source_key: String,
-    native_key: String,
-    source_scene: EditorScene,
-    mapping: PresentationMapping,
-    reverse: PresentationMapping,
-    dimension_ids: BTreeMap<String, String>,
-    source_dimension_ids: BTreeMap<String, String>,
-}
-impl BrowsingPresentation {
-    pub(crate) fn new(encoded: &str) -> Result<Self, String> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Request {
-            project: String,
-            design: super::super::code_projects::WorkspaceDesign,
-            seed: InteractionSeed,
-        }
-        let request: Request = decode_request(encoded)?;
-        if request.seed.format != FORMAT {
-            return Err("Unsupported browsing scene format".into());
-        }
-        let project = geosolve_sketch_code::CodeProject::from_json(&request.project)
-            .map_err(|e| e.to_string())?;
-        let expected_design = serde_json::to_value(&request.design).map_err(|e| e.to_string())?;
-        let (code, editor) = CodeProjectWorkbench::open_workspace_design(project, request.design)?;
-        let title = code.title().to_owned();
-        let mut bridge = WorkbenchBridge::from_parts(
-            WorkbenchDocumentAuthority::from_projectional_editor(*editor)?,
-            Some(code),
-            super::super::samples::SampleCatalogState::default(),
-            title,
-            String::new(),
-        )?;
-        let exported: serde_json::Value =
-            serde_json::from_str(&bridge.export_project_json()?).map_err(|e| e.to_string())?;
-        let actual_project: serde_json::Value = serde_json::from_str(
-            exported["contents"]
-                .as_str()
-                .ok_or("Browsing project export missing contents")?,
-        )
-        .map_err(|e| e.to_string())?;
-        let expected_project: serde_json::Value =
-            serde_json::from_str(&request.project).map_err(|e| e.to_string())?;
-        let actual_design: serde_json::Value =
-            serde_json::from_str(&bridge.workspace_design_json()?).map_err(|e| e.to_string())?;
-        if actual_project != expected_project || actual_design != expected_design {
-            return Err("Browsing reconstruction disagrees with accepted source/design".into());
-        }
-        bridge.snapshot()?;
-        let source_scene =
-            EditorScene::from_detached_json(&request.seed.scene).map_err(|e| e.to_string())?;
-        let native_scene = bridge
-            .retained_scene
-            .as_ref()
-            .ok_or("Browsing native scene unavailable")?;
-        let mapping = PresentationMapping::new(
-            request.seed.bindings.as_ref(),
-            bridge.editor().presentation_bindings().as_ref(),
-            source_scene.presentation_document().id(),
-            native_scene.presentation_document().id(),
-        )?;
-        let native_key = bridge.local_scene_key();
-        let reverse = mapping.reverse()?;
-        let native_dimensions = bridge.local_dimension_seed();
-        let mut dimension_ids = BTreeMap::new();
-        for (id, key) in &request.seed.dimensions.ids {
-            let native_key = mapping.layout_key(*key)?;
-            let native_id = native_dimensions
-                .ids
-                .iter()
-                .find(|(_, key)| **key == native_key)
-                .map(|(id, _)| id)
-                .ok_or("Browsing dimension correspondence is unavailable")?;
-            dimension_ids.insert(id.clone(), native_id.clone());
-        }
-        let source_dimension_ids = dimension_ids
-            .iter()
-            .map(|(source, native)| (native.clone(), source.clone()))
-            .collect();
-        Ok(Self {
-            bridge,
-            source_key: request.seed.scene_key,
-            native_key,
-            source_scene,
-            mapping,
-            reverse,
-            dimension_ids,
-            source_dimension_ids,
-        })
-    }
-    pub(crate) fn update_json(&mut self, encoded: &str) -> Result<String, String> {
-        self.apply_state(decode_request(encoded)?)?;
-        serde_json::to_string(&self.chrome()?).map_err(|e| e.to_string())
-    }
-    fn apply_state(&mut self, mut state: InteractionState) -> Result<(), String> {
-        if state.format != FORMAT
-            || state.scene_key != self.source_key
-            || self.bridge.local_scene_key() != self.native_key
-        {
-            return Err("Browsing view belongs to an obsolete accepted model".into());
-        }
-        SelectionPresentationState {
-            items: state.selection.clone(),
-            curve_picks: state.curve_picks.clone(),
-        }
-        .validate(&self.source_scene)
-        .map_err(|e| e.to_string())?;
-        let native_scene = self
-            .bridge
-            .retained_scene
-            .as_ref()
-            .ok_or("Browsing native scene unavailable")?;
-        state.selection = state
-            .selection
-            .into_iter()
-            .map(|item| self.mapping.selection(item))
-            .collect::<Result<_, _>>()?;
-        state.curve_picks = state
-            .curve_picks
-            .into_iter()
-            .map(|pick| self.mapping.curve_pick(pick, native_scene))
-            .collect::<Result<_, _>>()?;
-        state.scene_key.clone_from(&self.native_key);
-        state.dimension_pins = state
-            .dimension_pins
-            .iter()
-            .map(|id| self.native_dimension_id(id))
-            .collect::<Result<_, _>>()?;
-        state.dimension_focus = state
-            .dimension_focus
-            .as_deref()
-            .map(|id| self.native_dimension_id(id))
-            .transpose()?;
-        self.bridge.apply_interaction_state(state)?;
-        self.bridge.refresh_current_scene();
-        self.native_key = self.bridge.local_scene_key();
-        Ok(())
-    }
-    fn native_dimension_id(&self, source: &str) -> Result<String, String> {
-        self.dimension_ids
-            .get(source)
-            .cloned()
-            .ok_or_else(|| "Browsing dimension belongs to another scene".into())
-    }
-    fn chrome(&mut self) -> Result<serde_json::Value, String> {
-        let mut snapshot = self.bridge.snapshot()?;
-        snapshot
-            .dimensions
-            .translate_ids(&self.source_dimension_ids)?;
-        // Native source spans describe the accepted canonical source. They must
-        // not be applied to a divergent working text without exact basis mapping.
-        Ok(serde_json::json!({
-            "explorer":snapshot.explorer,"navigation":snapshot.navigation,"dimensions":snapshot.dimensions,
-            "authoringDocument":snapshot.authoring_document,"selection":snapshot.selection,
-            "parameters":snapshot.parameters,"problems":snapshot.problems,
-            "selectedGeometryRole":snapshot.presentation.selected_geometry_role,
-            "constructionVisible":snapshot.presentation.construction_visible,
-            "visibilityRestoreAvailable":snapshot.presentation.visibility_restore_available,
-        }))
-    }
-    pub(crate) fn navigate_json(&mut self, encoded: &str) -> Result<String, String> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Request {
-            state: InteractionState,
-            command: String,
-            payload: serde_json::Value,
-        }
-        let request: Request = decode_request(encoded)?;
-        if !matches!(
-            request.command.as_str(),
-            "navigation.rows.select" | "navigation.source.select"
-        ) {
-            return Err("Unsupported native browsing navigation".into());
-        }
-        let mut state = request.state.clone();
-        self.apply_state(request.state)?;
-        match request.command.as_str() {
-            "navigation.rows.select" => self.bridge.select_navigation_rows_json(request.payload)?,
-            "navigation.source.select" => {
-                self.bridge.select_navigation_source_json(request.payload)?;
-            }
-            _ => unreachable!("whitelisted navigation"),
-        }
-        let selection = self.bridge.editor().editor().selection_presentation_state();
-        state.selection = selection
-            .items
-            .into_iter()
-            .map(|item| self.reverse.selection(item))
-            .collect::<Result<_, _>>()?;
-        state.curve_picks = selection
-            .curve_picks
-            .into_iter()
-            .map(|pick| self.reverse.curve_pick(pick, &self.source_scene))
-            .collect::<Result<_, _>>()?;
-        SelectionPresentationState {
-            items: state.selection.clone(),
-            curve_picks: state.curve_picks.clone(),
-        }
-        .validate(&self.source_scene)
-        .map_err(|e| e.to_string())?;
-        serde_json::to_string(&serde_json::json!({"state":state,"chrome":self.chrome()?}))
-            .map_err(|e| e.to_string())
-    }
-    /// Describe a native source edit without preparing a compiler job or
-    /// publishing anything. The server must independently authorize and apply it.
-    pub(crate) fn describe_json(&mut self, encoded: &str) -> Result<String, String> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Request {
-            state: InteractionState,
-            authority: String,
-            command: String,
-            payload: serde_json::Value,
-        }
-        let request: Request = decode_request(encoded)?;
-        self.apply_state(request.state)?;
-        self.bridge
-            .validate_metadata_authority(&request.authority)?;
-        let mutation = match request.command.as_str() {
-            "parameter.edit" => {
-                let payload: ParameterPayload = decode_payload(request.payload)?;
-                self.bridge
-                    .parameter_source_mutation(&payload.id, payload.value)?
-            }
-            "dimensions.edit" => {
-                let mut payload: ParameterPayload = decode_payload(request.payload)?;
-                payload.id = self.native_dimension_id(&payload.id)?;
-                self.bridge.dimension_source_mutation(
-                    serde_json::json!({"id":payload.id,"value":payload.value}),
-                )?
-            }
-            "authoring.metadata.set" => {
-                Some(self.bridge.metadata_source_mutation(request.payload)?)
-            }
-            "authoring.parameter.extract" => {
-                Some(self.bridge.extraction_source_mutation(request.payload)?)
-            }
-            "declaration.move" => self
-                .bridge
-                .declaration_move_mutation(&decode_payload(request.payload)?)?,
-            "declaration.suppression.set" => {
-                let payload: DeclarationSuppressionPayload = decode_payload(request.payload)?;
-                Some(
-                    self.bridge
-                        .suppression_source_mutation(&payload.id, payload.suppressed)?,
-                )
-            }
-            "declaration.delete" => {
-                let payload: SelectionPayload = decode_payload(request.payload)?;
-                if let Some(DeclarationRowTarget::Managed {
-                    closure_role: ManagedDeclarationClosureRole::Helper { root },
-                    ..
-                }) = self.bridge.declaration_row_target(&payload.id)
-                {
-                    return Err(format!(
-                        "Profile Offset helper declarations cannot be deleted independently of `{}`",
-                        root.0
-                    ));
-                }
-                Some(ManagedSketchMutation::Delete {
-                    target: self.bridge.managed_row_target(&payload.id)?,
-                })
-            }
-            _ => return Err("Unsupported native source edit description".into()),
-        };
-        serde_json::to_string(&mutation).map_err(|e| e.to_string())
-    }
-}
+pub(crate) use super::accepted_browsing::BrowsingPresentation;
 
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -696,381 +350,6 @@ impl PredictionGuide {
     }
 }
 
-struct PresentationMapping {
-    source: geosolve_sketch::DocumentId,
-    destination: geosolve_sketch::DocumentId,
-    bindings: BTreeMap<
-        geosolve_constraint_editor::IntentNativeBinding,
-        geosolve_constraint_editor::IntentNativeBinding,
-    >,
-}
-impl PresentationMapping {
-    fn reverse(&self) -> Result<Self, String> {
-        let mut bindings = BTreeMap::new();
-        for (source, destination) in &self.bindings {
-            if bindings
-                .insert(*destination, *source)
-                .is_some_and(|previous| previous != *source)
-            {
-                return Err("Presentation namespace correspondence is not reversible".into());
-            }
-        }
-        Ok(Self {
-            source: self.destination,
-            destination: self.source,
-            bindings,
-        })
-    }
-    fn new(
-        source: Option<&geosolve_constraint_editor::ProjectionalPresentationBindings>,
-        destination: Option<&geosolve_constraint_editor::ProjectionalPresentationBindings>,
-        source_document: geosolve_sketch::DocumentId,
-        destination_document: geosolve_sketch::DocumentId,
-    ) -> Result<Self, String> {
-        let mut bindings = BTreeMap::new();
-        if source_document != destination_document {
-            let (Some(source), Some(destination)) = (source, destination) else {
-                return Err("Prediction namespace correspondence is unavailable".into());
-            };
-            if source.document != source_document || destination.document != destination_document {
-                return Err("Prediction namespace correspondence belongs to another scene".into());
-            }
-            for (symbol, before) in &source.nodes {
-                let after = destination
-                    .nodes
-                    .get(symbol)
-                    .ok_or("Prediction lost a source-owned declaration")?;
-                if before.len() != after.len() {
-                    return Err("Prediction declaration ownership changed".into());
-                }
-                for (before, after) in before.iter().zip(after) {
-                    if std::mem::discriminant(before) != std::mem::discriminant(after) {
-                        return Err("Prediction declaration ownership kind changed".into());
-                    }
-                    if let Some(previous) = bindings.insert(*before, *after)
-                        && previous != *after
-                    {
-                        return Err("Prediction namespace correspondence is ambiguous".into());
-                    }
-                }
-            }
-        }
-        Ok(Self {
-            source: source_document,
-            destination: destination_document,
-            bindings,
-        })
-    }
-    /// Personal state may survive a source edit only for unambiguous owners
-    /// whose complete binding shape still agrees. Unlike prediction mapping,
-    /// absent or changed declarations are simply not reconciled.
-    fn for_replacement(source: &LocalInteraction, destination: &LocalInteraction) -> Self {
-        use geosolve_constraint_editor::IntentNativeBinding as Binding;
-        let source_document = source.scene.presentation_document();
-        let destination_document = destination.scene.presentation_document();
-        let mut result = Self {
-            source: source_document.id(),
-            destination: destination_document.id(),
-            bindings: BTreeMap::new(),
-        };
-        if result.source == result.destination {
-            return result;
-        }
-        let (Some(before), Some(after)) = (&source.bindings, &destination.bindings) else {
-            return result;
-        };
-        let compatible = |before: &Binding, after: &Binding| {
-            if std::mem::discriminant(before) != std::mem::discriminant(after) {
-                return false;
-            }
-            match (before, after) {
-                (Binding::Curve(before), Binding::Curve(after)) => {
-                    match (
-                        source_document.curve(*before),
-                        destination_document.curve(*after),
-                    ) {
-                        (Some(before), Some(after)) => {
-                            std::mem::discriminant(&before.definition)
-                                == std::mem::discriminant(&after.definition)
-                        }
-                        _ => false,
-                    }
-                }
-                _ => true,
-            }
-        };
-        let mut candidates = BTreeMap::<Binding, std::collections::BTreeSet<Binding>>::new();
-        let mut reverse = BTreeMap::<Binding, std::collections::BTreeSet<Binding>>::new();
-        for (symbol, before) in &before.nodes {
-            let Some(after) = after.nodes.get(symbol) else {
-                continue;
-            };
-            if before.len() != after.len()
-                || !before.iter().zip(after).all(|(a, b)| compatible(a, b))
-            {
-                continue;
-            }
-            for (before, after) in before.iter().zip(after) {
-                candidates.entry(*before).or_default().insert(*after);
-                reverse.entry(*after).or_default().insert(*before);
-            }
-        }
-        for (before, after) in candidates {
-            if after.len() == 1 {
-                let after = *after.first().expect("one candidate");
-                if reverse
-                    .get(&after)
-                    .is_some_and(|sources| sources.len() == 1)
-                {
-                    result.bindings.insert(before, after);
-                }
-            }
-        }
-        result
-    }
-    fn binding(
-        &self,
-        source: geosolve_constraint_editor::IntentNativeBinding,
-    ) -> Result<geosolve_constraint_editor::IntentNativeBinding, String> {
-        if self.source == self.destination {
-            return Ok(source);
-        }
-        self.bindings
-            .get(&source)
-            .copied()
-            .ok_or_else(|| "Prediction has no exact presentation binding".into())
-    }
-    fn selection(&self, item: SelectionItem) -> Result<SelectionItem, String> {
-        use geosolve_constraint_editor::IntentNativeBinding as Binding;
-        Ok(match item {
-            SelectionItem::Point(point) => match self.binding(Binding::Point(point))? {
-                Binding::Point(point) => SelectionItem::Point(point),
-                _ => return Err("Prediction point binding changed kind".into()),
-            },
-            SelectionItem::Curve(span) => match self.binding(Binding::Curve(span.curve))? {
-                Binding::Curve(curve) => SelectionItem::Curve(geosolve_sketch::CurveSpan {
-                    curve,
-                    segment: span.segment,
-                }),
-                _ => return Err("Prediction curve binding changed kind".into()),
-            },
-            SelectionItem::Dimension(dimension) => {
-                match self.binding(Binding::Dimension(dimension))? {
-                    Binding::Dimension(dimension) => SelectionItem::Dimension(dimension),
-                    _ => return Err("Prediction dimension binding changed kind".into()),
-                }
-            }
-            SelectionItem::Constraint(constraint) => {
-                match self.binding(Binding::Constraint(constraint))? {
-                    Binding::Constraint(constraint) => SelectionItem::Constraint(constraint),
-                    _ => return Err("Prediction constraint binding changed kind".into()),
-                }
-            }
-            SelectionItem::Feature(feature) => {
-                match self.binding(Binding::ComputedFeature(feature))? {
-                    Binding::ComputedFeature(feature) => SelectionItem::Feature(feature),
-                    _ => return Err("Prediction feature binding changed kind".into()),
-                }
-            }
-            SelectionItem::FeatureCorner(corner) => match (
-                self.binding(Binding::ComputedFeature(corner.feature))?,
-                self.binding(Binding::ComputedFeatureCorner(corner.corner))?,
-            ) {
-                (Binding::ComputedFeature(feature), Binding::ComputedFeatureCorner(corner)) => {
-                    SelectionItem::FeatureCorner(geosolve_sketch_features::ComputedCornerRef {
-                        feature,
-                        corner,
-                    })
-                }
-                _ => return Err("Prediction corner binding changed kind".into()),
-            },
-            SelectionItem::Datum(datum) => SelectionItem::Datum(datum),
-        })
-    }
-    fn curve_pick(
-        &self,
-        pick: CurvePickContext,
-        scene: &EditorScene,
-    ) -> Result<CurvePickContext, String> {
-        use geosolve_constraint_editor::SceneCurveOrigin;
-        let SelectionItem::Curve(span) = self.selection(SelectionItem::Curve(pick.span))? else {
-            return Err("Browsing picked curve changed kind".into());
-        };
-        let origin = match pick.origin {
-            SceneCurveOrigin::Native => SceneCurveOrigin::Native,
-            SceneCurveOrigin::FilletDiscarded {
-                source,
-                interval,
-                provenance,
-                ..
-            } => {
-                let SelectionItem::Curve(source_span) =
-                    self.selection(SelectionItem::Curve(source.span))?
-                else {
-                    return Err("Browsing implicit curve source changed kind".into());
-                };
-                let SelectionItem::FeatureCorner(owner) =
-                    self.selection(SelectionItem::FeatureCorner(provenance.owner))?
-                else {
-                    return Err("Browsing implicit curve owner changed kind".into());
-                };
-                let mut origins = scene.curves.iter().filter_map(|curve| match curve.origin {
-                    SceneCurveOrigin::FilletDiscarded {
-                        source,
-                        interval: native_interval,
-                        provenance: native_provenance,
-                        ..
-                    } if curve.span == span
-                        && source.span == source_span
-                        && native_interval == interval
-                        && native_provenance.owner == owner
-                        && native_provenance.endpoint == provenance.endpoint
-                        && native_provenance.base_interval == provenance.base_interval =>
-                    {
-                        Some(curve.origin)
-                    }
-                    _ => None,
-                });
-                let origin = origins
-                    .next()
-                    .ok_or("Browsing picked implicit curve is unavailable")?;
-                if origins.next().is_some() {
-                    return Err("Browsing picked implicit curve is ambiguous".into());
-                }
-                origin
-            }
-        };
-        Ok(CurvePickContext {
-            span,
-            parameter: pick.parameter,
-            origin,
-        })
-    }
-    fn layout_key(
-        &self,
-        key: geosolve_constraint_editor::AnnotationLayoutKey,
-    ) -> Result<geosolve_constraint_editor::AnnotationLayoutKey, String> {
-        use geosolve_constraint_editor::IntentNativeBinding as Binding;
-        if key.document != self.source {
-            return Err("Prediction annotation belongs to another document".into());
-        }
-        let Binding::Source(source) = self.binding(Binding::Source(key.source))? else {
-            return Err("Prediction annotation source changed kind".into());
-        };
-        Ok(geosolve_constraint_editor::AnnotationLayoutKey {
-            document: self.destination,
-            source,
-            item: self.selection(key.item)?,
-            ..key
-        })
-    }
-    fn dimensions(&self, dimensions: &mut LocalDimensionSeed) -> Result<(), String> {
-        if self.source == self.destination {
-            return Ok(());
-        }
-        dimensions.ids = dimensions
-            .ids
-            .iter()
-            .map(|(id, key)| Ok((id.clone(), self.layout_key(*key)?)))
-            .collect::<Result<_, String>>()?;
-        dimensions.layout = AnnotationLayoutState::from_entries(
-            dimensions
-                .layout
-                .entries()
-                .into_iter()
-                .map(|entry| {
-                    Ok(geosolve_constraint_editor::AnnotationLayoutEntry {
-                        key: self.layout_key(entry.key)?,
-                        placement: entry.placement,
-                    })
-                })
-                .collect::<Result<Vec<_>, String>>()?,
-        );
-        dimensions.context.generated = dimensions
-            .context
-            .generated
-            .iter()
-            .map(|item| self.selection(*item))
-            .collect::<Result<_, _>>()?;
-        dimensions.context.default_priority = dimensions
-            .context
-            .default_priority
-            .iter()
-            .map(|item| self.selection(*item))
-            .collect::<Result<_, _>>()?;
-        dimensions.context.hovered = dimensions
-            .context
-            .hovered
-            .map(|item| self.selection(item))
-            .transpose()?;
-        dimensions.context.active = dimensions
-            .context
-            .active
-            .map(|item| self.selection(item))
-            .transpose()?;
-        // Namespace-specific automatic caches are rebuilt once against the exact
-        // prediction scene; authored priorities/manual placements are retained.
-        dimensions.state = DimensionPresentationState::default();
-        Ok(())
-    }
-}
-
-/// Translate personal selection between exact source-owned native namespaces.
-/// This returns presentation context, never a native editing capability.
-pub(crate) fn map_authoring_selection_json(encoded: &str) -> Result<String, String> {
-    #[derive(Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct View {
-        seed: InteractionSeed,
-        state: InteractionState,
-    }
-    #[derive(Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct Request {
-        scene: String,
-        bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
-        view: View,
-    }
-    let request: Request = decode_request(encoded)?;
-    let state = request.view.state;
-    if state.format != FORMAT || state.scene_key != request.view.seed.scene_key {
-        return Err("Authoring selection belongs to a stale accepted scene".into());
-    }
-    let source = LocalInteraction::new(
-        &serde_json::to_string(&request.view.seed).map_err(|e| e.to_string())?,
-    )?;
-    let destination = EditorScene::from_detached_json(&request.scene).map_err(|e| e.to_string())?;
-    let selection = SelectionPresentationState {
-        items: state.selection,
-        curve_picks: state.curve_picks,
-    };
-    selection
-        .validate(&source.scene)
-        .map_err(|e| e.to_string())?;
-    let mapping = PresentationMapping::new(
-        request.view.seed.bindings.as_ref(),
-        request.bindings.as_ref(),
-        source.scene.presentation_document().id(),
-        destination.presentation_document().id(),
-    )?;
-    let selection = SelectionPresentationState {
-        items: selection
-            .items
-            .into_iter()
-            .map(|item| mapping.selection(item))
-            .collect::<Result<_, _>>()?,
-        curve_picks: selection
-            .curve_picks
-            .into_iter()
-            .map(|pick| mapping.curve_pick(pick, &destination))
-            .collect::<Result<_, _>>()?,
-    };
-    selection
-        .validate(&destination)
-        .map_err(|e| e.to_string())?;
-    serde_json::to_string(&selection).map_err(|e| e.to_string())
-}
-
 /// Converts a detached native prediction into paint only. No accepted-scene owner
 /// or native editing handle is constructed from this transport.
 pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
@@ -1110,44 +389,9 @@ pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
         local.scene.presentation_document().id(),
         scene.presentation_document().id(),
     )?;
-    local.replace_prediction_scene(scene, &state.visibility, &mapping)?;
-    local.camera = camera(state.viewport)?;
-    local.grid_visible = state.grid_visible;
     local
-        .editor
-        .restore_selection_presentation(
-            &local.scene,
-            SelectionPresentationState {
-                items: state
-                    .selection
-                    .into_iter()
-                    .map(|item| mapping.selection(item))
-                    .collect::<Result<_, _>>()?,
-                // Paint has no curve-pick authority. Accepted navigation retains
-                // exact native/implicit occurrence contexts independently.
-                curve_picks: Vec::new(),
-            },
-        )
-        .map_err(|e| e.to_string())?;
-    local.dimensions.state.mode = mode(&state.dimension_mode)?;
-    if state.dimension_pins.len() > DimensionPresentationState::MAX_PINS {
-        return Err("Too many prediction dimension pins".into());
-    }
-    let key = |id: &String| {
-        local
-            .dimensions
-            .ids
-            .get(id)
-            .copied()
-            .ok_or_else(|| "Stale prediction dimension".to_string())
-    };
-    local.dimensions.state.pins = state
-        .dimension_pins
-        .iter()
-        .map(key)
-        .collect::<Result<_, _>>()?;
-    local.dimensions.state.focus = state.dimension_focus.as_ref().map(key).transpose()?;
-    local.dimensions.context.navigation_active = true;
+        .native
+        .prepare_prediction(scene, state.clone(), &mapping)?;
     let mut frame = local.compose_frame_with_operation(request.operation.as_ref())?;
     if let Some(construction) = request.construction {
         let preview = construction.preview.map(PredictionGuide::preview);
@@ -1178,152 +422,90 @@ pub(crate) fn authoring_preview_json(encoded: &str) -> Result<String, String> {
 
 /// Detached presentation session shared by native tests and the browser worker.
 pub(crate) struct LocalInteraction {
-    scene_key: String,
-    scene: EditorScene,
-    full_scene: EditorScene,
-    visibility_seed: VisibilitySeed,
-    visibility: VisibilityState,
-    title: String,
-    editor: ConstraintEditor,
-    camera: super::super::scene::CanvasCamera,
-    grid_visible: bool,
-    dimensions: LocalDimensionSeed,
-    pan: Option<CanvasPanGesture>,
-    dimension_hover: Option<(SelectionItem, ScreenPoint)>,
-    host_size_received: bool,
-    point_targets: BTreeMap<geosolve_sketch::DesignPointId, serde_json::Value>,
-    presence_bindings: BTreeMap<String, Vec<geosolve_constraint_editor::IntentNativeBinding>>,
-    bindings: Option<geosolve_constraint_editor::ProjectionalPresentationBindings>,
+    native: DetachedCanvas,
     presence: presence::PresenceState,
+}
+impl std::ops::Deref for LocalInteraction {
+    type Target = DetachedCanvasState;
+    fn deref(&self) -> &Self::Target {
+        &self.native
+    }
 }
 impl LocalInteraction {
     pub(crate) fn new(encoded: &str) -> Result<Self, String> {
-        let seed: InteractionSeed = decode_request(encoded)?;
-        if seed.format != FORMAT {
-            return Err("Unsupported local interaction format".into());
-        }
-        let scene = EditorScene::from_detached_json(&seed.scene).map_err(|e| e.to_string())?;
-        if seed
-            .bindings
-            .as_ref()
-            .is_some_and(|bindings| bindings.document != scene.presentation_document().id())
-        {
-            return Err("Local presentation bindings belong to another scene".into());
-        }
-        seed.visibility_seed.validate(&seed.visibility)?;
-        let mut editor = ConstraintEditor::default();
-        editor.set_geometry_interaction_policy(seed.policy);
-        seed.visibility.apply_policy(&mut editor);
-        editor
-            .restore_selection_presentation(
-                &scene,
-                SelectionPresentationState {
-                    items: seed.selection,
-                    curve_picks: seed.curve_picks,
-                },
-            )
-            .map_err(|e| e.to_string())?;
-        let camera = camera(scene.viewport)?;
-        let full_scene = scene.clone();
-        let mut scene = scene;
-        scene
-            .hide_items(seed.visibility_seed.hidden_items(&seed.visibility))
-            .map_err(|e| e.to_string())?;
         Ok(Self {
-            scene_key: seed.scene_key,
-            scene,
-            full_scene,
-            visibility_seed: seed.visibility_seed,
-            visibility: seed.visibility,
-            title: seed.title,
-            editor,
-            camera,
-            grid_visible: seed.grid_visible,
-            dimensions: seed.dimensions,
-            pan: None,
-            dimension_hover: None,
-            host_size_received: seed.host_size_received,
-            point_targets: seed.point_targets,
-            presence_bindings: seed.presence_bindings,
-            bindings: seed.bindings,
+            native: DetachedCanvas::new(encoded)?,
             presence: presence::PresenceState::default(),
         })
     }
     fn state(&self) -> InteractionState {
-        InteractionState {
-            format: FORMAT.into(),
-            scene_key: self.scene_key.clone(),
-            viewport: self.camera.viewport(),
-            selection: self.editor.selection().to_vec(),
-            curve_picks: self.editor.selection_presentation_state().curve_picks,
-            grid_visible: self.grid_visible,
-            visibility: self.visibility.clone(),
-            dimension_mode: mode_name(self.dimensions.state.mode).into(),
-            dimension_focus: self
-                .dimensions
-                .ids
-                .iter()
-                .find(|(_, key)| Some(**key) == self.dimensions.state.focus)
-                .map(|(id, _)| id.clone()),
-            dimension_pins: self
-                .dimensions
-                .ids
-                .iter()
-                .filter(|(_, key)| self.dimensions.state.pins.contains(key))
-                .map(|(id, _)| id.clone())
-                .collect(),
-        }
-    }
-    pub(crate) fn authoring_pointer_json(&self, encoded: &str) -> Result<String, String> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Input {
-            x: f64,
-            y: f64,
-            #[serde(default)]
-            captured: bool,
-        }
-        let input: Input = decode_request(encoded)?;
-        let position = self
-            .normalized_position([input.x, input.y], input.captured)
-            .ok_or("Invalid authoring pointer position")?;
-        let item = self.editor.select_pointer_item(&self.scene, position);
-        let target = match item {
-            Some(SelectionItem::Point(point)) => self.point_targets.get(&point),
-            _ => None,
-        };
-        serde_json::to_string(&serde_json::json!({"viewport":self.camera.viewport(),
-            "position":self.camera.viewport().screen_to_model(position),"target":target}))
-        .map_err(|e| e.to_string())
+        self.native.state()
     }
     pub(crate) fn state_json(&self) -> Result<String, String> {
-        serde_json::to_string(&self.state()).map_err(|e| e.to_string())
+        self.native.state_json()
+    }
+    pub(crate) fn export_presentation_json(&self) -> Result<String, String> {
+        self.native.export_presentation_json()
+    }
+    pub(crate) fn authoring_pointer_json(&self, encoded: &str) -> Result<String, String> {
+        self.native.authoring_pointer_json(encoded)
+    }
+    fn compose(&mut self, selection_changed: bool) -> Result<String, String> {
+        let frame = self.compose_frame()?;
+        serde_json::to_string(&InteractionUpdate {
+            frame,
+            state: self.state(),
+            selection_changed,
+            server_frame_compatible: false,
+        })
+        .map_err(|e| e.to_string())
+    }
+    fn paint_update(&self, update: Option<DetachedInteractionUpdate>) -> Result<String, String> {
+        let Some(update) = update else {
+            return Ok("null".into());
+        };
+        let frame = self.render_frame_with_operation(None)?;
+        serde_json::to_string(&InteractionUpdate {
+            frame,
+            state: update.state,
+            selection_changed: update.selection_changed,
+            server_frame_compatible: update.server_frame_compatible,
+        })
+        .map_err(|e| e.to_string())
+    }
+    pub(crate) fn replace_json(&mut self, encoded: &str) -> Result<String, String> {
+        let (native, update) = self.native.prepare_replacement(encoded)?;
+        let next = Self {
+            native,
+            presence: presence::PresenceState::default(),
+        };
+        let result = next.paint_update(Some(update))?;
+        *self = next;
+        Ok(result)
     }
     pub(crate) fn restore_selection_json(&mut self, encoded: &str) -> Result<String, String> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Request {
-            expected: InteractionState,
-            state: InteractionState,
-        }
-        let request: Request = decode_request(encoded)?;
-        if request.expected != self.state() {
-            return Err("Browsing navigation belongs to an obsolete local view".into());
-        }
-        let mut permitted = request.expected;
-        permitted.selection.clone_from(&request.state.selection);
-        permitted.curve_picks.clone_from(&request.state.curve_picks);
-        if permitted != request.state {
-            return Err("Browsing navigation may only replace selection".into());
-        }
-        let selection = SelectionPresentationState {
-            items: permitted.selection,
-            curve_picks: permitted.curve_picks,
-        };
-        self.editor
-            .restore_selection_presentation(&self.scene, selection)
-            .map_err(|e| e.to_string())?;
-        self.compose(true)
+        let update = self.native.restore_selection_json(encoded)?;
+        self.paint_update(update)
+    }
+    pub(crate) fn wheel_json(&mut self, encoded: &str) -> Result<String, String> {
+        let update = self.native.wheel_json(encoded)?;
+        self.paint_update(update)
+    }
+    pub(crate) fn resize_json(&mut self, encoded: &str) -> Result<String, String> {
+        let update = self.native.resize_json(encoded)?;
+        self.paint_update(update)
+    }
+    pub(crate) fn cancel_json(&mut self, encoded: &str) -> Result<String, String> {
+        let update = self.native.cancel_json(encoded)?;
+        self.paint_update(update)
+    }
+    pub(crate) fn pointer_json(&mut self, encoded: &str) -> Result<String, String> {
+        let update = self.native.pointer_json(encoded)?;
+        self.paint_update(update)
+    }
+    pub(crate) fn dispatch_json(&mut self, encoded: &str) -> Result<String, String> {
+        let update = self.native.dispatch_json(encoded)?;
+        self.paint_update(update)
     }
     pub(crate) fn presence_json(&mut self, encoded: &str) -> Result<String, String> {
         let next = presence::PresenceState::decode(encoded, &self.scene_key)?;
@@ -1334,81 +516,31 @@ impl LocalInteraction {
         }
         result
     }
-    fn compose(&mut self, selection_changed: bool) -> Result<String, String> {
-        self.compose_for_replacement(selection_changed, false)
-    }
-    fn compose_for_replacement(
-        &mut self,
-        selection_changed: bool,
-        server_frame_compatible: bool,
-    ) -> Result<String, String> {
-        let frame = self.compose_frame()?;
-        serde_json::to_string(&InteractionUpdate {
-            frame,
-            state: self.state(),
-            selection_changed,
-            server_frame_compatible,
-        })
-        .map_err(|e| e.to_string())
-    }
-    fn replace_prediction_scene(
-        &mut self,
-        scene: EditorScene,
-        state: &VisibilityState,
-        mapping: &PresentationMapping,
-    ) -> Result<(), String> {
-        mapping.dimensions(&mut self.dimensions)?;
-        self.scene = scene;
-        self.visibility_seed
-            .mask_prediction(&mut self.scene, state, mapping)?;
-        state.apply_policy(&mut self.editor);
-        Ok(())
-    }
-    fn apply_visibility(&mut self) -> Result<(), String> {
-        self.visibility_seed.validate(&self.visibility)?;
-        let mut scene = self.full_scene.clone();
-        scene
-            .hide_items(self.visibility_seed.hidden_items(&self.visibility))
-            .map_err(|e| e.to_string())?;
-        self.visibility.apply_policy(&mut self.editor);
-        self.scene = scene;
-        self.dimension_hover = None;
-        Ok(())
-    }
-    fn compose_frame(&mut self) -> Result<FrameSnapshot, String> {
+    pub(super) fn compose_frame(&mut self) -> Result<FrameSnapshot, String> {
         self.compose_frame_with_operation(None)
     }
     fn compose_frame_with_operation(
         &mut self,
         operation: Option<&authoring_presentation::OperationPresentation>,
     ) -> Result<FrameSnapshot, String> {
-        if self.scene.viewport != self.camera.viewport() {
-            self.scene
-                .reproject_viewport(self.camera.viewport())
-                .map_err(|e| e.to_string())?;
-        }
-        self.editor
-            .populate_curve_controls(&mut self.scene)
-            .map_err(|e| e.to_string())?;
-        self.dimensions.context.selection = self.editor.selection().to_vec();
-        if let Some(operation) = operation {
-            self.dimensions.context.active = operation
-                .provisional
-                .iter()
-                .find(|item| matches!(item, SelectionItem::Dimension(_)))
-                .copied();
-            // An authored value first enters this detached scene during the
-            // tool preview. Let its native explicit-interest rule reveal it;
-            // navigation-only frames otherwise retain the existing callouts.
-            if self.dimensions.context.active.is_some() {
-                self.dimensions.context.navigation_active = false;
-            }
-        }
-        self.dimensions.state.apply(
-            &mut self.scene,
-            &self.dimensions.layout,
-            &self.dimensions.context,
-        );
+        self.native.prepare_frame(operation.map_or(
+            DetachedFrameContext::Navigation,
+            |operation| {
+                DetachedFrameContext::Authoring {
+                    active_dimension: operation
+                        .provisional
+                        .iter()
+                        .find(|item| matches!(item, SelectionItem::Dimension(_)))
+                        .copied(),
+                }
+            },
+        ))?;
+        self.render_frame_with_operation(operation)
+    }
+    fn render_frame_with_operation(
+        &self,
+        operation: Option<&authoring_presentation::OperationPresentation>,
+    ) -> Result<FrameSnapshot, String> {
         let offset = operation.and_then(authoring_presentation::OperationPresentation::offset);
         let mut pending = operation.map_or_else(Vec::new, |operation| operation.pending.clone());
         if let Some(offset) = &offset {
@@ -1449,396 +581,6 @@ impl LocalInteraction {
             scene,
             aria_label: format!("{} accepted sketch viewport", self.title),
         })
-    }
-    pub(crate) fn replace_json(&mut self, encoded: &str) -> Result<String, String> {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase", deny_unknown_fields)]
-        struct Replacement {
-            seed: InteractionSeed,
-            preserve_selection: bool,
-        }
-        let request: Replacement = decode_request(encoded)?;
-        let mut next =
-            Self::new(&serde_json::to_string(&request.seed).map_err(|e| e.to_string())?)?;
-        next.camera = self.camera;
-        next.host_size_received = self.host_size_received;
-        next.grid_visible = self.grid_visible;
-        next.visibility = self.visibility.clone();
-        next.visibility.reconcile(&next.visibility_seed);
-        next.apply_visibility()?;
-        let mapping = PresentationMapping::for_replacement(self, &next);
-        next.dimensions.state.mode = self.dimensions.state.mode;
-        next.dimensions.state.pins = self
-            .dimensions
-            .state
-            .pins
-            .iter()
-            .filter_map(|pin| mapping.layout_key(*pin).ok())
-            .filter(|pin| next.dimensions.ids.values().any(|key| key == pin))
-            .collect();
-        next.dimensions.state.focus = self
-            .dimensions
-            .state
-            .focus
-            .and_then(|focus| mapping.layout_key(focus).ok())
-            .filter(|focus| next.dimensions.ids.values().any(|key| key == focus));
-        if self.scene_key == next.scene_key {
-            next.dimensions.state = self.dimensions.state.clone();
-        }
-        next.pan = self.pan;
-        next.dimension_hover = if self.scene_key == next.scene_key {
-            self.dimension_hover
-        } else {
-            None
-        };
-        next.dimensions.context.navigation_active = self.dimensions.context.navigation_active;
-        if request.preserve_selection && self.scene_key == next.scene_key {
-            next.editor = self.editor.clone();
-            next.dimensions.context.hovered = self.dimensions.context.hovered;
-        } else if request.preserve_selection {
-            let previous = self.editor.selection_presentation_state();
-            let mut selected = SelectionPresentationState {
-                items: previous
-                    .items
-                    .into_iter()
-                    .filter_map(|item| mapping.selection(item).ok())
-                    .collect(),
-                curve_picks: Vec::new(),
-            };
-            selected.items.retain(|item| {
-                SelectionPresentationState {
-                    items: vec![*item],
-                    curve_picks: vec![],
-                }
-                .validate(&next.scene)
-                .is_ok()
-            });
-            for pick in previous.curve_picks {
-                let Ok(item) = mapping.selection(SelectionItem::Curve(pick.span)) else {
-                    continue;
-                };
-                let mapped = mapping.curve_pick(pick, &next.scene).ok().filter(|pick| {
-                    selected.items.contains(&item)
-                        && SelectionPresentationState {
-                            items: vec![item],
-                            curve_picks: vec![*pick],
-                        }
-                        .validate(&next.scene)
-                        .is_ok()
-                });
-                if let Some(pick) = mapped {
-                    selected.curve_picks.push(pick);
-                } else {
-                    selected.items.retain(|selected| *selected != item);
-                }
-            }
-            next.editor
-                .restore_selection_presentation(&next.scene, selected)
-                .map_err(|e| e.to_string())?;
-        }
-        next.editor
-            .set_geometry_interaction_policy(request.seed.policy);
-        next.visibility.apply_policy(&mut next.editor);
-        // Exact server draft/inference paint may survive an unchanged local view.
-        // Navigation never paints a preview in an obsolete camera coordinate space.
-        let server_frame_compatible = request.seed.semantic_preview
-            && next.visibility == request.seed.visibility
-            && next.scene.viewport == next.camera.viewport()
-            && next.state().selection == request.seed.selection
-            && next.state().curve_picks == request.seed.curve_picks;
-        let result = next.compose_for_replacement(true, server_frame_compatible)?;
-        *self = next;
-        Ok(result)
-    }
-    pub(crate) fn wheel_json(&mut self, encoded: &str) -> Result<String, String> {
-        let request: WheelInputRequest = decode_request(encoded)?;
-        let samples = match request {
-            WheelInputRequest::Single(v) => vec![v],
-            WheelInputRequest::Batch(v) => {
-                require_version(v.version)?;
-                v.samples
-            }
-        };
-        if samples.is_empty() || samples.len() > 256 {
-            return Err("wheel batch requires between 1 and 256 samples".into());
-        }
-        let mut next = self.camera;
-        for sample in samples {
-            require_version(sample.version)?;
-            if ![sample.x, sample.y, sample.delta_x, sample.delta_y]
-                .into_iter()
-                .all(f64::is_finite)
-            {
-                return Err("wheel coordinates and deltas must be finite".into());
-            }
-            let anchor = self
-                .normalized_position([sample.x, sample.y], false)
-                .ok_or("wheel anchor is outside the fitted sketch plane")?;
-            next.zoom_about(anchor, (-sample.delta_y * 0.0015).exp());
-        }
-        self.editor.cancel();
-        self.pan = None;
-        self.camera = next;
-        self.dimensions.context.navigation_active = true;
-        self.dimensions.context.hovered = None;
-        self.dimension_hover = None;
-        self.compose(false)
-    }
-    pub(crate) fn resize_json(&mut self, encoded: &str) -> Result<String, String> {
-        let request: ResizeRequest = decode_request(encoded)?;
-        require_version(request.version)?;
-        if !request.pixel_ratio.is_finite()
-            || request.pixel_ratio <= 0.0
-            || request.pixel_ratio > MAX_PIXEL_RATIO
-        {
-            return Err("Invalid pixel ratio".into());
-        }
-        let next = camera(Viewport {
-            screen_size: [request.width, request.height],
-            ..self.camera.viewport()
-        })?;
-        if next == self.camera {
-            self.host_size_received = true;
-            return Ok("null".into());
-        }
-        self.reset_navigation();
-        self.camera = next;
-        if !self.host_size_received {
-            self.camera.fit_scene(&self.scene);
-            self.dimensions.state.reconsider_hidden_dimensions();
-        }
-        self.host_size_received = true;
-        self.compose(false)
-    }
-    fn reset_navigation(&mut self) {
-        self.editor.cancel();
-        self.pan = None;
-        self.dimensions.context.navigation_active = false;
-        self.dimensions.context.hovered = None;
-        self.dimension_hover = None;
-    }
-    pub(crate) fn cancel_json(&mut self, encoded: &str) -> Result<String, String> {
-        let request: CancelRequest = decode_request(encoded)?;
-        require_version(request.version)?;
-        self.editor.cancel();
-        self.pan = None;
-        self.dimensions.context.navigation_active = false;
-        self.dimensions.context.hovered = None;
-        self.dimension_hover = None;
-        self.compose(false)
-    }
-    fn normalized_position(&self, client: [f64; 2], captured: bool) -> Option<ScreenPoint> {
-        let size = self.camera.viewport().screen_size;
-        let rect = super::super::effect_adapter::ClientRect {
-            left: 0.0,
-            top: 0.0,
-            width: size[0],
-            height: size[1],
-        };
-        if captured {
-            super::super::effect_adapter::normalize_captured_client_point(rect, size, client)
-        } else {
-            super::super::effect_adapter::normalize_client_point(rect, size, client)
-        }
-    }
-    pub(crate) fn pointer_json(&mut self, encoded: &str) -> Result<String, String> {
-        let request: PointerRequest = decode_request(encoded)?;
-        require_version(request.version)?;
-        if ![request.x, request.y].into_iter().all(f64::is_finite)
-            || request.pointer_id > MAX_SAFE_INTEGER
-        {
-            return Err("Invalid local pointer".into());
-        }
-        let position = self
-            .normalized_position([request.x, request.y], self.pan.is_some())
-            .ok_or("local pointer is outside the fitted sketch plane")?;
-        let before = self.editor.selection_presentation_state();
-        let hover_before = self.editor.hover_state();
-        if matches!(request.phase, PointerPhase::Down) && request.buttons == MIDDLE_POINTER_BUTTON {
-            self.editor.cancel();
-            self.pan = Some(CanvasPanGesture {
-                pointer_id: request.pointer_id,
-                origin: position,
-                origin_center: self.camera.model_center(),
-            });
-            self.dimensions.context.navigation_active = true;
-            self.dimensions.context.hovered = None;
-            self.dimension_hover = None;
-        } else if let Some(pan) = self.pan {
-            if pan.pointer_id != request.pointer_id {
-                return Err("Local pan pointer changed".into());
-            }
-            self.camera
-                .pan_from(pan.origin_center, pan.origin, position);
-            if matches!(request.phase, PointerPhase::Up) {
-                self.pan = None;
-                self.dimensions.context.navigation_active = false;
-            }
-        } else {
-            let input = PointerInput {
-                pointer_id: request.pointer_id,
-                position,
-                modifiers: Modifiers {
-                    shift: request.modifiers.shift,
-                    control: request.modifiers.ctrl,
-                    command: request.modifiers.meta,
-                },
-            };
-            match request.phase {
-                PointerPhase::Down => {
-                    self.dimensions.context.navigation_active = false;
-                    self.editor.select_at(&self.scene, input);
-                    self.dimensions.state.focus = None;
-                }
-                PointerPhase::Move => {
-                    if request.buttons == 0 {
-                        self.editor.pointer_move(&self.scene, input);
-                    }
-                }
-                PointerPhase::Up => {}
-            }
-        }
-        if matches!(request.phase, PointerPhase::Move)
-            && request.buttons == 0
-            && self.pan.is_none()
-            && hover_before == self.editor.hover_state()
-            && before == self.editor.selection_presentation_state()
-        {
-            return Ok("null".into());
-        }
-        self.compose(before != self.editor.selection_presentation_state())
-    }
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one bounded presentation command vocabulary with shared scene semantics"
-    )]
-    pub(crate) fn dispatch_json(&mut self, encoded: &str) -> Result<String, String> {
-        let request: CommandRequest = decode_request(encoded)?;
-        require_version(request.version)?;
-        let before = self.editor.selection_presentation_state();
-        let previous_context = self.dimensions.context.clone();
-        let transient = request.command.starts_with("dimensions.hover")
-            || request.command.starts_with("dimensions.navigation.");
-        match request.command.as_str() {
-            "explorer.visibility.set"
-            | "explorer.visibility.isolate"
-            | "explorer.visibility.restore"
-            | "view.construction.toggle" => {
-                self.visibility_seed
-                    .dispatch(&mut self.visibility, &request)?;
-                self.apply_visibility()?;
-            }
-            "view.fit" => {
-                self.reset_navigation();
-                self.camera.fit_scene(&self.scene);
-                self.dimensions.state.reconsider_hidden_dimensions();
-            }
-            "view.origin" => {
-                self.reset_navigation();
-                self.camera.center_origin();
-            }
-            "view.grid.toggle" => {
-                self.grid_visible = !self.grid_visible;
-            }
-            "selection.clear" => {
-                self.editor.set_selection([]);
-                self.dimensions.state.focus = None;
-            }
-            "dimensions.mode" => {
-                self.dimensions.state.mode = mode(
-                    request
-                        .payload
-                        .get("mode")
-                        .and_then(serde_json::Value::as_str)
-                        .ok_or("Missing dimension mode")?,
-                )?;
-                self.dimensions.context.navigation_active = false;
-                self.dimensions.state.focus = None;
-                self.dimensions.context.hovered = None;
-                self.dimension_hover = None;
-            }
-            "dimensions.focus" => {
-                let id = request
-                    .payload
-                    .get("id")
-                    .and_then(serde_json::Value::as_str)
-                    .ok_or("Missing dimension ID")?;
-                self.dimensions.state.focus =
-                    Some(*self.dimensions.ids.get(id).ok_or("Stale dimension ID")?);
-                self.dimensions.context.navigation_active = false;
-                if self.dimensions.state.mode == DimensionDisplayMode::Hidden {
-                    self.dimensions.state.mode = DimensionDisplayMode::Focused;
-                }
-            }
-            "dimensions.clearPins" => {
-                self.dimensions.state.pins.clear();
-                self.dimensions.context.navigation_active = false;
-            }
-            "dimensions.pin" => {
-                let id = request
-                    .payload
-                    .get("id")
-                    .and_then(serde_json::Value::as_str)
-                    .ok_or("Missing dimension ID")?;
-                let key = *self.dimensions.ids.get(id).ok_or("Stale dimension ID")?;
-                let pinned = request
-                    .payload
-                    .get("pinned")
-                    .and_then(serde_json::Value::as_bool)
-                    .ok_or("Missing pin state")?;
-                if !pinned {
-                    self.dimensions.state.pins.retain(|p| *p != key);
-                } else if !self.dimensions.state.pins.contains(&key) {
-                    if self.dimensions.state.pins.len() >= DimensionPresentationState::MAX_PINS {
-                        return Err("At most four measurements can be pinned".into());
-                    }
-                    self.dimensions.state.pins.push(key);
-                }
-                self.dimensions.context.navigation_active = false;
-            }
-            "dimensions.hover" => {
-                #[derive(Deserialize)]
-                #[serde(deny_unknown_fields)]
-                struct Hover {
-                    x: f64,
-                    y: f64,
-                }
-                let payload: Hover =
-                    serde_json::from_value(request.payload).map_err(|e| e.to_string())?;
-                let position = self
-                    .normalized_position([payload.x, payload.y], false)
-                    .ok_or("dimension hover must lie inside the finite canvas bounds")?;
-                self.dimension_hover =
-                    if self.pan.is_some() || self.dimensions.context.navigation_active {
-                        None
-                    } else {
-                        geosolve_constraint_editor::dimension_hover_target(
-                            &self.scene,
-                            &self.editor,
-                            self.dimension_hover,
-                            position,
-                        )
-                    };
-                self.dimensions.context.hovered = self.dimension_hover.map(|(item, _)| item);
-            }
-            "dimensions.hover.clear" => {
-                self.dimensions.context.hovered = None;
-                self.dimension_hover = None;
-            }
-            "dimensions.navigation.begin" => {
-                self.dimensions.context.navigation_active = true;
-                self.dimensions.context.hovered = None;
-                self.dimension_hover = None;
-            }
-            "dimensions.navigation.end" => {
-                self.dimensions.context.navigation_active = false;
-            }
-            _ => return Err("Command requires the authoritative workbench".into()),
-        }
-        if transient && previous_context == self.dimensions.context {
-            return Ok("null".into());
-        }
-        self.compose(before != self.editor.selection_presentation_state())
     }
 }
 
@@ -1889,32 +631,36 @@ mod tests {
         let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
         assert_ne!(
             local.scene.presentation_document().id(),
-            browsing
-                .bridge
-                .retained_scene
-                .as_ref()
-                .unwrap()
-                .presentation_document()
-                .id()
+            browsing.model.view().scene().presentation_document().id()
         );
         let accepted = std::ptr::from_ref(
             browsing
-                .bridge
+                .model
+                .view()
+                .session()
                 .editor()
                 .coordinator()
                 .accepted_materialization()
                 .unwrap(),
         );
-        let identity = browsing.bridge.editor().coordinator().intent().identity();
+        let identity = browsing
+            .model
+            .view()
+            .session()
+            .editor()
+            .coordinator()
+            .intent()
+            .identity();
         let code_identity = browsing
-            .bridge
-            .code_project
-            .as_ref()
+            .model
+            .view()
+            .session()
+            .source()
             .unwrap()
-            .code_session_identity()
+            .token()
             .clone();
-        let before_project = browsing.bridge.export_project_json().unwrap();
-        let before_design = browsing.bridge.workspace_design_json().unwrap();
+        let before_project = browsing.export_project_json().unwrap();
+        let before_design = browsing.workspace_design_json().unwrap();
         let point = local.scene.points[0].screen_position;
         local.pointer_json(&serde_json::json!({"version":2,"phase":"down","pointerId":1,"x":point.x,"y":point.y,"buttons":1,"modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}}).to_string()).unwrap();
         for index in 0..4 {
@@ -1971,7 +717,9 @@ mod tests {
             if index >= 2 {
                 let expected_pick = local.state().curve_picks[0];
                 let native_picks = browsing
-                    .bridge
+                    .model
+                    .view()
+                    .session()
                     .editor()
                     .editor()
                     .selection_presentation_state()
@@ -1986,7 +734,9 @@ mod tests {
             assert_eq!(
                 std::ptr::from_ref(
                     browsing
-                        .bridge
+                        .model
+                        .view()
+                        .session()
                         .editor()
                         .coordinator()
                         .accepted_materialization()
@@ -1995,33 +745,45 @@ mod tests {
                 accepted
             );
             assert_eq!(
-                browsing.bridge.editor().coordinator().intent().identity(),
+                browsing
+                    .model
+                    .view()
+                    .session()
+                    .editor()
+                    .coordinator()
+                    .intent()
+                    .identity(),
                 identity
             );
             assert_eq!(
-                browsing
-                    .bridge
-                    .code_project
-                    .as_ref()
-                    .unwrap()
-                    .code_session_identity(),
+                browsing.model.view().session().source().unwrap().token(),
                 &code_identity
             );
-            assert_eq!(
-                browsing.bridge.export_project_json().unwrap(),
-                before_project
-            );
-            assert_eq!(
-                browsing.bridge.workspace_design_json().unwrap(),
-                before_design
-            );
+            assert_eq!(browsing.export_project_json().unwrap(), before_project);
+            assert_eq!(browsing.workspace_design_json().unwrap(), before_design);
         }
-        let before = browsing.bridge.editor().editor().selection().to_vec();
+        let before = browsing
+            .model
+            .view()
+            .session()
+            .editor()
+            .editor()
+            .selection()
+            .to_vec();
         let mut stale: serde_json::Value =
             serde_json::from_str(&local.state_json().unwrap()).unwrap();
         stale["sceneKey"] = "obsolete".into();
         assert!(browsing.update_json(&stale.to_string()).is_err());
-        assert_eq!(browsing.bridge.editor().editor().selection(), before);
+        assert_eq!(
+            browsing
+                .model
+                .view()
+                .session()
+                .editor()
+                .editor()
+                .selection(),
+            before
+        );
     }
 
     #[test]
@@ -2110,7 +872,7 @@ mod tests {
         };
         state.selection = vec![SelectionItem::Curve(pick.span)];
         state.curve_picks = vec![pick];
-        let original = browsing.bridge.export_project_json().unwrap();
+        let original = browsing.export_project_json().unwrap();
         let actual: serde_json::Value = serde_json::from_str(
             &browsing
                 .update_json(&serde_json::to_string(&state).unwrap())
@@ -2129,7 +891,9 @@ mod tests {
             expected["navigation"]["sources"]
         );
         let native = browsing
-            .bridge
+            .model
+            .view()
+            .session()
             .editor()
             .editor()
             .selection_presentation_state();
@@ -2141,9 +905,7 @@ mod tests {
         assert_ne!(native.curve_picks[0].span, pick.span);
         assert_ne!(native.curve_picks[0].origin, pick.origin);
         assert!(native.curve_picks[0].origin.is_implicit_construction());
-        native
-            .validate(browsing.bridge.retained_scene.as_ref().unwrap())
-            .unwrap();
+        native.validate(browsing.model.view().scene()).unwrap();
         state.curve_picks[0].parameter = -1.0;
         assert!(
             browsing
@@ -2152,13 +914,15 @@ mod tests {
         );
         assert_eq!(
             browsing
-                .bridge
+                .model
+                .view()
+                .session()
                 .editor()
                 .editor()
                 .selection_presentation_state(),
             native
         );
-        assert_eq!(browsing.bridge.export_project_json().unwrap(), original);
+        assert_eq!(browsing.export_project_json().unwrap(), original);
     }
 
     #[test]
@@ -2191,12 +955,14 @@ mod tests {
         .unwrap();
         let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
         let before = (
-            browsing.bridge.export_project_json().unwrap(),
-            browsing.bridge.workspace_design_json().unwrap(),
+            browsing.export_project_json().unwrap(),
+            browsing.workspace_design_json().unwrap(),
         );
         let accepted = std::ptr::from_ref(
             browsing
-                .bridge
+                .model
+                .view()
+                .session()
                 .editor()
                 .coordinator()
                 .accepted_materialization()
@@ -2283,7 +1049,12 @@ mod tests {
             .unwrap(),
             serde_json::json!({"mutation":"extract_parameter","declaration":"length","path":["value"],"symbol":"parameter1","variable":"parameter1","presentation":{"label":"Named length","description":"Preserve the driving span","isKeyParameter":true}})
         );
-        assert!(browsing.bridge.pending_managed_mutation.is_none());
+        assert_eq!(
+            browsing.model.project(),
+            serde_json::from_str::<serde_json::Value>(&before.0).unwrap()["contents"]
+                .as_str()
+                .unwrap()
+        );
         let mut stale_extraction: serde_json::Value = serde_json::from_str(&extraction).unwrap();
         stale_extraction["payload"]["authority"] = serde_json::json!("older source authority");
         assert!(
@@ -2321,15 +1092,17 @@ mod tests {
         );
         assert_eq!(
             (
-                browsing.bridge.export_project_json().unwrap(),
-                browsing.bridge.workspace_design_json().unwrap()
+                browsing.export_project_json().unwrap(),
+                browsing.workspace_design_json().unwrap()
             ),
             before
         );
         assert_eq!(
             std::ptr::from_ref(
                 browsing
-                    .bridge
+                    .model
+                    .view()
+                    .session()
                     .editor()
                     .coordinator()
                     .accepted_materialization()
@@ -2425,7 +1198,7 @@ mod tests {
             serde_json::from_str(&bridge.interaction_snapshot_json().unwrap()).unwrap();
         let mut local = LocalInteraction::new(&pair["seed"].to_string()).unwrap();
         let source = bridge.export_project_json().unwrap();
-        let curve = local.scene.curves.first().unwrap();
+        let curve = local.scene.curves.first().unwrap().clone();
         let span = curve.span;
         let active_dimension = local
             .scene
@@ -2434,7 +1207,11 @@ mod tests {
             .find(|annotation| matches!(annotation.item, SelectionItem::Dimension(_)))
             .unwrap()
             .item;
-        local.dimensions.state.mode = DimensionDisplayMode::Hidden;
+        local
+            .dispatch_json(
+                r#"{"version":2,"command":"dimensions.mode","payload":{"mode":"hidden"}}"#,
+            )
+            .unwrap();
         let start = local
             .scene
             .viewport
@@ -2670,20 +1447,6 @@ mod tests {
             bridge.local_dimension_seed().state.pins,
             local.dimensions.state.pins
         );
-    }
-    #[test]
-    fn local_canvas_invalid_late_wheel_and_resize_preserve_view() {
-        let (_, mut local) = seeded();
-        let state = local.state_json().unwrap();
-        let malformed = r#"{"version":2,"samples":[{"version":2,"x":20.0,"y":20.0,"deltaX":0.0,"deltaY":-50.0,"ctrl":false},{"version":2,"x":-1.0,"y":20.0,"deltaX":0.0,"deltaY":-50.0,"ctrl":false}]}"#;
-        assert!(local.wheel_json(malformed).is_err());
-        assert_eq!(local.state_json().unwrap(), state);
-        assert!(
-            local
-                .resize_json(r#"{"version":2,"width":-1.0,"height":670.0,"pixelRatio":2.0}"#)
-                .is_err()
-        );
-        assert_eq!(local.state_json().unwrap(), state);
     }
     #[test]
     fn local_canvas_preserves_explicit_curve_pick_when_server_arms_constraint() {

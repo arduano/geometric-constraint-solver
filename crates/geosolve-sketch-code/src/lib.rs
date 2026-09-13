@@ -5,6 +5,12 @@
 //! This crate is deliberately optional. The native solver, sketch domain,
 //! headless editor and low-level intent graph do not depend on it.
 
+#[cfg(test)]
+extern crate self as geosolve_sketch_code;
+#[cfg(test)]
+#[path = "../tests/support/managed_regression_projects.rs"]
+mod managed_regression_projects;
+
 mod artifact;
 mod bootstrap;
 mod bundled_samples;
@@ -12,6 +18,9 @@ mod composition;
 mod declaration_catalog;
 mod document_export;
 mod editor_insertion;
+mod editor_publication;
+/// Shared native/source publication proof; does not grant publication authority.
+pub mod editor_terminal;
 mod expansion;
 mod generated;
 mod managed;
@@ -58,6 +67,10 @@ pub use document_export::{
     ManagedSketchExportError, export_sketch_document_to_managed_source,
     export_sketch_document_with_features_to_managed_source,
 };
+pub use editor_publication::{
+    PreparedEditorSourceInsertion, prepare_editor_source_insertion, retain_editor_default_labels,
+};
+
 pub use editor_insertion::{
     CANVAS_ADDITIONS_GROUP, EditorBootstrapDeclaration, EditorDeclarationInsertionError,
     EditorDeclarationInsertionPlan, EditorSourceDeclarationClosure,
@@ -147,3 +160,45 @@ pub const PATCH_ARTIFACT_LIMIT: usize = 16 * 1024 * 1024;
 
 /// Maximum admitted size of a complete optional code project.
 pub const CODE_PROJECT_LIMIT: usize = 64 * 1024 * 1024;
+
+mod navigation;
+pub use navigation::{
+    ManagedNavigationEntry, ManagedNavigationIndex, generated_panel_row_id,
+    managed_navigation_index, managed_panel_row_id,
+};
+
+mod browsing;
+pub use browsing::{
+    ManagedControlSubmission, managed_browsing_navigation_index, managed_control_source_mutation,
+};
+pub use browsing::{
+    ManagedDeclarationClosureRole, ManagedDeclarationPanelProjection, ManagedDeclarationPanelRow,
+    ManagedGeneratedPanelRow, managed_declaration_panel_projection,
+};
+
+mod editor_checkpoint;
+pub use editor_checkpoint::{
+    ValidatedSourceHistory, encode_editor_checkpoint, restore_editor_checkpoint,
+    validate_editor_checkpoint,
+};
+
+mod source_properties;
+pub use source_properties::{
+    ManagedPropertyTarget, ManagedSourceProperties, managed_control_label,
+    managed_parameter_consumer_labels, parameter_can_extract,
+};
+
+mod inspector;
+pub use inspector::{
+    InspectorDescriptorIndex, InspectorParameterAuthority, InspectorParameterPresentation,
+    ManagedSourceInspector, managed_path_text, managed_source_path,
+};
+
+/// Shared persisted source workspace and native history admission.
+pub mod authoring_persistence;
+
+/// Accepted source/native interaction correspondence shared by hosts.
+pub mod interaction;
+
+mod compiler_context;
+pub use compiler_context::managed_compiler_patches;

@@ -845,11 +845,13 @@ dependencies = [
 name = "geosolve-constraint-editor"
 version = "0.2.0"
 dependencies = [
+ "base64 0.23.1",
  "geosolve-sketch",
  "geosolve-sketch-features",
  "geosolve-sketch-intent",
  "geosolve-sketch-ops",
  "geosolve-sketch-topology",
+ "miniz_oxide 0.9.1",
  "proptest",
  "serde",
  "serde_json",
@@ -885,6 +887,7 @@ dependencies = [
  "geosolve-headless",
  "geosolve-sketch",
  "geosolve-sketch-code",
+ "geosolve-sketch-engine",
  "geosolve-sketch-features",
  "geosolve-sketch-intent",
  "geosolve-sketch-render",

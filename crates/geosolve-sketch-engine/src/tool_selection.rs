@@ -150,6 +150,23 @@ impl EditableSession {
         serde_json::to_string(&serde_json::json!({"scene":scene,"bindings":bindings}))
             .map_err(error)
     }
+    /// Resolve accepted personal selection to stable semantic operands.
+    ///
+    /// # Errors
+    /// Rejects foreign scenes, invalid occurrences or ambiguous native ownership.
+    pub fn tool_operation_view_operands(
+        &self,
+        viewport: Viewport,
+        view: geosolve_constraint_editor::DetachedSelectionView,
+    ) -> Result<Vec<ToolOperationOperand>, EngineError> {
+        let editor = &self.accepted().0.materialized.editor;
+        let scene = editor.scene(viewport, 0.25).map_err(error)?;
+        let selection = view
+            .map_to(&scene, editor.presentation_bindings().as_ref())
+            .map_err(error)?;
+        self.tool_operation_operands(&selection)
+    }
+
     /// Validate exact native selection and return stable semantic operands.
     /// # Errors
     /// Rejects stale namespaces, ambiguous owners and invalid picked occurrences.

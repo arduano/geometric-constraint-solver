@@ -160,3 +160,164 @@ fn semantic_design_restores_point_override_without_checkpoint_or_solved_geometry
         .push_str("// changed without compiler receipt");
     assert!(EditableSession::open(&serde_json::to_string(&forged).unwrap(), None).is_err());
 }
+
+#[test]
+fn persistable_history_restores_both_directions_and_retains_failed_edits() {
+    let first = project(2).to_canonical_json().unwrap();
+    let next = project(5).to_canonical_json().unwrap();
+    let mut session = EditableSession::open_persistable(&first, None).unwrap();
+    let initial_geometry = session.accepted().result().geometry.clone();
+    let initial_design = session.design();
+    let token = session.token().clone();
+    session.apply_project(&token, &next).unwrap();
+    let middle_geometry = session.accepted().result().geometry.clone();
+    let middle_design = session.design();
+    let token = session.token().clone();
+    session.apply_project(&token, &first).unwrap();
+    let token = session.token().clone();
+    session.undo(&token).unwrap();
+    assert!(session.state().can_undo && session.state().can_redo);
+    let wire = session.export_history().unwrap();
+    let mut restored = EditableSession::restore_history(&wire).unwrap();
+    assert_eq!(restored.export_history().unwrap(), wire);
+    assert_eq!(restored.token(), session.token());
+    assert_eq!(restored.export_project_json().unwrap(), next);
+    assert_eq!(restored.design(), middle_design);
+    assert_eq!(restored.accepted().result().geometry, middle_geometry);
+    assert_eq!(radius(restored.accepted()), 5.0);
+    assert!(
+        restored
+            .accepted()
+            .result()
+            .validation
+            .hard_residuals_validated
+    );
+    assert!(
+        restored
+            .accepted()
+            .result()
+            .validation
+            .all_active_features_current
+    );
+    let before = restored.state();
+    assert!(restored.apply_project(&before.token, "{}").is_err());
+    assert_eq!(restored.state(), before);
+    assert_eq!(restored.export_history().unwrap(), wire);
+    restored.undo(&before.token).unwrap();
+    assert_eq!(restored.accepted().result().geometry, initial_geometry);
+    assert_eq!(restored.design(), initial_design);
+    assert_eq!(restored.export_project_json().unwrap(), first);
+    assert!(!restored.state().can_undo && restored.state().can_redo);
+    let token = restored.token().clone();
+    restored.redo(&token).unwrap();
+    assert_eq!(restored.accepted().result().geometry, middle_geometry);
+    let token = restored.token().clone();
+    restored.redo(&token).unwrap();
+    assert_eq!(radius(restored.accepted()), 2.0);
+    assert!(restored.state().can_undo && !restored.state().can_redo);
+    let final_wire = restored.export_history().unwrap();
+    let cold = EditableSession::restore_history(&final_wire).unwrap();
+    assert_eq!(cold.export_history().unwrap(), final_wire);
+    assert_eq!(
+        cold.accepted().result().geometry,
+        restored.accepted().result().geometry
+    );
+}
+
+#[test]
+fn history_rejects_corrupt_nested_authority_and_ephemeral_export() {
+    let first = project(2).to_canonical_json().unwrap();
+    let next = project(5).to_canonical_json().unwrap();
+    assert!(
+        EditableSession::open(&first, None)
+            .unwrap()
+            .export_history()
+            .is_err()
+    );
+    let mut session = EditableSession::open_persistable(&first, None).unwrap();
+    let token = session.token().clone();
+    session.apply_project(&token, &next).unwrap();
+    let token = session.token().clone();
+    session.apply_project(&token, &first).unwrap();
+    let token = session.token().clone();
+    session.undo(&token).unwrap();
+    let wire = session.export_history().unwrap();
+    for direction in ["snapshot", "undo", "redo"] {
+        for checkpoint in ["editor_checkpoint", "accepted_editor_checkpoint"] {
+            let mut corrupt: serde_json::Value = serde_json::from_str(&wire).unwrap();
+            let snapshot = if direction == "snapshot" {
+                &mut corrupt["snapshot"]
+            } else {
+                &mut corrupt[direction][0]["snapshot"]
+            };
+            snapshot[checkpoint] = serde_json::json!("corrupt native checkpoint");
+            assert!(EditableSession::restore_history(&corrupt.to_string()).is_err());
+        }
+    }
+    assert_eq!(session.export_history().unwrap(), wire);
+    assert_eq!(radius(session.accepted()), 5.0);
+}
+
+#[test]
+fn existing_source_workspace_preserves_dirty_utf8_draft_and_legacy_history() {
+    use geosolve_sketch_code::authoring_persistence::SourceWorkspaceOrigin;
+    use geosolve_sketch_engine::SourceWorkspacePresentation;
+    let first = project(2).to_canonical_json().unwrap();
+    let next = project(5).to_canonical_json().unwrap();
+    let mut session = EditableSession::open_persistable(&first, None).unwrap();
+    let token = session.token().clone();
+    session.apply_project(&token, &next).unwrap();
+    let presentation = SourceWorkspacePresentation {
+        origin: SourceWorkspaceOrigin::Authored,
+        selected_file: "sketch.ts".into(),
+        managed_draft: "// unfinished draft 😀\ninvalid".into(),
+        draft_diagnostic: None,
+    };
+    let encoded = session.export_source_workspace(&presentation).unwrap();
+    let wire: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(wire["version"], "geosolve-code-workbench-v5");
+    assert_eq!(wire["managed_draft"], presentation.managed_draft);
+    for version in ["geosolve-code-workbench-v4", "geosolve-code-workbench-v5"] {
+        let mut candidate = wire.clone();
+        candidate["version"] = serde_json::json!(version);
+        if version.ends_with("v4") {
+            candidate["session"] = serde_json::json!(session.export_history().unwrap());
+        }
+        let (mut restored, personal) =
+            EditableSession::restore_source_workspace(&candidate.to_string()).unwrap();
+        assert_eq!(personal, presentation);
+        assert_eq!(
+            restored.export_source_workspace(&personal).unwrap(),
+            encoded
+        );
+        assert_eq!(restored.export_project_json().unwrap(), next);
+        assert_eq!(
+            restored.export_history().unwrap(),
+            session.export_history().unwrap()
+        );
+        assert_eq!(
+            restored.accepted().result().geometry,
+            session.accepted().result().geometry
+        );
+        let token = restored.token().clone();
+        restored.undo(&token).unwrap();
+        assert_eq!(radius(restored.accepted()), 2.0);
+        assert_eq!(restored.export_project_json().unwrap(), first);
+    }
+    let mut foreign = wire.clone();
+    foreign["project"] = serde_json::json!(first);
+    assert!(EditableSession::restore_source_workspace(&foreign.to_string()).is_err());
+    let mut missing_file = presentation.clone();
+    missing_file.selected_file = "missing.ts".into();
+    assert!(session.export_source_workspace(&missing_file).is_err());
+    let duplicate = encoded.replacen(
+        "\"managed_draft\":",
+        "\"managed_draft\":\"forged\",\"managed_draft\":",
+        1,
+    );
+    assert!(EditableSession::restore_source_workspace(&duplicate).is_err());
+    assert_eq!(
+        session.export_source_workspace(&presentation).unwrap(),
+        encoded
+    );
+}

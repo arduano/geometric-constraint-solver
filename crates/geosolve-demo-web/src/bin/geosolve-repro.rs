@@ -19,7 +19,7 @@ fn decode_from_standard_io() -> Result<(), Box<dyn std::error::Error>> {
     decode_from_io(
         io::stdin().lock(),
         io::stdout().lock(),
-        geosolve_demo_web::reproduction::MAX_REPRODUCTION_TEXT_BYTES,
+        geosolve_constraint_editor::reproduction::MAX_REPRODUCTION_TEXT_BYTES,
     )
 }
 
@@ -34,13 +34,13 @@ fn decode_from_io(
         .read_to_string(&mut payload)?;
     if payload.len() > maximum_text_bytes {
         return Err(Box::new(
-            geosolve_demo_web::reproduction::ReproductionPayloadError::TextTooLarge {
+            geosolve_constraint_editor::reproduction::ReproductionPayloadError::TextTooLarge {
                 actual: payload.len(),
                 maximum: maximum_text_bytes,
             },
         ));
     }
-    let workspace = geosolve_demo_web::reproduction::decode_workspace(&payload)?;
+    let workspace = geosolve_constraint_editor::reproduction::decode_workspace(&payload)?;
     writer.write_all(workspace.as_bytes())?;
     Ok(())
 }
@@ -53,8 +53,8 @@ mod tests {
 
     #[test]
     fn diagnostic_decoder_bounds_input_and_writes_only_valid_workspace_bytes() {
-        let payload =
-            geosolve_demo_web::reproduction::encode_workspace("{\"version\":5}").expect("payload");
+        let payload = geosolve_constraint_editor::reproduction::encode_workspace("{\"version\":5}")
+            .expect("payload");
         let mut output = Vec::new();
         decode_from_io(Cursor::new(payload), &mut output, 1_024).expect("decode payload");
         assert_eq!(output, b"{\"version\":5}");

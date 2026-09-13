@@ -73,15 +73,7 @@ fn personal_visibility_masks_paint_and_pick_and_restores_without_model_changes()
     let chrome: serde_json::Value =
         serde_json::from_str(&browsing.update_json(&local.state_json().unwrap()).unwrap()).unwrap();
     assert_eq!(chrome["explorer"][0]["effectiveVisible"], false);
-    assert!(
-        browsing
-            .bridge
-            .retained_scene
-            .as_ref()
-            .unwrap()
-            .points
-            .is_empty()
-    );
+    assert!(browsing.model.view().scene().points.is_empty());
     local
         .replace_json(&serde_json::json!({"seed":seed,"preserveSelection":true}).to_string())
         .unwrap();
@@ -132,8 +124,8 @@ fn personal_visibility_masks_paint_and_pick_and_restores_without_model_changes()
     assert_eq!(bridge.export_project_json().unwrap(), project);
     assert_eq!(bridge.workspace_design_json().unwrap(), design);
     assert_eq!(bridge.revision, revision);
-    assert_eq!(browsing.bridge.export_project_json().unwrap(), project);
-    assert_eq!(browsing.bridge.workspace_design_json().unwrap(), design);
+    assert_eq!(browsing.export_project_json().unwrap(), project);
+    assert_eq!(browsing.workspace_design_json().unwrap(), design);
 }
 #[test]
 fn malformed_and_stale_visibility_is_transactionally_rejected() {
@@ -158,10 +150,16 @@ fn malformed_and_stale_visibility_is_transactionally_rejected() {
     assert_eq!(local.state_json().unwrap(), initial);
     let mut stale: serde_json::Value = serde_json::from_str(&initial).unwrap();
     stale["visibility"]["hiddenRows"] = serde_json::json!(["missing"]);
-    let project = browsing.bridge.export_project_json().unwrap();
+    let project = browsing.export_project_json().unwrap();
     assert!(browsing.update_json(&stale.to_string()).is_err());
-    assert!(browsing.bridge.explorer_visibility.hidden_rows.is_empty());
-    assert_eq!(browsing.bridge.export_project_json().unwrap(), project);
+    assert!(
+        browsing
+            .model
+            .view()
+            .state()
+            .is_none_or(|state| state.visibility.hidden_rows.is_empty())
+    );
+    assert_eq!(browsing.export_project_json().unwrap(), project);
     assert!(browsing.update_json(&initial).is_ok());
 }
 #[test]
@@ -170,18 +168,18 @@ fn suppression_is_described_without_source_publication_and_rejects_stale_rows() 
     let chrome: serde_json::Value =
         serde_json::from_str(&browsing.update_json(&local.state_json().unwrap()).unwrap()).unwrap();
     let row = &chrome["explorer"][0]["children"][0];
-    let project = browsing.bridge.export_project_json().unwrap();
+    let project = browsing.export_project_json().unwrap();
     let request = serde_json::json!({"state":local.state(),"authority":chrome["authoringDocument"]["authority"],"command":"declaration.suppression.set","payload":{"id":row["id"],"suppressed":true}});
     let mutation: serde_json::Value =
         serde_json::from_str(&browsing.describe_json(&request.to_string()).unwrap()).unwrap();
     assert_eq!(mutation["mutation"], "set_suppressed");
     assert_eq!(mutation["suppressed"], true);
     assert_eq!(mutation["target"]["target"], "declaration");
-    assert_eq!(browsing.bridge.export_project_json().unwrap(), project);
+    assert_eq!(browsing.export_project_json().unwrap(), project);
     let mut stale = request;
     stale["payload"]["id"] = "missing".into();
     assert!(browsing.describe_json(&stale.to_string()).is_err());
-    assert_eq!(browsing.bridge.export_project_json().unwrap(), project);
+    assert_eq!(browsing.export_project_json().unwrap(), project);
 }
 
 #[test]

@@ -102,6 +102,98 @@ fn receipt(prepared: &PreparedConstruction, name: &str) -> PreparedManagedMutati
 }
 
 #[test]
+fn cold_construction_after_retained_point_history_authenticates_labels_and_preserves_history() {
+    for name in ["segment", "polyline", "circle", "rectangle"] {
+        let mut server = EditableSession::open_persistable(&project(), None).unwrap();
+        let initial = server.state();
+        let target = server.point_gesture_targets().unwrap().remove(0).target;
+        let mut point = server.begin_point_gesture(target, 903, viewport()).unwrap();
+        point
+            .advance(
+                903,
+                geosolve_sketch_engine::PointGestureSample {
+                    sequence: 1,
+                    position: [3.0, -2.0],
+                },
+            )
+            .unwrap();
+        server
+            .commit_point_gesture(point.finish(903).unwrap().command())
+            .unwrap();
+        let before = server.state();
+        let history = server.export_history().unwrap();
+        let client = EditableSession::open(
+            &server.export_project_json().unwrap(),
+            Some(&serde_json::to_string(&server.design()).unwrap()),
+        )
+        .unwrap();
+        assert_eq!(
+            client.source_design_digest().unwrap(),
+            server.source_design_digest().unwrap()
+        );
+        let command = command(&client, name);
+        let prepared = server
+            .prepare_construction(&command)
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert_eq!(server.state(), before);
+        assert_eq!(server.export_history().unwrap(), history);
+        for field in ["label", "comments"] {
+            let mut forged = command.clone();
+            if field == "label" {
+                let geosolve_sketch_code::ManagedValue::Object(fields) =
+                    &mut forged.expected_declarations[0].arguments
+                else {
+                    panic!("object expected")
+                };
+                fields.insert(
+                    "label".into(),
+                    geosolve_sketch_code::ManagedValue::String("polyline-000000000000ffff".into()),
+                );
+            } else {
+                forged.expected_declarations[0].comments = Some(vec!["forged metadata".into()]);
+            }
+            assert!(
+                server.prepare_construction(&forged).is_err(),
+                "{name}: {field}"
+            );
+            assert_eq!(server.state(), before);
+            assert_eq!(server.export_history().unwrap(), history);
+        }
+        let staged = server
+            .resolve_construction(&prepared, receipt(&prepared, name))
+            .unwrap();
+        assert!(staged.result().validation.hard_residuals_validated);
+        assert!(staged.result().validation.all_active_features_current);
+        assert!(
+            staged
+                .result()
+                .geometry
+                .points
+                .iter()
+                .all(|point| point.position.into_iter().all(f64::is_finite))
+        );
+        assert!(
+            staged
+                .result()
+                .geometry
+                .points
+                .iter()
+                .any(|point| (point.position[0] - 3.0).abs() < 1e-9
+                    && (point.position[1] + 2.0).abs() < 1e-9)
+        );
+        server.apply_construction_commit(staged).unwrap();
+        let created = server.state();
+        server.undo(&server.token().clone()).unwrap();
+        assert_eq!(server.accepted().result().geometry, before.result.geometry);
+        server.undo(&server.token().clone()).unwrap();
+        assert_eq!(server.accepted().result().geometry, initial.result.geometry);
+        server.redo(&server.token().clone()).unwrap();
+        server.redo(&server.token().clone()).unwrap();
+        assert_eq!(server.accepted().result().geometry, created.result.geometry);
+    }
+}
+
+#[test]
 fn ordinary_construction_retains_local_drafts_and_stages_one_durable_source_transaction() {
     for name in ["segment", "polyline", "circle", "rectangle", "inferred"] {
         let client = EditableSession::open(&project(), None).unwrap();

@@ -2787,3 +2787,65 @@ fn suppressed_canvas_fillet_keeps_reversible_suppression_outside_its_base_declar
     assert!(accepted.validation.hard_residuals_validated);
     assert!(accepted.validation.all_active_features_current);
 }
+
+#[test]
+fn completed_source_insertion_authenticates_the_exact_delegated_origin() {
+    use geosolve_constraint_editor::{
+        EditorEffect, GeometryToolVariant, Modifiers, PointerInput, Viewport,
+    };
+    use geosolve_sketch_code::prepare_editor_source_insertion;
+    let (project, expansion, accepted) = accepted_line_code_project();
+    let accepted_before = accepted.coordinator().intent().to_canonical_json().unwrap();
+    let mut candidate = accepted.fork_accepted_authority().unwrap();
+    let origin = candidate.coordinator().intent().identity();
+    assert_ne!(
+        origin,
+        accepted.coordinator().intent().identity(),
+        "nested materialization history is removed by the fork"
+    );
+    candidate
+        .editor_mut()
+        .activate_geometry_tool(GeometryToolVariant::Segment);
+    let viewport = Viewport::new([800.0, 600.0], [0.0, 0.0], 10.0).unwrap();
+    for position in [[10.0, 12.0], [35.0, 22.0]] {
+        let scene = candidate.scene(viewport, 0.25).unwrap();
+        let effects = candidate
+            .pointer_down(
+                &scene,
+                PointerInput {
+                    pointer_id: 99,
+                    position: viewport.model_to_screen(position),
+                    modifiers: Modifiers::default(),
+                },
+            )
+            .unwrap();
+        for effect in effects {
+            if matches!(effect, EditorEffect::CommitConstructionPlan { .. }) {
+                candidate.apply_construction_editor_effect(&effect).unwrap();
+            }
+        }
+    }
+    assert_eq!(candidate.completed_construction().unwrap().origin(), origin);
+    let (declarations, _, _) =
+        prepare_editor_source_insertion(&project, &expansion, &accepted, &candidate)
+            .unwrap()
+            .into_parts();
+    assert!(!declarations.is_empty());
+    let validation = &candidate
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .validation;
+    assert!(validation.hard_residuals_validated && validation.all_active_features_current);
+    assert!(
+        validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value.is_finite() && value <= 1e-9)
+    );
+    let (_, _, foreign) = accepted_empty_code_project();
+    assert!(prepare_editor_source_insertion(&project, &expansion, &foreign, &candidate).is_err());
+    assert_eq!(
+        accepted.coordinator().intent().to_canonical_json().unwrap(),
+        accepted_before
+    );
+}

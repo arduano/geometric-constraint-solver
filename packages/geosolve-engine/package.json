@@ -18,7 +18,9 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:wasm": "node scripts/build-wasm.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "generate:tools": "cargo run --locked -q -p geosolve-constraint-editor --example generate_tool_catalog -- --write src/tool-catalog.ts",
+    "check:tools": "cargo run --locked -q -p geosolve-constraint-editor --example generate_tool_catalog -- --check src/tool-catalog.ts"
   },
   "dependencies": {
     "@geosolve/sketch-code": "file:../geosolve-sketch-code"

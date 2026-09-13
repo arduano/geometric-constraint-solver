@@ -2,79 +2,47 @@
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
 use geosolve_constraint_editor::{
-    AuthoringTool, ConstraintIntent, DimensionKind, FeatureAuthoringTool,
+    AuthoringTool, ConstraintIntent, DimensionKind, FeatureAuthoringTool, ModifyTool,
 };
 
-pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); 13] = [
-    ("lock", "Lock", ConstraintIntent::Lock),
-    ("coincident", "Coincident", ConstraintIntent::Coincident),
-    ("horizontal", "Horizontal", ConstraintIntent::Horizontal),
-    ("vertical", "Vertical", ConstraintIntent::Vertical),
-    ("concentric", "Concentric", ConstraintIntent::Concentric),
-    ("collinear", "Collinear", ConstraintIntent::Collinear),
-    ("parallel", "Parallel", ConstraintIntent::Parallel),
-    (
-        "perpendicular",
-        "Perpendicular / Normal",
-        ConstraintIntent::Perpendicular,
-    ),
-    ("equal", "Equal", ConstraintIntent::Equal),
-    ("midpoint", "Midpoint", ConstraintIntent::Midpoint),
-    ("symmetric", "Symmetric", ConstraintIntent::Symmetric),
-    ("tangent", "Tangent", ConstraintIntent::Tangent),
-    ("continuity", "Continuity", ConstraintIntent::Continuity),
-];
+macro_rules! project_action_surface {
+    (constraints { $( $constraint:ident => ($constraint_key:literal, $constraint_label:literal), )* }
+     dimensions { $( $dimension:ident => ($dimension_key:literal, $dimension_label:literal), )* }
+     modify { $( $modify:ident => ($modify_key:literal, $modify_label:literal), )* }
+     auxiliary { $( $auxiliary:ident => ($auxiliary_key:literal, $auxiliary_label:literal, $auxiliary_command:literal), )* }) => {
+        pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); ConstraintIntent::ALL.len()] =
+            [$( ($constraint_key, $constraint_label, ConstraintIntent::$constraint), )*];
+        pub(crate) const DIMENSION_ACTIONS: [(&str, &str, DimensionKind); DimensionKind::ALL.len()] =
+            [$( ($dimension_key, $dimension_label, DimensionKind::$dimension), )*];
+    };
+}
+geosolve_constraint_editor::authoring_tool_catalog!(project_action_surface);
 
-pub(crate) const DIMENSION_ACTIONS: [(&str, &str, DimensionKind); 5] = [
-    (
-        "point-distance",
-        "Point distance",
-        DimensionKind::PointDistance,
-    ),
-    (
-        "segment-length",
-        "Segment length",
-        DimensionKind::SegmentLength,
-    ),
-    ("radius", "Radius", DimensionKind::Radius),
-    ("diameter", "Diameter", DimensionKind::Diameter),
-    (
-        "oriented-angle",
-        "Oriented angle",
-        DimensionKind::OrientedAngle,
-    ),
-];
-
-pub(crate) const FEATURE_ACTIONS: [(&str, &str, FeatureAuthoringTool); 1] =
-    [("fillet", "Fillet", FeatureAuthoringTool::Fillet)];
+pub(crate) const FEATURE_ACTIONS: [(&str, &str, FeatureAuthoringTool); 1] = [(
+    ModifyTool::Fillet.key(),
+    ModifyTool::Fillet.label(),
+    FeatureAuthoringTool::Fillet,
+)];
 
 /// Native Modify actions that deliberately do not share computed-feature authoring.
-pub(crate) const OFFSET_ACTIONS: [(&str, &str); 1] = [("offset", "Offset")];
+pub(crate) const OFFSET_ACTIONS: [(&str, &str); 1] =
+    [(ModifyTool::Offset.key(), ModifyTool::Offset.label())];
 
 pub(crate) fn constraint_from_key(key: &str) -> Option<ConstraintIntent> {
-    CONSTRAINT_ACTIONS
-        .iter()
-        .find_map(|(candidate, _, kind)| (*candidate == key).then_some(*kind))
+    ConstraintIntent::from_key(key)
 }
 
 pub(crate) fn dimension_from_key(key: &str) -> Option<DimensionKind> {
-    DIMENSION_ACTIONS
-        .iter()
-        .find_map(|(candidate, _, kind)| (*candidate == key).then_some(*kind))
+    DimensionKind::from_key(key)
 }
 
 #[cfg(test)]
 pub(crate) fn dimension_key(kind: DimensionKind) -> &'static str {
-    DIMENSION_ACTIONS
-        .iter()
-        .find_map(|(key, _, candidate)| (*candidate == kind).then_some(*key))
-        .expect("complete dimension action catalog")
+    kind.key()
 }
 
 pub(crate) fn authoring_tool_from_key(key: &str) -> Option<AuthoringTool> {
-    constraint_from_key(key)
-        .map(AuthoringTool::Constraint)
-        .or_else(|| dimension_from_key(key).map(AuthoringTool::Dimension))
+    AuthoringTool::from_key(key)
 }
 
 pub(crate) fn feature_tool_from_key(key: &str) -> Option<FeatureAuthoringTool> {

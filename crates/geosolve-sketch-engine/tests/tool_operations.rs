@@ -348,6 +348,101 @@ fn family_command(session: &EditableSession, tool: ToolOperationTool) -> ToolOpe
     prediction.finish(93).unwrap().command().clone()
 }
 #[test]
+fn cold_tool_commands_after_retained_point_history_keep_exact_operands_and_metadata() {
+    for tool in [
+        ToolOperationTool::Radius,
+        ToolOperationTool::Horizontal,
+        ToolOperationTool::Fillet,
+        ToolOperationTool::Offset,
+        ToolOperationTool::ToggleGeometryRole,
+    ] {
+        let source = if tool == ToolOperationTool::ToggleGeometryRole {
+            project()
+        } else {
+            family_project_for(tool)
+        };
+        let mut server = EditableSession::open_persistable(&source, None).unwrap();
+        // Round trip through two real edits, retaining history and fixture geometry.
+        for (gesture_id, delta) in [(903, -1.0), (904, 1.0)] {
+            let target = server.point_gesture_targets().unwrap().remove(0);
+            let mut point = server
+                .begin_point_gesture(target.target, gesture_id, viewport())
+                .unwrap();
+            point
+                .advance(
+                    gesture_id,
+                    geosolve_sketch_engine::PointGestureSample {
+                        sequence: 1,
+                        position: [target.position[0] + delta, target.position[1]],
+                    },
+                )
+                .unwrap();
+            server
+                .commit_point_gesture(point.finish(gesture_id).unwrap().command())
+                .unwrap();
+        }
+        let before = server.state();
+        let history = server.export_history().unwrap();
+        let client = EditableSession::open(
+            &server.export_project_json().unwrap(),
+            Some(&serde_json::to_string(&server.design()).unwrap()),
+        )
+        .unwrap();
+        let command = if tool == ToolOperationTool::ToggleGeometryRole {
+            command(&client, tool)
+        } else {
+            family_command(&client, tool)
+        };
+        let prepared = server
+            .prepare_tool_operation(&command)
+            .unwrap_or_else(|error| panic!("{tool:?}: {error}"));
+        assert_eq!(server.state(), before);
+        assert_eq!(server.export_history().unwrap(), history);
+        if !command.expected_declarations.is_empty() {
+            let mut forged = command.clone();
+            forged.expected_declarations[0].comments = Some(vec!["forged".into()]);
+            assert!(server.prepare_tool_operation(&forged).is_err());
+            let mut forged = command;
+            let geosolve_sketch_code::ManagedValue::Object(fields) =
+                &mut forged.expected_declarations[0].arguments
+            else {
+                panic!("object expected")
+            };
+            fields.insert(
+                "label".into(),
+                geosolve_sketch_code::ManagedValue::String("Fillet 999".into()),
+            );
+            assert!(server.prepare_tool_operation(&forged).is_err());
+        }
+        assert_eq!(server.state(), before);
+        assert_eq!(server.export_history().unwrap(), history);
+        let name = if tool == ToolOperationTool::ToggleGeometryRole {
+            "role".into()
+        } else {
+            format!("family-{tool:?}")
+        };
+        let staged = server
+            .resolve_tool_operation(&prepared, compilation(&prepared, &name))
+            .unwrap_or_else(|error| panic!("{tool:?}: {error}"));
+        assert!(staged.result().validation.hard_residuals_validated);
+        assert!(staged.result().validation.all_active_features_current);
+        assert!(
+            staged
+                .result()
+                .geometry
+                .points
+                .iter()
+                .all(|point| point.position.into_iter().all(f64::is_finite))
+        );
+        server.apply_tool_operation_commit(staged).unwrap();
+        let created = server.state();
+        server.undo(&server.token().clone()).unwrap();
+        assert_eq!(server.accepted().result().geometry, before.result.geometry);
+        server.redo(&server.token().clone()).unwrap();
+        assert_eq!(server.accepted().result().geometry, created.result.geometry);
+    }
+}
+#[test]
 fn all_existing_native_tool_families_prepare_real_source_mutations() {
     let mut failures = Vec::new();
     for tool in ToolOperationTool::ALL {

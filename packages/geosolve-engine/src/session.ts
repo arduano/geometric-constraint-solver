@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { EditableInspection, InspectionNativeHandle, InteractionViewport, InteractionSeed } from "./inspection.js";
 import type { AcceptedResult, EvaluationFailure } from "./index.js";
 import type { CompiledManagedSource, ManagedValue, SemanticPathSegment } from "@geosolve/sketch-code/ir";
 import { RetainedPointGesture, decodePointValue, type PointGestureNativeHandle, type PointGestureHandle, type PointGestureTarget, type PointGestureViewport, type PointGestureCommand, type PreparedPointGestureCommit, type PreparedPointGestureReplay } from "./point-gesture.js";
@@ -50,8 +51,26 @@ export interface EditableDesign {
   readonly generated: unknown;
   readonly overrides: unknown;
 }
-export interface EditableNativeHandle extends Partial<PointGestureNativeHandle>, Partial<ConstructionNativeHandle>, Partial<ToolOperationNativeHandle> {
+/** Existing saved workspace's personal source state, separate from native authority. */
+export interface SourceWorkspacePresentation {
+  readonly origin: { readonly kind: "authored" } | { readonly kind: "bundled"; readonly sample: string };
+  readonly selectedFile: string;
+  readonly managedDraft: string;
+  readonly draftDiagnostic: Readonly<Record<string, unknown>> | null;
+}
+/** Exact existing outer personal presentation wire, independent of source/native history. */
+export interface WorkspaceViewPresentation {
+  readonly hiddenRows: readonly string[];
+  readonly isolateRestore?: readonly string[] | null;
+  readonly constructionVisible: boolean;
+  readonly dimensions?: { readonly mode: "focused" | "all" | "hidden"; readonly pins: readonly string[] };
+}
+export interface EditableNativeHandle extends Partial<PointGestureNativeHandle>, Partial<ConstructionNativeHandle>, Partial<ToolOperationNativeHandle>, Partial<InspectionNativeHandle> {
   openEditableSession(json: string): string;
+  restoreEditableHistory?(history: string): string;
+  restoreEditableWorkspace?(workspace: string): string;
+  exportEditableWorkspace?(request: string): string;
+  exportEditableHistory?(id: string): string;
   editableSessionState(id: string): string;
   applyEditableProject(json: string): string;
   applyEditableOverlay(json: string): string;
@@ -64,6 +83,7 @@ export interface EditableNativeHandle extends Partial<PointGestureNativeHandle>,
   releaseEditableAuthoring?(ticket: string): boolean;
   exportEditableProject?(id: string): string;
   editableSourceDesignDigest?(id: string): string;
+  editableCompilerPatches?(id: string): string;
 }
 /** Internal engine integration: results join the same immutable export/lifetime table. */
 export interface EditableSessionHost {
@@ -77,6 +97,8 @@ export type EditableUpdate = { readonly status: "accepted"; readonly state: Edit
 export class EditableSession {
   private disposed = false;
   private current: EditableSessionState;
+  readonly restoredWorkspacePresentation: SourceWorkspacePresentation | null = null;
+  readonly restoredViewPresentation: WorkspaceViewPresentation | null = null;
   private readonly native: EditableNativeHandle;
   private readonly preparations = new Set<PreparedAuthoring>();
   private readonly pointPreparations = new Set<PreparedPointGestureCommit>();
@@ -84,24 +106,75 @@ export class EditableSession {
   private readonly constructionCommits = new Set<PreparedConstructionCommit>();
   private readonly toolOperationPreparations = new Set<PreparedToolOperation>();
   private readonly toolOperationCommits = new Set<PreparedToolOperationCommit>();
-  constructor(private readonly host: EditableSessionHost, project: unknown, options: { design?: EditableDesign | string } = {}) {
+  constructor(private readonly host: EditableSessionHost, project: unknown, options: { design?: EditableDesign | string; persistableHistory?: boolean } | { history: string } | { workspace: string } = {}) {
     if (!host.isLive()) throw Error("Engine has been disposed");
     const native = host.native;
     for (const name of ["openEditableSession", "editableSessionState", "applyEditableProject", "applyEditableOverlay", "undoEditable", "redoEditable", "exportEditableDesign", "closeEditableSession"] as const) {
       if (typeof native[name] !== "function") throw Error("This engine build does not support editable sessions");
     }
     this.native = native as EditableNativeHandle;
-    this.current = this.admit(this.native.openEditableSession(JSON.stringify({
-      project: encode(project), design: options.design === undefined ? null : encode(options.design),
-    })));
+    if ("workspace" in options) {
+      if (!this.native.restoreEditableWorkspace) throw Error("This engine build does not support source workspace restoration");
+      const restored = JSON.parse(this.native.restoreEditableWorkspace(options.workspace));
+      this.current = this.admit(JSON.stringify(restored.state));
+      this.restoredWorkspacePresentation = freeze(restored.presentation) as SourceWorkspacePresentation;
+      this.restoredViewPresentation = restored.viewPresentation == null ? null : freeze(restored.viewPresentation) as WorkspaceViewPresentation;
+    } else if ("history" in options) {
+      if (!this.native.restoreEditableHistory) throw Error("This engine build does not support native history restoration");
+      this.current = this.admit(this.native.restoreEditableHistory(options.history));
+    } else {
+      this.current = this.admit(this.native.openEditableSession(JSON.stringify({
+        project: encode(project), design: options.design === undefined ? null : encode(options.design),
+        ...(options.persistableHistory ? { persistable_history: true } : {}),
+      })));
+    }
   }
   get state(): EditableSessionState { return this.current; }
   get token(): EditableSessionToken { return this.current.token; }
   get accepted(): AcceptedResult { return this.current.result; }
 
+  /** Complete existing source-history format, including every native Undo/Redo checkpoint. */
+  exportHistory(): string {
+    this.assertLive();
+    if (!this.native.exportEditableHistory) throw Error("This engine build does not support native history export");
+    return this.native.exportEditableHistory(String(this.token.session));
+  }
+
+  /** Saves the existing source-workspace format with complete history and personal unfinished text. */
+  exportWorkspace(presentation: SourceWorkspacePresentation, viewPresentation?: WorkspaceViewPresentation): string {
+    this.assertLive();
+    if (!this.native.exportEditableWorkspace) throw Error("This engine build does not support source workspace export");
+    return this.native.exportEditableWorkspace(JSON.stringify({ session: this.token.session, expected: this.token, presentation, viewPresentation }));
+  }
+
+  /** Read-only accepted source/native inspection, without rebuilding a workbench. */
+  inspect(viewport: PointGestureViewport): EditableInspection {
+    this.assertLive();
+    if (!this.native.inspectEditableSession) throw Error("This engine build does not support accepted inspection");
+    return decodePointValue(this.native.inspectEditableSession(JSON.stringify({ session: this.token.session, expected: this.token, viewport })));
+  }
+
+  /** Trusted accepted input for local native browsing, with no UI host reconstruction. */
+  interactionSeed(viewport?: InteractionViewport): InteractionSeed {
+    this.assertLive();
+    if (!this.native.editableInteractionSeed) throw Error("This engine build does not support accepted interaction seeds");
+    return decodePointValue(this.native.editableInteractionSeed(JSON.stringify({ session: this.token.session, expected: this.token, viewport })));
+  }
+
+  /** Pinned data-only patch definitions for the real source compiler. */
+  managedCompilerPatches(): Readonly<Record<string, unknown>> {
+    this.assertLive();
+    if (!this.native.editableCompilerPatches) throw Error("This engine build does not support compiler patch context");
+    return decodePointValue(this.native.editableCompilerPatches(String(this.token.session)));
+  }
+
   /** Accepted presentation for source-owned personal selection translation. */
   toolOperationPresentationJSON(viewport: PointGestureViewport): string {
     return this.toolOperationNative().editableToolOperationContext(JSON.stringify({ session: this.token.session, expected: this.token, viewport }));
+  }
+  /** Resolve a tab's exact accepted-scene selection to semantic native operands. */
+  toolOperationViewOperands(viewport: PointGestureViewport, view: unknown): readonly ToolOperationOperand[] {
+    return decodePointValue(this.toolOperationNative().editableToolOperationViewOperands(JSON.stringify({ session: this.token.session, expected: this.token, viewport, view })));
   }
   /** Validate translated native selection and retain exact semantic occurrences. */
   toolOperationOperands(selection: unknown): readonly ToolOperationOperand[] {

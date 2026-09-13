@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Retained native relation, dimension and computed-feature authoring.
-use crate::terminal::PreparedDeclarationLabelProjection;
-use crate::{AcceptedEvaluation, EditableSession, EngineError, PreparedAuthoringMutation};
+use crate::{AcceptedEvaluation, EditableSession, EngineError};
 use geosolve_constraint_editor::{
     AuthoringOperand, AuthoringOptions, AuthoringOutcome, AuthoringState, AuthoringTool,
     ConstraintIntent, DimensionKind, FeatureAuthoringOptions, FeatureAuthoringOutcome,
@@ -14,9 +13,8 @@ use geosolve_sketch::{
     DocumentDimensionMode, SketchDatum, TangentOrientation,
 };
 use geosolve_sketch_code::{
-    CodeProject, CodeSessionIdentity, EditorBootstrapDeclaration, ManagedDeclarationDraft,
-    ManagedSketchMutation, ManagedValue, PreparedManagedMutationReceipt,
-    PreparedManagedMutationRequest, SemanticSymbol, prepare_editor_declaration_insertions,
+    CodeProject, EditorBootstrapDeclaration, ManagedDeclarationDraft, ManagedSketchMutation,
+    ManagedValue, PreparedManagedMutationReceipt, PreparedManagedMutationRequest, SemanticSymbol,
 };
 use geosolve_sketch_intent::{IntentKey, IntentPlanDisposition};
 use serde::{Deserialize, Serialize};
@@ -32,78 +30,31 @@ fn error(value: impl std::fmt::Display) -> EngineError {
     EngineError::Admission(value.to_string())
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ToolOperationTool {
-    Lock,
-    Coincident,
-    Horizontal,
-    Vertical,
-    Concentric,
-    Collinear,
-    Parallel,
-    Perpendicular,
-    Equal,
-    Midpoint,
-    Symmetric,
-    Tangent,
-    Continuity,
-    PointDistance,
-    SegmentLength,
-    Radius,
-    Diameter,
-    OrientedAngle,
-    Fillet,
-    Offset,
-    ToggleGeometryRole,
+macro_rules! define_operation_tools {
+    (constraints { $( $constraint:ident => ($constraint_key:literal, $constraint_label:literal), )* }
+     dimensions { $( $dimension:ident => ($dimension_key:literal, $dimension_label:literal), )* }
+     modify { $( $modify:ident => ($modify_key:literal, $modify_label:literal), )* }
+     auxiliary { $( $auxiliary:ident => ($auxiliary_key:literal, $auxiliary_label:literal, $auxiliary_command:literal), )* }) => {
+        /// Wire projection of native authoring, Modify and contextual actions.
+        #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        pub enum ToolOperationTool { $( $constraint, )* $( $dimension, )* $( $modify, )* $( #[serde(rename = $auxiliary_command)] $auxiliary, )* }
+        impl ToolOperationTool {
+            /// Native palette tools; contextual actions remain separately invokable.
+            pub const ALL: [Self; AuthoringTool::ALL.len() + geosolve_constraint_editor::ModifyTool::PALETTE.len()] =
+                [$( Self::$constraint, )* $( Self::$dimension, )* $( Self::$modify, )*];
+            fn authoring(self) -> Option<AuthoringTool> {
+                match self {
+                    $( Self::$constraint => Some(AuthoringTool::Constraint(ConstraintIntent::$constraint)), )*
+                    $( Self::$dimension => Some(AuthoringTool::Dimension(DimensionKind::$dimension)), )*
+                    $( Self::$modify => None, )*
+                    $( Self::$auxiliary => None, )*
+                }
+            }
+        }
+    };
 }
-impl ToolOperationTool {
-    pub const ALL: [Self; 20] = [
-        Self::Lock,
-        Self::Coincident,
-        Self::Horizontal,
-        Self::Vertical,
-        Self::Concentric,
-        Self::Collinear,
-        Self::Parallel,
-        Self::Perpendicular,
-        Self::Equal,
-        Self::Midpoint,
-        Self::Symmetric,
-        Self::Tangent,
-        Self::Continuity,
-        Self::PointDistance,
-        Self::SegmentLength,
-        Self::Radius,
-        Self::Diameter,
-        Self::OrientedAngle,
-        Self::Fillet,
-        Self::Offset,
-    ];
-    fn authoring(self) -> Option<AuthoringTool> {
-        Some(match self {
-            Self::Lock => AuthoringTool::Constraint(ConstraintIntent::Lock),
-            Self::Coincident => AuthoringTool::Constraint(ConstraintIntent::Coincident),
-            Self::Horizontal => AuthoringTool::Constraint(ConstraintIntent::Horizontal),
-            Self::Vertical => AuthoringTool::Constraint(ConstraintIntent::Vertical),
-            Self::Concentric => AuthoringTool::Constraint(ConstraintIntent::Concentric),
-            Self::Collinear => AuthoringTool::Constraint(ConstraintIntent::Collinear),
-            Self::Parallel => AuthoringTool::Constraint(ConstraintIntent::Parallel),
-            Self::Perpendicular => AuthoringTool::Constraint(ConstraintIntent::Perpendicular),
-            Self::Equal => AuthoringTool::Constraint(ConstraintIntent::Equal),
-            Self::Midpoint => AuthoringTool::Constraint(ConstraintIntent::Midpoint),
-            Self::Symmetric => AuthoringTool::Constraint(ConstraintIntent::Symmetric),
-            Self::Tangent => AuthoringTool::Constraint(ConstraintIntent::Tangent),
-            Self::Continuity => AuthoringTool::Constraint(ConstraintIntent::Continuity),
-            Self::PointDistance => AuthoringTool::Dimension(DimensionKind::PointDistance),
-            Self::SegmentLength => AuthoringTool::Dimension(DimensionKind::SegmentLength),
-            Self::Radius => AuthoringTool::Dimension(DimensionKind::Radius),
-            Self::Diameter => AuthoringTool::Dimension(DimensionKind::Diameter),
-            Self::OrientedAngle => AuthoringTool::Dimension(DimensionKind::OrientedAngle),
-            Self::Fillet | Self::Offset | Self::ToggleGeometryRole => return None,
-        })
-    }
-}
+geosolve_constraint_editor::authoring_tool_catalog!(define_operation_tools);
 
 /// Exact source/native ownership, independent of allocator identities and coordinates.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -297,6 +248,7 @@ pub struct ToolOperationPrediction {
 #[derive(Debug)]
 pub struct ToolOperationTerminal {
     command: ToolOperationCommand,
+    symbol: IntentKey,
     editor: Box<ProjectionalEditorSession>,
     declarations: Vec<EditorBootstrapDeclaration>,
     high_water: u64,
@@ -310,45 +262,38 @@ impl ToolOperationTerminal {
 /// Exact server replay plus one compiler ticket, held privately until resolution.
 #[derive(Debug)]
 pub struct PreparedToolOperation {
-    expected: CodeSessionIdentity,
-    mutation: PreparedAuthoringMutation,
-    editor: Box<ProjectionalEditorSession>,
-    projections: Vec<PreparedDeclarationLabelProjection>,
+    operation: crate::authoring_commit::PreparedNativeAuthoring,
 }
 impl PreparedToolOperation {
     pub fn request(&self) -> &PreparedManagedMutationRequest {
-        self.mutation.request()
+        self.operation.mutation.request()
     }
     pub fn declarations(&self) -> impl ExactSizeIterator<Item = &SemanticSymbol> {
-        self.projections
+        self.operation
+            .projections
             .iter()
             .map(|projection| &projection.declaration)
     }
 }
 #[derive(Debug)]
 pub struct PreparedToolOperationCommit {
-    expected: CodeSessionIdentity,
-    candidate: EditableSession,
-    project: String,
-    design: crate::EditableDesign,
-    digest: String,
-    declarations: Vec<SemanticSymbol>,
+    operation: crate::authoring_commit::PreparedNativeAuthoringCommit,
 }
 impl PreparedToolOperationCommit {
     pub fn result(&self) -> &crate::EngineAcceptedResult {
-        self.candidate.accepted().result()
+        self.operation.candidate.accepted().result()
     }
     pub fn project_json(&self) -> &str {
-        &self.project
+        &self.operation.project
     }
     pub fn design(&self) -> &crate::EditableDesign {
-        &self.design
+        &self.operation.design
     }
     pub fn source_design_digest(&self) -> &str {
-        &self.digest
+        &self.operation.digest
     }
     pub fn declarations(&self) -> &[SemanticSymbol] {
-        &self.declarations
+        &self.operation.declarations
     }
 }
 
@@ -357,34 +302,17 @@ impl EditableSession {
         &self,
         terminal: ToolOperationTerminal,
     ) -> Result<PreparedToolOperation, EngineError> {
-        let mutation = self.prepare_managed_mutation(
-            terminal.command.expected_mutation.unwrap_or(
-                ManagedSketchMutation::InsertDeclarations {
-                    declarations: terminal.command.expected_declarations,
-                },
-            ),
-            terminal.high_water,
-        )?;
-        let graph = terminal.editor.coordinator().intent().graph();
-        let projections = terminal
-            .declarations
-            .iter()
-            .map(|declaration| {
-                let node = graph
-                    .node(declaration.node)
-                    .ok_or_else(|| error("tool_operation declaration disappeared"))?;
-                Ok(PreparedDeclarationLabelProjection {
-                    node: declaration.node,
-                    terminal_symbol: node.symbol.clone(),
-                    declaration: declaration.symbol.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>, EngineError>>()?;
         Ok(PreparedToolOperation {
-            expected: self.token().clone(),
-            mutation,
-            editor: terminal.editor,
-            projections,
+            operation: self.prepare_native_authoring(
+                terminal.editor,
+                &terminal.declarations,
+                terminal.command.expected_mutation.unwrap_or(
+                    ManagedSketchMutation::InsertDeclarations {
+                        declarations: terminal.command.expected_declarations,
+                    },
+                ),
+                terminal.high_water,
+            )?,
         })
     }
 
@@ -399,30 +327,13 @@ impl EditableSession {
         prepared: &PreparedToolOperation,
         receipt: PreparedManagedMutationReceipt,
     ) -> Result<PreparedToolOperationCommit, EngineError> {
-        if self.token() != &prepared.expected {
-            return Err(error("tool_operation preparation is stale or foreign"));
-        }
-        let mut candidate = self.fork_for_preparation();
-        candidate.apply_managed_mutation(&prepared.mutation, receipt)?;
-        let materialized = &candidate.accepted().0.materialized;
-        crate::terminal::validate_construction_parity(
-            &prepared.editor,
-            &materialized.editor,
-            &materialized.expansion,
-            &prepared.projections,
-        )
-        .map_err(error)?;
         Ok(PreparedToolOperationCommit {
-            expected: prepared.expected.clone(),
-            project: candidate.export_project_json()?,
-            design: candidate.design(),
-            digest: candidate.source_design_digest()?,
-            candidate,
-            declarations: prepared
-                .projections
-                .iter()
-                .map(|projection| projection.declaration.clone())
-                .collect(),
+            operation: self.resolve_native_authoring(
+                &prepared.operation,
+                receipt,
+                "tool_operation",
+                "Apply project",
+            )?,
         })
     }
 
@@ -434,7 +345,7 @@ impl EditableSession {
         &mut self,
         prepared: PreparedToolOperationCommit,
     ) -> Result<AcceptedEvaluation, EngineError> {
-        self.install_prepared_session(&prepared.expected, prepared.candidate)
+        self.install_native_authoring(prepared.operation)
     }
 }
 
@@ -468,6 +379,20 @@ impl EditableSession {
         selection: Vec<ToolOperationOperand>,
         options: ToolOperationOptions,
     ) -> Result<ToolOperationPrediction, EngineError> {
+        self.begin_tool_operation_with_symbol(tool, gesture_id, viewport, selection, options, None)
+    }
+
+    // Only server-owned replay may provide a feature label, after authenticating
+    // the complete original command on its trusted basis. It is never a wire input.
+    fn begin_tool_operation_with_symbol(
+        &self,
+        tool: ToolOperationTool,
+        gesture_id: u64,
+        viewport: Viewport,
+        selection: Vec<ToolOperationOperand>,
+        options: ToolOperationOptions,
+        authenticated_symbol: Option<IntentKey>,
+    ) -> Result<ToolOperationPrediction, EngineError> {
         Viewport::new(
             viewport.screen_size,
             viewport.model_center,
@@ -490,22 +415,27 @@ impl EditableSession {
                 .fork_accepted_authority()
                 .map_err(error)?,
         );
-        let symbol = IntentKey::new(format!(
-            "{} {}",
-            if tool == ToolOperationTool::Offset {
-                "Offset"
-            } else {
-                "Fillet"
+        let symbol = authenticated_symbol.map_or_else(
+            || {
+                IntentKey::new(format!(
+                    "{} {}",
+                    if tool == ToolOperationTool::Offset {
+                        "Offset"
+                    } else {
+                        "Fillet"
+                    },
+                    editor
+                        .coordinator()
+                        .intent()
+                        .identity()
+                        .revision
+                        .raw()
+                        .saturating_add(1)
+                ))
+                .map_err(error)
             },
-            editor
-                .coordinator()
-                .intent()
-                .identity()
-                .revision
-                .raw()
-                .saturating_add(1)
-        ))
-        .map_err(error)?;
+            Ok,
+        )?;
         let mut prediction = ToolOperationPrediction {
             origin: self.accepted().clone(),
             project: self
@@ -565,15 +495,24 @@ impl EditableSession {
         &self,
         command: &ToolOperationCommand,
     ) -> Result<ToolOperationTerminal, EngineError> {
+        self.trace_tool_operation_with_symbol(command, None)
+    }
+
+    fn trace_tool_operation_with_symbol(
+        &self,
+        command: &ToolOperationCommand,
+        symbol: Option<IntentKey>,
+    ) -> Result<ToolOperationTerminal, EngineError> {
         if command.samples.len() > MAX_TOOL_OPERATION_SAMPLES {
             return Err(error("tool operation trace exceeds bounds"));
         }
-        let mut prediction = self.begin_tool_operation_with_options(
+        let mut prediction = self.begin_tool_operation_with_symbol(
             command.tool,
             command.gesture_id,
             command.viewport,
             command.selection.clone(),
             command.options.clone(),
+            symbol,
         )?;
         for sample in &command.samples {
             prediction.advance(command.gesture_id, sample.clone())?;
@@ -587,7 +526,24 @@ impl EditableSession {
         if command.basis != self.source_design_digest()? {
             return Err(error("tool operation source/design basis is stale"));
         }
-        let terminal = self.trace_tool_operation(command)?;
+        let mut terminal = self.trace_tool_operation(command)?;
+        if terminal.command.expected_declarations != command.expected_declarations {
+            let cold = self
+                .cold_prediction_basis()?
+                .trace_tool_operation(command)?;
+            if cold.command.expected_declarations == command.expected_declarations
+                && cold.command.expected_mutation == command.expected_mutation
+            {
+                if matches!(
+                    command.tool,
+                    ToolOperationTool::Fillet | ToolOperationTool::Offset
+                ) {
+                    terminal =
+                        self.trace_tool_operation_with_symbol(command, Some(cold.symbol.clone()))?;
+                }
+                retain_original_default_labels(&cold, &mut terminal);
+            }
+        }
         if terminal.command.expected_declarations != command.expected_declarations
             || terminal.command.expected_mutation != command.expected_mutation
         {
@@ -607,7 +563,9 @@ impl EditableSession {
     ) -> Result<(PreparedToolOperation, crate::ConstructionReplayWitness), EngineError> {
         crate::replay::same_project(self, basis)?;
         let original = basis.replay_tool_operation(command)?;
-        let latest = self.trace_tool_operation(command)?;
+        let mut latest =
+            self.trace_tool_operation_with_symbol(command, Some(original.symbol.clone()))?;
+        retain_original_default_labels(&original, &mut latest);
         let mut witness = crate::replay::construction_witness(
             &original.command.expected_declarations,
             &latest.command.expected_declarations,
@@ -641,6 +599,20 @@ impl EditableSession {
         witness.required_stable_declarations.dedup();
         Ok((self.prepare_tool_operation_terminal(latest)?, witness))
     }
+}
+
+fn retain_original_default_labels(
+    original: &ToolOperationTerminal,
+    latest: &mut ToolOperationTerminal,
+) {
+    geosolve_sketch_code::retain_editor_default_labels(
+        &original.editor,
+        &original.declarations,
+        &original.command.expected_declarations,
+        &latest.editor,
+        &latest.declarations,
+        &mut latest.command.expected_declarations,
+    );
 }
 
 fn resolve_operand(
@@ -1290,57 +1262,25 @@ impl ToolOperationPrediction {
             )?);
             return Ok(ToolOperationTerminal {
                 command: self.command,
+                symbol: self.symbol,
                 editor: self.editor,
                 declarations: Vec::new(),
                 high_water: self.project.managed.declaration_name_high_water,
             });
         }
-        let accepted_nodes = origin.editor.coordinator().intent().graph().nodes();
-        let added = self
-            .editor
-            .coordinator()
-            .intent()
-            .graph()
-            .nodes()
-            .values()
-            .filter(|node| !accepted_nodes.contains_key(&node.id))
-            .collect::<Vec<_>>();
-        if added.is_empty() || added.len() > geosolve_sketch_code::MANAGED_MUTATION_BATCH_LIMIT {
-            return Err(error("tool declaration count is outside bounds"));
-        }
-        let (declarations, high_water) =
-            crate::construction_names::allocate_canvas_declaration_names(
+        let (declarations, high_water, drafts) =
+            geosolve_sketch_code::prepare_editor_source_insertion(
                 &self.project,
-                &added,
-                self.project.managed.declaration_name_high_water,
+                &origin.expansion,
+                &origin.editor,
+                &self.editor,
             )
-            .map_err(error)?;
-        let insertion = prepare_editor_declaration_insertions(
-            &self.project,
-            &origin.expansion,
-            &origin.editor,
-            &self.editor,
-            &declarations,
-        )
-        .map_err(error)?;
-        self.command.expected_declarations = insertion
-            .declarations
-            .into_iter()
-            .map(|draft| {
-                let mut draft = ManagedDeclarationDraft::from(draft);
-                if draft
-                    .builder_path
-                    .first()
-                    .is_some_and(|namespace| namespace == "dimension")
-                    && let ManagedValue::Object(arguments) = &mut draft.arguments
-                {
-                    arguments.insert("isKeyConstraint".into(), ManagedValue::Bool(true));
-                }
-                draft
-            })
-            .collect();
+            .map_err(error)?
+            .into_parts();
+        self.command.expected_declarations = drafts;
         Ok(ToolOperationTerminal {
             command: self.command,
+            symbol: self.symbol,
             editor: self.editor,
             declarations,
             high_water,

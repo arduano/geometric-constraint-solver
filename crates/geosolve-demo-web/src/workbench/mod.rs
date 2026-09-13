@@ -719,7 +719,7 @@ impl WorkbenchDocumentAuthority {
         if snapshot.intent_session()?.is_some() {
             persistence::projectional_editor_from_snapshot(snapshot)
                 .map(|editor| Self::projectional(editor, computed_evaluation_high_water, revisions))
-        } else if snapshot.legacy_bootstrap().is_some() {
+        } else if snapshot.is_legacy() {
             persistence::projectional_editor_from_legacy_snapshot(snapshot)
                 .map(|editor| Self::projectional(editor, computed_evaluation_high_water, revisions))
         } else {

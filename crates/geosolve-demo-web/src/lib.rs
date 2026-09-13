@@ -1,8 +1,5 @@
 //! Non-authoritative WASM sketch workbench.
 
-/// Bounded text transport for complete workbench reproduction checkpoints.
-pub mod reproduction;
-
 /// DOM-free projectional-intent RPC constructors shared by native and WASM
 /// hosts. The returned session executes the Rust-owned typed protocol and
 /// existing native solver; this web crate adds no equations.
@@ -70,13 +67,6 @@ mod wasm {
             .map_err(|error| JsValue::from_str(&error))
     }
 
-    /// Map personal selection through exact source-owned presentation bindings.
-    #[wasm_bindgen(js_name = mapAuthoringSelection)]
-    pub fn map_authoring_selection(request: &str) -> Result<String, JsValue> {
-        crate::workbench::bridge::local_interaction::map_authoring_selection_json(request)
-            .map_err(|error| JsValue::from_str(&error))
-    }
-
     /// Independent per-tab accepted-model Inspector/Explorer presentation.
     /// The adapter exposes no authoring or accepted publication command.
     #[wasm_bindgen]
@@ -96,6 +86,11 @@ mod wasm {
         pub fn new(request: &str) -> Result<BrowsingHandle, JsValue> {
             crate::workbench::bridge::local_interaction::BrowsingPresentation::new(request)
                 .map(|local| Self { local })
+                .map_err(|e| JsValue::from_str(&e))
+        }
+        pub fn initialize(&mut self) -> Result<String, JsValue> {
+            self.local
+                .initialize_json()
                 .map_err(|e| JsValue::from_str(&e))
         }
         pub fn update(&mut self, request: &str) -> Result<String, JsValue> {
@@ -143,6 +138,12 @@ mod wasm {
         }
         pub fn state(&self) -> Result<String, JsValue> {
             self.local.state_json().map_err(|e| JsValue::from_str(&e))
+        }
+        #[wasm_bindgen(js_name = exportPresentation)]
+        pub fn export_presentation(&self) -> Result<String, JsValue> {
+            self.local
+                .export_presentation_json()
+                .map_err(|e| JsValue::from_str(&e))
         }
         #[wasm_bindgen(js_name = restoreSelection)]
         pub fn restore_selection(&mut self, request: &str) -> Result<String, JsValue> {

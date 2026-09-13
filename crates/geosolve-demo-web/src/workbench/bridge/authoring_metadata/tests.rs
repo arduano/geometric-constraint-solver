@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use super::*;
-use geosolve_sketch_code::CompiledManagedSource;
+use geosolve_sketch_code::{CompiledManagedSource, ManagedMetadataTarget};
 
 fn fixture_bridge(compiled: CompiledManagedSource) -> WorkbenchBridge {
     let (code, editor) =

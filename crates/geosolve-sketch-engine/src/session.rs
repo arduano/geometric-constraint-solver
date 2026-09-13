@@ -7,9 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use geosolve_sketch_code::{
     CodeInteractionOverlay, CodeProject, CodeSessionIdentity, KeyedReconcileState,
     MaterializedCodeProject, ProjectKey, SketchCodeSession,
-    materialize_code_project_cold_with_overlay,
-    materialize_code_project_incremental_for_structural_edit,
-    materialize_code_project_incremental_with_overlay, required_generated_members,
+    materialize_code_project_cold_with_overlay, materialize_code_project_incremental_with_overlay,
+    required_generated_members,
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,9 +36,10 @@ pub struct EditableSessionState {
 
 #[derive(Debug)]
 pub struct EditableSession {
-    history: SketchCodeSession,
-    authorities: BTreeMap<String, AcceptedEvaluation>,
-    accepted: AcceptedEvaluation,
+    pub(super) history: SketchCodeSession,
+    pub(super) authorities: BTreeMap<String, AcceptedEvaluation>,
+    pub(super) accepted: AcceptedEvaluation,
+    pub(super) persistable_history: bool,
 }
 
 /// Independently replayed, unpublished point edit bound to one exact live session.
@@ -75,6 +75,7 @@ impl EditableSession {
             history: self.history.clone(),
             authorities: self.authorities.clone(),
             accepted: self.accepted.clone(),
+            persistable_history: self.persistable_history,
         }
     }
 
@@ -97,6 +98,26 @@ impl EditableSession {
     /// # Errors
     /// Rejects invalid source, foreign/stale semantic overrides or unaccepted geometry.
     pub fn open(project_json: &str, design_json: Option<&str>) -> Result<Self, EngineError> {
+        Self::open_with_checkpoint_policy(project_json, design_json, false)
+    }
+
+    /// Opens a source-authoring session whose complete history can be saved and restored.
+    /// Hosts retain their outer storage, draft and publication policies.
+    ///
+    /// # Errors
+    /// Rejects invalid source/design or independently unaccepted native geometry.
+    pub fn open_persistable(
+        project_json: &str,
+        design_json: Option<&str>,
+    ) -> Result<Self, EngineError> {
+        Self::open_with_checkpoint_policy(project_json, design_json, true)
+    }
+
+    fn open_with_checkpoint_policy(
+        project_json: &str,
+        design_json: Option<&str>,
+        persistable_history: bool,
+    ) -> Result<Self, EngineError> {
         let project = CodeProject::from_json(project_json).map_err(error)?;
         let design = match design_json {
             Some(json) => {
@@ -138,20 +159,44 @@ impl EditableSession {
         .map_err(error)?;
         let expansion = materialized.expansion.clone();
         let accepted = publication(&project, materialized, digest)?;
-        let key = accepted.result().result_id.clone();
+        let checkpoint = editor_history_checkpoint(&accepted, persistable_history)?;
         let history = SketchCodeSession::new_project_with_overlay(
             project,
             generated,
             design.overrides,
             expansion,
-            serde_json::Value::String(key.clone()),
+            checkpoint,
         )
         .map_err(error)?;
+        let key = history_authority_key(history.snapshot())?;
         Ok(Self {
             history,
             authorities: BTreeMap::from([(key, accepted.clone())]),
             accepted,
+            persistable_history,
         })
+    }
+
+    /// Restores the unchanged source-session history format, validating every native checkpoint.
+    /// Historical entries are rematerialized lazily when visited; none are discarded.
+    ///
+    /// # Errors
+    /// Rejects corrupt current/accepted/Undo/Redo authority, native geometry or source ownership.
+    pub fn restore_history(json: &str) -> Result<Self, EngineError> {
+        Self::from_validated_source_history(
+            geosolve_sketch_code::ValidatedSourceHistory::decode(json).map_err(error)?,
+        )
+    }
+
+    /// Serializes every source-history entry using the existing delegated native checkpoint format.
+    ///
+    /// # Errors
+    /// Rejects an ephemeral session or output beyond the source-session wire limit.
+    pub fn export_history(&self) -> Result<String, EngineError> {
+        if !self.persistable_history {
+            return Err(error("session has no persistable native checkpoints"));
+        }
+        self.history.to_canonical_json().map_err(error)
     }
 
     pub fn accepted(&self) -> &AcceptedEvaluation {
@@ -239,7 +284,7 @@ impl EditableSession {
             .code_project
             .as_ref()
             .ok_or_else(|| error("missing managed project"))?;
-        let (materialized, overlay) = crate::terminal::materialize_terminal(
+        let (materialized, overlay) = geosolve_sketch_code::editor_terminal::materialize_terminal(
             &self.accepted.0.materialized,
             project,
             &snapshot.generated,
@@ -258,7 +303,7 @@ impl EditableSession {
                 &expected,
                 overlay.clone(),
                 expansion,
-                serde_json::Value::String(accepted.result().result_id.clone()),
+                editor_history_checkpoint(&accepted, self.persistable_history)?,
                 "Move semantic point",
             )
             .map_err(error)?;
@@ -321,39 +366,8 @@ impl EditableSession {
                 "project update belongs to a different editable session project",
             ));
         }
-        let plan = self
-            .history
-            .plan_structural_reconciliation(
-                expected,
-                required_generated_members(&project).map_err(error)?,
-                &BTreeSet::new(),
-            )
-            .map_err(error)?;
-        let (materialized, overlay) = materialize_code_project_incremental_for_structural_edit(
-            &self.accepted.0.materialized,
-            &project,
-            plan.staged(),
-            &self.history.snapshot().interaction_overlay,
-        )
-        .map_err(error)?;
-        let digest = input_digest(&project, plan.staged(), &overlay, Some(expected))?;
-        let expansion = materialized.expansion.clone();
-        let accepted = publication(&project, materialized, digest)?;
-        let prepared = self
-            .history
-            .prepare_project_edit_from_plan_with_overlay(
-                expected,
-                project,
-                plan,
-                overlay,
-                expansion,
-                serde_json::Value::String(accepted.result().result_id.clone()),
-                "Apply project",
-            )
-            .map_err(error)?;
-        let mut history = self.history.clone();
-        history.apply_prepared(prepared).map_err(error)?;
-        self.install(history, accepted)
+        self.apply_project_for_host(project, "Apply project", false)?;
+        Ok(self.accepted.clone())
     }
 
     /// Applies typed authored point/suppression overrides through shared expansion and native validation.
@@ -388,7 +402,7 @@ impl EditableSession {
                 expected,
                 overlay,
                 expansion,
-                serde_json::Value::String(accepted.result().result_id.clone()),
+                editor_history_checkpoint(&accepted, self.persistable_history)?,
                 "Apply semantic overrides",
             )
             .map_err(error)?;
@@ -421,62 +435,102 @@ impl EditableSession {
         undo: bool,
     ) -> Result<AcceptedEvaluation, EngineError> {
         self.authenticate(expected)?;
-        let mut history = self.history.clone();
-        if undo { history.undo() } else { history.redo() }.map_err(error)?;
-        let key = history
-            .pointer_frame_checkpoint()
-            .as_str()
-            .ok_or_else(|| error("invalid private checkpoint key"))?;
-        let accepted = self
-            .authorities
-            .get(key)
-            .ok_or_else(|| error("missing private accepted history authority"))?
-            .clone();
-        self.history = history;
-        self.accepted = accepted.clone();
-        Ok(accepted)
+        self.step_source_history(undo)?;
+        Ok(self.accepted.clone())
     }
 
-    fn authenticate(&self, expected: &CodeSessionIdentity) -> Result<(), EngineError> {
+    pub(super) fn authenticate(&self, expected: &CodeSessionIdentity) -> Result<(), EngineError> {
         if expected != self.token() {
             return Err(error("stale or foreign editable session token"));
         }
         Ok(())
     }
 
-    fn install(
+    pub(super) fn install(
         &mut self,
         history: SketchCodeSession,
         accepted: AcceptedEvaluation,
     ) -> Result<AcceptedEvaluation, EngineError> {
-        // Public owning history serialization includes every retained opaque checkpoint.
-        // This private index is reconstructible only while this session owns the handles.
-        let wire: serde_json::Value =
-            serde_json::from_str(&history.to_canonical_json().map_err(error)?).map_err(error)?;
-        let mut snapshots = vec![&wire["snapshot"]];
-        for direction in ["undo", "redo"] {
-            if let Some(entries) = wire[direction].as_array() {
-                snapshots.extend(entries.iter().map(|entry| &entry["snapshot"]));
-            }
-        }
-        let retained = snapshots
-            .into_iter()
-            .flat_map(|snapshot| {
-                [
-                    snapshot["editor_checkpoint"].as_str(),
-                    snapshot["accepted_editor_checkpoint"].as_str(),
-                ]
-            })
-            .flatten()
-            .collect::<BTreeSet<_>>();
-        self.authorities
-            .retain(|key, _| retained.contains(key.as_str()));
-        self.authorities
-            .insert(accepted.result().result_id.clone(), accepted.clone());
+        // The source owner has already authenticated history and its wire bound.
+        // Retain native handles directly from its read-only inventory; no JSON
+        // roundtrip or knowledge of the private durable entry schema is needed.
+        let retained = history
+            .retained_snapshots()
+            .map(history_authority_key)
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        let key = history_authority_key(history.snapshot())?;
+        self.authorities.retain(|key, _| retained.contains(key));
+        self.authorities.insert(key, accepted.clone());
         self.history = history;
         self.accepted = accepted.clone();
         Ok(accepted)
     }
+}
+
+pub(super) fn editor_history_checkpoint(
+    accepted: &AcceptedEvaluation,
+    persistable: bool,
+) -> Result<serde_json::Value, EngineError> {
+    if persistable {
+        geosolve_sketch_code::encode_editor_checkpoint(&accepted.0.materialized.editor)
+            .map_err(error)
+    } else {
+        Ok(serde_json::Value::String(
+            accepted.result().result_id.clone(),
+        ))
+    }
+}
+
+pub(super) fn history_authority_key(
+    snapshot: &geosolve_sketch_code::CodeSessionSnapshot,
+) -> Result<String, EngineError> {
+    let checkpoint = snapshot
+        .accepted_editor_checkpoint
+        .as_str()
+        .ok_or_else(|| error("invalid native history checkpoint"))?;
+    // Equal geometry can accompany different document/source presentation.
+    // Allocator high-water retention during Undo does not change either basis.
+    let encoded =
+        serde_json::to_vec(&(checkpoint, &snapshot.accepted_source_digest)).map_err(error)?;
+    Ok(geosolve_sketch_intent::intent_content_digest(&encoded).to_string())
+}
+
+pub(super) fn accepted_from_history(
+    history: &SketchCodeSession,
+) -> Result<AcceptedEvaluation, EngineError> {
+    accepted_from_validated_history_editor(
+        history,
+        geosolve_sketch_code::restore_editor_checkpoint(history.pointer_frame_checkpoint())
+            .map_err(error)?,
+    )
+}
+
+pub(super) fn accepted_from_validated_history_editor(
+    history: &SketchCodeSession,
+    editor: Box<geosolve_constraint_editor::ProjectionalEditorSession>,
+) -> Result<AcceptedEvaluation, EngineError> {
+    let snapshot = history.snapshot();
+    let project = snapshot
+        .accepted_code_project
+        .as_ref()
+        .ok_or_else(|| error("history has no accepted source project"))?;
+    let expansion = snapshot
+        .accepted_expansion
+        .clone()
+        .ok_or_else(|| error("history has no accepted source expansion"))?;
+    let generated = snapshot
+        .accepted_generated
+        .as_ref()
+        .ok_or_else(|| error("history has no accepted generated identity"))?;
+    let materialized = geosolve_sketch_code::rehydrate_materialized_code_project(editor, expansion)
+        .map_err(error)?;
+    let digest = input_digest(
+        project,
+        generated,
+        &snapshot.accepted_interaction_overlay,
+        Some(history.identity()),
+    )?;
+    publication(project, *materialized, digest)
 }
 
 fn source_design_digest(
@@ -491,7 +545,7 @@ fn source_design_digest(
     Ok(geosolve_sketch_intent::intent_content_digest(&bytes).to_string())
 }
 
-fn input_digest(
+pub(super) fn input_digest(
     project: &CodeProject,
     generated: &KeyedReconcileState,
     overlay: &CodeInteractionOverlay,
@@ -501,7 +555,7 @@ fn input_digest(
     Ok(geosolve_sketch_intent::intent_content_digest(&bytes).to_string())
 }
 
-fn publication(
+pub(super) fn publication(
     project: &CodeProject,
     materialized: MaterializedCodeProject,
     digest: String,

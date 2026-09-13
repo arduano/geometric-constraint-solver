@@ -60,6 +60,30 @@ Previously retained accepted export handles remain valid until engine release/di
 Generator results have no reverse source-editing authority. See the shipped TypeScript
 interfaces for exact method/result types.
 
+Hosts that retain complete Undo/Redo across restarts can opt into native history:
+
+```ts
+const session = engine.openEditableSession(project, { persistableHistory: true });
+const saved = session.exportWorkspace({
+  origin: { kind: "authored" }, selectedFile: "sketch.ts",
+  managedDraft: unfinishedSource, draftDiagnostic: null,
+});
+session.dispose();
+const restored = engine.restoreEditableWorkspace(saved);
+// restored.restoredWorkspacePresentation contains the retained personal source state.
+```
+
+This uses the existing saved-source format, including every native historical
+checkpoint; restoration independently validates current and historical authority.
+`exportHistory()` / `restoreEditableSession()` expose only the source-history layer
+when the host stores personal source state separately. A duplicate live session
+identity cannot replace an existing session. These APIs do not save files themselves.
+
+`session.inspect(viewport)` returns accepted native scene/bindings and source
+navigation without solving. Native identities remain opaque; the engine resolves
+exact correspondence through `toolOperationViewOperands(viewport, view)` for
+selection originating in a detached canvas.
+
 Managed point prediction uses `pointGestureTargets()` and `beginPointGesture(target,
 { expected, gestureId, viewport })`. Keep one retained gesture in a dedicated
 authoring worker, pass ordered model-space samples to `advance`, and render its
@@ -73,6 +97,14 @@ The trusted server independently calls `preparePointGestureCommit(command,
 authority until installation. Dropping/releasing a candidate preserves the live
 session. Foreign, consumed and stale preparations cannot publish. For latest-model replay, use `preparePointGestureReplay` with the independently admitted
 original session and authenticate its required target lifetimes against server history.
+
+The exported `constructionTools`, `operationTools` and `auxiliaryTools` map stable
+toolbar IDs to typed command values. Their TypeScript unions and Rust wire enums
+project the native editor catalogs; icons and toolbar arrangement remain host-owned.
+The contextual `geometry-role` entry maps to the existing `toggle_geometry_role`
+command and stays outside the operation palette. After changing the native catalog,
+run `npm --prefix packages/geosolve-engine run generate:tools`; `check:tools` and
+the frontend manifest check reject stale generated projections.
 
 Construction uses `beginConstruction(tool, { expected, gestureId, viewport, role? })`
 for all 25 existing native geometry variants. `initialFrame` exposes native defaults
@@ -117,5 +149,6 @@ server conflict policy and personal contribution history remain host-owned.
 accepted inputs. Reopening those inputs independently revalidates geometry and preserves
 the digest. Individual evaluation IDs include session state and are not recovery IDs.
 
-M98 has focused Node/browser, session and offline archive checks. Final integrated
-qualification and supervising-user acceptance remain outstanding.
+M98's engine and shared authoring are mechanically qualified. M99's ownership cleanup
+is in implementation; its focused evidence does not yet establish integrated qualification.
+Supervising-user M98 acceptance remains a separate open record.

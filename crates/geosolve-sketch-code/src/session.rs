@@ -637,6 +637,17 @@ impl SketchCodeSession {
         &self.snapshot
     }
 
+    /// Borrows the current and every Undo/Redo snapshot for native resource retention.
+    /// This read-only inventory does not serialize or change history authority.
+    pub fn retained_snapshots(&self) -> impl Iterator<Item = &CodeSessionSnapshot> {
+        std::iter::once(&self.snapshot).chain(
+            self.undo
+                .iter()
+                .chain(&self.redo)
+                .map(|entry| &entry.snapshot),
+        )
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }

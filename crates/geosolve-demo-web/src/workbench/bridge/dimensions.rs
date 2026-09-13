@@ -15,44 +15,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_DIMENSION_INSTANCE: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum DisplayMode {
-    #[default]
-    Focused,
-    All,
-    Hidden,
-}
-
-impl From<DisplayMode> for DimensionDisplayMode {
-    fn from(mode: DisplayMode) -> Self {
-        match mode {
-            DisplayMode::Focused => Self::Focused,
-            DisplayMode::All => Self::All,
-            DisplayMode::Hidden => Self::Hidden,
-        }
-    }
-}
-
-impl From<DimensionDisplayMode> for DisplayMode {
-    fn from(mode: DimensionDisplayMode) -> Self {
-        match mode {
-            DimensionDisplayMode::Focused => Self::Focused,
-            DimensionDisplayMode::All => Self::All,
-            DimensionDisplayMode::Hidden => Self::Hidden,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct DimensionPersistence {
-    #[serde(default)]
-    mode: DisplayMode,
-    /// Exact native document/source/item identity; never resolved by a label or ordinal.
-    #[serde(default)]
-    pins: Vec<String>,
-}
+pub(super) use geosolve_constraint_editor::presentation_persistence::{
+    DimensionPersistence, DisplayMode,
+};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -199,18 +164,7 @@ impl WorkbenchBridge {
     }
 
     fn dimension_authority(&self) -> String {
-        geosolve_sketch_intent::intent_content_digest(
-            serde_json::json!({
-                "instance": self.dimensions.instance,
-                "intent": self.editor().coordinator().intent().identity(),
-                "code": self.code_project.as_ref().map(CodeProjectWorkbench::code_session_identity),
-                "dirty": self.code_project.as_ref().is_some_and(CodeProjectWorkbench::is_dirty),
-                "pending": self.pending_managed_mutation.is_some(),
-            })
-            .to_string()
-            .as_bytes(),
-        )
-        .to_string()
+        self.chrome_read().dimension_authority()
     }
 
     #[allow(
@@ -223,7 +177,7 @@ impl WorkbenchBridge {
         }
         let authority = self.dimension_authority();
         if self.dimensions.cache.authority != authority {
-            self.dimensions.cache = self.build_dimension_provenance(authority);
+            self.dimensions.cache = self.chrome_read().build_dimension_provenance(authority);
         }
         let interaction = self.editor().editor();
         let layout = interaction.annotation_layout_for_scene();
@@ -266,91 +220,30 @@ impl WorkbenchBridge {
             navigation_active: self.dimensions.navigation_active,
             active,
         };
-        let mut entries = self.dimensions.native.apply(scene, &layout, &context);
-        if !self.dimensions.pending_pins.is_empty() {
-            self.dimensions.native.pins = entries
-                .iter()
-                .filter(|entry| {
-                    self.dimensions
-                        .pending_pins
-                        .contains(&persistent_identity(entry.key))
-                })
-                .map(|entry| entry.key)
-                .collect();
-            self.dimensions.pending_pins.clear();
-            entries = self.dimensions.native.apply(scene, &layout, &context);
-        }
-        let selected_owners: BTreeSet<_> = context
-            .selection
-            .iter()
-            .filter_map(|item| self.dimensions.cache.owners.get(item).copied())
-            .chain(self.editor().selected_declaration())
-            .collect();
-        self.dimensions.parameters = self
-            .dimensions
-            .cache
-            .parameters
-            .iter()
-            .filter(|(row, owners)| row.default_priority || !owners.is_disjoint(&selected_owners))
-            .map(|(row, _)| row.clone())
-            .collect();
-        self.dimensions.entries = entries
-            .into_iter()
-            .map(|entry| {
-                let metadata = self.dimensions.cache.dimensions.get(&entry.key.item);
-                let reason = if entry.reference {
-                    Some("Reference measurements follow the accepted geometry".to_owned())
-                } else if entry.suppressed {
-                    Some("This dimension is suppressed".to_owned())
-                } else {
-                    metadata
-                        .and_then(|metadata| match &metadata.edit {
-                            DimensionEdit::ReadOnly(reason) => Some(reason.clone()),
-                            DimensionEdit::Source { .. } | DimensionEdit::Native { .. } => None,
-                        })
-                        .or_else(|| {
-                            metadata
-                                .is_none()
-                                .then(|| "No accepted edit target is available".into())
-                        })
-                };
-                let row = DimensionEntry {
-                    id: format!(
-                        "{}:{}",
-                        self.dimensions.cache.authority,
-                        persistent_identity(entry.key)
-                    ),
-                    row_key: format!(
-                        "{}:{}",
-                        self.dimensions.instance,
-                        persistent_identity(entry.key)
-                    ),
-                    label: metadata
-                        .map_or_else(|| entry.label.clone(), |metadata| metadata.label.clone()),
-                    value: self.dimension_measurement_value(&entry, scene),
-                    unit: Some(
-                        if entry.kind == SceneAnnotationKind::OrientedAngle {
-                            "°"
-                        } else {
-                            "mm"
-                        }
-                        .into(),
-                    ),
-                    kind: dimension_kind(entry.kind),
-                    reference: entry.reference,
-                    generated: entry.generated,
-                    default_priority: entry.default_priority,
-                    pinned: entry.pinned,
-                    visible: entry.visible,
-                    focused: entry.focused,
-                    editable: reason.is_none(),
-                    reason,
-                    contextual: entry.related || entry.focused || entry.pinned,
-                    metadata: metadata.and_then(|metadata| metadata.presentation.clone()),
-                };
-                (entry, row)
-            })
-            .collect();
+        let read = ChromeRead {
+            editor: self
+                .authority
+                .projectional_ref()
+                .expect("projectional bridge"),
+            code_project: self
+                .code_project
+                .as_ref()
+                .map(CodeProjectWorkbench::chrome_source),
+            dimension_instance: self.dimensions.instance,
+            pending: self.pending_managed_mutation.is_some(),
+            interaction_blocked: self.captured_pointer.is_some()
+                || self.active_tool != "select"
+                || self
+                    .authority
+                    .projectional_ref()
+                    .expect("projectional bridge")
+                    .editor()
+                    .active_pointer_gesture()
+                    .is_some(),
+            hidden_rows: &self.explorer_visibility.hidden_rows,
+        };
+        self.dimensions
+            .apply_projection(&read, scene, &layout, &context);
     }
 
     // Keep the scene-composition call site explicit: the shared owner must run
@@ -360,46 +253,7 @@ impl WorkbenchBridge {
     }
 
     pub(super) fn dimensions_snapshot(&self) -> DimensionsSnapshot {
-        DimensionsSnapshot {
-            mode: self.dimensions.native.mode.into(),
-            entries: self
-                .dimensions
-                .entries
-                .iter()
-                .filter(|(entry, row)| {
-                    let summarized_by_parameter = self
-                        .dimensions
-                        .cache
-                        .dimensions
-                        .get(&entry.key.item)
-                        .and_then(|metadata| match &metadata.edit {
-                            DimensionEdit::Source { control, .. } => Some(control),
-                            _ => None,
-                        })
-                        .is_some_and(|control| {
-                            self.dimensions.parameters.iter().any(|parameter| {
-                                &parameter.id == control && parameter.default_priority
-                            })
-                        });
-                    row.contextual
-                        || (!summarized_by_parameter
-                            && (entry.default_priority
-                                || entry.related
-                                || entry.pinned
-                                || entry.focused
-                                || entry.visible))
-                })
-                .map(|(_, row)| row.clone())
-                .collect(),
-            all_measurements: self
-                .dimensions
-                .entries
-                .iter()
-                .map(|(_, row)| row.clone())
-                .collect(),
-            parameters: self.dimensions.parameters.clone(),
-            pin_count: self.dimensions.native.pins.len(),
-        }
+        self.dimensions.snapshot()
     }
 
     pub(super) fn dimension_persistence(&self) -> DimensionPersistence {
@@ -423,12 +277,7 @@ impl WorkbenchBridge {
         &mut self,
         persistence: DimensionPersistence,
     ) -> Result<(), String> {
-        if persistence.pins.len() > DimensionPresentationState::MAX_PINS
-            || persistence.pins.iter().any(|pin| pin.len() > 1024)
-            || persistence.pins.iter().collect::<BTreeSet<_>>().len() != persistence.pins.len()
-        {
-            return Err("dimension preferences contain invalid or excessive pins".into());
-        }
+        persistence.validate()?;
         self.dimensions = DimensionBridgeState::default();
         self.dimensions.native.mode = persistence.mode.into();
         self.dimensions.pending_pins = persistence.pins;
@@ -580,41 +429,8 @@ impl WorkbenchBridge {
         id: &str,
         value: &serde_json::Value,
     ) -> Result<PreparedDimensionEdit, String> {
-        let (entry, row) = self.dimension_command_entry(id)?;
-        if !row.editable {
-            return Err(row
-                .reason
-                .clone()
-                .unwrap_or_else(|| "This dimension is read only".into()));
-        }
-        let key = entry.key;
-        let edit = self
-            .dimensions
-            .cache
-            .dimensions
-            .get(&key.item)
-            .map(|metadata| metadata.edit.clone())
-            .ok_or_else(|| "dimension edit authority is unavailable".to_owned())?;
-        let value = finite_edit_value(value)?;
-        let metadata = self
-            .retained_scene
-            .as_ref()
-            .and_then(|scene| entry.target_metadata(scene))
-            .ok_or_else(|| "The accepted dimension target is unavailable".to_owned())?;
-        let storage_value = metadata
-            .storage_value_for_display(value)
-            .map_err(|error| error.to_string())?;
-        let display_storage = if metadata.unit == geosolve_sketch::ScalarUnit::Angle {
-            storage_value.to_degrees()
-        } else {
-            storage_value
-        };
-        Ok(PreparedDimensionEdit {
-            key,
-            edit,
-            storage_value,
-            display_storage,
-        })
+        self.dimensions
+            .prepare_dimension_edit(self.retained_scene.as_ref(), id, value)
     }
 
     pub(super) fn dimension_source_mutation(
@@ -642,11 +458,7 @@ impl WorkbenchBridge {
         &self,
         id: &str,
     ) -> Result<&(SceneDimensionEntry, DimensionEntry), String> {
-        self.dimensions
-            .entries
-            .iter()
-            .find(|(_, row)| row.id == id)
-            .ok_or_else(|| "The dimension belongs to an unavailable or stale accepted scene".into())
+        self.dimensions.dimension_command_entry(id)
     }
 
     fn require_dimension_inspection_available(&self) -> Result<(), String> {
@@ -692,7 +504,9 @@ impl WorkbenchBridge {
         );
         Ok(())
     }
+}
 
+impl ChromeRead<'_> {
     #[allow(
         clippy::too_many_lines,
         reason = "one accepted provenance cache resolves source and native scalar authority without changing live selection"
@@ -723,7 +537,7 @@ impl WorkbenchBridge {
         let manifest = self
             .code_project
             .as_ref()
-            .map(CodeProjectWorkbench::managed_controls_cached);
+            .map(CodeChrome::managed_controls_cached);
         for dimension in accepted.session.design_document().dimensions() {
             let item = SelectionItem::Dimension(dimension.id);
             let owner = accepted
@@ -1045,14 +859,11 @@ fn dimensional_inspector_target(
 }
 
 fn persistent_identity(key: AnnotationLayoutKey) -> String {
-    format!(
-        "{}:{}:{:?}:{:?}:{:?}",
-        key.document, key.source, key.item, key.kind, key.marker_index
-    )
+    DimensionPersistence::pin_identity(key)
 }
 
-impl WorkbenchBridge {
-    fn dimension_measurement_value(
+impl ChromeRead<'_> {
+    pub(super) fn dimension_measurement_value(
         &self,
         entry: &SceneDimensionEntry,
         scene: &EditorScene,
@@ -1128,34 +939,7 @@ mod tests;
 
 impl WorkbenchBridge {
     pub(super) fn local_dimension_seed(&self) -> super::local_interaction::LocalDimensionSeed {
-        super::local_interaction::LocalDimensionSeed {
-            state: self.dimensions.native.clone(),
-            layout: self.editor().editor().annotation_layout_for_scene(),
-            context: DimensionPresentationContext {
-                selection: self.editor().editor().selection().to_vec(),
-                generated: self
-                    .dimensions
-                    .cache
-                    .dimensions
-                    .iter()
-                    .filter_map(|(item, metadata)| metadata.generated.then_some(*item))
-                    .collect(),
-                default_priority: self
-                    .dimensions
-                    .cache
-                    .dimensions
-                    .iter()
-                    .filter_map(|(item, metadata)| metadata.default_priority.then_some(*item))
-                    .collect(),
-                ..DimensionPresentationContext::default()
-            },
-            ids: self
-                .dimensions
-                .entries
-                .iter()
-                .map(|(entry, row)| (row.id.clone(), entry.key))
-                .collect(),
-        }
+        self.dimensions.local_seed(self.editor())
     }
     pub(super) fn validate_local_dimension_pins(&self, pins: &[String]) -> Result<(), String> {
         if pins
@@ -1187,5 +971,360 @@ impl WorkbenchBridge {
             .filter(|(_, row)| pins.contains(&row.id))
             .map(|(entry, _)| entry.key)
             .collect();
+    }
+}
+
+impl DimensionBridgeState {
+    pub(super) fn apply_projection(
+        &mut self,
+        read: &ChromeRead<'_>,
+        scene: &mut EditorScene,
+        layout: &geosolve_constraint_editor::AnnotationLayoutState,
+        context: &DimensionPresentationContext,
+    ) {
+        let mut entries = self.native.apply(scene, layout, context);
+        if !self.pending_pins.is_empty() {
+            self.native.pins = entries
+                .iter()
+                .filter(|entry| self.pending_pins.contains(&persistent_identity(entry.key)))
+                .map(|entry| entry.key)
+                .collect();
+            self.pending_pins.clear();
+            entries = self.native.apply(scene, layout, context);
+        }
+        self.install_entries(read, scene, context, entries);
+    }
+
+    fn install_entries(
+        &mut self,
+        read: &ChromeRead<'_>,
+        scene: &EditorScene,
+        context: &DimensionPresentationContext,
+        entries: Vec<SceneDimensionEntry>,
+    ) {
+        let selected_owners: BTreeSet<_> = context
+            .selection
+            .iter()
+            .filter_map(|item| self.cache.owners.get(item).copied())
+            .chain(read.editor().selected_declaration())
+            .collect();
+        self.parameters = self
+            .cache
+            .parameters
+            .iter()
+            .filter(|(row, owners)| row.default_priority || !owners.is_disjoint(&selected_owners))
+            .map(|(row, _)| row.clone())
+            .collect();
+        self.entries = entries
+            .into_iter()
+            .map(|entry| {
+                let metadata = self.cache.dimensions.get(&entry.key.item);
+                let reason = if entry.reference {
+                    Some("Reference measurements follow the accepted geometry".to_owned())
+                } else if entry.suppressed {
+                    Some("This dimension is suppressed".to_owned())
+                } else {
+                    metadata
+                        .and_then(|metadata| match &metadata.edit {
+                            DimensionEdit::ReadOnly(reason) => Some(reason.clone()),
+                            DimensionEdit::Source { .. } | DimensionEdit::Native { .. } => None,
+                        })
+                        .or_else(|| {
+                            metadata
+                                .is_none()
+                                .then(|| "No accepted edit target is available".into())
+                        })
+                };
+                let row = DimensionEntry {
+                    id: format!(
+                        "{}:{}",
+                        self.cache.authority,
+                        persistent_identity(entry.key)
+                    ),
+                    row_key: format!("{}:{}", self.instance, persistent_identity(entry.key)),
+                    label: metadata
+                        .map_or_else(|| entry.label.clone(), |metadata| metadata.label.clone()),
+                    value: read.dimension_measurement_value(&entry, scene),
+                    unit: Some(
+                        if entry.kind == SceneAnnotationKind::OrientedAngle {
+                            "°"
+                        } else {
+                            "mm"
+                        }
+                        .into(),
+                    ),
+                    kind: dimension_kind(entry.kind),
+                    reference: entry.reference,
+                    generated: entry.generated,
+                    default_priority: entry.default_priority,
+                    pinned: entry.pinned,
+                    visible: entry.visible,
+                    focused: entry.focused,
+                    editable: reason.is_none(),
+                    reason,
+                    contextual: entry.related || entry.focused || entry.pinned,
+                    metadata: metadata.and_then(|metadata| metadata.presentation.clone()),
+                };
+                (entry, row)
+            })
+            .collect();
+    }
+
+    pub(super) fn snapshot(&self) -> DimensionsSnapshot {
+        DimensionsSnapshot {
+            mode: self.native.mode.into(),
+            entries: self
+                .entries
+                .iter()
+                .filter(|(entry, row)| {
+                    let summarized_by_parameter = self
+                        .cache
+                        .dimensions
+                        .get(&entry.key.item)
+                        .and_then(|metadata| match &metadata.edit {
+                            DimensionEdit::Source { control, .. } => Some(control),
+                            _ => None,
+                        })
+                        .is_some_and(|control| {
+                            self.parameters.iter().any(|parameter| {
+                                &parameter.id == control && parameter.default_priority
+                            })
+                        });
+                    row.contextual
+                        || (!summarized_by_parameter
+                            && (entry.default_priority
+                                || entry.related
+                                || entry.pinned
+                                || entry.focused
+                                || entry.visible))
+                })
+                .map(|(_, row)| row.clone())
+                .collect(),
+            all_measurements: self.entries.iter().map(|(_, row)| row.clone()).collect(),
+            parameters: self.parameters.clone(),
+            pin_count: self.native.pins.len(),
+        }
+    }
+}
+
+impl ChromeRead<'_> {
+    pub(super) fn dimension_authority(&self) -> String {
+        geosolve_sketch_intent::intent_content_digest(
+            serde_json::json!({
+                "instance": self.dimension_instance(),
+                "intent": self.editor().coordinator().intent().identity(),
+                "code": self.code_project.as_ref().map(CodeChrome::code_session_identity),
+                "dirty": self.code_project.as_ref().is_some_and(CodeChrome::is_dirty),
+                "pending": self.pending,
+            })
+            .to_string()
+            .as_bytes(),
+        )
+        .to_string()
+    }
+}
+
+impl DimensionBridgeState {
+    pub(super) fn instance(&self) -> u64 {
+        self.instance
+    }
+    pub(super) fn install_browsing(
+        &mut self,
+        read: &ChromeRead<'_>,
+        view: &geosolve_sketch_engine::AcceptedBrowsingView,
+    ) {
+        let authority = read.dimension_authority();
+        if self.cache.authority != authority {
+            self.cache = read.build_dimension_provenance(authority);
+        }
+        self.native = view.dimensions().state.clone();
+        self.install_entries(
+            read,
+            view.scene(),
+            &view.dimensions().context,
+            view.dimension_entries().to_vec(),
+        );
+    }
+    pub(super) fn browsing_snapshot(
+        &self,
+        ids: &BTreeMap<String, AnnotationLayoutKey>,
+    ) -> Result<DimensionsSnapshot, String> {
+        let translated = self
+            .entries
+            .iter()
+            .map(|(entry, row)| {
+                let id = ids
+                    .iter()
+                    .find_map(|(id, key)| (*key == entry.key).then_some(id.clone()))
+                    .ok_or("Browsing dimension has no exact source identity")?;
+                Ok((row.id.clone(), id))
+            })
+            .collect::<Result<BTreeMap<_, _>, String>>()?;
+        let mut snapshot = self.snapshot();
+        snapshot.translate_ids(&translated)?;
+        Ok(snapshot)
+    }
+}
+
+impl DimensionBridgeState {
+    fn prepare_dimension_edit(
+        &self,
+        scene: Option<&EditorScene>,
+        id: &str,
+        value: &serde_json::Value,
+    ) -> Result<PreparedDimensionEdit, String> {
+        let (entry, row) = self.dimension_command_entry(id)?;
+        if !row.editable {
+            return Err(row
+                .reason
+                .clone()
+                .unwrap_or_else(|| "This dimension is read only".into()));
+        }
+        let key = entry.key;
+        let edit = self
+            .cache
+            .dimensions
+            .get(&key.item)
+            .map(|metadata| metadata.edit.clone())
+            .ok_or_else(|| "dimension edit authority is unavailable".to_owned())?;
+        let value = finite_edit_value(value)?;
+        let metadata = scene
+            .and_then(|scene| entry.target_metadata(scene))
+            .ok_or_else(|| "The accepted dimension target is unavailable".to_owned())?;
+        let storage_value = metadata
+            .storage_value_for_display(value)
+            .map_err(|error| error.to_string())?;
+        let display_storage = if metadata.unit == geosolve_sketch::ScalarUnit::Angle {
+            storage_value.to_degrees()
+        } else {
+            storage_value
+        };
+        Ok(PreparedDimensionEdit {
+            key,
+            edit,
+            storage_value,
+            display_storage,
+        })
+    }
+
+    fn dimension_command_entry(
+        &self,
+        id: &str,
+    ) -> Result<&(SceneDimensionEntry, DimensionEntry), String> {
+        self.entries
+            .iter()
+            .find(|(_, row)| row.id == id)
+            .ok_or_else(|| "The dimension belongs to an unavailable or stale accepted scene".into())
+    }
+
+    pub(super) fn browsing_source_mutation(
+        &self,
+        read: &ChromeRead<'_>,
+        view: &geosolve_sketch_engine::AcceptedBrowsingView,
+        id: &str,
+        value: &serde_json::Value,
+    ) -> Result<Option<ManagedSketchMutation>, String> {
+        let key = view
+            .dimensions()
+            .ids
+            .get(id)
+            .ok_or("Browsing dimension belongs to another scene")?;
+        let id = self
+            .entries
+            .iter()
+            .find(|(entry, _)| &entry.key == key)
+            .map(|(_, row)| row.id.as_str())
+            .ok_or("Browsing dimension correspondence is unavailable")?;
+        let prepared = self.prepare_dimension_edit(Some(view.scene()), id, value)?;
+        match prepared.edit {
+            DimensionEdit::Source {
+                control,
+                from_display,
+            } => read.parameter_source_mutation(
+                &control,
+                serde_json::json!(prepared.display_storage * from_display),
+            ),
+            DimensionEdit::ReadOnly(reason) => Err(reason),
+            DimensionEdit::Native { .. } => {
+                Err("This dimension has no source-owned collaborative edit".into())
+            }
+        }
+    }
+}
+
+impl DimensionBridgeState {
+    pub(super) fn local_seed(
+        &self,
+        editor: &geosolve_constraint_editor::ProjectionalEditorSession,
+    ) -> super::local_interaction::LocalDimensionSeed {
+        super::local_interaction::LocalDimensionSeed {
+            state: self.native.clone(),
+            layout: editor.editor().annotation_layout_for_scene(),
+            context: DimensionPresentationContext {
+                selection: editor.editor().selection().to_vec(),
+                generated: self
+                    .cache
+                    .dimensions
+                    .iter()
+                    .filter_map(|(item, metadata)| metadata.generated.then_some(*item))
+                    .collect(),
+                default_priority: self
+                    .cache
+                    .dimensions
+                    .iter()
+                    .filter_map(|(item, metadata)| metadata.default_priority.then_some(*item))
+                    .collect(),
+                ..DimensionPresentationContext::default()
+            },
+            ids: self
+                .entries
+                .iter()
+                .map(|(entry, row)| (row.id.clone(), entry.key))
+                .collect(),
+        }
+    }
+
+    pub(super) fn initialize_browsing(
+        &mut self,
+        read: &ChromeRead<'_>,
+        scene: &mut EditorScene,
+        baseline: &geosolve_constraint_editor::DetachedDimensionPresentation,
+    ) -> geosolve_constraint_editor::DetachedDimensionPresentation {
+        let authority = read.dimension_authority();
+        self.cache = read.build_dimension_provenance(authority);
+        self.native = baseline.state.clone();
+        let mut seed = self.local_seed(read.editor());
+        seed.layout = baseline.layout.clone();
+        self.apply_projection(read, scene, &seed.layout, &seed.context);
+        seed.state = self.native.clone();
+        seed.ids = self
+            .entries
+            .iter()
+            .map(|(entry, row)| (row.id.clone(), entry.key))
+            .collect();
+        seed
+    }
+}
+
+impl DimensionBridgeState {
+    pub(super) fn restore_browsing_preferences(
+        dimensions: &mut geosolve_constraint_editor::DetachedDimensionPresentation,
+        persistence: &DimensionPersistence,
+        reverse: &geosolve_constraint_editor::PresentationMapping,
+    ) -> Result<(), String> {
+        persistence.validate()?;
+        dimensions.state.mode = persistence.mode.into();
+        dimensions.state.pins = dimensions
+            .ids
+            .values()
+            .filter_map(|key| match reverse.layout_key(*key) {
+                Ok(source) => persistence
+                    .pins
+                    .contains(&persistent_identity(source))
+                    .then_some(Ok(*key)),
+                Err(error) => Some(Err(error)),
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(())
     }
 }

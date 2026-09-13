@@ -2,14 +2,17 @@
 //! Cross-view browsing over accepted native ownership and managed provenance.
 
 use super::*;
+use geosolve_constraint_editor::ProjectionalEditorSession;
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_NAVIGATION_INSTANCE: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Clone)]
 pub(super) struct NavigationState {
     instance: u64,
-    cache: Option<NavigationIndex>,
+    cache: Option<Rc<NavigationIndex>>,
     explicit_rows: BTreeSet<String>,
     remembered_items: Vec<SelectionItem>,
     remembered_owner: Option<NodeId>,
@@ -93,57 +96,209 @@ struct SourceRequest {
     to: usize,
 }
 
-impl WorkbenchBridge {
-    pub(super) fn navigation_geometry_key(&self) -> String {
+/// Personal result of one authenticated navigation command; contains no editing authority.
+pub(super) struct PreparedNavigation {
+    pub(super) selection: geosolve_constraint_editor::SelectionPresentationState,
+    pub(super) logical_owner: Option<NodeId>,
+    pub(super) navigation: NavigationState,
+}
+
+struct NavigationMutation<'a> {
+    editor: &'a mut ProjectionalEditorSession,
+    navigation: &'a mut NavigationState,
+    scene: Option<&'a EditorScene>,
+}
+
+impl NavigationState {
+    pub(super) fn geometry_key(&self, read: &ChromeRead<'_>) -> String {
         // All values are small authority tokens or bounded presentation state.
         // Camera and selection are deliberately absent from the index lifetime.
         serde_json::json!({
-            "instance": self.navigation.instance,
-            "intent": self.editor().coordinator().intent().identity(),
-            "code": self.code_project.as_ref().map(CodeProjectWorkbench::code_session_identity),
-            "hidden": self.explorer_visibility.hidden_rows,
-            "visibility": format!("{:?}", self.editor().editor().geometry_interaction_policy().visibility),
+            "instance": self.instance,
+            "intent": read.editor().coordinator().intent().identity(),
+            "code": read.code_project.as_ref().map(CodeChrome::code_session_identity),
+            "hidden": read.hidden_rows,
+            "visibility": format!("{:?}", read.editor().editor().geometry_interaction_policy().visibility),
         }).to_string()
     }
 
+    pub(super) fn needs_scene_refresh(&self, read: &ChromeRead<'_>) -> bool {
+        let geometry_key = self.geometry_key(read);
+        self.cache
+            .as_ref()
+            .is_none_or(|cache| cache.geometry_key != geometry_key)
+    }
+
+    pub(super) fn snapshot(
+        &mut self,
+        read: &ChromeRead<'_>,
+        scene: Option<&EditorScene>,
+    ) -> NavigationSnapshot {
+        self.ensure_index(read, scene);
+        self.current_snapshot(read.editor(), scene)
+    }
+
+    fn validate_authority(&self, authority: &str) -> Result<(), String> {
+        if self
+            .cache
+            .as_ref()
+            .expect("navigation index installed")
+            .authority
+            != authority
+        {
+            return Err("Navigation belongs to stale source or scene authority".into());
+        }
+        Ok(())
+    }
+
+    /// Prepares only personal selection and remembered navigation against one accepted fork.
+    pub(super) fn prepare_rows_json(
+        &self,
+        read: &ChromeRead<'_>,
+        scene: Option<&EditorScene>,
+        action_blocked: bool,
+        value: serde_json::Value,
+    ) -> Result<PreparedNavigation, String> {
+        let request: RowRequest = decode_payload(value)?;
+        self.prepare(
+            read,
+            scene,
+            action_blocked,
+            Some(&request.authority),
+            |view| view.select_navigation_rows(&request.ids, request.mode),
+        )
+    }
+
+    pub(super) fn prepare_source_json(
+        &self,
+        read: &ChromeRead<'_>,
+        scene: Option<&EditorScene>,
+        action_blocked: bool,
+        value: serde_json::Value,
+    ) -> Result<PreparedNavigation, String> {
+        let request: SourceRequest = decode_payload(value)?;
+        let authority = request.authority.clone();
+        self.prepare(read, scene, action_blocked, Some(&authority), |view| {
+            view.select_source_request(&request)
+        })
+    }
+
+    pub(super) fn prepare_rows_legacy(
+        &self,
+        read: &ChromeRead<'_>,
+        scene: Option<&EditorScene>,
+        action_blocked: bool,
+        id: &str,
+    ) -> Result<PreparedNavigation, String> {
+        self.prepare(read, scene, action_blocked, None, |view| {
+            view.select_navigation_rows(&[id.to_owned()], NavigationMode::Replace)
+        })
+    }
+
+    fn prepare(
+        &self,
+        read: &ChromeRead<'_>,
+        scene: Option<&EditorScene>,
+        action_blocked: bool,
+        authority: Option<&str>,
+        apply: impl FnOnce(&mut NavigationMutation<'_>) -> Result<(), String>,
+    ) -> Result<PreparedNavigation, String> {
+        if action_blocked {
+            return Err(
+                "Finish the current tool or gesture before navigating between views".into(),
+            );
+        }
+        let mut navigation = self.clone();
+        navigation.ensure_index(read, scene);
+        if let Some(authority) = authority {
+            navigation.validate_authority(authority)?;
+        }
+        let mut editor = read
+            .editor()
+            .fork_accepted_authority()
+            .map_err(|error| error.to_string())?;
+        // A fork retains accepted geometry but has its own retained-session seal.
+        // Map exact occurrences against that presentation before installing them.
+        let fork_scene = scene
+            .map(|scene| editor.scene(scene.viewport, 0.25))
+            .transpose()
+            .map_err(|error| error.to_string())?;
+        if let Some(scene) = scene {
+            let selection = geosolve_constraint_editor::map_presentation_selection(
+                scene,
+                read.editor().presentation_bindings().as_ref(),
+                fork_scene.as_ref().expect("fork scene supplied"),
+                editor.presentation_bindings().as_ref(),
+                read.editor().editor().selection_presentation_state(),
+            )
+            .map_err(|error| format!("navigation fork selection: {error}"))?;
+            editor
+                .restore_navigation_selection(
+                    fork_scene.as_ref().expect("fork scene supplied"),
+                    selection,
+                    read.editor().selected_declaration(),
+                )
+                .map_err(|error| format!("navigation fork restore: {error}"))?;
+        }
+        if scene.is_none() {
+            editor.set_selection(read.editor().editor().selection().to_vec());
+            if editor.selected_declaration() != read.editor().selected_declaration() {
+                editor.set_selected_declaration(read.editor().selected_declaration());
+            }
+        }
+        apply(&mut NavigationMutation {
+            editor: &mut editor,
+            navigation: &mut navigation,
+            scene,
+        })?;
+        let selection = editor.editor().selection_presentation_state();
+        let selection = if let Some(scene) = scene {
+            geosolve_constraint_editor::map_presentation_selection(
+                fork_scene.as_ref().expect("fork scene supplied"),
+                editor.presentation_bindings().as_ref(),
+                scene,
+                read.editor().presentation_bindings().as_ref(),
+                selection,
+            )
+            .map_err(|error| format!("navigation return selection: {error}"))?
+        } else {
+            selection
+        };
+        Ok(PreparedNavigation {
+            selection,
+            logical_owner: editor.selected_declaration(),
+            navigation,
+        })
+    }
     #[allow(
         clippy::too_many_lines,
         reason = "one accepted ownership/cache publication, with a scene-free draft-only refresh"
     )]
-    pub(super) fn ensure_navigation_index(&mut self) {
-        let geometry_key = self.navigation_geometry_key();
+    pub(super) fn ensure_index(&mut self, read: &ChromeRead<'_>, scene: Option<&EditorScene>) {
+        let geometry_key = self.geometry_key(read);
         let key = serde_json::json!({"geometry":geometry_key,
-            "pending":self.pending_managed_mutation.is_some(),
-            "dirty":self.code_project.as_ref().is_some_and(CodeProjectWorkbench::is_dirty),
+            "pending":read.pending,
+            "dirty":read.code_project.as_ref().is_some_and(CodeChrome::is_dirty),
         })
         .to_string();
-        if self
-            .navigation
-            .cache
-            .as_ref()
-            .is_some_and(|cache| cache.key == key)
-        {
+        if self.cache.as_ref().is_some_and(|cache| cache.key == key) {
             return;
         }
         let reuse_items = self
-            .navigation
             .cache
             .as_ref()
             .is_some_and(|cache| cache.geometry_key == geometry_key);
-        if !reuse_items {
-            self.refresh_current_scene();
-        }
         let mut entries = BTreeMap::new();
-        let (source, source_digest, unavailable_reason) = if let Some(code) = &self.code_project {
-            let index = code.navigation_index(self.editor());
+        let (source, source_digest, unavailable_reason) = if let Some(code) = &read.code_project {
+            let index = code.navigation_index(read.editor());
             for entry in index.entries {
                 let items = entry.exact_bindings.map_or_else(
                     || {
-                        self.editor()
+                        read.editor()
                             .navigation_selection_items(entry.nodes.iter().copied())
                     },
                     |bindings| {
-                        self.editor()
+                        read.editor()
                             .navigation_selection_items_for_bindings(bindings)
                     },
                 );
@@ -168,13 +323,13 @@ impl WorkbenchBridge {
                 index.blocked_reason,
             )
         } else {
-            for cell in self.editor().workbench_projection().outline {
+            for cell in read.editor().workbench_projection().outline {
                 for declaration in cell.declarations {
                     entries.insert(
                         intent_panel_row_id(&declaration.symbol),
                         NavigationEntry {
                             nodes: BTreeSet::from([declaration.node]),
-                            items: self
+                            items: read
                                 .editor()
                                 .navigation_selection_items([declaration.node])
                                 .into_iter()
@@ -190,27 +345,20 @@ impl WorkbenchBridge {
                 Some("This project has no managed source statements".into()),
             )
         };
-        let explorer = self.explorer_snapshot();
+        let explorer = read.explorer_snapshot();
         complete_hierarchy(&explorer, &mut entries);
-        let policy = self.editor().editor().geometry_interaction_policy();
+        let policy = read.editor().editor().geometry_interaction_policy();
         for (id, entry) in &mut entries {
             if reuse_items
-                && let Some(previous) = self
-                    .navigation
-                    .cache
-                    .as_ref()
-                    .and_then(|cache| cache.entries.get(id))
+                && let Some(previous) = self.cache.as_ref().and_then(|cache| cache.entries.get(id))
             {
                 entry.items.clone_from(&previous.items);
                 continue;
             }
-            entry.items =
-                canonical_selection(entry.items.iter().copied(), self.retained_scene.as_ref());
-            entry.items.retain(|item| {
-                self.retained_scene
-                    .as_ref()
-                    .is_some_and(|scene| item_is_visible(scene, *item, policy))
-            });
+            entry.items = canonical_selection(entry.items.iter().copied(), scene);
+            entry
+                .items
+                .retain(|item| scene.is_some_and(|scene| item_is_visible(scene, *item, policy)));
         }
         let authority = geosolve_sketch_intent::intent_content_digest(
             serde_json::json!({"key":key, "source":source_digest})
@@ -218,7 +366,7 @@ impl WorkbenchBridge {
                 .as_bytes(),
         )
         .to_string();
-        self.navigation.cache = Some(NavigationIndex {
+        self.cache = Some(Rc::new(NavigationIndex {
             key,
             geometry_key,
             authority,
@@ -226,37 +374,33 @@ impl WorkbenchBridge {
             unavailable_reason,
             entries,
             explorer,
-        });
-        self.navigation.explicit_rows.clear();
-        self.navigation.notice = None;
-        self.remember_navigation_selection();
+        }));
+        self.explicit_rows.clear();
+        self.notice = None;
+        self.remember_selection(read.editor());
     }
 
-    fn remember_navigation_selection(&mut self) {
-        self.navigation.remembered_items = self.editor().editor().selection().to_vec();
-        self.navigation.remembered_owner = self.editor().selected_declaration();
+    fn remember_selection(&mut self, editor: &ProjectionalEditorSession) {
+        self.remembered_items = editor.editor().selection().to_vec();
+        self.remembered_owner = editor.selected_declaration();
     }
 
-    pub(super) fn navigation_snapshot(&mut self) -> NavigationSnapshot {
-        self.ensure_navigation_index();
-        if self.navigation.remembered_items != self.editor().editor().selection()
-            || self.navigation.remembered_owner != self.editor().selected_declaration()
+    fn current_snapshot(
+        &mut self,
+        editor: &ProjectionalEditorSession,
+        scene: Option<&EditorScene>,
+    ) -> NavigationSnapshot {
+        if self.remembered_items != editor.editor().selection()
+            || self.remembered_owner != editor.selected_declaration()
         {
-            self.navigation.explicit_rows.clear();
-            self.navigation.notice = None;
-            self.remember_navigation_selection();
+            self.explicit_rows.clear();
+            self.notice = None;
+            self.remember_selection(editor);
         }
-        let cache = self
-            .navigation
-            .cache
-            .as_ref()
-            .expect("navigation index installed");
-        let selected = canonical_selection(
-            self.editor().editor().selection().iter().copied(),
-            self.retained_scene.as_ref(),
-        );
-        let owners = if self.navigation.explicit_rows.is_empty() {
-            self.editor()
+        let cache = self.cache.as_ref().expect("navigation index installed");
+        let selected = canonical_selection(editor.editor().selection().iter().copied(), scene);
+        let owners = if self.explicit_rows.is_empty() {
+            editor
                 .selected_declaration()
                 .into_iter()
                 .collect::<BTreeSet<_>>()
@@ -270,7 +414,7 @@ impl WorkbenchBridge {
             &cache.entries,
             &selected,
             &owners,
-            &self.navigation.explicit_rows,
+            &self.explicit_rows,
             &mut rows,
             &mut sources,
         );
@@ -281,7 +425,7 @@ impl WorkbenchBridge {
         let sources = sources.into_iter().collect::<Vec<_>>();
         // Durable point movement changes authority, but not this selection key.
         let selection_key = geosolve_sketch_intent::intent_content_digest(
-            serde_json::json!({"instance":self.navigation.instance,"rows":rows,"items":format!("{selected:?}")})
+            serde_json::json!({"instance":self.instance,"rows":rows,"items":format!("{selected:?}")})
                 .to_string()
                 .as_bytes(),
         )
@@ -294,11 +438,15 @@ impl WorkbenchBridge {
             item_count: selected.len(),
             can_navigate_source,
             unavailable_reason: cache.unavailable_reason.clone(),
-            notice: self.navigation.notice.clone(),
+            notice: self.notice.clone(),
         }
     }
 
-    pub(super) fn navigation_explorer_snapshot(&self) -> Vec<ExplorerSnapshot> {
+    pub(super) fn explorer_snapshot(
+        &self,
+        editor: &ProjectionalEditorSession,
+        scene: Option<&EditorScene>,
+    ) -> Vec<ExplorerSnapshot> {
         fn mark(rows: &mut [ExplorerSnapshot], target: Option<&str>) {
             for row in rows {
                 row.selected =
@@ -308,28 +456,27 @@ impl WorkbenchBridge {
         }
 
         let mut rows = self
-            .navigation
             .cache
             .as_ref()
             .expect("navigation index installed")
             .explorer
             .clone();
-        let target = self.navigation_inspector_row_id();
+        let target = self.inspector_row_id(editor, scene);
         mark(&mut rows, target);
         rows
     }
 
-    fn navigation_inspector_row_id(&self) -> Option<&str> {
-        let selected = self.editor().selected_declaration();
-        let cache = self.navigation.cache.as_ref().unwrap();
-        let items = canonical_selection(
-            self.editor().editor().selection().iter().copied(),
-            self.retained_scene.as_ref(),
-        );
+    fn inspector_row_id(
+        &self,
+        editor: &ProjectionalEditorSession,
+        scene: Option<&EditorScene>,
+    ) -> Option<&str> {
+        let selected = editor.selected_declaration();
+        let cache = self.cache.as_ref().unwrap();
+        let items = canonical_selection(editor.editor().selection().iter().copied(), scene);
         // Only one row exposes mutation controls. Exact siblings may share a
         // declaration identity, but they must never all become Inspector targets.
         let empty_generated_count = self
-            .navigation
             .explicit_rows
             .iter()
             .filter(|id| {
@@ -355,7 +502,7 @@ impl WorkbenchBridge {
                 .min_by_key(|(id, entry)| {
                     (
                         entry.items.len(),
-                        !self.navigation.explicit_rows.contains(*id),
+                        !self.explicit_rows.contains(*id),
                         !id.starts_with("managed:"),
                         *id,
                     )
@@ -364,64 +511,32 @@ impl WorkbenchBridge {
         })
     }
 
-    pub(super) fn navigation_selection_snapshot(
+    pub(super) fn selection_snapshot(
         &self,
+        read: &ChromeRead<'_>,
+        scene: Option<&EditorScene>,
         navigation: &NavigationSnapshot,
     ) -> Option<SelectionSnapshot> {
-        if self.editor().selected_declaration().is_none()
+        let editor = read.editor();
+        if editor.selected_declaration().is_none()
             && (navigation.item_count > 1 || navigation.rows.len() > 1)
         {
             return None;
         }
-        let mut selection = self.selection_snapshot()?;
-        if let Some(id) = self.navigation_inspector_row_id() {
+        let mut selection = read.selection_snapshot()?;
+        if let Some(id) = self.inspector_row_id(editor, scene) {
             selection
                 .label
-                .clone_from(&self.navigation.cache.as_ref()?.entries.get(id)?.label);
+                .clone_from(&self.cache.as_ref()?.entries.get(id)?.label);
         }
         if let Some(source) = navigation.sources.first() {
             selection.source = Some(source.clone());
         }
         Some(selection)
     }
+}
 
-    fn validate_navigation_authority(&mut self, authority: &str) -> Result<(), String> {
-        if self.captured_pointer.is_some()
-            || self.pending_managed_mutation.is_some()
-            || self.editor().editor().active_pointer_gesture().is_some()
-            || self.active_tool != "select"
-            || self.authoring.active_tool().is_some()
-            || self.feature_authoring.active_tool().is_some()
-            || self.offset_authoring.is_active()
-            || self.editor().editor().geometry_draft_status().is_some()
-        {
-            return Err(
-                "Finish the current tool or gesture before navigating between views".into(),
-            );
-        }
-        self.ensure_navigation_index();
-        if self.navigation.cache.as_ref().unwrap().authority != authority {
-            return Err("Navigation belongs to stale source or scene authority".into());
-        }
-        Ok(())
-    }
-
-    pub(super) fn select_navigation_rows_json(
-        &mut self,
-        value: serde_json::Value,
-    ) -> Result<(), String> {
-        let request: RowRequest = decode_payload(value)?;
-        self.validate_navigation_authority(&request.authority)?;
-        self.select_navigation_rows(&request.ids, request.mode)
-    }
-
-    pub(super) fn select_navigation_rows_legacy(&mut self, id: &str) -> Result<(), String> {
-        self.ensure_navigation_index();
-        let authority = self.navigation.cache.as_ref().unwrap().authority.clone();
-        self.validate_navigation_authority(&authority)?;
-        self.select_navigation_rows(&[id.to_owned()], NavigationMode::Replace)
-    }
-
+impl NavigationMutation<'_> {
     fn select_navigation_rows(
         &mut self,
         ids: &[String],
@@ -445,7 +560,7 @@ impl WorkbenchBridge {
             nodes.extend(&entry.nodes);
             requested_items.extend(&entry.items);
         }
-        let current = self.navigation_snapshot();
+        let current = self.navigation.current_snapshot(self.editor, self.scene);
         let remove = matches!(mode, NavigationMode::Toggle)
             && ids.iter().all(|id| {
                 current
@@ -453,19 +568,17 @@ impl WorkbenchBridge {
                     .iter()
                     .any(|row| &row.id == id && row.state == "selected")
             });
-        let previous = canonical_selection(
-            self.editor().editor().selection().iter().copied(),
-            self.retained_scene.as_ref(),
-        )
-        .into_iter()
-        .collect::<Vec<_>>();
+        let previous =
+            canonical_selection(self.editor.editor().selection().iter().copied(), self.scene)
+                .into_iter()
+                .collect::<Vec<_>>();
         if !self
-            .editor_mut()
+            .editor
             .select_navigation_declarations(nodes, Modifiers::default())
         {
             return Err("The navigation output no longer matches accepted authority".into());
         }
-        let logical = self.editor().selected_declaration();
+        let logical = self.editor.selected_declaration();
         let target = requested_items;
         let mut kept = if matches!(mode, NavigationMode::Toggle) {
             previous
@@ -481,11 +594,11 @@ impl WorkbenchBridge {
                 }
             }
         }
-        self.editor_mut().set_selection(kept);
+        self.editor.set_selection(kept);
         if logical.is_none() && matches!(mode, NavigationMode::Replace) {
-            self.editor_mut().set_selected_declaration(None);
-        } else if !remove && self.editor().editor().selection().is_empty() {
-            let _ = self.editor_mut().set_selected_declaration(logical);
+            self.editor.set_selected_declaration(None);
+        } else if !remove && self.editor.editor().selection().is_empty() {
+            let _ = self.editor.set_selected_declaration(logical);
         }
         if matches!(mode, NavigationMode::Replace) {
             self.navigation.explicit_rows.clear();
@@ -508,7 +621,7 @@ impl WorkbenchBridge {
         }
         self.reconcile_navigation_logical_owner();
         self.navigation.notice = None;
-        self.remember_navigation_selection();
+        self.navigation.remember_selection(self.editor);
         Ok(())
     }
 
@@ -527,24 +640,19 @@ impl WorkbenchBridge {
             .flat_map(|entry| entry.nodes.iter().copied())
             .collect::<BTreeSet<_>>();
         if !logical_owners.is_empty() {
-            let owner = self.editor().selected_declaration();
+            let owner = self.editor.selected_declaration();
             if logical_owners.len() > 1
                 || owner.is_some_and(|owner| !logical_owners.contains(&owner))
             {
-                self.editor_mut().set_selected_declaration(None);
-            } else if self.editor().editor().selection().is_empty() {
-                self.editor_mut()
+                self.editor.set_selected_declaration(None);
+            } else if self.editor.editor().selection().is_empty() {
+                self.editor
                     .set_selected_declaration(logical_owners.iter().next().copied());
             }
         }
     }
 
-    pub(super) fn select_navigation_source_json(
-        &mut self,
-        value: serde_json::Value,
-    ) -> Result<(), String> {
-        let request: SourceRequest = decode_payload(value)?;
-        self.validate_navigation_authority(&request.authority)?;
+    fn select_source_request(&mut self, request: &SourceRequest) -> Result<(), String> {
         let cache = self.navigation.cache.as_ref().unwrap();
         if let Some(reason) = &cache.unavailable_reason {
             return Err(reason.clone());
@@ -583,6 +691,152 @@ impl WorkbenchBridge {
             return Ok(());
         }
         self.select_navigation_rows(&ids, NavigationMode::Replace)
+    }
+}
+
+impl WorkbenchBridge {
+    pub(super) fn navigation_geometry_key(&self) -> String {
+        self.navigation.geometry_key(&self.chrome_read())
+    }
+
+    fn navigation_context(
+        &mut self,
+    ) -> (&mut NavigationState, ChromeRead<'_>, Option<&EditorScene>) {
+        let dimension_instance = self.dimension_instance();
+        let editor = self
+            .authority
+            .projectional_ref()
+            .expect("bridge owns projectional authority");
+        let read = ChromeRead {
+            editor,
+            code_project: self
+                .code_project
+                .as_ref()
+                .map(CodeProjectWorkbench::chrome_source),
+            dimension_instance,
+            pending: self.pending_managed_mutation.is_some(),
+            interaction_blocked: self.captured_pointer.is_some()
+                || self.active_tool != "select"
+                || editor.editor().active_pointer_gesture().is_some(),
+            hidden_rows: &self.explorer_visibility.hidden_rows,
+        };
+        (&mut self.navigation, read, self.retained_scene.as_ref())
+    }
+
+    fn refresh_navigation_scene(&mut self) {
+        if self.navigation.needs_scene_refresh(&self.chrome_read()) {
+            self.refresh_current_scene();
+        }
+    }
+
+    pub(super) fn ensure_navigation_index(&mut self) {
+        self.refresh_navigation_scene();
+        let (navigation, read, scene) = self.navigation_context();
+        navigation.ensure_index(&read, scene);
+    }
+
+    pub(super) fn navigation_snapshot(&mut self) -> NavigationSnapshot {
+        self.refresh_navigation_scene();
+        let (navigation, read, scene) = self.navigation_context();
+        navigation.snapshot(&read, scene)
+    }
+
+    pub(super) fn navigation_explorer_snapshot(&self) -> Vec<ExplorerSnapshot> {
+        self.navigation
+            .explorer_snapshot(self.editor(), self.retained_scene.as_ref())
+    }
+
+    pub(super) fn navigation_selection_snapshot(
+        &self,
+        navigation: &NavigationSnapshot,
+    ) -> Option<SelectionSnapshot> {
+        self.navigation.selection_snapshot(
+            &self.chrome_read(),
+            self.retained_scene.as_ref(),
+            navigation,
+        )
+    }
+
+    fn navigation_action_blocked(&self) -> bool {
+        self.captured_pointer.is_some()
+            || self.pending_managed_mutation.is_some()
+            || self.editor().editor().active_pointer_gesture().is_some()
+            || self.active_tool != "select"
+            || self.authoring.active_tool().is_some()
+            || self.feature_authoring.active_tool().is_some()
+            || self.offset_authoring.is_active()
+            || self.editor().editor().geometry_draft_status().is_some()
+    }
+
+    fn install_navigation(&mut self, prepared: PreparedNavigation) -> Result<(), String> {
+        let editor = self
+            .authority
+            .projectional_mut()
+            .expect("bridge owns projectional authority");
+        if let Some(scene) = self.retained_scene.as_ref() {
+            // The renderer may retain a filtered presentation. Install against
+            // a fresh scene sealed by the current editor, translating its exact
+            // picked occurrences before any personal state changes.
+            let native_scene = editor
+                .scene(scene.viewport, 0.25)
+                .map_err(|error| error.to_string())?;
+            let selection = geosolve_constraint_editor::map_presentation_selection(
+                scene,
+                editor.presentation_bindings().as_ref(),
+                &native_scene,
+                editor.presentation_bindings().as_ref(),
+                prepared.selection,
+            )?;
+            editor
+                .restore_navigation_selection(&native_scene, selection, prepared.logical_owner)
+                .map_err(|error| format!("navigation install: {error}"))?;
+        } else {
+            editor.set_selection(prepared.selection.items);
+        }
+        if editor.selected_declaration() != prepared.logical_owner {
+            editor.set_selected_declaration(prepared.logical_owner);
+        }
+        self.navigation = prepared.navigation;
+        Ok(())
+    }
+
+    pub(super) fn select_navigation_rows_json(
+        &mut self,
+        value: serde_json::Value,
+    ) -> Result<(), String> {
+        self.refresh_navigation_scene();
+        let prepared = self.navigation.prepare_rows_json(
+            &self.chrome_read(),
+            self.retained_scene.as_ref(),
+            self.navigation_action_blocked(),
+            value,
+        )?;
+        self.install_navigation(prepared)
+    }
+
+    pub(super) fn select_navigation_rows_legacy(&mut self, id: &str) -> Result<(), String> {
+        self.refresh_navigation_scene();
+        let prepared = self.navigation.prepare_rows_legacy(
+            &self.chrome_read(),
+            self.retained_scene.as_ref(),
+            self.navigation_action_blocked(),
+            id,
+        )?;
+        self.install_navigation(prepared)
+    }
+
+    pub(super) fn select_navigation_source_json(
+        &mut self,
+        value: serde_json::Value,
+    ) -> Result<(), String> {
+        self.refresh_navigation_scene();
+        let prepared = self.navigation.prepare_source_json(
+            &self.chrome_read(),
+            self.retained_scene.as_ref(),
+            self.navigation_action_blocked(),
+            value,
+        )?;
+        self.install_navigation(prepared)
     }
 
     pub(super) fn navigation_update_json(&mut self) -> Result<String, String> {

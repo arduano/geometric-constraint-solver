@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+export type { AcceptedInspection, EditableInspection, ManagedNavigationIndex, PresentationBindings } from "./inspection.js";
+export type { InteractionSeed, InteractionViewport } from "./inspection.js";
+export type { WorkspaceViewPresentation } from "./session.js";
+import type { InteractionSeed, InteractionViewport } from "./inspection.js";
+export { constructionTools, operationTools, auxiliaryTools } from "./tool-catalog.js";
 import { recordedSketch, type Sketch, type GeneratedSketchArtifact } from "@geosolve/sketch-code";
 
 import { EditableSession, type EditableNativeHandle, type EditableDesign } from "./session.js";
-export { EditableSession, type EditableSessionToken, type EditableSessionState, type EditableDesign, type EditableUpdate } from "./session.js";
+export { EditableSession, type EditableSessionToken, type EditableSessionState, type EditableDesign, type EditableUpdate, type SourceWorkspacePresentation } from "./session.js";
 export type { AuthoringAction, AuthoringReceipt, AuthoringUpdate, AuthoringValueChange, AuthoringValueWrite, PreparedAuthoring } from "./session.js";
 export { RetainedPointGesture, type PointGestureCommand, type PointGestureFrame, type PointGestureHandle, type PointGestureSample, type PointGestureTarget, type PointGestureTerminal, type PointGestureViewport, type PointOwnerAddress, type PointWritableAddress, type PreparedPointGestureCommit, type PreparedPointGestureReplay, type PointReplayWitness } from "./point-gesture.js";
 export { ConstructionPrediction, type ConstructionTool, type ConstructionEvent, type ConstructionSample, type ConstructionCommand, type ConstructionGuide, type ConstructionFrame, type PreparedConstruction, type PreparedConstructionCommit, type PreparedConstructionReplay, type ConstructionReplayWitness } from "./construction.js";
@@ -12,6 +17,9 @@ export interface EngineNativeHandle extends Partial<EditableNativeHandle> {
   evaluateGenerated(json: string): string;
   evaluateManaged(json: string): string;
   exportProfiles(resultId: string, chordErrorMm: number): string;
+  resultInteractionSeed?(json: string): string;
+  exportResultWorkspace?(id: string): string;
+  encodeReproduction?(workspace: string): string;
   exportProfilesForOutput?(resultId: string, chordErrorMm: number, output: string): string;
   releaseResult(resultId: string): boolean;
   free(): void;
@@ -81,11 +89,25 @@ export class Engine {
     return this.native.compileProjectJson(JSON.stringify(input));
   }
   /** Open managed history using authentic source and an optional semantic design sidecar. */
-  openEditableSession(project: unknown, options: { design?: EditableDesign | string } = {}): EditableSession {
+  openEditableSession(project: unknown, options: { design?: EditableDesign | string; persistableHistory?: boolean } = {}): EditableSession {
     this.assertLive();
     return new EditableSession({ native: this.native, isLive: () => !this.disposed,
       accept: (result) => { this.admit(result); ++this.sequence; return result; },
     }, project, options);
+  }
+  /** Restores complete native source history without discarding historical entries. */
+  restoreEditableSession(history: string): EditableSession {
+    this.assertLive();
+    return new EditableSession({ native: this.native, isLive: () => !this.disposed,
+      accept: (result) => { this.admit(result); ++this.sequence; return result; },
+    }, undefined, { history });
+  }
+  /** Restores the unchanged saved source-workspace format, preserving drafts and both history directions. */
+  restoreEditableWorkspace(workspace: string): EditableSession {
+    this.assertLive();
+    return new EditableSession({ native: this.native, isLive: () => !this.disposed,
+      accept: (result) => { this.admit(result); ++this.sequence; return result; },
+    }, undefined, { workspace });
   }
   /** Existing authenticated CodeProject wire. No synthetic compiler receipts. */
   async evaluateEditable(project: unknown, options: { signal?: AbortSignal } = {}): Promise<EvaluationResult> {
@@ -99,6 +121,26 @@ export class Engine {
     const json = options.output === undefined ? this.native.exportProfiles(result.result_id, options.chordErrorMm)
       : this.native.exportProfilesForOutput!(result.result_id, options.chordErrorMm, options.output);
     return freeze(JSON.parse(json)) as ProfileExport;
+  }
+  /** Retained accepted geometry for local native presentation, including generator output. */
+  interactionSeed(result: AcceptedResult, viewport?: InteractionViewport): InteractionSeed {
+    this.assertLive();
+    if (!this.retained.has(result)) throw Error("Result is released or belongs to another engine");
+    if (!this.native.resultInteractionSeed) throw Error("This engine build does not support accepted interaction seeds");
+    return freeze(JSON.parse(this.native.resultInteractionSeed(JSON.stringify({ resultId: result.result_id, viewport })))) as InteractionSeed;
+  }
+  /** Existing native accepted workspace export, including generated sketches. */
+  exportWorkspace(result: AcceptedResult): string {
+    this.assertLive();
+    if (!this.retained.has(result)) throw Error("Result is released or belongs to another engine");
+    if (!this.native.exportResultWorkspace) throw Error("This engine build does not support native workspace export");
+    return this.native.exportResultWorkspace(result.result_id);
+  }
+  /** Existing bounded reproduction transport; this does not admit workspace authority. */
+  encodeReproduction(workspace: string): string {
+    this.assertLive();
+    if (!this.native.encodeReproduction) throw Error("This engine build does not support reproduction export");
+    return this.native.encodeReproduction(workspace);
   }
   release(result: AcceptedResult): void {
     this.assertLive();

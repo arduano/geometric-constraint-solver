@@ -230,6 +230,83 @@ pub struct DelegatedComputedFilletRadiusProposal {
     pub proposed_radius: f64,
 }
 
+/// Native evidence retained after one accepted geometry construction.
+///
+/// This opaque, nonserialized value preserves resolved recipe samples, typed
+/// operands, options and explicit branches, together with created-node aliases.
+/// It is source-authoring evidence, never a compiler or publication capability.
+#[derive(Debug)]
+pub struct CompletedConstructionReceipt {
+    origin: IntentSessionIdentity,
+    terminal: IntentSessionIdentity,
+    draft: Box<crate::Draft>,
+    plan: crate::ConstructionCommitPlan,
+    aliases: geosolve_sketch_intent::IntentAliasMap,
+    geometry_alias: IntentKey,
+}
+
+impl CompletedConstructionReceipt {
+    /// Exact authority against which the native construction was authored.
+    #[must_use]
+    pub const fn origin(&self) -> IntentSessionIdentity {
+        self.origin
+    }
+
+    /// Exact native recipe, including its defining-input convention.
+    #[must_use]
+    pub fn variant(&self) -> crate::GeometryToolVariant {
+        self.draft.variant
+    }
+
+    /// Original resolved sample at a recipe stage, before derived native lowering.
+    #[must_use]
+    pub fn defining_point(&self, index: usize) -> Option<[f64; 2]> {
+        self.draft.position(index)
+    }
+
+    /// Explicit conic options used by the completed recipe.
+    #[must_use]
+    pub fn conic_options(&self) -> crate::ConicConstructionOptions {
+        self.draft.conic_options
+    }
+
+    /// Explicit knot and rational-weight options used by the completed recipe.
+    #[must_use]
+    pub fn nurbs_options(&self) -> &crate::NurbsConstructionOptions {
+        &self.draft.nurbs_options
+    }
+
+    /// Whether regularization was explicitly selected for the completed recipe.
+    #[must_use]
+    pub fn regularized(&self) -> bool {
+        self.draft.regularized
+    }
+
+    /// Whether the completed polyline or spline was explicitly closed.
+    #[must_use]
+    pub fn closed(&self) -> bool {
+        self.draft.closed
+    }
+
+    /// Accepted plan retaining typed operands, roles and explicit relation branches.
+    #[must_use]
+    pub const fn plan(&self) -> &crate::ConstructionCommitPlan {
+        &self.plan
+    }
+
+    /// Created declarations authenticated by the accepted native transaction.
+    #[must_use]
+    pub const fn aliases(&self) -> &geosolve_sketch_intent::IntentAliasMap {
+        &self.aliases
+    }
+
+    /// The created geometry declaration, resolved by the native alias map.
+    #[must_use]
+    pub fn geometry_node(&self) -> Option<NodeId> {
+        self.aliases.node(&self.geometry_alias)
+    }
+}
+
 /// Result of one authenticated terminal geometry-authoring publication.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectionalEditorConstructionOutcome {
@@ -247,6 +324,7 @@ pub struct ProjectionalEditorConstructionOutcome {
 /// into exactly one instance patch.
 #[derive(Debug)]
 pub struct ProjectionalEditorSession {
+    completed_construction: Option<CompletedConstructionReceipt>,
     coordinator: ProjectionalIntentCoordinator,
     editor: ConstraintEditor,
     selected_declaration: Option<NodeId>,
@@ -555,6 +633,7 @@ impl ProjectionalEditorSession {
         preview_control: OperationControl,
     ) -> Self {
         Self {
+            completed_construction: None,
             coordinator,
             editor,
             selected_declaration: None,
@@ -2539,6 +2618,15 @@ impl ProjectionalEditorSession {
         Ok(outcome)
     }
 
+    /// Returns construction inputs only while their exact terminal authority is current.
+    /// Forking and restoration discard this transient evidence.
+    #[must_use]
+    pub fn completed_construction(&self) -> Option<&CompletedConstructionReceipt> {
+        self.completed_construction
+            .as_ref()
+            .filter(|receipt| receipt.terminal == self.coordinator.intent().identity())
+    }
+
     /// Applies one exact tokenized construction terminal through intent.
     ///
     /// The pending editor-owned token authenticates its prepared native input,
@@ -2573,6 +2661,14 @@ impl ProjectionalEditorSession {
             return Err(ProjectionalEditorError::ConstructionCommitMismatch);
         };
 
+        let origin = self.coordinator.intent().identity();
+        let draft = self
+            .editor
+            .pending_construction_commit
+            .as_ref()
+            .ok_or(ProjectionalEditorError::ConstructionCommitMismatch)?
+            .draft
+            .clone();
         let translated = {
             let Some(accepted) = self.coordinator.accepted_materialization() else {
                 self.reject_construction_commit(*token);
@@ -2616,6 +2712,14 @@ impl ProjectionalEditorSession {
                 return Err(error.into());
             }
         };
+        self.completed_construction = Some(CompletedConstructionReceipt {
+            origin,
+            terminal: transaction.identity,
+            draft,
+            plan: plan.clone(),
+            aliases: transaction.aliases.clone(),
+            geometry_alias: translated.geometry_alias,
+        });
         self.editor = accepted_editor;
         self.point_drag = None;
         self.curve_control_drag = None;
@@ -2769,6 +2873,37 @@ impl ProjectionalEditorSession {
         }
         self.editor.restore_selection_presentation(scene, state)?;
         self.project_native_selection_to_declaration();
+        Ok(())
+    }
+
+    /// Restores exact personal selection and an explicit navigation owner atomically.
+    ///
+    /// Empty outputs may retain a logical declaration without native items. For
+    /// nonempty selection, an explicit owner must match its unique native owner;
+    /// `None` preserves deliberate multi-row browsing without an Inspector target.
+    /// No document, solver, history or accepted-scene authority changes.
+    ///
+    /// # Errors
+    /// Rejects stale scenes, active gestures, invalid selected occurrences, or
+    /// logical declarations not owned by this exact accepted selection.
+    pub fn restore_navigation_selection(
+        &mut self,
+        scene: &EditorScene,
+        state: crate::SelectionPresentationState,
+        logical_owner: Option<NodeId>,
+    ) -> Result<(), crate::SelectionPresentationError> {
+        if !self.scene_is_current(scene) {
+            return Err(crate::SelectionPresentationError::StaleScene);
+        }
+        if let Some(owner) = logical_owner
+            && (self.visible_declaration_owner(owner) != Some(owner)
+                || (!state.items.is_empty()
+                    && self.native_selection_declaration(&state.items) != Some(owner)))
+        {
+            return Err(crate::SelectionPresentationError::InvalidSelection);
+        }
+        self.editor.restore_selection_presentation(scene, state)?;
+        self.selected_declaration = logical_owner;
         Ok(())
     }
 
@@ -3989,15 +4124,14 @@ impl ProjectionalEditorSession {
     }
 
     fn project_native_selection_to_declaration(&mut self) {
-        let selection = self.editor.selection();
+        self.selected_declaration = self.native_selection_declaration(self.editor.selection());
+    }
+
+    fn native_selection_declaration(&self, selection: &[SelectionItem]) -> Option<NodeId> {
         if selection.is_empty() {
-            self.selected_declaration = None;
-            return;
+            return None;
         }
-        let Some(accepted) = self.coordinator.accepted_materialization() else {
-            self.selected_declaration = None;
-            return;
-        };
+        let accepted = self.coordinator.accepted_materialization()?;
         let mut owners = std::collections::BTreeSet::new();
         for item in selection {
             let item_owners = accepted
@@ -4013,21 +4147,17 @@ impl ProjectionalEditorSession {
                 .map(|owner| owner.node)
                 .collect::<std::collections::BTreeSet<_>>();
             let mut item_owners = item_owners.into_iter();
-            let Some(owner) = item_owners.next() else {
-                self.selected_declaration = None;
-                return;
-            };
+            let owner = item_owners.next()?;
             if item_owners.next().is_some() {
-                self.selected_declaration = None;
-                return;
+                return None;
             }
             owners.insert(owner);
         }
         let mut owners = owners.into_iter();
-        self.selected_declaration = owners
+        owners
             .next()
             .filter(|_| owners.next().is_none())
-            .and_then(|node| self.visible_declaration_owner(node));
+            .and_then(|node| self.visible_declaration_owner(node))
     }
 
     /// Resolves an existing declaration to its visible organizational owner.

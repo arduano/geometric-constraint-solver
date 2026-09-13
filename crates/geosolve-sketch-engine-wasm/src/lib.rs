@@ -11,12 +11,15 @@ mod construction;
 mod point_gesture;
 mod tool_operations;
 mod tool_selection;
+mod workspace;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OpenEditableRequest {
     project: String,
     design: Option<String>,
+    #[serde(default)]
+    persistable_history: bool,
 }
 
 #[derive(Deserialize)]
@@ -59,15 +62,57 @@ impl EngineAdapter {
             return Err("close an editable session before opening more than eight".into());
         }
         let request: OpenEditableRequest = decode_session_request(json)?;
-        let session = EditableSession::open(&request.project, request.design.as_deref())
-            .map_err(|error| error.to_string())?;
+        let open = if request.persistable_history {
+            EditableSession::open_persistable
+        } else {
+            EditableSession::open
+        };
+        let session =
+            open(&request.project, request.design.as_deref()).map_err(|error| error.to_string())?;
+        self.install_opened_session(session)
+    }
+
+    /// # Errors
+    /// Rejects corrupt source/native history, duplicate live identity or exhausted capacity.
+    pub fn restore_editable_history(&mut self, json: &str) -> Result<String, String> {
+        self.reserve()?;
+        if self.sessions.len() >= 8 {
+            return Err("close an editable session before opening more than eight".into());
+        }
+        let session = EditableSession::restore_history(json).map_err(|error| error.to_string())?;
+        self.install_opened_session(session)
+    }
+
+    /// # Errors
+    /// Rejects unknown sessions, ephemeral history or oversized serialization.
+    pub fn export_editable_history(&self, session_id: &str) -> Result<String, String> {
+        let id: u64 = session_id.parse().map_err(|_| "invalid session ID")?;
+        self.sessions
+            .get(&id)
+            .ok_or("unknown or closed session ID")?
+            .export_history()
+            .map_err(|error| error.to_string())
+    }
+
+    fn install_opened_session(&mut self, session: EditableSession) -> Result<String, String> {
         let state = serde_json::to_string(&session.state()).map_err(|error| error.to_string())?;
+        self.install_opened_session_reply(session, state)
+    }
+
+    fn install_opened_session_reply(
+        &mut self,
+        session: EditableSession,
+        reply: String,
+    ) -> Result<String, String> {
+        if self.sessions.contains_key(&session.token().session) {
+            return Err("editable history identity is already open".into());
+        }
         let accepted = session.accepted().clone();
         self.sessions.insert(session.token().session, session);
         self.accepted = Some(accepted.clone());
         self.retained
             .insert(accepted.result().result_id.clone(), accepted);
-        Ok(state)
+        Ok(reply)
     }
 
     /// # Errors
@@ -324,10 +369,59 @@ mod wasm {
                 .map_err(|error| JsValue::from_str(&error))
         }
 
+        #[wasm_bindgen(js_name = inspectEditableSession)]
+        pub fn inspect_editable_session(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .inspect_editable_session(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableInteractionSeed)]
+        pub fn editable_interaction_seed(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_interaction_seed(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = resultInteractionSeed)]
+        pub fn result_interaction_seed(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .result_interaction_seed(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableCompilerPatches)]
+        pub fn editable_compiler_patches(&self, id: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_compiler_patches(id)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = exportResultWorkspace)]
+        pub fn export_result_workspace(&self, id: &str) -> Result<String, JsValue> {
+            self.0
+                .export_result_workspace(id)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = encodeReproduction)]
+        pub fn encode_reproduction(&self, workspace: &str) -> Result<String, JsValue> {
+            self.0
+                .encode_reproduction(workspace)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
         #[wasm_bindgen(js_name = editableToolOperationContext)]
         pub fn editable_tool_operation_context(&self, json: &str) -> Result<String, JsValue> {
             self.0
                 .editable_tool_operation_context(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = editableToolOperationViewOperands)]
+        pub fn editable_tool_operation_view_operands(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .editable_tool_operation_view_operands(json)
                 .map_err(|error| JsValue::from_str(&error))
         }
 
@@ -597,6 +691,34 @@ mod wasm {
         pub fn open_editable_session(&mut self, json: &str) -> Result<String, JsValue> {
             self.0
                 .open_editable_session(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = restoreEditableWorkspace)]
+        pub fn restore_editable_workspace(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .restore_editable_workspace(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = exportEditableWorkspace)]
+        pub fn export_editable_workspace(&self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .export_editable_workspace(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = restoreEditableHistory)]
+        pub fn restore_editable_history(&mut self, json: &str) -> Result<String, JsValue> {
+            self.0
+                .restore_editable_history(json)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = exportEditableHistory)]
+        pub fn export_editable_history(&self, id: &str) -> Result<String, JsValue> {
+            self.0
+                .export_editable_history(id)
                 .map_err(|error| JsValue::from_str(&error))
         }
 

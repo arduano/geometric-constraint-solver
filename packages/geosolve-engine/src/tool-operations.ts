@@ -3,7 +3,8 @@ import type { AcceptedResult } from "./index.js";
 import type { EditableDesign, PreparedAuthoring } from "./session.js";
 import type { PointGestureViewport } from "./point-gesture.js";
 import { decodePointValue } from "./point-gesture.js";
-export type ToolOperationTool = "lock" | "coincident" | "horizontal" | "vertical" | "concentric" | "collinear" | "parallel" | "perpendicular" | "equal" | "midpoint" | "symmetric" | "tangent" | "continuity" | "point_distance" | "segment_length" | "radius" | "diameter" | "oriented_angle" | "fillet" | "offset" | "toggle_geometry_role";
+import type { ToolOperationTool } from "./tool-catalog.js";
+export type { ToolOperationTool } from "./tool-catalog.js";
 export type ToolOperationOperand =
  | { readonly target: "binding"; readonly symbol: string; readonly binding: number; readonly span: number | null; readonly curve_parameter: number | null; readonly occurrence?: ToolCurveOccurrence }
  | { readonly target: "datum"; readonly datum: "origin" | "x_axis" | "y_axis" };
@@ -62,6 +63,7 @@ export interface PreparedToolOperationCommit {
 }
 export interface ToolOperationNativeHandle {
   editableToolOperationContext(json: string): string;
+  editableToolOperationViewOperands(json: string): string;
   editableToolOperationOperands(json: string): string;
   beginEditableToolOperation(json: string): string;
   advanceEditableToolOperation(json: string): string;

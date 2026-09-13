@@ -162,6 +162,7 @@ fn terminal_plan_publishes_one_intent_transaction_and_undo_restores_scene() {
         .applied
         .len();
     let counts_before = accepted_counts(&session);
+    let origin = session.coordinator().intent().identity();
     let effect = terminal_segment_effect(&mut session, viewport, 17, [1.0, 1.0], [3.0, 2.25]);
     let outcome = session.apply_construction_editor_effect(&effect).unwrap();
 
@@ -196,7 +197,23 @@ fn terminal_plan_publishes_one_intent_transaction_and_undo_restores_scene() {
         0
     );
 
+    let receipt = session.completed_construction().unwrap();
+    assert_eq!(receipt.origin(), origin);
+    assert_eq!(receipt.variant(), GeometryToolVariant::Segment);
+    assert_eq!(receipt.defining_point(0), Some([1.0, 1.0]));
+    assert_eq!(receipt.defining_point(1), Some([3.0, 2.25]));
+    assert_eq!(receipt.defining_point(2), None);
+    assert!(receipt.geometry_node().is_some());
+    assert_eq!(receipt.aliases(), &outcome.transaction.aliases);
+    assert!(
+        session
+            .fork_accepted_authority()
+            .unwrap()
+            .completed_construction()
+            .is_none()
+    );
     session.undo().unwrap().unwrap();
+    assert!(session.completed_construction().is_none());
     assert_eq!(accepted_counts(&session), counts_before);
     assert_independent_validation(&session);
     assert_eq!(

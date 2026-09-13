@@ -233,11 +233,20 @@ impl EditableSession {
         prepared: &PreparedAuthoringMutation,
         receipt: PreparedManagedMutationReceipt,
     ) -> Result<AcceptedEvaluation, EngineError> {
+        self.apply_managed_mutation_for_host(prepared, receipt, "Apply project")
+    }
+
+    pub(super) fn apply_managed_mutation_for_host(
+        &mut self,
+        prepared: &PreparedAuthoringMutation,
+        receipt: PreparedManagedMutationReceipt,
+        history_label: &str,
+    ) -> Result<AcceptedEvaluation, EngineError> {
         let (authority, _) = self.managed_authority()?;
         let validated = validate_prepared_managed_mutation(&authority, &prepared.request, receipt)
             .map_err(error)?;
         let high_water = validated.declaration_name_high_water();
-        self.apply_managed_compilation(validated.into_compiled(), high_water)
+        self.apply_managed_compilation(validated.into_compiled(), high_water, history_label)
     }
 
     /// Captures an explicit Apply candidate. Later draft typing cannot alter these bytes.
@@ -268,13 +277,14 @@ impl EditableSession {
         let validated = validate_prepared_managed_source(&authority, &prepared.request, receipt)
             .map_err(error)?;
         let high_water = validated.declaration_name_high_water();
-        self.apply_managed_compilation(validated.into_compiled(), high_water)
+        self.apply_managed_compilation(validated.into_compiled(), high_water, "Apply project")
     }
 
     fn apply_managed_compilation(
         &mut self,
         compiled: CompiledManagedSource,
         high_water: u64,
+        history_label: &str,
     ) -> Result<AcceptedEvaluation, EngineError> {
         let mut project = self
             .code_snapshot()
@@ -283,9 +293,9 @@ impl EditableSession {
             .ok_or_else(|| error("missing managed project"))?;
         project.managed = compiled.into_managed_document().map_err(error)?;
         project.managed.declaration_name_high_water = high_water;
-        let json = project.to_canonical_json().map_err(error)?;
-        let expected = self.token().clone();
-        self.apply_project(&expected, &json)
+        project.validate().map_err(error)?;
+        self.apply_project_for_host(project, history_label, false)?;
+        Ok(self.accepted().clone())
     }
 
     /// Resolves current lexical expectations for one atomic semantic property batch.

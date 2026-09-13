@@ -13,6 +13,8 @@ keywords = ["cad", "constraints", "editor", "geometry"]
 categories = ["algorithms", "graphics"]
 
 [dependencies]
+base64.workspace = true
+miniz_oxide.workspace = true
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
 geosolve-sketch-intent = { version = "0.2.0", path = "../geosolve-sketch-intent" }

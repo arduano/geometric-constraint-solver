@@ -1962,6 +1962,13 @@ fn derived_geometry_input_point(
     input_index: u16,
 ) -> Option<[f64; 2]> {
     use GeometryRecipeKind as G;
+    if recipe == G::ThreePointCircle
+        && let Some(receipt) = editor.completed_construction()
+        && receipt.geometry_node() == Some(node.id)
+        && receipt.variant().intent_recipe() == recipe
+    {
+        return receipt.defining_point(usize::from(input_index));
+    }
     if matches!(recipe, G::TwoPointDiameterCircle | G::ThreePointCircle) {
         let center =
             accepted_curve_control_position(editor, node, DocumentCurveControlKind::Center)?;

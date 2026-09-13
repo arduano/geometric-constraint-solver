@@ -1035,3 +1035,71 @@ fn accepted_profile_offset_distance_drop_consumes_its_exact_prepared_transaction
     assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
     assert_one_preview_plan_and_no_terminal_replan(before_drop);
 }
+
+#[test]
+fn navigation_restore_preserves_picked_curve_and_empty_logical_owner_atomically() {
+    let (mut editor, viewport) = fixture(0x99_5e11, 1.0);
+    let scene = editor.scene(viewport, 0.5).unwrap();
+    let curve = &scene.curves[0];
+    let item = SelectionItem::Curve(curve.span);
+    editor.set_selection([item]);
+    let owner = editor
+        .selected_declaration()
+        .expect("curve has one source owner");
+    let before = editor.coordinator().intent().identity();
+    let native = std::ptr::from_ref(editor.coordinator().accepted_materialization().unwrap());
+    let selected = crate::SelectionPresentationState {
+        items: vec![item],
+        curve_picks: vec![crate::CurvePickContext {
+            span: curve.span,
+            parameter: (curve.screen_parameters[0] + curve.screen_parameters.last().unwrap()) / 2.0,
+            origin: curve.origin,
+        }],
+    };
+    editor
+        .restore_navigation_selection(&scene, selected.clone(), Some(owner))
+        .unwrap();
+    assert_eq!(editor.editor().selection_presentation_state(), selected);
+    assert_eq!(editor.selected_declaration(), Some(owner));
+    let wrong_owner = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .find(|node| node.id != owner)
+        .unwrap()
+        .id;
+    assert_eq!(
+        editor.restore_navigation_selection(&scene, selected.clone(), Some(wrong_owner)),
+        Err(crate::SelectionPresentationError::InvalidSelection)
+    );
+    assert_eq!(editor.editor().selection_presentation_state(), selected);
+    assert_eq!(editor.selected_declaration(), Some(owner));
+    let mut invalid = selected.clone();
+    invalid.curve_picks[0].parameter = f64::NAN;
+    assert_eq!(
+        editor.restore_navigation_selection(&scene, invalid, Some(owner)),
+        Err(crate::SelectionPresentationError::InvalidCurvePick)
+    );
+    assert_eq!(editor.editor().selection_presentation_state(), selected);
+    editor
+        .restore_navigation_selection(&scene, selected.clone(), None)
+        .unwrap();
+    assert_eq!(editor.editor().selection_presentation_state(), selected);
+    assert!(editor.selected_declaration().is_none());
+    editor
+        .restore_navigation_selection(
+            &scene,
+            crate::SelectionPresentationState::default(),
+            Some(owner),
+        )
+        .unwrap();
+    assert!(editor.editor().selection().is_empty());
+    assert_eq!(editor.selected_declaration(), Some(owner));
+    assert_eq!(editor.coordinator().intent().identity(), before);
+    assert_eq!(
+        std::ptr::from_ref(editor.coordinator().accepted_materialization().unwrap()),
+        native
+    );
+}

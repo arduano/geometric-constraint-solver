@@ -5,250 +5,135 @@
 use crate::EditorTool;
 use geosolve_sketch_intent::GeometryRecipeKind;
 
-/// A stable palette family for related geometry-authoring recipes.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum GeometryToolFamily {
-    Point,
-    Lines,
-    Rectangles,
-    Circles,
-    Arcs,
-    Ellipses,
-    Beziers,
-    Conics,
-    Splines,
-}
-
-/// An exact geometry-authoring recipe.
+/// Closed native geometry inventory shared with host catalog projections.
 ///
-/// [`EditorTool`] remains the coarse compatibility projection. New hosts should
-/// retain this identity so variants that share one legacy implementation do not
-/// become indistinguishable in presentation or drafting state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum GeometryToolVariant {
-    SketchPoint,
-    Segment,
-    Polyline,
-    MidpointLine,
-    TwoPointAlignedRectangle,
-    ThreePointCornerRectangle,
-    CenterRectangle,
-    ThreePointCenterRectangle,
-    CenterRadiusCircle,
-    TwoPointDiameterCircle,
-    ThreePointCircle,
-    CenterArc,
-    ThreePointArc,
-    TangentArc,
-    CenterAxesEllipse,
-    AxisEndpointsEllipse,
-    CenterAxesEllipticalArc,
-    AxisEndpointsEllipticalArc,
-    QuadraticBezier,
-    CubicBezier,
-    RationalQuadraticConic,
-    Parabola,
-    Hyperbola,
-    OpenControlNurbs,
-    PeriodicControlNurbs,
+/// This callback macro is an implementation seam for generated adapters; native
+/// consumers should use [`GeometryToolVariant`] and [`GeometryToolFamily`].
+#[doc(hidden)]
+#[macro_export]
+macro_rules! geometry_tool_catalog {
+    ($consumer:ident) => {
+        $consumer! {
+            Point => ("point", SketchPoint) {
+                SketchPoint => "sketch-point",
+            }
+            Lines => ("lines", Segment) {
+                Segment => "segment",
+                Polyline => "polyline",
+                MidpointLine => "midpoint-line",
+            }
+            Rectangles => ("rectangles", TwoPointAlignedRectangle) {
+                TwoPointAlignedRectangle => "two-point-aligned-rectangle",
+                ThreePointCornerRectangle => "three-point-corner-rectangle",
+                CenterRectangle => "center-rectangle",
+                ThreePointCenterRectangle => "three-point-center-rectangle",
+            }
+            Circles => ("circles", CenterRadiusCircle) {
+                CenterRadiusCircle => "center-radius-circle",
+                TwoPointDiameterCircle => "two-point-diameter-circle",
+                ThreePointCircle => "three-point-circle",
+            }
+            Arcs => ("arcs", CenterArc) {
+                CenterArc => "center-arc",
+                ThreePointArc => "three-point-arc",
+                TangentArc => "tangent-arc",
+            }
+            Ellipses => ("ellipses", CenterAxesEllipse) {
+                CenterAxesEllipse => "center-axes-ellipse",
+                AxisEndpointsEllipse => "axis-endpoints-ellipse",
+                CenterAxesEllipticalArc => "center-axes-elliptical-arc",
+                AxisEndpointsEllipticalArc => "axis-endpoints-elliptical-arc",
+            }
+            Beziers => ("beziers", QuadraticBezier) {
+                QuadraticBezier => "quadratic-bezier",
+                CubicBezier => "cubic-bezier",
+            }
+            Conics => ("conics", RationalQuadraticConic) {
+                RationalQuadraticConic => "rational-quadratic-conic",
+                Parabola => "parabola",
+                Hyperbola => "hyperbola",
+            }
+            Splines => ("splines", OpenControlNurbs) {
+                OpenControlNurbs => "open-control-nurbs",
+                PeriodicControlNurbs => "periodic-control-nurbs",
+            }
+        }
+    };
 }
 
-const POINT_VARIANTS: [GeometryToolVariant; 1] = [GeometryToolVariant::SketchPoint];
-const LINE_VARIANTS: [GeometryToolVariant; 3] = [
-    GeometryToolVariant::Segment,
-    GeometryToolVariant::Polyline,
-    GeometryToolVariant::MidpointLine,
-];
-const RECTANGLE_VARIANTS: [GeometryToolVariant; 4] = [
-    GeometryToolVariant::TwoPointAlignedRectangle,
-    GeometryToolVariant::ThreePointCornerRectangle,
-    GeometryToolVariant::CenterRectangle,
-    GeometryToolVariant::ThreePointCenterRectangle,
-];
-const CIRCLE_VARIANTS: [GeometryToolVariant; 3] = [
-    GeometryToolVariant::CenterRadiusCircle,
-    GeometryToolVariant::TwoPointDiameterCircle,
-    GeometryToolVariant::ThreePointCircle,
-];
-const ARC_VARIANTS: [GeometryToolVariant; 3] = [
-    GeometryToolVariant::CenterArc,
-    GeometryToolVariant::ThreePointArc,
-    GeometryToolVariant::TangentArc,
-];
-const ELLIPSE_VARIANTS: [GeometryToolVariant; 4] = [
-    GeometryToolVariant::CenterAxesEllipse,
-    GeometryToolVariant::AxisEndpointsEllipse,
-    GeometryToolVariant::CenterAxesEllipticalArc,
-    GeometryToolVariant::AxisEndpointsEllipticalArc,
-];
-const BEZIER_VARIANTS: [GeometryToolVariant; 2] = [
-    GeometryToolVariant::QuadraticBezier,
-    GeometryToolVariant::CubicBezier,
-];
-const CONIC_VARIANTS: [GeometryToolVariant; 3] = [
-    GeometryToolVariant::RationalQuadraticConic,
-    GeometryToolVariant::Parabola,
-    GeometryToolVariant::Hyperbola,
-];
-const SPLINE_VARIANTS: [GeometryToolVariant; 2] = [
-    GeometryToolVariant::OpenControlNurbs,
-    GeometryToolVariant::PeriodicControlNurbs,
-];
+macro_rules! define_geometry_tools {
+    ($( $family:ident => ($family_key:literal, $default:ident) {
+        $( $variant:ident => $key:literal, )*
+    } )*) => {
+        /// A stable palette family for related geometry-authoring recipes.
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        #[non_exhaustive]
+        pub enum GeometryToolFamily { $( $family, )* }
 
-impl GeometryToolFamily {
-    /// Complete family inventory in stable palette order.
-    pub const ALL: [Self; 9] = [
-        Self::Point,
-        Self::Lines,
-        Self::Rectangles,
-        Self::Circles,
-        Self::Arcs,
-        Self::Ellipses,
-        Self::Beziers,
-        Self::Conics,
-        Self::Splines,
-    ];
+        /// An exact geometry-authoring recipe.
+        ///
+        /// [`EditorTool`] remains the coarse compatibility projection. New hosts
+        /// retain this identity through presentation, drafting and publication.
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        #[non_exhaustive]
+        pub enum GeometryToolVariant { $( $( $variant, )* )* }
 
-    /// Stable family key for persistence and host presentation identity.
-    #[must_use]
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::Point => "point",
-            Self::Lines => "lines",
-            Self::Rectangles => "rectangles",
-            Self::Circles => "circles",
-            Self::Arcs => "arcs",
-            Self::Ellipses => "ellipses",
-            Self::Beziers => "beziers",
-            Self::Conics => "conics",
-            Self::Splines => "splines",
+        impl GeometryToolFamily {
+            /// Complete family inventory in stable palette order.
+            pub const ALL: [Self; [$(stringify!($family)),*].len()] = [$( Self::$family, )*];
+            /// Stable family key for persistence and host presentation identity.
+            #[must_use]
+            pub const fn key(self) -> &'static str {
+                match self { $( Self::$family => $family_key, )* }
+            }
+            /// Exact variants in stable palette order.
+            #[must_use]
+            pub const fn variants(self) -> &'static [GeometryToolVariant] {
+                match self { $( Self::$family => &[$( GeometryToolVariant::$variant, )*], )* }
+            }
+            /// Variant selected when the host activates this family.
+            #[must_use]
+            pub const fn default_variant(self) -> GeometryToolVariant {
+                match self { $( Self::$family => GeometryToolVariant::$default, )* }
+            }
         }
-    }
+        impl GeometryToolVariant {
+            /// Complete recipe inventory in stable palette order.
+            pub const ALL: [Self; [$( $(stringify!($variant),)* )*].len()] = [$( $( Self::$variant, )* )*];
+            /// Stable globally unique recipe key.
+            #[must_use]
+            pub const fn key(self) -> &'static str {
+                match self { $( $( Self::$variant => $key, )* )* }
+            }
+            /// Palette family containing this recipe.
+            #[must_use]
+            pub const fn family(self) -> GeometryToolFamily {
+                match self { $( $( Self::$variant => GeometryToolFamily::$family, )* )* }
+            }
+            /// Canonical persistent Intent recipe implemented by this authoring tool.
+            #[must_use]
+            pub const fn intent_recipe(self) -> GeometryRecipeKind {
+                match self { $( $( Self::$variant => GeometryRecipeKind::$variant, )* )* }
+            }
 
-    /// Exact variants in stable palette order.
-    #[must_use]
-    pub const fn variants(self) -> &'static [GeometryToolVariant] {
-        match self {
-            Self::Point => &POINT_VARIANTS,
-            Self::Lines => &LINE_VARIANTS,
-            Self::Rectangles => &RECTANGLE_VARIANTS,
-            Self::Circles => &CIRCLE_VARIANTS,
-            Self::Arcs => &ARC_VARIANTS,
-            Self::Ellipses => &ELLIPSE_VARIANTS,
-            Self::Beziers => &BEZIER_VARIANTS,
-            Self::Conics => &CONIC_VARIANTS,
-            Self::Splines => &SPLINE_VARIANTS,
+            /// Construction adapter for a persistent Intent recipe.
+            ///
+            /// Non-rational B-splines share NURBS drafting stages. Their caller
+            /// must restore the original recipe and remove weights/gauge state.
+            #[must_use]
+            pub const fn construction_variant_for_intent_recipe(recipe: GeometryRecipeKind) -> Self {
+                match recipe {
+                    $( $( GeometryRecipeKind::$variant => Self::$variant, )* )*
+                    GeometryRecipeKind::OpenControlBSpline => Self::OpenControlNurbs,
+                    GeometryRecipeKind::PeriodicControlBSpline => Self::PeriodicControlNurbs,
+                }
+            }
         }
-    }
-
-    /// Variant selected when a host activates only this family or its legacy
-    /// [`EditorTool`] projection.
-    #[must_use]
-    pub const fn default_variant(self) -> GeometryToolVariant {
-        match self {
-            Self::Point => GeometryToolVariant::SketchPoint,
-            Self::Lines => GeometryToolVariant::Segment,
-            Self::Rectangles => GeometryToolVariant::TwoPointAlignedRectangle,
-            Self::Circles => GeometryToolVariant::CenterRadiusCircle,
-            Self::Arcs => GeometryToolVariant::CenterArc,
-            Self::Ellipses => GeometryToolVariant::CenterAxesEllipse,
-            Self::Beziers => GeometryToolVariant::QuadraticBezier,
-            Self::Conics => GeometryToolVariant::RationalQuadraticConic,
-            Self::Splines => GeometryToolVariant::OpenControlNurbs,
-        }
-    }
+    };
 }
+geometry_tool_catalog!(define_geometry_tools);
 
 impl GeometryToolVariant {
-    /// Complete recipe inventory in stable palette order.
-    pub const ALL: [Self; 25] = [
-        Self::SketchPoint,
-        Self::Segment,
-        Self::Polyline,
-        Self::MidpointLine,
-        Self::TwoPointAlignedRectangle,
-        Self::ThreePointCornerRectangle,
-        Self::CenterRectangle,
-        Self::ThreePointCenterRectangle,
-        Self::CenterRadiusCircle,
-        Self::TwoPointDiameterCircle,
-        Self::ThreePointCircle,
-        Self::CenterArc,
-        Self::ThreePointArc,
-        Self::TangentArc,
-        Self::CenterAxesEllipse,
-        Self::AxisEndpointsEllipse,
-        Self::CenterAxesEllipticalArc,
-        Self::AxisEndpointsEllipticalArc,
-        Self::QuadraticBezier,
-        Self::CubicBezier,
-        Self::RationalQuadraticConic,
-        Self::Parabola,
-        Self::Hyperbola,
-        Self::OpenControlNurbs,
-        Self::PeriodicControlNurbs,
-    ];
-
-    /// Stable globally unique recipe key.
-    #[must_use]
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::SketchPoint => "sketch-point",
-            Self::Segment => "segment",
-            Self::Polyline => "polyline",
-            Self::MidpointLine => "midpoint-line",
-            Self::TwoPointAlignedRectangle => "two-point-aligned-rectangle",
-            Self::ThreePointCornerRectangle => "three-point-corner-rectangle",
-            Self::CenterRectangle => "center-rectangle",
-            Self::ThreePointCenterRectangle => "three-point-center-rectangle",
-            Self::CenterRadiusCircle => "center-radius-circle",
-            Self::TwoPointDiameterCircle => "two-point-diameter-circle",
-            Self::ThreePointCircle => "three-point-circle",
-            Self::CenterArc => "center-arc",
-            Self::ThreePointArc => "three-point-arc",
-            Self::TangentArc => "tangent-arc",
-            Self::CenterAxesEllipse => "center-axes-ellipse",
-            Self::AxisEndpointsEllipse => "axis-endpoints-ellipse",
-            Self::CenterAxesEllipticalArc => "center-axes-elliptical-arc",
-            Self::AxisEndpointsEllipticalArc => "axis-endpoints-elliptical-arc",
-            Self::QuadraticBezier => "quadratic-bezier",
-            Self::CubicBezier => "cubic-bezier",
-            Self::RationalQuadraticConic => "rational-quadratic-conic",
-            Self::Parabola => "parabola",
-            Self::Hyperbola => "hyperbola",
-            Self::OpenControlNurbs => "open-control-nurbs",
-            Self::PeriodicControlNurbs => "periodic-control-nurbs",
-        }
-    }
-
-    /// Palette family containing this recipe.
-    #[must_use]
-    pub const fn family(self) -> GeometryToolFamily {
-        match self {
-            Self::SketchPoint => GeometryToolFamily::Point,
-            Self::Segment | Self::Polyline | Self::MidpointLine => GeometryToolFamily::Lines,
-            Self::TwoPointAlignedRectangle
-            | Self::ThreePointCornerRectangle
-            | Self::CenterRectangle
-            | Self::ThreePointCenterRectangle => GeometryToolFamily::Rectangles,
-            Self::CenterRadiusCircle | Self::TwoPointDiameterCircle | Self::ThreePointCircle => {
-                GeometryToolFamily::Circles
-            }
-            Self::CenterArc | Self::ThreePointArc | Self::TangentArc => GeometryToolFamily::Arcs,
-            Self::CenterAxesEllipse
-            | Self::AxisEndpointsEllipse
-            | Self::CenterAxesEllipticalArc
-            | Self::AxisEndpointsEllipticalArc => GeometryToolFamily::Ellipses,
-            Self::QuadraticBezier | Self::CubicBezier => GeometryToolFamily::Beziers,
-            Self::RationalQuadraticConic | Self::Parabola | Self::Hyperbola => {
-                GeometryToolFamily::Conics
-            }
-            Self::OpenControlNurbs | Self::PeriodicControlNurbs => GeometryToolFamily::Splines,
-        }
-    }
-
     /// Coarse compatibility projection used by the pre-M78 editor API.
     #[must_use]
     pub const fn editor_tool(self) -> EditorTool {
@@ -276,81 +161,6 @@ impl GeometryToolVariant {
             Self::Parabola => EditorTool::Parabola,
             Self::Hyperbola => EditorTool::Hyperbola,
             Self::OpenControlNurbs | Self::PeriodicControlNurbs => EditorTool::Nurbs,
-        }
-    }
-
-    /// Canonical persistent Intent recipe implemented by this authoring tool.
-    #[must_use]
-    pub const fn intent_recipe(self) -> GeometryRecipeKind {
-        use GeometryRecipeKind as R;
-        match self {
-            Self::SketchPoint => R::SketchPoint,
-            Self::Segment => R::Segment,
-            Self::Polyline => R::Polyline,
-            Self::MidpointLine => R::MidpointLine,
-            Self::TwoPointAlignedRectangle => R::TwoPointAlignedRectangle,
-            Self::ThreePointCornerRectangle => R::ThreePointCornerRectangle,
-            Self::CenterRectangle => R::CenterRectangle,
-            Self::ThreePointCenterRectangle => R::ThreePointCenterRectangle,
-            Self::CenterRadiusCircle => R::CenterRadiusCircle,
-            Self::TwoPointDiameterCircle => R::TwoPointDiameterCircle,
-            Self::ThreePointCircle => R::ThreePointCircle,
-            Self::CenterArc => R::CenterArc,
-            Self::ThreePointArc => R::ThreePointArc,
-            Self::TangentArc => R::TangentArc,
-            Self::CenterAxesEllipse => R::CenterAxesEllipse,
-            Self::AxisEndpointsEllipse => R::AxisEndpointsEllipse,
-            Self::CenterAxesEllipticalArc => R::CenterAxesEllipticalArc,
-            Self::AxisEndpointsEllipticalArc => R::AxisEndpointsEllipticalArc,
-            Self::QuadraticBezier => R::QuadraticBezier,
-            Self::CubicBezier => R::CubicBezier,
-            Self::RationalQuadraticConic => R::RationalQuadraticConic,
-            Self::Parabola => R::Parabola,
-            Self::Hyperbola => R::Hyperbola,
-            Self::OpenControlNurbs => R::OpenControlNurbs,
-            Self::PeriodicControlNurbs => R::PeriodicControlNurbs,
-        }
-    }
-
-    /// Construction-tool adapter for one persistent Intent recipe.
-    ///
-    /// The 25-tool interactive palette predates the distinct non-rational
-    /// B-spline recipes. Those two recipes deliberately borrow the matching
-    /// NURBS construction stages; their caller must restore the original
-    /// recipe and remove projective weight/gauge state before publication.
-    /// Every other recipe maps to the variant returned by
-    /// [`Self::intent_recipe`].
-    #[must_use]
-    pub const fn construction_variant_for_intent_recipe(recipe: GeometryRecipeKind) -> Self {
-        match recipe {
-            GeometryRecipeKind::SketchPoint => Self::SketchPoint,
-            GeometryRecipeKind::Segment => Self::Segment,
-            GeometryRecipeKind::Polyline => Self::Polyline,
-            GeometryRecipeKind::MidpointLine => Self::MidpointLine,
-            GeometryRecipeKind::TwoPointAlignedRectangle => Self::TwoPointAlignedRectangle,
-            GeometryRecipeKind::ThreePointCornerRectangle => Self::ThreePointCornerRectangle,
-            GeometryRecipeKind::CenterRectangle => Self::CenterRectangle,
-            GeometryRecipeKind::ThreePointCenterRectangle => Self::ThreePointCenterRectangle,
-            GeometryRecipeKind::CenterRadiusCircle => Self::CenterRadiusCircle,
-            GeometryRecipeKind::TwoPointDiameterCircle => Self::TwoPointDiameterCircle,
-            GeometryRecipeKind::ThreePointCircle => Self::ThreePointCircle,
-            GeometryRecipeKind::CenterArc => Self::CenterArc,
-            GeometryRecipeKind::ThreePointArc => Self::ThreePointArc,
-            GeometryRecipeKind::TangentArc => Self::TangentArc,
-            GeometryRecipeKind::CenterAxesEllipse => Self::CenterAxesEllipse,
-            GeometryRecipeKind::AxisEndpointsEllipse => Self::AxisEndpointsEllipse,
-            GeometryRecipeKind::CenterAxesEllipticalArc => Self::CenterAxesEllipticalArc,
-            GeometryRecipeKind::AxisEndpointsEllipticalArc => Self::AxisEndpointsEllipticalArc,
-            GeometryRecipeKind::QuadraticBezier => Self::QuadraticBezier,
-            GeometryRecipeKind::CubicBezier => Self::CubicBezier,
-            GeometryRecipeKind::RationalQuadraticConic => Self::RationalQuadraticConic,
-            GeometryRecipeKind::Parabola => Self::Parabola,
-            GeometryRecipeKind::Hyperbola => Self::Hyperbola,
-            GeometryRecipeKind::OpenControlBSpline | GeometryRecipeKind::OpenControlNurbs => {
-                Self::OpenControlNurbs
-            }
-            GeometryRecipeKind::PeriodicControlBSpline
-            | GeometryRecipeKind::PeriodicControlNurbs => Self::PeriodicControlNurbs,
         }
     }
 

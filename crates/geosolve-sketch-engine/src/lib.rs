@@ -7,14 +7,22 @@ use std::rc::Rc;
 
 use geosolve_constraint_editor::{IntentNativeBinding, IntentValidationEvidence};
 mod authoring;
+mod authoring_commit;
+mod inspection;
+mod interaction_seed;
+pub use inspection::{AcceptedInspection, EditableInspection};
+pub use interaction_seed::InteractionViewport;
 mod construction;
-mod construction_names;
 mod point_gesture;
 mod profiles;
 mod replay;
 pub use replay::{ConstructionAllocation, ConstructionReplayWitness, PointReplayWitness};
 mod session;
-mod terminal;
+mod workspace;
+pub use geosolve_constraint_editor::presentation_persistence::WorkbenchPresentationPersistence as WorkspaceViewPresentation;
+pub use geosolve_sketch_code::authoring_persistence::SourceWorkspacePresentation;
+mod standalone;
+pub use standalone::{PersistentSourceApply, PreparedCanvasSourceMutation};
 mod tool_operations;
 mod tool_selection;
 pub use authoring::{
@@ -676,3 +684,9 @@ fn output_geometry(
         computed_edges: explicit_edges.into_iter().collect(),
     })
 }
+
+mod browsing;
+pub use browsing::{AcceptedBrowsingSession, AcceptedBrowsingSource, AcceptedBrowsingView};
+
+/// Bounded existing reproduction transport; decoding still requires complete workspace admission.
+pub use geosolve_constraint_editor::reproduction::encode_workspace as encode_reproduction_workspace;

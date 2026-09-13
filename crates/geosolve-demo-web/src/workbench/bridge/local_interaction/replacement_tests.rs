@@ -38,25 +38,32 @@ fn fixture_from(
     (first, second, local, second_pair["seed"].clone())
 }
 
+fn set_selection(local: &mut LocalInteraction, selection: SelectionPresentationState) {
+    let expected = local.state();
+    let mut state = expected.clone();
+    state.selection = selection.items;
+    state.curve_picks = selection.curve_picks;
+    local
+        .restore_selection_json(&serde_json::json!({"expected":expected,"state":state}).to_string())
+        .unwrap();
+}
+
 fn select_and_pin(local: &mut LocalInteraction) {
     let point = local.scene.points[1].screen_position;
     local.pointer_json(&serde_json::json!({"version":2,"phase":"down","pointerId":1,"x":point.x,"y":point.y,"buttons":1,"modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}}).to_string()).unwrap();
     let point_selection = local.editor.selection()[0];
     let curve = local.scene.curves[0].span;
-    local
-        .editor
-        .restore_selection_presentation(
-            &local.scene,
-            SelectionPresentationState {
-                items: vec![point_selection, SelectionItem::Curve(curve)],
-                curve_picks: vec![CurvePickContext {
-                    span: curve,
-                    parameter: 0.5,
-                    origin: geosolve_constraint_editor::SceneCurveOrigin::Native,
-                }],
-            },
-        )
-        .unwrap();
+    set_selection(
+        local,
+        SelectionPresentationState {
+            items: vec![point_selection, SelectionItem::Curve(curve)],
+            curve_picks: vec![CurvePickContext {
+                span: curve,
+                parameter: 0.5,
+                origin: geosolve_constraint_editor::SceneCurveOrigin::Native,
+            }],
+        },
+    );
     let dimension = local.dimensions.ids.keys().next().unwrap().clone();
     for (command, payload) in [
         (
@@ -90,9 +97,15 @@ fn authoring_selection_maps_exact_source_curve_occurrences_between_engine_namesp
         first.export_project_json().unwrap(),
         second.export_project_json().unwrap(),
     );
-    let mapped: SelectionPresentationState =
-        serde_json::from_str(&map_authoring_selection_json(&request.to_string()).unwrap()).unwrap();
     let destination = LocalInteraction::new(&seed.to_string()).unwrap();
+    let map = |request: &serde_json::Value| {
+        serde_json::from_value::<geosolve_constraint_editor::DetachedSelectionView>(
+            request["view"].clone(),
+        )
+        .unwrap()
+        .map_to(&destination.scene, destination.bindings.as_ref())
+    };
+    let mapped = map(&request).unwrap();
     assert_eq!(
         mapped.items,
         vec![
@@ -117,10 +130,10 @@ fn authoring_selection_maps_exact_source_curve_occurrences_between_engine_namesp
     );
     let mut stale = request.clone();
     stale["view"]["state"]["sceneKey"] = "obsolete".into();
-    assert!(map_authoring_selection_json(&stale.to_string()).is_err());
+    assert!(map(&stale).is_err());
     let mut invalid = request;
     invalid["view"]["state"]["curvePicks"][0]["parameter"] = 2.0.into();
-    assert!(map_authoring_selection_json(&invalid.to_string()).is_err());
+    assert!(map(&invalid).is_err());
 }
 
 #[test]
@@ -247,8 +260,7 @@ fn replacement_drops_removed_incompatible_or_unavailable_owners_without_reusing_
 fn replacement_omits_ambiguous_point_correspondence_but_preserves_independent_curve_and_dimension()
 {
     use geosolve_constraint_editor::IntentNativeBinding as Binding;
-    let (_, _, mut local, mut seed) = fixture();
-    select_and_pin(&mut local);
+    let (mut first, _, mut local, mut seed) = fixture();
     let curve = local.scene.curves[0].span.curve;
     let (symbol, owned) = local
         .bindings
@@ -262,7 +274,11 @@ fn replacement_omits_ambiguous_point_correspondence_but_preserves_independent_cu
     let owned = owned.clone();
     let alias: geosolve_sketch_intent::IntentKey =
         serde_json::from_value(serde_json::json!("replacement.ambiguous")).unwrap();
-    local.bindings.as_mut().unwrap().nodes.insert(alias, owned);
+    let mut first_pair: serde_json::Value =
+        serde_json::from_str(&first.interaction_snapshot_json().unwrap()).unwrap();
+    first_pair["seed"]["bindings"]["nodes"][alias.as_str()] = serde_json::to_value(owned).unwrap();
+    local = LocalInteraction::new(&first_pair["seed"].to_string()).unwrap();
+    select_and_pin(&mut local);
     let mut swapped = seed["bindings"]["nodes"][&symbol].clone();
     let rows = swapped.as_array_mut().unwrap();
     assert_eq!(rows[0]["kind"], "point");
@@ -299,16 +315,13 @@ fn replacement_preserves_only_the_exact_implicit_curve_occurrence() {
             * 0.5,
         origin: discarded.origin,
     };
-    local
-        .editor
-        .restore_selection_presentation(
-            &local.scene,
-            SelectionPresentationState {
-                items: vec![SelectionItem::Curve(pick.span)],
-                curve_picks: vec![pick],
-            },
-        )
-        .unwrap();
+    set_selection(
+        &mut local,
+        SelectionPresentationState {
+            items: vec![SelectionItem::Curve(pick.span)],
+            curve_picks: vec![pick],
+        },
+    );
     let next = LocalInteraction::new(&seed.to_string()).unwrap();
     let expected = next
         .scene

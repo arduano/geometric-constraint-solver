@@ -4,32 +4,8 @@ import type { EditableDesign, PreparedAuthoring } from "./session.js";
 import type { PointGestureViewport } from "./point-gesture.js";
 import { decodePointValue } from "./point-gesture.js";
 
-export type ConstructionTool =
-  | "sketch_point"
-  | "segment"
-  | "polyline"
-  | "midpoint_line"
-  | "two_point_aligned_rectangle"
-  | "three_point_corner_rectangle"
-  | "center_rectangle"
-  | "three_point_center_rectangle"
-  | "center_radius_circle"
-  | "two_point_diameter_circle"
-  | "three_point_circle"
-  | "center_arc"
-  | "three_point_arc"
-  | "tangent_arc"
-  | "center_axes_ellipse"
-  | "axis_endpoints_ellipse"
-  | "center_axes_elliptical_arc"
-  | "axis_endpoints_elliptical_arc"
-  | "quadratic_bezier"
-  | "cubic_bezier"
-  | "rational_quadratic_conic"
-  | "parabola"
-  | "hyperbola"
-  | "open_control_nurbs"
-  | "periodic_control_nurbs";
+import type { ConstructionTool } from "./tool-catalog.js";
+export type { ConstructionTool } from "./tool-catalog.js";
 export interface ConstructionConicOptions {
   readonly minor_axis_ratio: number;
   readonly arc_start: number;

@@ -11,7 +11,7 @@ fn m98_semantic_design_reconstructs_point_override_without_solved_geometry() {
     let project = CodeProject::managed(ProjectKey("folder-design".into()), compiled).unwrap();
     let (initial, _) =
         CodeProjectWorkbench::open_project(CodeProjectOrigin::Authored, project.clone()).unwrap();
-    let expansion = &initial.materialized.as_ref().unwrap().expansion;
+    let expansion = &initial.session.accepted_materialization().expansion;
     let writable = expansion.writable_points.first().unwrap();
     let mut design = initial.workspace_design();
     design
@@ -28,9 +28,8 @@ fn m98_semantic_design_reconstructs_point_override_without_solved_geometry() {
     let (restored, editor) =
         CodeProjectWorkbench::open_workspace_design(project.clone(), decoded).unwrap();
     let point = restored
-        .materialized
-        .as_ref()
-        .unwrap()
+        .session
+        .accepted_materialization()
         .expansion
         .writable_points
         .first()
@@ -42,7 +41,7 @@ fn m98_semantic_design_reconstructs_point_override_without_solved_geometry() {
         serde_json::to_string(&restored.workspace_design()).unwrap(),
         json
     );
-    assert!(!restored.session.can_undo());
+    assert!(!restored.session.source_session().can_undo());
     let accepted = editor.coordinator().accepted_materialization().unwrap();
     assert!(accepted.validation.hard_residuals_validated);
     assert!(accepted.validation.all_active_features_current);

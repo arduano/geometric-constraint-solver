@@ -16,9 +16,8 @@ use geosolve_constraint_editor::{
     IntentSourceTokenTarget, IntentWorkbenchProjection,
 };
 use geosolve_sketch_intent::{
-    IntentDefinitionFieldDescriptor, IntentFieldChoices, IntentFieldDefault, IntentFieldKey,
-    IntentKey, IntentLiteral, IntentLiteralSchema, IntentOutputDescriptor,
-    IntentPatchOperationKind, IntentPlanDisposition, IntentProjectionPath,
+    IntentFieldChoices, IntentFieldDefault, IntentFieldKey, IntentKey, IntentLiteral,
+    IntentLiteralSchema, IntentPatchOperationKind, IntentPlanDisposition, IntentProjectionPath,
     IntentProjectionPathSegment, IntentSessionIdentity, IntentUnit, LeafField, LeafRef, NodeId,
     OperationKind,
 };
@@ -28,100 +27,14 @@ pub(crate) struct DesignProjectionSelection {
     pub node: NodeId,
 }
 
-/// Explicit authority shown beside a code-owned Inspector parameter. These
-/// rows are presentation metadata only: the mutation adapter independently
-/// re-resolves the same target against a fresh managed-control manifest.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum InspectorParameterAuthority {
-    ModifiableSource {
-        control_id: String,
-        source_start: usize,
-        source_end: usize,
-        source_path: String,
-        source_text: String,
-        consumer_count: usize,
-        generated_consumer_count: usize,
-    },
-    ModifiableInstance,
-    Encoded {
-        reason: String,
-    },
-    Blocked {
-        reason: String,
-    },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct InspectorParameterPresentation {
-    pub target: IntentInspectorEditTarget,
-    pub authority: InspectorParameterAuthority,
-}
+pub(crate) use geosolve_sketch_code::{
+    InspectorDescriptorIndex, InspectorParameterAuthority, InspectorParameterPresentation,
+};
 
 #[derive(Clone, Copy)]
 pub(crate) struct InspectorPresentation<'a> {
     pub parameters: &'a [InspectorParameterPresentation],
     pub name_authority: Option<&'a InspectorParameterAuthority>,
-}
-
-/// One bounded target-to-schema index shared by managed-parameter authority
-/// derivation and Inspector markup. The central descriptor remains the source
-/// of truth; this view only prevents repeated linear scans of it for every
-/// projected field.
-pub(crate) struct InspectorDescriptorIndex<'a> {
-    definitions: BTreeMap<IntentFieldKey, &'a IntentDefinitionFieldDescriptor>,
-    instances: BTreeMap<LeafRef, (&'a IntentOutputDescriptor, IntentProjectionPath)>,
-}
-
-impl<'a> InspectorDescriptorIndex<'a> {
-    pub(crate) fn new(inspector: &'a IntentInspectorProjection) -> Self {
-        let mut definitions = BTreeMap::new();
-        for descriptor in &inspector.descriptor.fields {
-            let replaced = definitions.insert(descriptor.schema.field.clone(), descriptor);
-            assert!(
-                replaced.is_none(),
-                "central Inspector definition descriptors must be unique"
-            );
-        }
-
-        let mut instances = BTreeMap::new();
-        for output in &inspector.descriptor.outputs {
-            for field in &output.writable {
-                let leaf = LeafRef {
-                    node: output.port.node,
-                    port: output.port.port,
-                    field: *field,
-                };
-                let path = output
-                    .path_for_leaf(leaf)
-                    .expect("descriptor output owns its declared writable leaf");
-                let replaced = instances.insert(leaf, (output, path));
-                assert!(
-                    replaced.is_none(),
-                    "central Inspector writable-leaf descriptors must be unique"
-                );
-            }
-        }
-        Self {
-            definitions,
-            instances,
-        }
-    }
-
-    pub(crate) fn definition(
-        &self,
-        field: &IntentFieldKey,
-    ) -> Option<&'a IntentDefinitionFieldDescriptor> {
-        self.definitions.get(field).copied()
-    }
-
-    pub(crate) fn instance(
-        &self,
-        leaf: LeafRef,
-    ) -> Option<(&'a IntentOutputDescriptor, &IntentProjectionPath)> {
-        self.instances
-            .get(&leaf)
-            .map(|(output, path)| (*output, path))
-    }
 }
 
 pub(crate) fn declaration_count(projection: &IntentWorkbenchProjection) -> usize {

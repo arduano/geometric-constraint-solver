@@ -20,6 +20,7 @@ geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
 geosolve-sketch-code = { version = "0.2.0", path = "../geosolve-sketch-code" }
+geosolve-sketch-engine = { version = "0.2.0", path = "../geosolve-sketch-engine" }
 geosolve-sketch-intent = { version = "0.2.0", path = "../geosolve-sketch-intent" }
 geosolve-sketch-render = { version = "0.2.0", path = "../geosolve-sketch-render" }
 geosolve-sketch-topology = { version = "0.2.0", path = "../geosolve-sketch-topology" }

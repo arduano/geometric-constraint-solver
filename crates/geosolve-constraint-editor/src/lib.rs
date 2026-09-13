@@ -9,6 +9,10 @@
 
 mod annotations;
 mod authoring;
+mod authoring_catalog;
+mod visibility;
+pub use visibility::{VisibilityRow, VisibilitySeed, VisibilityState};
+mod camera;
 mod commit_plan;
 mod coordinator;
 mod curve_controls;
@@ -23,6 +27,15 @@ mod intent_bootstrap;
 mod intent_computed;
 mod intent_coordinator;
 mod intent_editor;
+pub use camera::{
+    CanvasCamera, DEFAULT_PIXELS_PER_MODEL_UNIT, FIT_MARGIN_PIXELS, MAX_PIXELS_PER_MODEL_UNIT,
+    MIN_PIXELS_PER_MODEL_UNIT, SCREEN_SIZE,
+};
+mod presentation_mapping;
+pub use presentation_mapping::{
+    DetachedDimensionPresentation, DetachedSelectionView, PresentationMapping,
+    map_presentation_selection,
+};
 mod intent_feature_authoring;
 mod intent_graph_snapshot;
 mod intent_inputs;
@@ -44,6 +57,7 @@ pub use authoring::{
     AuthoringApplication, AuthoringOperand, AuthoringOperandKind, AuthoringOptions,
     AuthoringOutcome, AuthoringState, AuthoringTool, AuthoringWarning,
 };
+pub use authoring_catalog::{ConstraintIntent, DimensionKind, ModifyTool};
 pub use commit_plan::{
     ConstructionCommitPlan, ConstructionCommitResult, ConstructionConstraintResult,
     ConstructionContactResult, ConstructionRelationDefinition, ConstructionRelationProvenance,
@@ -134,10 +148,10 @@ pub use intent_coordinator::{
     ProjectionalIntentCoordinator, ProjectionalPatchOutcome, ProjectionalPointDragPreview,
 };
 pub use intent_editor::{
-    DelegatedComputedFilletRadiusProposal, MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES,
-    ProjectionalDelegatedPointPointerOutcome, ProjectionalEditorConstructionOutcome,
-    ProjectionalEditorError, ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
-    ProjectionalPresentationBindings,
+    CompletedConstructionReceipt, DelegatedComputedFilletRadiusProposal,
+    MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES, ProjectionalDelegatedPointPointerOutcome,
+    ProjectionalEditorConstructionOutcome, ProjectionalEditorError,
+    ProjectionalEditorPointerOutcome, ProjectionalEditorSession, ProjectionalPresentationBindings,
 };
 pub use intent_feature_authoring::{
     ProjectionalFilletAuthoringError, ProjectionalFilletPatch, projectional_fillet_patch,
@@ -5788,6 +5802,7 @@ struct ConfirmedDraftInference {
 
 #[derive(Clone, Debug)]
 struct PendingConstructionCommit {
+    draft: Box<Draft>,
     token: ConstructionCommitToken,
     variant: GeometryToolVariant,
     expected: Box<PreparedSketchInput>,
@@ -9715,6 +9730,7 @@ impl ConstraintEditor {
         };
         self.next_construction_commit_token = next_token;
         self.pending_construction_commit = Some(PendingConstructionCommit {
+            draft: Box::new(draft.clone()),
             token,
             variant: draft.variant,
             expected: Box::new(prepared_input),
@@ -11366,27 +11382,6 @@ fn draft_point_slot(draft: &Draft, stage_index: usize) -> Option<DraftPointSlot>
     }
 }
 
-/// Compact selection-sensitive authoring vocabulary.
-///
-/// An intent is not an equation identity. The headless coordinator resolves it
-/// to one [`ResolvedConstraintKind`] from typed selected operands.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ConstraintIntent {
-    Lock,
-    Coincident,
-    Horizontal,
-    Vertical,
-    Parallel,
-    Perpendicular,
-    Equal,
-    Midpoint,
-    Symmetric,
-    Tangent,
-    Continuity,
-    Concentric,
-    Collinear,
-}
-
 /// Exact persistent constraint family selected by contextual dispatch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResolvedConstraintKind {
@@ -11447,16 +11442,6 @@ impl ResolvedConstraintKind {
             Self::EndpointContinuity => "Endpoint continuity",
         }
     }
-}
-
-/// Complete M55 alpha dimension action vocabulary.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DimensionKind {
-    PointDistance,
-    SegmentLength,
-    Radius,
-    Diameter,
-    OrientedAngle,
 }
 
 /// Explicit branch state for one newly constructed curve contact.
@@ -14633,7 +14618,7 @@ mod tests {
         );
     }
 
-    fn line_document() -> (SketchDocument, [CurveSpan; 2], [DesignPointId; 4]) {
+    pub(super) fn line_document() -> (SketchDocument, [CurveSpan; 2], [DesignPointId; 4]) {
         let mut document = SketchDocument::new(10.0).expect("document");
         let p0 = document.add_point("a", [-4.0, 1.0]).expect("point");
         let p1 = document.add_point("b", [4.0, 1.0]).expect("point");
@@ -14736,7 +14721,7 @@ mod tests {
         ));
     }
 
-    fn scene(document: &SketchDocument) -> EditorScene {
+    pub(super) fn scene(document: &SketchDocument) -> EditorScene {
         #[allow(clippy::default_trait_access)]
         let session = geosolve_sketch::RetainedSketchDocumentSession::new(
             document.clone(),
@@ -24199,3 +24184,17 @@ mod tests {
         assert!(has_construction_commit(&effects));
     }
 }
+
+mod input_coordinates;
+pub use input_coordinates::{
+    ClientRect, UnmappedCanvasPointerAction, normalize_captured_client_point,
+    normalize_client_point, unmapped_canvas_pointer_action,
+};
+
+pub mod detached_interaction;
+
+pub mod reproduction;
+pub mod workspace_persistence;
+
+/// Durable personal presentation envelope shared by browser and filesystem hosts.
+pub mod presentation_persistence;

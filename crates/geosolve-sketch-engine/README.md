@@ -52,8 +52,20 @@ original parameter units. Standalone engine evaluation is read-only in both mode
 exact current `CodeSessionIdentity`, including its session and revision. They use
 the existing `SketchCodeSession` transactions and shared native materialization.
 Failures preserve accepted geometry, semantic state and history; old accepted
-results remain exportable. History checkpoints reference private immutable native
-authorities. They cannot be imported as external state.
+results remain exportable. The ordinary session keeps private immutable native history
+handles. `open_persistable` additionally retains delegated native checkpoints in the
+existing source-history format. `export_history` and `restore_history` preserve every
+current, accepted, Undo and Redo entry, with independent native checkpoint validation.
+
+`restore_source_workspace` and `export_source_workspace` consume the existing v4/v5
+saved-source format, including unfinished text, diagnostics, origin and selected file.
+The codec belongs to `geosolve-sketch-code`; outer UI presentation and filesystem
+transactions stay with their hosts. `source_session()` exposes read-only history.
+Native standalone hosts use the same engine publication services and may explicitly
+retain failed source as a history entry through `apply_project_retaining_failure`.
+That opt-in policy preserves the previous accepted result; it never grants failed
+working source accepted-scene authority. Ordinary atomic server edits still reject
+and retain their previous complete session.
 
 `design()` exports `geosolve-design-v1`: project identity, keyed reconciliation and
 authored semantic overrides. Reopening reconstructs and independently validates
@@ -104,9 +116,10 @@ state and should not serve as durable recovery identities.
 `AuthoringPrediction::apply_overlay` is a whole semantic update and must not be called for
 every pointer frame.
 
-`begin_construction` retains `Segment`, `Polyline`, `CenterRadiusCircle` or
-`TwoPointAlignedRectangle` drafting on an isolated accepted coordinator. Ordered Move/Click,
-Complete and `StepBack` samples use the existing shared inference and recipe regularization.
+`begin_construction` supports all 25 native geometry variants from the generated tool
+catalog on an isolated accepted coordinator. Ordered Move/Click, Complete, `StepBack`,
+Reset, explicit branch/inference choices and recipe options use the shared editor state
+machines. Viewport events update pixel tolerances before further authored input.
 Frames expose resolved model-space preview and inference guides; `scene_json` exports the
 detached scene. Terminal plans validate through `apply_construction_editor_effect` on the
 fork. These local drafts never change the live engine's source, design or history.
@@ -125,7 +138,13 @@ declaration names. The host persists those inputs and lifecycle changes before c
 parity validation keeps all live source, geometry, history and allocation state. Model-space
 positions and explicit source references reconstruct through ordinary cold opening.
 
-Construction uses the default shared inference cohort; explicit candidate cycling and
-advanced construction variants are outside this boundary. Stale source/design commands
-reject before replay; latest-state rebase and browser worker/UI integration remain separate
-work. Focused native/WASM validation does not establish end-to-end interaction latency.
+Constraint, dimension, Fillet, Offset and selected-geometry role changes use the
+corresponding native tool-operation continuation. The trusted server can replay original
+point/construction/operation intent against its admitted historical basis and current
+model; it must authenticate the returned declaration lifetime witnesses before publishing.
+The collaboration host owns server ordering and per-user contribution history.
+
+`AcceptedEvaluation::inspect` and `EditableSession::inspect` project accepted scenes,
+source navigation and exact native correspondence without solving or rebuilding an
+editing host. Accepted browsing retains separate personal selection and dimension
+presentation. Renderers and storage remain outside this crate.
