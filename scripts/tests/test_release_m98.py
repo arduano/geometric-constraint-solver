@@ -6,15 +6,18 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import release_gate as gate
 import release_gate_m98 as m98
+import release_gate_native as native
 
 
 class M98ReleaseTests(unittest.TestCase):
@@ -311,6 +314,131 @@ class M98ReleaseTests(unittest.TestCase):
         self.assertTrue((output / 'artifacts/bake/shape.json').is_file())
         self.assertEqual(gate.read_json(output / 'coverage.json')['summary']['tests'],4)
 
+    def test_failed_node_retains_diagnostics_but_disposes_private_runtime_and_cache(self):
+        captured = self.captured_runtime('''
+          mkdirSync(process.env.npm_config_cache,{recursive:true});
+          writeFileSync(process.env.npm_config_cache+"/cache","disposable cache");
+          mkdirSync("target/m98/bake",{recursive:true});
+          writeFileSync("target/m98/bake/shape.json",'{"regions":[]}');
+          mkdirSync("examples/generator-website/test-output",{recursive:true});
+          writeFileSync("examples/generator-website/test-output/failure.png","screenshot bytes");
+          mkdirSync(process.env.GEOSOLVE_BROWSER_EVIDENCE,{recursive:true});
+          writeFileSync(process.env.GEOSOLVE_BROWSER_EVIDENCE+"/trace.json",'{"failure":true}');
+          assert.fail("deliberate owning test failure");
+        ''')
+        before = gate.hash_output(captured)
+        output = self.root / 'target/failure'
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(subprocess.CalledProcessError):
+            m98.run(self.root, captured, 'engine.node', output)
+        self.assertEqual(before, gate.hash_output(captured))
+        self.assertFalse((output / 'repository').exists())
+        self.assertFalse((output / 'npm-cache').exists())
+        self.assertFalse((output / 'coverage.json').exists())
+        self.assertIn('deliberate owning test failure', (output / 'node.tap').read_text())
+        self.assertEqual((output / 'artifacts/bake/shape.json').read_text(), '{"regions":[]}')
+        self.assertEqual((output / 'example-browser/failure.png').read_text(), 'screenshot bytes')
+        self.assertEqual((output / 'browser/trace.json').read_text(), '{"failure":true}')
+        # The parent's post-process cleanup is safe after the child's finally.
+        evidence = gate.hash_output(output)
+        m98.cleanup_runtime(output)
+        self.assertEqual(evidence, gate.hash_output(output))
+
+    def test_real_typecheck_timeout_retains_partial_output_and_cleans_private_staging(self):
+        self.write('examples/generator-website/scripts/check-types.mjs', '''
+          import {mkdirSync,writeFileSync} from 'node:fs';
+          mkdirSync(process.env.npm_config_cache,{recursive:true});
+          writeFileSync(process.env.npm_config_cache+'/cache','disposable');
+          mkdirSync('target/m98',{recursive:true});
+          writeFileSync('target/m98/timeout.json','{"phase":"typecheck"}');
+          process.stdout.write('typecheck started before timeout\\n');
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);
+        ''')
+        captured = self.captured_runtime()
+        before = gate.hash_output(captured)
+        output = self.root / 'target/timeout'
+        real_process = native.process
+
+        def bounded_timeout(command, cwd, environment, directory, timeout):
+            self.assertEqual(command, ['node', 'examples/generator-website/scripts/check-types.mjs'])
+            self.assertEqual(timeout, 120)
+            return real_process(command, cwd, environment, directory, 0.5)
+
+        with patch.object(native, 'process', side_effect=bounded_timeout), \
+                contextlib.redirect_stdout(io.StringIO()), self.assertRaises(subprocess.TimeoutExpired):
+            m98.run(self.root, captured, 'example.generator', output)
+        self.assertEqual(before, gate.hash_output(captured))
+        self.assertFalse((output / 'repository').exists())
+        self.assertFalse((output / 'npm-cache').exists())
+        self.assertFalse((output / 'coverage.json').exists())
+        self.assertEqual((output / 'typecheck.log').read_text(), 'typecheck started before timeout\n')
+        self.assertEqual((output / 'artifacts/timeout.json').read_text(), '{"phase":"typecheck"}')
+        self.assertEqual(gate.read_json(output / 'typecheck-process/process.json')['status'], 'timeout')
+
+    def test_partial_runtime_copy_failure_still_disposes_staging(self):
+        captured = self.captured_runtime()
+        output = self.root / 'target/copy-failure'
+
+        def partial_copy(source, destination, **kwargs):
+            destination.mkdir()
+            (destination / 'partial-runtime').write_text('incomplete copy')
+            raise OSError('deliberate copy failure')
+
+        with patch.object(m98.shutil, 'copytree', side_effect=partial_copy), \
+                self.assertRaisesRegex(OSError, 'deliberate copy failure'):
+            m98.run(self.root, captured, 'engine.node', output)
+        self.assertFalse((output / 'repository').exists())
+        self.assertFalse((output / 'coverage.json').exists())
+
+    def test_sigterm_retains_partial_logs_and_diagnostics_before_disposing_runtime(self):
+        self.write('examples/generator-website/scripts/check-types.mjs', '''
+          import {mkdirSync,writeFileSync} from 'node:fs';
+          mkdirSync(process.env.npm_config_cache,{recursive:true});
+          writeFileSync(process.env.npm_config_cache+'/cache','disposable');
+          mkdirSync('target/m98',{recursive:true});
+          process.stdout.write('started before interruption\\n');
+          writeFileSync('target/m98/started.json','{"phase":"typecheck"}');
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);
+        ''')
+        captured = self.captured_runtime()
+        output = self.root / 'target/interrupted'
+        marker = output / 'repository/target/m98/started.json'
+        wrapper = (f'import sys; from pathlib import Path; sys.path.insert(0,{str(Path(m98.__file__).parent)!r}); '
+                   f'import release_gate_m98 as m; m.run(Path({str(self.root)!r}), Path({str(captured)!r}), '
+                   f'"example.generator", Path({str(output)!r}))')
+        process = subprocess.Popen([sys.executable, '-c', wrapper],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            deadline = time.monotonic() + 5
+            while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(marker.exists(), 'actual typecheck reached its blocking work')
+            process.send_signal(signal.SIGTERM)
+            self.assertNotEqual(process.wait(timeout=5), 0)
+        finally:
+            if process.poll() is None:
+                process.send_signal(signal.SIGTERM)
+                process.wait(timeout=5)
+        self.assertFalse((output / 'repository').exists())
+        self.assertFalse((output / 'npm-cache').exists())
+        self.assertFalse((output / 'coverage.json').exists())
+        self.assertEqual((output / 'typecheck.log').read_text(), 'started before interruption\n')
+        self.assertEqual((output / 'artifacts/started.json').read_text(), '{"phase":"typecheck"}')
+        self.assertEqual(gate.read_json(output / 'typecheck-process/process.json')['status'], 'interrupted')
+
+    def test_cleanup_refuses_external_diagnostics_and_never_removes_link_targets(self):
+        output = self.root / 'target/cleanup'
+        external = self.write('external/keep.txt', 'unchanged').parent
+        repository = output / 'repository'
+        (repository / 'target').mkdir(parents=True)
+        (repository / 'target/m98').symlink_to(external, target_is_directory=True)
+        (output / 'npm-cache').symlink_to(external, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'escapes its private runtime'):
+            m98.cleanup_runtime(output)
+        self.assertFalse(repository.exists())
+        self.assertFalse((output / 'npm-cache').is_symlink())
+        self.assertEqual((external / 'keep.txt').read_text(), 'unchanged')
+        self.assertFalse((output / 'artifacts').exists())
+
     def test_changed_captured_bytes_or_installed_dependency_refuse_execution(self):
         captured = self.captured_runtime()
         runtime = captured / 'repository/packages/geosolve-engine/dist/runtime.js'
@@ -331,6 +459,9 @@ class M98ReleaseTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, 'changed captured|changed installed'):
             m98.run(self.root, captured, 'engine.node', output)
         self.assertFalse((output / 'coverage.json').exists())
+        self.assertFalse((output / 'repository').exists())
+        self.assertFalse((output / 'npm-cache').exists())
+        self.assertTrue((output / 'node.tap').is_file())
 
     def test_real_node_empty_owning_file_is_not_a_passing_file_level_test(self):
         captured = self.captured_runtime(empty_file=True)
@@ -338,6 +469,9 @@ class M98ReleaseTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, 'declares no tests'):
             m98.run(self.root, captured, 'engine.node', output)
         self.assertFalse((output / 'coverage.json').exists())
+        self.assertFalse((output / 'repository').exists())
+        self.assertFalse((output / 'npm-cache').exists())
+        self.assertTrue((output / 'node.tap').is_file())
 
     def test_node_coverage_refuses_empty_partial_skipped_cancelled_and_failed_output(self):
         valid = '\n'.join(f'# {key} {value}' for key,value in {'tests':2,'pass':2,'fail':0,'cancelled':0,'skipped':0,'todo':0}.items())

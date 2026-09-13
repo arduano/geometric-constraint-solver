@@ -249,46 +249,47 @@ class Evaluator:
         case, family = item
         directory = self.output / 'cases' / case
         directory.mkdir(parents=True)
-        temporary = directory / 'tmp'
-        temporary.mkdir()
-        env = dict(self.environment, TMPDIR=str(temporary), DENO_DIR=str(temporary / 'deno'))
-        native_output, manifest = directory / 'native.tsv', directory / 'manifest.json'
-        parity_dir, result_path = directory / 'parity', directory / 'parity-result.tsv'
-        env.update(GEOSOLVE_GOLDEN_ORACLE_CASE=case, GEOSOLVE_GOLDEN_ORACLE_OUTPUT=str(native_output),
-                   GEOSOLVE_GOLDEN_ORACLE_PARITY_MANIFEST=str(manifest),
-                   GEOSOLVE_GOLDEN_PARITY_MANIFEST=str(manifest),
-                   GEOSOLVE_GOLDEN_PARITY_DIRECTORY=str(parity_dir),
-                   GEOSOLVE_GOLDEN_PARITY_RESULT=str(result_path))
-        if family == 'scene-authority':
-            native_key, native_test = 'scene', 'workbench::tests::golden_scene_authority_oracle_survey'
-            parity_key, export_test, validate_test = 'scene', SCENE_EXPORT, SCENE_VALIDATE
-            stage_prefix = 'scene-parity'
-        elif family == 'feature.fillet':
-            native_key, native_test = 'fillet', 'golden_fillet_oracle_survey'
-            parity_key, export_test, validate_test = ('parity', 'golden_fillet_backend_parity_export',
-                                                     'golden_fillet_backend_parity_validate')
-            stage_prefix = 'parity'
-        else:
-            native_key, native_test = 'authoring', 'golden_oracle_family_survey'
-            parity_key, export_test, validate_test = 'parity', 'golden_backend_parity_export', 'golden_backend_parity_validate'
-            stage_prefix = 'parity'
-            env.update(GEOSOLVE_GOLDEN_ORACLE_FAMILY=family,
-                       GEOSOLVE_GOLDEN_ORACLE_CASE=case[len(family) + 1:])
-        outcome = self.test(native_key, native_test, env, directory, 'native', NATIVE_TIMEOUT)
-        if outcome['exit_code'] or family != 'scene-authority' and not manifest.is_file():
-            row = classify_process(case, family, outcome, directory / 'native.log', NATIVE_TIMEOUT)
-        else:
-            row = self.parity(case, family, parity_key, export_test, validate_test, stage_prefix,
-                              env, directory, parity_dir, result_path)
-            if row is None:
-                try:
-                    row = parse_rows(native_output.read_text(), [(case, family)])[0]
-                except (OSError, ValueError):
-                    row = harness_row(case, family, 'HARNESS_ERROR', 'native-output', 'malformed-output')
-        (directory / 'row.tsv').write_text(tsv([row]))
-        write_json(directory / 'case.json', {'case_id': case, 'family': family, 'row': row,
-                                           'interrupted': self.processes.cancel.is_set()})
-        return row
+        # Runtime caches are disposable; only proof inputs, outputs and logs are sealed.
+        with tempfile.TemporaryDirectory(prefix='gs-golden-') as runtime:
+            temporary = Path(runtime)
+            env = dict(self.environment, TMPDIR=str(temporary), DENO_DIR=str(temporary / 'deno'))
+            native_output, manifest = directory / 'native.tsv', directory / 'manifest.json'
+            parity_dir, result_path = directory / 'parity', directory / 'parity-result.tsv'
+            env.update(GEOSOLVE_GOLDEN_ORACLE_CASE=case, GEOSOLVE_GOLDEN_ORACLE_OUTPUT=str(native_output),
+                       GEOSOLVE_GOLDEN_ORACLE_PARITY_MANIFEST=str(manifest),
+                       GEOSOLVE_GOLDEN_PARITY_MANIFEST=str(manifest),
+                       GEOSOLVE_GOLDEN_PARITY_DIRECTORY=str(parity_dir),
+                       GEOSOLVE_GOLDEN_PARITY_RESULT=str(result_path))
+            if family == 'scene-authority':
+                native_key, native_test = 'scene', 'workbench::tests::golden_scene_authority_oracle_survey'
+                parity_key, export_test, validate_test = 'scene', SCENE_EXPORT, SCENE_VALIDATE
+                stage_prefix = 'scene-parity'
+            elif family == 'feature.fillet':
+                native_key, native_test = 'fillet', 'golden_fillet_oracle_survey'
+                parity_key, export_test, validate_test = ('parity', 'golden_fillet_backend_parity_export',
+                                                         'golden_fillet_backend_parity_validate')
+                stage_prefix = 'parity'
+            else:
+                native_key, native_test = 'authoring', 'golden_oracle_family_survey'
+                parity_key, export_test, validate_test = 'parity', 'golden_backend_parity_export', 'golden_backend_parity_validate'
+                stage_prefix = 'parity'
+                env.update(GEOSOLVE_GOLDEN_ORACLE_FAMILY=family,
+                           GEOSOLVE_GOLDEN_ORACLE_CASE=case[len(family) + 1:])
+            outcome = self.test(native_key, native_test, env, directory, 'native', NATIVE_TIMEOUT)
+            if outcome['exit_code'] or family != 'scene-authority' and not manifest.is_file():
+                row = classify_process(case, family, outcome, directory / 'native.log', NATIVE_TIMEOUT)
+            else:
+                row = self.parity(case, family, parity_key, export_test, validate_test, stage_prefix,
+                                  env, directory, parity_dir, result_path)
+                if row is None:
+                    try:
+                        row = parse_rows(native_output.read_text(), [(case, family)])[0]
+                    except (OSError, ValueError):
+                        row = harness_row(case, family, 'HARNESS_ERROR', 'native-output', 'malformed-output')
+            (directory / 'row.tsv').write_text(tsv([row]))
+            write_json(directory / 'case.json', {'case_id': case, 'family': family, 'row': row,
+                                               'interrupted': self.processes.cancel.is_set()})
+            return row
 
     def parity(self, case, family, key, export, validate, prefix, env, directory, parity_dir, result_path):
         for phase, test in [('export', export), ('validate', validate)]:

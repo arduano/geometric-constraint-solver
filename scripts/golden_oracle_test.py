@@ -175,6 +175,9 @@ import json, os, pathlib, sys
 name = next(arg for arg in sys.argv[1:] if not arg.startswith('--') and arg not in ('pretty', 'never', '1'))
 env = os.environ
 assert pathlib.Path(env['TMPDIR']).is_dir()
+assert pathlib.Path(env['TMPDIR']).stat().st_mode & 0o077 == 0
+cache = pathlib.Path(env['DENO_DIR']); cache.mkdir(exist_ok=True)
+(cache / 'disposable').write_bytes(b'x' * 65536)
 assert env['CARGO_MANIFEST_DIR'] == str(pathlib.Path.cwd())
 assert env['CARGO_PKG_NAME'] == 'synthetic-cargo-env'
 case = env['GEOSOLVE_GOLDEN_ORACLE_FAMILY'] + '.' + env['GEOSOLVE_GOLDEN_ORACLE_CASE']
@@ -213,8 +216,11 @@ print('test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered ou
                 self.assertFalse(any('cargo' in command or 'npm' in command for command in commands))
                 for path in receipts:
                     env = json.loads(path.read_text())['environment']
-                    self.assertEqual(env['TMPDIR'], str(folder / 'tmp'))
-                    self.assertEqual(env['DENO_DIR'], str(folder / 'tmp/deno'))
+                    runtime = Path(env['TMPDIR'])
+                    self.assertFalse(runtime.is_relative_to(output))
+                    self.assertFalse(runtime.exists())
+                    self.assertEqual(env['DENO_DIR'], str(runtime / 'deno'))
+                self.assertFalse((folder / 'tmp').exists())
 
 
 class ObservationTests(unittest.TestCase):

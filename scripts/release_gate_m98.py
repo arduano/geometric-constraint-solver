@@ -179,6 +179,67 @@ def validate_tap(text, files=()):
     return summaries
 
 
+def cleanup_runtime(output):
+    """Retain selected diagnostics, then dispose only this run's mutable copies.
+
+    The parent may repeat this after terminating a stage process tree, before
+    sealing its evidence, when interruption prevented the child's finally block.
+    """
+    output = Path(output)
+    if output.is_symlink():
+        raise ValueError("M98 execution output cannot be a symlink")
+    repository = output / "repository"
+
+    def remove_private(path):
+        if path.is_symlink():
+            path.unlink()
+        elif path.exists():
+            shutil.rmtree(path)
+
+    try:
+        for source, destination in ((repository / "target/m98", output / "artifacts"),
+                                    (repository / "examples/generator-website/test-output", output / "example-browser")):
+            if not source.exists() and not source.is_symlink():
+                continue
+            if repository.is_symlink() or source.is_symlink() or not source.resolve().is_relative_to(repository.resolve()):
+                raise ValueError("M98 diagnostic directory escapes its private runtime")
+            if not source.is_dir():
+                raise ValueError("M98 diagnostic output must be a directory")
+            if destination.is_symlink():
+                raise ValueError("M98 diagnostic destination cannot be a symlink")
+            destination.mkdir(parents=True, exist_ok=True)
+            for path in source.iterdir():
+                target = destination / path.name
+                if target.exists() or target.is_symlink():
+                    raise ValueError("M98 diagnostic destination already exists")
+                shutil.move(str(path), target)
+    finally:
+        try:
+            remove_private(repository)
+        finally:
+            remove_private(output / "npm-cache")
+
+
+def _run_logged(command, cwd, environment, path, timeout):
+    """Write output as it arrives, including partial output before termination."""
+    import release_gate_native as native
+    process_output = path.with_name(path.stem + "-process")
+    try:
+        result = native.process(command, cwd, environment, process_output, timeout)
+    finally:
+        # The existing bounded process owner stops every descendant before
+        # diagnostics move or mutable runtime directories are removed.
+        text = "".join(log.read_text(errors="replace") for name in ("stdout.log", "stderr.log")
+                       if (log := process_output / name).is_file())
+        path.write_text(text)
+        print(text, end="", flush=True)
+    if result["status"] == "timeout":
+        raise subprocess.TimeoutExpired(command, timeout, output=text)
+    if result["status"] != "passed":
+        raise subprocess.CalledProcessError(result["exit_code"], command, output=text)
+    return text
+
+
 def run(root, prepared, group, output, browser_package=None):
     import release_gate as gate
     metadata = gate.read_json(prepared / "prepared.json")
@@ -191,6 +252,14 @@ def run(root, prepared, group, output, browser_package=None):
             raise ValueError(f"installed M98 runtime dependency changed: {name}")
     output.mkdir(parents=True, exist_ok=False)
     repository = output / "repository"
+    try:
+        _run_private(root, prepared, group, output, browser_package, metadata, repository)
+    finally:
+        cleanup_runtime(output)
+
+
+def _run_private(root, prepared, group, output, browser_package, metadata, repository):
+    import release_gate as gate
     shutil.copytree(prepared / "repository", repository, symlinks=True)
     if browser_package is not None:
         shutil.copytree(browser_package, repository / "crates/geosolve-demo-web/dist")
@@ -213,8 +282,8 @@ def run(root, prepared, group, output, browser_package=None):
         environment["GEOSOLVE_M98_PACKAGE_OUT"] = str(output / "packages")
         environment["GEOSOLVE_M98_DIST"] = str(repository / "crates/geosolve-demo-web/dist")
     if group == "example.generator":
-        subprocess.run(["node", "examples/generator-website/scripts/check-types.mjs"],
-                       cwd=repository, env=environment, check=True, timeout=120)
+        _run_logged(["node", "examples/generator-website/scripts/check-types.mjs"],
+                   repository, environment, output / "typecheck.log", 120)
     if group == "collaboration.frontend":
         report_path = output / "frontend.json"
         command = ["node", "node_modules/vitest/vitest.mjs", "run", "--no-cache", "--reporter=json",
@@ -223,27 +292,12 @@ def run(root, prepared, group, output, browser_package=None):
     else:
         command = ["node", "--test", "--test-concurrency=1", "--test-reporter=tap", *files]
         cwd = repository
-    result = subprocess.run(command, cwd=cwd, env=environment, text=True,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
-    print(result.stdout, end="", flush=True)
-    (output / ("frontend.log" if group == "collaboration.frontend" else "node.tap")).write_text(result.stdout)
-    if result.returncode:
-        raise subprocess.CalledProcessError(result.returncode, command)
-    counts = validate_frontend_report(gate.read_json(report_path), files, repository) if group == "collaboration.frontend" else validate_tap(result.stdout, files)
+    transcript = _run_logged(command, cwd, environment,
+                            output / ("frontend.log" if group == "collaboration.frontend" else "node.tap"), 1800)
+    counts = validate_frontend_report(gate.read_json(report_path), files, repository) if group == "collaboration.frontend" else validate_tap(transcript, files)
     if gate.hash_output(prepared / "repository") != metadata["tree"]:
         raise ValueError("test changed captured M98 runtime bytes")
     for name, expected in metadata["dependencies"].items():
         if gate.hash_output(root / name) != expected:
             raise ValueError(f"test changed installed runtime dependency: {name}")
     gate.write_json(output / "coverage.json", {"status": "passed", "files": files, "summary": counts})
-    # Keep screenshots, generated profiles and package evidence after disposing
-    # the mutable source/build copy. The prepared runtime remains an input.
-    for source, destination in ((repository / "target/m98", output / "artifacts"),
-                                (repository / "examples/generator-website/test-output", output / "example-browser")):
-        if source.is_dir():
-            destination.mkdir(parents=True, exist_ok=True)
-            for path in source.iterdir():
-                shutil.move(str(path), destination / path.name)
-    # Output evidence survives; private mutable source/build copies are disposable.
-    shutil.rmtree(repository)
-    shutil.rmtree(output / "npm-cache", ignore_errors=True)
