@@ -8578,14 +8578,20 @@ export default sketch(($) => {
         let serialized = snapshot.to_string();
         assert!(!serialized.contains("IntentBootstrapMetadata"));
         assert!(!serialized.contains("Bootstrap {"));
+        for group in snapshot["explorer"].as_array().unwrap() {
+            for item in group["children"].as_array().unwrap() {
+                assert!(!item["label"].as_str().unwrap().contains("legacy"));
+            }
+        }
         let imported = snapshot["explorer"]
             .as_array()
             .unwrap()
             .iter()
             .flat_map(|group| group["children"].as_array().unwrap())
-            .find(|item| item["label"] == "legacy-document")
+            .find(|item| item["label"] == "Visual sketch")
             .expect("default document exposes its imported declaration");
 
+        assert_eq!(imported["id"], "intent:legacy-document");
         assert_eq!(imported["kind"], "Imported");
         let selected: serde_json::Value = serde_json::from_str(
             &bridge
@@ -8600,7 +8606,7 @@ export default sketch(($) => {
                 .unwrap(),
         )
         .unwrap();
-        assert_eq!(selected["selection"]["label"], "legacy-document");
+        assert_eq!(selected["selection"]["label"], "Visual sketch");
         assert_eq!(selected["selection"]["kind"], "Imported");
     }
 

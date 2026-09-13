@@ -222,7 +222,7 @@ The standalone `CodeProjectWorkbench` now owns the shared engine `EditableSessio
 Its duplicate mutable source/history owner and materialization cache are removed;
 native compiler resolution, source publication, point terminals and history use
 engine services. The host retains its draft/presentation, native gestures, unique
-namespace initialization and legacy non-code workspace support. Existing v4/v5
+namespace initialization and visual workspace support. Existing v4/v5
 source/history envelopes remain unchanged. An opaque validated-history receipt
 admits every retained native checkpoint once and carries the accepted editor into
 engine restoration. Standalone retained failed source remains an explicit host

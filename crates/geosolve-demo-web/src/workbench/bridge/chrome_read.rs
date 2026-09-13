@@ -472,6 +472,36 @@ impl ChromeRead<'_> {
             None => Err("the managed declaration target is unavailable or stale".into()),
         }
     }
+    fn declaration_label(&self, node: NodeId, symbol: &IntentKey, name: &IntentKey) -> String {
+        // Bootstrap aliases are durable identities, not authoring terminology.
+        // Format only their default names; preserve authored names and code labels.
+        let is_bootstrap = self
+            .editor()
+            .coordinator()
+            .intent()
+            .graph()
+            .node(node)
+            .is_some_and(|declaration| {
+                matches!(
+                    declaration.kind,
+                    geosolve_sketch_intent::IntentNodeKind::Bootstrap { .. }
+                ) || declaration.bootstrap_origin.is_some()
+            });
+        if self.code_project.is_none() && is_bootstrap && name == symbol {
+            if name.as_str() == "legacy-document" {
+                return "Visual sketch".into();
+            }
+            if let Some(alias) = name.as_str().strip_prefix("legacy-") {
+                let label = alias.replace('-', " ");
+                let mut chars = label.chars();
+                if let Some(first) = chars.next() {
+                    return format!("{}{rest}", first.to_uppercase(), rest = chars.as_str());
+                }
+            }
+        }
+        name.to_string()
+    }
+
     pub(super) fn base_explorer_snapshot(&self) -> Vec<ExplorerSnapshot> {
         let selected = self.editor().selected_declaration();
         let Some(code) = &self.code_project else {
@@ -496,7 +526,11 @@ impl ChromeRead<'_> {
                         .into_iter()
                         .map(|declaration| ExplorerSnapshot {
                             id: intent_panel_row_id(&declaration.symbol),
-                            label: declaration.name.to_string(),
+                            label: self.declaration_label(
+                                declaration.node,
+                                &declaration.symbol,
+                                &declaration.name,
+                            ),
                             kind: node_family_label(&declaration.kind).into(),
                             row_kind: ExplorerRowKind::Declaration,
                             selected: selected == Some(declaration.node),
@@ -574,7 +608,7 @@ impl ChromeRead<'_> {
             );
             return Some(SelectionSnapshot {
                 id: inspector.node.to_string(),
-                label: inspector.name.to_string(),
+                label: self.declaration_label(inspector.node, &inspector.symbol, &inspector.name),
                 kind: node_family_label(&inspector.kind).into(),
                 ownership: Some(ownership),
                 source,

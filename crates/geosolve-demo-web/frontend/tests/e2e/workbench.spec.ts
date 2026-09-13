@@ -214,8 +214,8 @@ test("real WASM opens an actual sample with a styled authoritative canvas and la
   const explorerBounds = await explorer.boundingBox();
   expect(explorerBounds?.width).toBeGreaterThanOrEqual(145);
   expect(explorerBounds?.width).toBeLessThanOrEqual(175);
-  const imported = explorer.getByRole("button", { name: "legacy-document", exact: true });
-  await expect(imported).toHaveText("legacy-document");
+  const imported = explorer.getByRole("button", { name: "Visual sketch", exact: true });
+  await expect(imported).toHaveText("Visual sketch");
   const importedIcon = imported.locator("svg.lucide-box");
   await expect(importedIcon).toHaveClass(/\bshrink-0\b/);
   expect(await importedIcon.evaluate((element) => ({
@@ -223,7 +223,10 @@ test("real WASM opens an actual sample with a styled authoritative canvas and la
     width: element.getBoundingClientRect().width,
   }))).toEqual({ flexShrink: "0", width: 14 });
   await imported.click();
+  await expect(page.getByRole("tabpanel").getByText("Visual sketch", { exact: true })).toBeVisible();
   await expect(page.getByRole("tabpanel").getByText("Imported", { exact: true })).toBeVisible();
+  await expect(explorer).not.toContainText("legacy-");
+  await expect(page.getByRole("tabpanel")).not.toContainText("legacy-");
   await expect(page.locator("body")).not.toContainText("IntentBootstrapMetadata");
   await expect(page.locator("body")).not.toContainText("Bootstrap {");
   await openManifold(page);

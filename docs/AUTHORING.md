@@ -12,6 +12,10 @@ local project. The [small folder example](../examples/file-workspace/README.md)
 is a useful first design; the [manifold](../examples/file-workspace-manifold/README.md)
 shows reusable patches and shared parameters.
 
+In the browser, **New sketch** starts the visual workflow: author directly with
+canvas tools and dimensions. **Start from code** opens a sketch with editable
+TypeScript source.
+
 ## Choose editable or generator mode
 
 | Mode | Typical use | UI edits |

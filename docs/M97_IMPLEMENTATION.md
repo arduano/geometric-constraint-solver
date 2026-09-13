@@ -55,7 +55,8 @@ across accepted edits while commands retain their separate revision-bound tokens
 
 M97-F001 reproduced at M96 source `41ad6c7`: four -90 wheel samples followed by an
 empty-canvas click moved 45 of 82 manifold labels, by up to 628 CSS pixels. The
-minimal native legacy fixture independently moves 11 labels, by up to 596 pixels.
+minimal native fixture for visual authoring independently moves 11 labels, by up
+to 596 pixels.
 Its retained-policy regression passes. Actual-WASM browser testing of the initial
 M97 candidate retains all 82 label positions within 0.01 CSS pixels across the
 same zoom/cold-selection sequence.
