@@ -9,7 +9,7 @@ test("custom generator source declares controls and dynamic topology using the p
   await buildExample();
   const { footprint } = await import(pathToFileURL(await buildNodeGenerator()));
   // Use the exact recorder from the same bundled module as its branded builder.
-  const { readWorkspaceSnapshot, evaluateWorkspaceSnapshot } = await import(pathToFileURL(resolve(repository, "scripts/workspace-loader.mjs")));
+  const { readWorkspaceSnapshot, evaluateWorkspaceSnapshot } = await import(pathToFileURL(resolve(repository, "packages/geosolve-cli/runtime/workspace-loader.mjs")));
   const defaults = footprint.parseInputs();
   assert.deepEqual(defaults, { columns: 3, rows: 2, clearance: 0.5, mounting: "magnets", rounded: true });
   assert.equal(footprint.inputs.clearance.unit, "mm");
@@ -65,7 +65,7 @@ function bounds(points) {
 }
 
 test("editable manifold is a complete source-only folder with three freshly compiled patches", async () => {
-  const { readWorkspaceSnapshot, evaluateWorkspaceSnapshot } = await import(pathToFileURL(resolve(repository, "scripts/workspace-loader.mjs")));
+  const { readWorkspaceSnapshot, evaluateWorkspaceSnapshot } = await import(pathToFileURL(resolve(repository, "packages/geosolve-cli/runtime/workspace-loader.mjs")));
   const input = readWorkspaceSnapshot(resolve(repository, "examples/file-workspace-manifold"));
   assert.equal(input.mode, "editable");
   assert.deepEqual(input.files.map((file) => file.path), ["geosolve.json", "patches/point-to-point-channel.patch.ts", "patches/silicone-groove.patch.ts", "patches/water-channel.patch.ts", "sketch.ts"]);

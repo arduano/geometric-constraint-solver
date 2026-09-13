@@ -505,3 +505,14 @@ Manifold metadata comes from the native browser's read projection and publishes
 through the current semantic mutation API; all 18 regions, area tolerance,
 failed external patch retention, Undo/Redo and restart assertions remain exact.
 No production recovery change or timeout increase was required.
+
+Resume `20260913T152300-cc3b4efc` passes folder Node (311.5 s), folder browser
+(117.2 s), and the ordinary browser stage (1482.4 s): all 17 opening/catalog
+checks and 49 full workflows pass without skips, retries or flakiness. Generator
+qualification fails before assertions because two tests still import the loader
+from its retired `scripts` location. Both now import its CLI runtime owner;
+`node --test --test-concurrency=1 examples/generator-website/scripts/generator.test.mjs`
+passes 2/2 in 2.783 s (`generator-loader-final.log`, pinned Nix shell), retaining
+all geometry, topology, residual and freshly compiled manifold assertions.
+No product code changes in this correction. Remaining integrated obligations
+will resume using only authenticated completed evidence.
