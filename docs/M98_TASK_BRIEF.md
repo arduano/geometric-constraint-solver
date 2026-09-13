@@ -1,35 +1,35 @@
-User authorizes M98: planning AND implementing a small working prototype of file-driven/plaintext-first local sketch authoring with two-way synchronization to the EXISTING GeoSolve demo UI. You are Astra ULTRA. Work entirely in your allocated worktree /home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace on branch m98/file-workspace. Goal: quickly deliver a runnable prototype for human testing and iteration, not a production release or a new hardening campaign. Use a persistent native goal if available. Do not stop at a plan; make a short plan then implement the happy path.
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-ISOLATION / CONCURRENT OWNERSHIP
-The other GeoSolve agent is ACTIVE in /home/arduano/programming/geometric-constraint-solver, branch m92/integration, currently implementing M97 source-native authoring metadata, with extensive uncommitted edits. M98 was verified unused at task assignment. Your base is committed d80bf22264f74b60870f2e99feb8cc6ccb9d0133 (M97 qualified dimensions + design docs, not its live uncommitted metadata changes). This is an explicitly authorized PARALLEL M98 prototype exception to the normal sequential milestone workflow, NOT M97 acceptance/closure. Do not complete, redo or clean up M97.
-Write only your worktree (including its own target/node_modules/generated assets/test folders) and explicitly owned disposable runtime state. Do not edit the primary checkout or any other worktree, steal/shared-link build outputs, reset/stash/commit others' changes, operate on other branches, merge/rebase/cherry-pick/push, prune worktrees, restart services or interrupt/message the other agent. Existing app previews/ports remain untouched. Use a fresh unused private development port and bind loopback by default; own only your process. No public deployment, firewall/proxy changes or global package installation. No additional managed agents/worktrees without asking. Avoid unbounded CPU/memory parallelism while other tasks run. Pin base; do not chase their moving source. Put integration overlap and anticipated M97 source-format changes in your handoff; worktree isolation prevents overwrites but doesn't magically eliminate later merge conflicts.
-Read AGENTS.md, START_HERE.md, ARCHITECTURE.md, PLAN.md, ACCEPTANCE.md, docs/SCENARIOS.md and relevant authoring/UI persistence APIs before changes. Preserve solver invariants, Rust ownership and licenses. If stale documents say M93 next, observed project has progressed to active M97. Record M98 goals/prototype scope in new docs/M98_* files; keep changes to shared roadmap/startup docs minimal and in YOUR branch only. Do not declare existing milestones accepted.
+# M98 original prototype brief
 
-PRODUCT CONCEPT
-A sketch is a normal local folder with human/AI-editable plaintext source, using the EXISTING canonical sketch language and managed-source transaction model. User starts a sketch from CLI in a new folder, starts a local preview, and leaves the current demo web UI open. Agent edits files with normal filesystem tools; the UI automatically reflects accepted changes. User edits supported geometry/dimensions/source in the SAME existing UI; accepted edits are saved automatically back to the project's plaintext source/appropriate small metadata files. Closing/reopening reconstructs the same accepted sketch. Files are durable, not browser-only or a downloaded snapshot. Browser is another editor over the same project, not a replacement application.
-Keep the demo UI available in its current ordinary mode. Add an opt-in folder-backed mode/adapter; reuse its canvas, Inspector, authoring controls and existing authoritative Rust/managed-source APIs. Do not build a new CAD UI, reimplement constraint equations, invent a second sketch language, or route everything through a giant opaque compiled JSON blob that loses plaintext authoring. Existing generated/cache artifacts may be derived and marked as such. Preserve source/labels/comments as supported by the existing writer; don't promise arbitrary handwritten AST roundtrip if not supported. Use the existing managed authoring subset as the explicit happy path and clearly explain any unsupported-source edits.
+This historical brief records the initial local-folder experiment. It was later
+expanded into the [M98 implementation plan](M98_IMPLEMENTATION_PLAN.md), native
+engine and multi-editor collaboration. Use [Getting started](GETTING_STARTED.md)
+for current commands and [M98 qualification](M98_QUALIFICATION.md) for final evidence.
 
-MINIMUM WORKFLOW (command spelling yours to choose)
-- init <new-folder>: produces minimal editable sketch source and only necessary manifest/config, using existing source syntax. Refuse to overwrite existing files.
-- open/serve <folder>: starts own local bridge + existing demo UI in folder mode, reports URL and paths. Manual opening of that URL is sufficient; do not spend time on desktop browser launching integrations.
-- External save/atomic replacement -> debounce/coalesce -> existing compile/validate/solve -> accepted revision pushed to UI. Preserve camera/selection where meaningful, no page reload required for ordinary edit.
-- UI edit -> existing accepted source transaction -> atomic writeback -> updated visible source. Suppress self-generated watch loops, no extra dirty revisions/repeated solves per save.
-- check/status or equivalent machine-readable result: source location diagnostics, accepted/current revision, file paths and success/error; existing commands can be reused.
-- Manual existing sketch export remains available for later manual shape building. No 3D feature kernel, no Manifold integration, no automated solid export, no Pi case modelling in M98. SVG/other existing sketch export should be demonstrably accessible; choose existing formats instead of inventing new ones.
+The purpose was to make an ordinary folder of editable TypeScript the durable
+sketch source. An external editor or AI agent could save source while a person used
+the existing canvas and Inspector. Both paths used the same managed-source
+transactions, Rust materializer and independently validated solver.
 
-SMALL BUT ESSENTIAL DATA-LOSS GUARDS (not a platform hardening project)
-One local project / one browser happy path is sufficient. Two independent writers still exist (filesystem/AI and browser): use revision/content-hash compare-and-swap or equivalent so stale UI edits CANNOT overwrite an external file change. On conflict preserve disk and user pending intent, show a clear refresh/retry/conflict message; no CRDT or automatic semantic merge required. Invalid/incomplete file edits leave original file text intact and last accepted geometry visible with unmistakable error/stale status. Watcher observes save-by-rename; reconnect/restart reads disk. Failed writes do not report saved. Bind loopback; bound writes to chosen project and avoid arbitrary browser-requested paths. Use a per-session token/origin protection or existing comparable local API mechanism as needed for write endpoints. Don't add account/auth/cloud systems, custom sandboxing, migration frameworks or permissions UX. Only execute source through the existing intended compiler path; don't add arbitrary shell endpoints.
-Clearly separate persisted design source from UI-only state; small sidecar okay for camera/local preferences if needed, not a competing authoritative geometry copy. Do not silently make browser localStorage override on-disk source at startup. Declare supported source-file scope (e.g. initial manifest + entry + direct project source deps) and watch what init/examples actually use; recursively watching the universe is unnecessary.
+The initial workflow was:
 
-BOUNDED DELIVERABLE / ACCEPTANCE
-1. Brief docs/M98_GOALS.md with happy-path architecture, source-of-truth/revision rule, reuse points and explicit deferred list, then actual working implementation.
-2. From an empty task-owned folder: init -> serve -> existing demo UI shows initial sketch -> edit source externally -> geometry updates -> edit a dimension or perform supported ordinary authoring in UI -> plaintext changes -> restart/reopen preserves it. Execute this end to end, not only mock component tests.
-3. Focused regressions: atomic external save/rename, invalid source preserves last-good with error, UI writeback no watch loop, stale write refuses data loss. Use minimal fixtures. Test existing normal demo mode still opens/works.
-4. Preserve manual export and demonstrate one export. No requirement to implement3D/rendering beyond existing sketch UI.
-5. Practical Nix-friendly run commands, small README/example folder, exact launch command/URL for review and logs under your own worktree. Measure rough observed save-to-preview latency on a SMALL sketch if easy; no benchmark campaign or universal realtime claim.
-6. docs/M98_HANDOFF.md: exact commands run, tests, artifact/demo paths, known limitations, changed integration seams, base SHA, relation to still-active M97, and next manual UAT steps. Small local commits on your branch; keep branch/worktree and demo available, don't merge or publish. If preview only loopback, say so and give port-forward instructions rather than claiming user reachability.
+1. Initialize a new folder without overwriting existing files.
+2. Serve it through the existing demo workbench.
+3. Observe external saves, compile and validate them, then update accepted geometry.
+4. Write supported GUI edits back to source without watcher loops.
+5. Reject stale edits while preserving disk contents and pending intent.
+6. Reopen from disk and retain useful diagnostics when current source is invalid.
 
-TIME/SCOPE DISCIPLINE
-User explicitly wants test-and-iterate quickly and says don't spend too much time hardening. Target a thin end-to-end vertical slice, not a generic filesystem framework. Existing local bridge/CLI machinery should be reused where possible. No solver math changes, new primitives, full golden inventory expansion, migration overhaul, giant concurrency test matrix or broad source cleanup. Run focused tests and relevant build/typecheck/format for touched components. Full production release gate/UAT acceptance/deployment is NOT the deliverable: mark M98 PROTOTYPE_READY_FOR_UAT, not accepted/release-qualified. Don't weaken any tests or claim skipped gates passed. If project policy would require a huge release campaign, defer production nomination and clearly record the unrun checks instead of letting them swallow prototype scope. Prioritize human-observable happy path and essential no-data-loss correctness.
+The prototype deliberately covered one entry file and one editing browser, with
+loopback transport, bounded paths and per-session authorization. It reused the
+managed authoring subset and manual project export. Arbitrary TypeScript reverse
+editing, collaboration, multi-file imports and a 3D kernel were outside that first
+cut. Later M98 work added imports, editable semantic sidecars, profile export,
+headless generators and collaborative authoring; it did not add a solid modeler.
 
-At finish return branch/worktree, prototype launch instructions, whether actual two-way live workflow was witnessed, exact tests, known limits and handoff. Stop at a reviewable useful prototype; no unrequested follow-on milestone. If truly blocked, explain specifically. This task is authorized to implement file-backed SKETCH authoring only; the Pi case remains brainstorming-only.
+Initial delivery required actual two-way browser/file evidence and focused checks
+for atomic external saves, invalid source retention, stale writes and ordinary demo
+startup. Prototype readiness was distinct from release qualification and human
+acceptance. The final M98 product is mechanically qualified; its human UAT remains
+open as recorded in [M98 UAT](M98_UAT.md).

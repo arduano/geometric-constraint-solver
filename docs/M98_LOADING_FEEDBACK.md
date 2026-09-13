@@ -2,10 +2,12 @@
 
 # M98 loading feedback amendment
 
-The supervising user requested a canvas loading indicator for solves taking longer than
+The maintainer requested a canvas loading indicator for solves taking longer than
 0.5 seconds, after observing manifold edits taking 5–10 seconds without visible feedback.
 This extends M98; the previous qualified product is `6509e9c`, nominated by `ef79b4a`.
-Supervising-user acceptance and milestone closure remain open.
+M98 human acceptance and milestone closure remain open.
+This records the initial loading amendment; later local-canvas work preserves
+navigation while authoring remains busy.
 
 The canvas keeps its accepted geometry and, after 500 ms of outstanding work, displays a
 grey veil and a compact “Solving…” spinner. Fast operations do not flash. Multiple queued
@@ -100,9 +102,9 @@ Independent trace review found no new solver/history defect in these failures. F
 repairs consume the same frozen artifact. `npm run check:types` and
 `node --test scripts/test-release-artifact.mjs` pass (18 artifact tests). The corrected
 verifier passes all 13 HTTP routes and actual manifold readiness at temporary loopback
-port 18119 (`target/m98/loading-transport-r3.json`). The first local verifier invocation
+a disposable server (`target/m98/loading-transport-r3.json`). The first local verifier invocation
 omitted the pinned Chromium path and failed browser launch because the downloaded binary
-lacked `libglib`; retry with `GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome`
+lacked `libglib`; retry with the pinned Chrome executable
 passes without changing product bytes.
 
 The focused rerun passes all nine affected workflows in 9.1 minutes against the
@@ -166,42 +168,14 @@ The SDK and dedicated engine archives retain their preceding hashes. The amended
 has SHA-256 `b33388ed29955463a980fa3c5474e240ff310b46101b06a09cce7c944b02e676`.
 No product rebuild followed qualification.
 
-Executed preview preparation and verification:
+Historical static verification passed all 13 HTTP/MIME/hash routes and actual-WASM
+manifold readiness with 182 accepted geometry items. Folder verification retained
+exact assets except its recorded plain-HTTP UUID compatibility insertion, held a
+read-only response to witness the veil, and checked cleanup with accepted geometry
+unchanged. All authored files and source identity were preserved.
 
-```bash
-python3 target/m98/freeze-preview.py 20260909T173058-0f35c852
-nix-shell shell.nix --run 'python3 target/m98/install-preview.py 20260909T173058-0f35c852'
-python3 target/m98/replace-loading-preview.py
-GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
-  node crates/geosolve-demo-web/frontend/scripts/verify-artifact.mjs \
-  --manifest target/m98/preview-20260909T173058-0f35c852/production.json \
-  --directory target/m98/preview-20260909T173058-0f35c852/geosolve-production \
-  --url http://100.94.63.83:18106/ --receipt target/m98/loading-static-preview-verification.json
-node target/m98/verify-loading-tailnet.mjs
-python3 target/m98/release-loading-preview-lease.py
-```
-
-Before switching processes, the installed location was explicitly set to the existing writable
-manifold at `target/m98/installed-preview-20260909T144235-377abb33/manifold`.
-All seven existing authored/documentation files retain exact bytes. The static preview is
-`http://100.94.63.83:18106/`; the editable folder is `http://100.94.63.83:18108/` with its
-session URL in `target/m98/loading-preview-final-session.json`. The latter endpoint binds
-only the Tailscale address and retains its secure-random `crypto.randomUUID` compatibility
-script for plain HTTP. Authorization, Host/Origin refusal and real SSE pass verification.
-
-Static verification passes all 13 routes, MIME/hash checks and actual-WASM manifold readiness
-with 182 accepted geometry items and no browser errors. Folder verification checks all frozen
-bytes excluding only the explicitly known HTML compatibility insertion, then holds a read-only
-Fit response to witness the veil, unchanged accepted canvas and cleanup. That endpoint test
-is deterministic transport evidence; integrated tests supply the real slow-solving evidence.
-After verification, the backend and proxy were restarted to release the automated editing
-lease. The final session has an unclaimed editor and identical accepted/current hash
-`01fe512c5221bccbc1a032eb32480101005c9ca3571f99e504a1619647b3d59a`; all 12 served file
-hashes were checked again. The accepted M97 preview remains reachable and untouched.
-
-Receipts: `target/m98/loading-final-qualified.json`, `loading-static-preview-verification.json`,
-`loading-tailnet-verification.json` and `loading-preview-final-session.json`.
-The amendment is implemented, qualified and delivered. M98 supervising-user acceptance and
-closure remain open. Solve time is unchanged; standalone managed TypeScript compilation can
-still briefly block the main thread, and worker-process crash recovery still reconstructs a
-fresh camera. Live-worker rollback now retains the measured camera under M98-F015.
+The amendment was qualified and delivered. It did not reduce solve time. Its initial
+blocking of new canvas gestures and main-thread managed compilation were later
+superseded by [local canvas interaction](M98_LOCAL_CANVAS.md) and shared worker
+ownership. [Final M98 qualification](M98_QUALIFICATION.md) retains the final limits
+and open human acceptance. Historical receipts remain under `target/m98/loading-*`.

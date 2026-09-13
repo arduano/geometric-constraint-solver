@@ -2,7 +2,7 @@
 
 # Bundled sample assets
 
-Each child directory is one canonical M92 sample and contains `manifest.json`, `sketch.ts`,
+Each child directory is one canonical sample and contains `manifest.json`, `sketch.ts`,
 `sketch.compiled.json`, `witnesses.json`, and `NOTICE.md` when any provenance record sets
 `notice_required`.
 

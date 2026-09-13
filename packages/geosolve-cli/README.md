@@ -1,6 +1,11 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# GeoSolve local-folder CLI
+# GeoSolve local authoring server and CLI
+
+Use ordinary TypeScript files as the shared authoring surface for a person, an AI
+agent and the browser workbench. Saving code updates the validated sketch; supported
+canvas and Inspector edits update its source or explicit semantic design sidecar.
+The CLI also validates and exports sketches without opening a browser.
 
 The CLI archive contains the compiler, Rust WASM engines and a frozen workbench. Install
 the four matching local archives together; no registry, Rust toolchain or source checkout
@@ -20,7 +25,7 @@ npm install --offline --ignore-scripts /path/geosolve-sketch-code-0.2.0.tgz \
 
 Open the exact session URL printed by `serve`. The server listens on loopback. The local
 files remain authoritative; pending edits, conflicts and recovery are shown in the
-workbench. Only one bridge and one editing tab own a folder at a time.
+workbench. In ordinary folder mode, one bridge and one editing tab own a folder at a time.
 
 `geosolve check <folder>` returns machine-readable independent validation without opening
 the workbench. `geosolve bake <folder> --out <outside-file.json> --chord-error-mm 0.08`
@@ -41,7 +46,34 @@ last accepted result. It is trusted local code, with the same access as the CLI 
 Workers do not provide a security sandbox. The filesystem recovery contract targets Linux;
 an independent writer retaining an old descriptor is preserved in recovery data.
 
+## Shared editing demo
+
+The installed CLI can also run the reference collaboration server. It accepts
+multiple editors and viewers, synchronizes unfinished source text, and independently
+validates model edits on the server. Canvas navigation and selection remain local.
+Personal Undo preserves other editors' contributions when its ownership checks pass.
+
+Supply an invitations JSON file containing an array of `{ token, userId, role }`
+objects. Each token must be unique and between 32 and 256 characters; use a freshly
+generated random token for each participant. Roles are `editor` or `viewer`.
+
+```bash
+./node_modules/.bin/geosolve serve my-design --collaboration true \
+  --invitations /path/to/invitations.json --initialize true \
+  --authoring-preview client
+```
+
+Open the participant URLs printed by the server. Omit `--initialize true` when
+restarting the same shared project so its journal, working text and history restore.
+An installed package includes the matching workbench artifact. A source checkout
+additionally needs `--artifact /path/to/production-artifact.json` from the release
+artifact builder. See the [collaboration package](../geosolve-collaboration/README.md)
+for the protocol, authority and bounded-history contracts.
+
 ## Building the archives from a prepared checkout
+
+Follow [Getting started](../../docs/GETTING_STARTED.md) to install the development
+toolchain and build the SDK, native WASM packages and workbench first.
 
 Production host modules live in this package's `runtime/` directory. The CLI owns
 its bundler dependency and ordinary `dist/` build output; runtime execution and

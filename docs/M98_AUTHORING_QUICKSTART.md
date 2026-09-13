@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M98 authoring quickstart
+# Local and shared authoring quickstart
 
 Use editable mode when both source edits and workbench edits should change a design. Use
 generator mode when ordinary TypeScript computes the design from inputs and your host owns
@@ -15,7 +15,7 @@ npm install --offline --ignore-scripts /path/geosolve-sketch-code-0.2.0.tgz \
   /path/geosolve-engine-0.1.0.tgz /path/geosolve-collaboration-0.1.0.tgz \
   /path/geosolve-cli-0.1.0.tgz
 ./node_modules/.bin/geosolve init my-design
-./node_modules/.bin/geosolve serve my-design --port 18109
+./node_modules/.bin/geosolve serve my-design
 ```
 
 Keep `serve` running. In a second terminal in the same directory, build a candidate source
@@ -124,7 +124,7 @@ Initialization does not migrate legacy single-editor semantic overrides or histo
 preserve that original folder when preparing a separate collaborative copy.
 
 A repository launch additionally supplies `--artifact <prepared-artifact-manifest>`.
-`--host <Tailscale-IP> --port <port>` binds a chosen interface. The command emits one
+`--host <preview-IP> --port <port>` binds a chosen interface. The command emits one
 invitation URL per principal. Each editor has an independent camera, selection,
 Inspector, visibility and tool state. CodeMirror shares raw typing, including invalid
 syntax. Apply captures the current draft; later typing remains unapplied. Canvas edits

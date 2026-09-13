@@ -5,7 +5,7 @@
 Status: accepted for completed M78 on 2026-08-17; hardened product implementation is committed
 through F011 fix `e43aa85`; replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete clean qualification and immutable
-byte-verified Tailscale nomination. Human UAT and closeout approval pass. Approval descendant
+byte-verified preview nomination. Human UAT and closeout approval pass. Approval descendant
 `a6d504e` passes Pages run `32096209036`, artifact `9310104202` and deployment `5955688918`; exact
 hosted-byte verification closes M78.
 
@@ -207,9 +207,9 @@ sketch lifecycle, 5/5 sketch locality and 33/33 actual M78 geometry-variant focu
 changing a residual, Jacobian, priority or branch rule. Exact replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
 `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes complete workspace/WASM/Rustdoc/Trunk/release
-qualification; its exact seven-file output is frozen without rebuilding and byte-verified over
-Tailscale at ordered-manifest aggregate
-`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`. The supervising caller
+qualification; its exact seven-file output was frozen without rebuilding and byte-verified
+on the preview server at ordered-manifest aggregate
+`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`. The maintainer
 accepts U1-U8 plus the focused F011 recheck and requests closure. Pages publication from
 documentation-only approval descendant `a6d504e` now passes: run `32096209036`, artifact
 `9310104202` and deployment `5955688918` exact-verify the seven-file ordered aggregate

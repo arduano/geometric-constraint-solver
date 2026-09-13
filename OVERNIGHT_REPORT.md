@@ -1,10 +1,10 @@
-# Overnight report: Human checkpoint A
+# M1–M4 bootstrap report
 
 > Historical record only. This report describes the completed M1-M4 bootstrap block and is not current project status. See `START_HERE.md` and `PLAN.md` for active guidance.
 
 Date: 2026-07-14
 
-At the time of this historical checkpoint, the autonomous M1-M4 block was complete and M5 had not begun.
+At the time of this historical checkpoint, the M1-M4 implementation block was complete and M5 had not begun.
 
 ## Milestones and commits
 

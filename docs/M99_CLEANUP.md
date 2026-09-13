@@ -2,15 +2,15 @@
 
 # M99 — shared authoring and host infrastructure
 
-The supervising user approved this cleanup for implementation on 2026-09-13,
+The maintainer approved this cleanup for implementation on 2026-09-13,
 including coordinated clean breaks to experimental Rust/TypeScript APIs. M98's
 human U02 recheck and acceptance remain open; this authorization does not record
-those outcomes. Implementation used the existing `m98/file-workspace` checkout.
+those outcomes.
 
-**Accepted and closed on 2026-09-13:** [supervising-user signoff](M99_CLOSURE.md).
+**Accepted and closed on 2026-09-13:** [maintainer signoff](M99_CLOSURE.md).
 [Final qualification](M99_QUALIFICATION.md) records clean product `eb4d2e0`,
 297/297 integrated obligations, exact offline installation and both final
-MiniCAD consumer runs. This does not close M98's outstanding human acceptance.
+downstream CAD consumer runs. This does not close M98's outstanding human acceptance.
 [M100](M100_FINAL_CLEANUP.md) is the prepared next milestone.
 
 ## Contract
@@ -24,7 +24,7 @@ queues remain mandatory. No new mathematics or golden expansion is planned.
 
 Preserve project formats, sidecars, journals, pending operations, invitations,
 personal histories and existing previews. Durable operation formats remain
-unchanged. MiniCAD's baked-profile contract stays `geosolve-baked-profile-v1`;
+unchanged. the downstream CAD project's baked-profile contract stays `geosolve-baked-profile-v1`;
 its current consumer scripts migrate to the packaged CLI without rewriting
 historical evidence. Replaced experimental API wrappers may be removed once all
 consumers migrate.
@@ -45,7 +45,7 @@ consumers migrate.
   folder and standalone consumers onto shared authoring services.
 - [x] Move production Node hosting into the CLI package; remove Node dependence
   on frontend/demo execution and milestone build paths; share worker mechanics.
-- [x] Migrate MiniCAD runners to packaged CLI provenance and baked-profile output.
+- [x] Migrate downstream CAD runners to packaged CLI provenance and baked-profile output.
 - [x] Remove superseded implementations and scaffolding after coverage mapping;
   shorten active docs while retaining linked historical evidence.
 - [x] Pass focused owner checks and integrated clean-source qualification;
@@ -65,7 +65,7 @@ worker replacement. Keep 500 ms navigation/text budgets, zero drag reversals and
 the delayed loading veil. Navigation remains local during a ten-second held
 solve and text synchronizes before release. Preserve existing golden assertions.
 
-The installed CLI/generator and MiniCAD pipeline must run without repository
+The installed CLI/generator and the downstream CAD consumer pipeline must run without repository
 implementation imports or `target/m98` runtime paths. Completion requires removing
 duplicate owners, not merely moving files. Follow `RELEASE_QUALIFICATION.md`;
 targeted checks are development evidence, not integrated qualification.
@@ -76,8 +76,8 @@ The following progress entries retain their original focused results and failed
 attempts. Their intermediate pending/underway statements are superseded by the
 [complete final qualification](M99_QUALIFICATION.md), not new outstanding work.
 
-Baseline: clean `1925143`, with qualified M98 product `b49e339` and unchanged live
-previews. Implementation and exact check results are recorded below as work lands.
+Baseline: clean `1925143`, with qualified M98 product `b49e339`.
+The following entries preserve historical implementation and test outcomes.
 
 
 The first implementation slices now have single owning paths:
@@ -100,7 +100,7 @@ The first implementation slices now have single owning paths:
 - Production Node modules, build and packaging belong to `packages/geosolve-cli`.
   Package exports replace repository runtime imports. Disposable loader/evaluation
   workers share lifetime/cancellation mechanics; queue policies remain explicit.
-- MiniCAD's two runners consume installed `geosolve bake` and current receipts,
+- the downstream CAD project's two runners consume installed `geosolve bake` and current receipts,
   preserving v1 profile output and recording package/input provenance.
 
 Reusable browsing work is underway: exact presentation mapping, finite camera and
@@ -126,15 +126,13 @@ Focused development evidence (all through the pinned Nix shell):
   history/artifact checks 35/35; additional storage/loader/session/worker/artifact
   checks 87/87; host/CLI/export checks 17/17; capture checks 17/17; input checks 22/22.
 - Shared disposable worker helper: 17 loader/generator/profile-export checks pass.
-- MiniCAD: five receipt tests; both 85/90 mm pipelines and both case variants pass
+- downstream CAD: five receipt tests; both 85/90 mm pipelines and both case variants pass
   against the qualified installed M98 packages. Each case variant passed 111 STL
   inspections and 1707 geometry checks. M99 package rerun remains required.
 
-Exact commands and logs are retained in `target/m99/` and the agent handoff files
-`tool-catalog-status.txt`, `session-ui-handoff.md` and `minicad-status.txt`.
-Intermediate compilation failures are retained in logs; fixes are being qualified
-with focused owner checks. No integrated M99 nomination, preview replacement or
-human acceptance is claimed. Existing previews and durable user data are unchanged.
+These are intermediate focused results. The
+[final qualification](M99_QUALIFICATION.md) supersedes their pending integration
+status and records the complete owner, package and consumer evidence.
 
 ### Detached interaction and worker ownership
 
@@ -324,7 +322,7 @@ The integrated runner now requires `browsing-initialize.test.ts` in the prepared
 native frontend inventory; it is excluded from preflight until authentic current
 WASM exists. No golden assertions or mathematical behavior changed. M99 still
 requires the completed folder browser migration, integrated clean-source gate,
-offline installed-product/browser checks and MiniCAD rerun. No human acceptance,
+offline installed-product/browser checks and the downstream CAD consumer rerun. No human acceptance,
 preview replacement or service/data migration is claimed by these focused results.
 
 Engine-only hosts now return accepted native interaction seeds; the browser's
@@ -429,7 +427,7 @@ All 19 current folder/CLI test owners are required by the integrated runner. Exa
 relocated source/helper capture, real private package-export resolution and
 preparation invalidation tests pass (runner 20/20, inputs 22/22); see
 `folder-inventory-audit.md`. These focused checks still do not constitute clean
-integrated qualification. Installed-product/browser and MiniCAD M99 verification
+integrated qualification. Installed-product/browser and the downstream CAD consumer M99 verification
 and the integrated gate remain outstanding.
 
 `folder-publication-final.log` passes all 23 project/publication checks, including
@@ -449,7 +447,7 @@ family was omitted and the failed attempt remains failed.
 Preflight `20260913T135018-a662db92` passes all five stages: inventory (186 runner
 and 13 oracle-harness tests), metadata/format, managed, frontend and catalog/build
 contracts. The implementation is locally checkpointed for clean integrated
-nomination; the complete gate and final MiniCAD consumer run remain open.
+nomination; the complete gate and final downstream CAD consumer run remain open.
 
 The first clean integrated run `20260913T135512-c56378ed` passed all five
 preflight stages, then caught a newly expanded WASM adapter test compiling against
@@ -526,3 +524,8 @@ passes 2/2 in 2.783 s (`generator-loader-final.log`, pinned Nix shell), retainin
 all geometry, topology, residual and freshly compiled manifold assertions.
 No product code changes in this correction. Remaining integrated obligations
 will resume using only authenticated completed evidence.
+
+Final run `20260913T155413-41e9f715` passed all **297/297 obligations**.
+[M99 qualification](M99_QUALIFICATION.md) records offline verification of four
+archives and 285 installed files plus both successful consumer pipelines.
+[M99 closure](M99_CLOSURE.md) records acceptance on 2026-09-13.

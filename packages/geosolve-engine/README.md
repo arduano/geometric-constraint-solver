@@ -149,6 +149,9 @@ server conflict policy and personal contribution history remain host-owned.
 accepted inputs. Reopening those inputs independently revalidates geometry and preserves
 the digest. Individual evaluation IDs include session state and are not recovery IDs.
 
-M98's engine and shared authoring are mechanically qualified. M99's ownership cleanup
-is in implementation; its focused evidence does not yet establish integrated qualification.
-Supervising-user M98 acceptance remains a separate open record.
+For a complete embedding example, see the
+[generator website](../../examples/generator-website/README.md). The
+[architecture guide](../../ARCHITECTURE.md) describes shared ownership across the
+standalone, folder and collaborative hosts;
+[release qualification](../../docs/RELEASE_QUALIFICATION.md) records how those boundaries
+are tested.

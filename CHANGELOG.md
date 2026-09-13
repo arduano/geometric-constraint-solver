@@ -5,6 +5,14 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ## [Unreleased]
 
+### Documentation
+
+- Rewrote the README around the embeddable Rust/WASM solver, headless UI adapter,
+  bidirectional TypeScript authoring and browser/local-server demos.
+- Added current setup, authoring and development guides, architecture/API navigation
+  and milestone/ADR indexes. Consolidated historical records and removed private
+  operational details while preserving numerical contracts and acceptance results.
+
 ### Added
 
 - Typed retained-design, solve-attempt and accepted-state identities/views for
@@ -79,12 +87,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - One ordinary editable **2D Fillet playground** for independent lines, line-circle,
   line-quadratic-Bezier, high-valence, multi-corner/sequential and short-middle conflict
   authoring, with no guide, protected state or alternate coordinator.
-- ADR 0032 and the completed, supervising-human-approved M68 headless computed-Fillet direct
+- ADR 0032 and the completed, maintainer-approved M68 headless computed-Fillet direct
   manipulation cut:
   an analytic branch-preserving radius rail, explicit contact/retention/bounded-local-alternative
   actions, Current-only coordinator transactions, pointer capture and Rust-first qualification.
   The complete release gate and focused human UAT pass on approved candidate `edffb8a`.
-- ADR 0033 and the completed, supervising-human-approved M69 Profile/Construction semantics cut:
+- ADR 0033 and the completed, maintainer-approved M69 Profile/Construction semantics cut:
   atomic curve-role authoring/conversion, role-aware operation output, exact evaluation-local
   Fillet-discarded construction provenance, shared headless pick/visibility policy and thin
   workbench controls. The complete release gate and focused human UAT pass on approved candidate
@@ -104,13 +112,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   ordinary editable auto-constraint playground supports the focused human UAT. Historical initial
   candidate `4b16db3a885f5e28f508189b8817797375f05807` passed focused inference 46/46,
   266 editor unit tests plus every relevant integration suite, demo-web 82/82, the sketch library
-  33/33, M56 6/6, the complete release gate and byte-verified Tailscale publication. Human review
+  33/33, M56 6/6, the complete release gate and byte-verified preview publication. Human review
   then opened Circle-authoring finding `M70-F001`. Replacement source
   `3d157896c87eaf647abee1192c838100ce359ce9` implements that Circle-through-point contract and
   passes focused inference 47/47, 271/271 editor unit tests plus every relevant integration suite,
-  demo-web 83/83, sketch 33/33 and M56 6/6. Its complete release gate, frozen Tailscale publication
+  demo-web 83/83, sketch 33/33 and M56 6/6. Its complete release gate, frozen preview publication
   and served-byte verification pass. The targeted human recheck and scoped UAT are accepted; the
-  supervising human explicitly approved and closed M70 on 2026-08-10.
+  maintainer explicitly approved and closed M70 on 2026-08-10.
 - The completed M70B reproduction-payload cut: deterministic single-line
   `GEOSOLVE_REPRO_V1` text over freshly encoded authoritative application-workspace v5 bytes, with
   zlib compression, strict unpadded URL-safe base64, canonical byte length, FNV-1a corruption
@@ -122,13 +130,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   legacy lab/raw-storage formats are excluded. Human payload finding `M70B-F001` corrected the
   mismatch between semantic-open Local contact intervals and closed effective core bounds without
   changing persisted branch metadata or strict validation. Replacement source
-  `b4ec279e221df38816b7376a6978712e21df02c2` passes direct/release qualification, frozen Tailscale
+  `b4ec279e221df38816b7376a6978712e21df02c2` passes direct/release qualification, frozen preview
   publication and served-byte verification. F002-F005 add the radial-Normal/accepted-scene,
   Coincident-closure Fillet, certified branch traversal and movement-continuity corrections at
   their owning layers. The canonical oracle is 198/198 `PASS`. Clean closing source `48e3cc3`
   passes the complete gate with final multi-feature transaction and finite-arc transport
   regressions and produces release bytes identical to the F005 candidate. M70B is closed under the
-  supervising human's requested scoped sign-off.
+  maintainer's requested scoped sign-off.
 - The completed M74 production-style reference UX cut. Every sketch exposes immutable intrinsic
   Origin/X/Y datums with no persistent identity, variables, history, geometry count or Fit
   contribution. Ordinary retained Origin coincidence, point-on-axis, line-collinear-with-axis and
@@ -139,7 +147,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   appropriate. Canonical sketch v1-v4 stays frozen and rejects datum relations with
   `UnsupportedM74State`; draft-v5 side records remain unsupported. Product source `5569337` passes
   focused native/WASM owners, the reviewed 270-row golden, independent review, the complete clean
-  gate and frozen-artifact verification. The supervising caller approved scoped closure on
+  gate and frozen-artifact verification. The maintainer approved scoped closure on
   2026-08-16 while explicitly deferring, rather than passing, the hands-on U1-U8 scorecard into an
   unstarted bug-fixing/UAT follow-up milestone.
 - The scoped-approved M76 production-quality annotation cut. Public editor DTOs now describe exact
@@ -153,7 +161,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   an `M76-Fxxx` defect. Feature commit `a9fd6f6` is included in final source
   `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
   `248cba4509a992aeff7a02dd6d57a1a2481380a4`, which passes the complete local release gate and
-  exact immutable Tailscale verification at aggregate
+  exact immutable preview verification at aggregate
   `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`, then passes GitHub Pages
   run `31961652265`. Its
   `184.090683967s` sparse corpus remains below the enforced `240s` shared-runner ceiling after all
@@ -178,9 +186,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   Focused native/WASM, coordinator, replay, demo and unchanged 270/270 golden evidence passes.
   Exact source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
   `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its immutable
-  no-rebuild snapshot `/tmp/geosolve-m77-uat.ARrQFw` was byte-verified at aggregate
+  no-rebuild archived snapshot was byte-verified at aggregate
   `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`; its listener retired
-  before M78. The supervising caller accepts U1-U6 and requests closure. Approval descendant
+  before M78. The maintainer accepts U1-U6 and requests closure. Approval descendant
   `66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`;
   root plus all seven hosted paths byte-match aggregate
   `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Follow-up `62d9d26`
@@ -199,7 +207,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   changes no residual, Jacobian, priority, branch rule or canonical persistence schema. Exact
   replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
   `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate, unchanged 270/270
-  golden authority and immutable byte-verified Tailscale nomination. The supervising caller accepts
+  golden authority and immutable byte-verified preview nomination. The maintainer accepts
   U1-U8 plus F011 and requests closure. Documentation-only approval descendant `a6d504e` passes
   Pages run `32096209036`, artifact `9310104202` and deployment `5955688918`; root plus all seven
   hosted paths byte-match aggregate
@@ -216,12 +224,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   partial, positional or direction-only redundancy remain transactional rejections. This adds no
   residual, constraint kind or persistence schema. Exact product source `6874aa1` passes focused
   native/WASM, demo, workspace and clean release qualification plus unchanged golden authority;
-  its immutable Tailscale candidate is byte-verified and human UAT accepts U1-U5 without a new
+  its immutable preview candidate is byte-verified and human UAT accepts U1-U5 without a new
   finding. Documentation-only approval descendant `2560ca5`, tree `bad5662`, passes Pages run
   `32116835502`, artifact `9317131695` and deployment `5959116526`; root plus all seven hosted
   paths byte-match aggregate
   `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. Qualified product source
-  remains `6874aa1`; Pages is final public-byte authority and the frozen Tailscale snapshot remains
+  remains `6874aa1`; Pages is final public-byte authority and the frozen preview snapshot remains
   separate accepted UAT evidence. M79 is complete.
 
 ### Changed
@@ -244,7 +252,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   tolerances, geometry-role ordering, equations, persistence bytes and golden behavior remain
   unchanged. Exact product source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
   `83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes the complete clean gate and immutable
-  Tailscale byte verification. On 2026-08-16 the supervising caller accepted that candidate, the
+  preview byte verification. On 2026-08-16 the maintainer accepted that candidate, the
   focused F001/F002 hover recheck and U1-U12 for scoped closure. The detailed UAT steps were not
   individually logged, so this disposition is not represented as a separate step-by-step replay.
   Documentation-only approval descendant `f80235978fbcdccd58c45a08bccf3969a20110c9` passes Pages
@@ -264,13 +272,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   received a shortened deprecation interval. Accepted product source `4c93ac5` passes the complete
   gate, focused approval and exact GitHub Pages artifact verification. No residual, solver, branch,
   persistence, public commit DTO or browser behavior changed.
-- Completed and received supervising-human approval for M67 on 2026-08-08. The non-published
+- Completed and received maintainer approval for M67 on 2026-08-08. The non-published
   workbench dropped its raw Production topology, Host-state evidence and Accepted redundancy
   developer cards while retaining Problems,
   canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
   removed the separately routed `/#/dev/lab` application. M68 subsequently completed the ADR 0032
   Fillet-interaction cut, and M69 subsequently completed the ADR 0033 Profile/Construction cut;
-  both received explicit supervising-human approval on 2026-08-09. M70 subsequently completed ADR
+  both received explicit maintainer approval on 2026-08-09. M70 subsequently completed ADR
   0034 headless auto-constraint drafting intelligence. Implementation, focused direct and
   integrated release qualification, frozen replacement-candidate publication and served-byte
   verification are complete. `M70-F001` is resolved and the scoped human UAT is approved. M70B
@@ -280,7 +288,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   M71-F003 through M71-F006 resolve native-midpoint durability, endpoint-axis/direction bundling,
   distinct-reference orthogonal point-axis composition and overly broad default capture. Clean
   source `f8a45ae7b355ab9874bf268c9950e369814e8432` passes the complete gate and supplies the current
-  byte-verified replacement. On 2026-08-14 the supervising human confirmed the corrected
+  byte-verified replacement. On 2026-08-14 the maintainer confirmed the corrected
   two-constraint auto-placement, accepted the scoped U1-U5 review and explicitly closed M71.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
@@ -298,10 +306,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Rebased the post-M44 roadmap: M45 preserves cleanup evidence without human approval;
   M46-M53 replace and purge legacy browser E2E/playground infrastructure, consolidate one
   directly tested workbench and perform post-cleanup host-semantics UAT. M53 received explicit
-  supervising-human approval. At that checkpoint the later functional/release sequence was
+  maintainer approval. At that checkpoint the later functional/release sequence was
   forecast as M54-M64, with a dedicated M55 alpha constraint/dimension/branch-action parity gate
   inserted before concurrency and scale; the roadmap-reset entry below supersedes that forecast.
-- Closed M61 with explicit supervising-human approval for its recorded advanced-workbench scope.
+- Closed M61 with explicit maintainer approval for its recorded advanced-workbench scope.
   At that checkpoint the previously forecast M62-M64 hardening sequence was removed and M62 was
   left intentionally unscoped. M62-M64 were subsequently scoped, completed and individually
   approved. New milestones normally end in hands-on UAT; M74 records an explicit scoped exception
@@ -405,7 +413,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   transient one-shot `candidate_request` after a successful point edit while matching publication
   policy, inputs and attempt/accepted identity; genuinely stale/rejected work and exact proposal
   compare-and-swap remain strict.
-- Closed M66 on 2026-08-08 with explicit supervising-human approval of its mechanically qualified
+- Closed M66 on 2026-08-08 with explicit maintainer approval of its mechanically qualified
   computed-Fillet scope. U1-U5 are accepted under that scoped close decision, while
   `M66-PF001` through `M66-PF004` are mechanically closed by direct regressions rather than claimed
   as individually repeated human tests. Accepted limitation `M66-KL001` records that radius drag
@@ -448,7 +456,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   radius press reject state-neutrally, modifier keys cannot toggle the radius owner away, and a
   direct overlap regression covers the surviving gesture through move/release. The full formatting,
   warnings-denied workspace Clippy/test, WASM and release Trunk gates pass; the candidate was
-  HTTP-verified over Tailscale before the scoped close decision above.
+  HTTP-verified over preview before the scoped close decision above.
 - Preserved the superseded Fillet/Offset/Mirror candidate for historical inspection at
   `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). It is not an active or approved
   M66 candidate.

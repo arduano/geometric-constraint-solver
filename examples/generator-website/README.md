@@ -12,7 +12,8 @@ and four 6 mm magnet or 3 mm screw bores per cell. These are 2D profiles; height
 depths and manufacturing fits are outside this example. Its dimensions are a practical
 Gridfinity-style study, not a complete bin/baseplate specification.
 
-From a prepared repository with built `@geosolve/sketch-code` and `@geosolve/engine`:
+Follow [Getting started](../../docs/GETTING_STARTED.md) to build the repository
+packages, then run:
 
 ```bash
 node examples/generator-website/scripts/build.mjs
@@ -55,7 +56,8 @@ sandbox. A generator used inline with `engine.evaluate` runs in the host JavaScr
 the engine cannot interrupt an already-running synchronous callback there.
 
 The UI does not expose source edits or dragging: generator mode regenerates from inputs.
-The manifold folder example demonstrates reversible editable mode. `isKeyParameter` and
+The [manifold folder example](../file-workspace-manifold/README.md) demonstrates
+reversible editable mode. `isKeyParameter` and
 `isKeyConstraint` describe overview intent; they do not determine generator inputs.
 
 ## Focused checks

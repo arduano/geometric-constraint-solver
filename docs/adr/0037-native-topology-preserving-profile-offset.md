@@ -3,7 +3,7 @@
 # ADR 0037: Native topology-preserving Profile Offset
 
 Status: accepted, amended, implemented and closed for M80. Exact product source `29d8e41`, tree
-`44ecb95`, passes the clean replacement gate, immutable Tailscale nomination and supervising-human
+`44ecb95`, passes the clean replacement gate, immutable preview nomination and human
 UAT. The Profile Offset, native line-line Fillet publication and F016 ordinary arc-angle
 propagation contracts are separately qualified. Previously frozen candidates remain withdrawn;
 approval descendant `ece6c3c`, Pages run `32262792440` and artifact `9369119336` pass exact hosted-
@@ -400,23 +400,12 @@ the still-visible native action. `M80-F014` maps dependent/high-valence sharp co
 concise user-facing reason without persistent IDs or document-error boilerplate. `M80-F015` puts
 the complete native preparation trial and final validation under cooperative work control.
 
-Focused native/WASM and workbench tests, unchanged historical persistence bytes and the stable
-golden gate pass as pre-amendment evidence. Exact source `b83dad2`, tree `440d66e`, passed the
-complete clean release gate; its no-rebuild output remains frozen read-only at
-`/tmp/geosolve-m80-uat.hggNdd` and byte-verified on the shared Tailscale endpoint with aggregate
-`d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`.
-The scope amendment withdraws those bytes from final acceptance; they are no longer served.
-Exact amended source `05b8b3b`, tree `4b66560`, passes the complete clean gate. Its no-rebuild
-output is frozen at `/tmp/geosolve-m80-uat.kJj5JB` with ordered-manifest aggregate
-`8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215` and exact temporary/final
-HTTP verification; F016 later withdraws it from current UAT. Replacement source `29d8e41`, tree
-`44ecb95`, activates ordinary circular-arc Start/End variables under line-arc tangency without a
-new residual or Fillet-specific relation. Its complete clean gate, focused centre/remote-endpoint
-regressions and no-rebuild snapshot `/tmp/geosolve-m80-uat.CPuVgx` pass, with aggregate
-`75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`. `docs/M80_UAT.md`
-records supervising-human acceptance of this exact replacement. Approval descendant `ece6c3c`,
-Pages run `32262792440` and artifact `9369119336` pass exact hosted-byte verification; M80 is
-closed.
+Focused native/WASM and workbench tests, unchanged historical persistence bytes
+and the golden gate passed. The accepted replacement source `29d8e41` includes
+ordinary circular-arc Start/End variables under line-arc tangency without a new
+residual or Fillet-specific relation. Its complete clean gate, focused
+centre/remote-endpoint regressions and exact served-byte verification passed.
+[M80 UAT](../M80_UAT.md) records acceptance; earlier nominations were superseded.
 
 ## Scope boundary
 

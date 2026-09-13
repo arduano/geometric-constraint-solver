@@ -2,7 +2,10 @@
 
 # ADR 0043: executed, reversible managed sketches
 
-Status: accepted for M89 implementation on 2026-09-01.
+Status: accepted for M89, superseded in part by the M90 clean-break amendment below.
+The V2 source and recorder details describe the original decision; current managed
+compilation emits V4 and retains bounded V3 readers. See
+[API compatibility](../API_COMPATIBILITY.md) and [Authoring](../AUTHORING.md).
 
 ## Context
 

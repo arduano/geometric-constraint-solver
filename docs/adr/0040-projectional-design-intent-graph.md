@@ -2,10 +2,11 @@
 
 # ADR 0040: Projectional design-intent graph
 
-Status: accepted for M83 implementation and its post-F007 architecture hardening; human acceptance
-of M83 remains pending. This ADR supersedes the chronological owner-rewrite design preserved as
-ADR 0039 on `archive/m83-chronological-lineage-2026-08-23`; that archived candidate is not product
-authority and must not be restored wholesale.
+Status: accepted and completed in M83. This ADR supersedes the chronological
+owner-rewrite design archived as ADR 0039 on
+`archive/m83-chronological-lineage-2026-08-23`. Its design rationale remains useful;
+[Architecture](../../ARCHITECTURE.md) describes the current source-authoring and
+shared-engine composition.
 
 ## Context
 
@@ -243,10 +244,10 @@ into the design.
   materialization evidence retain independent SHA-256 verification.
 - RPC mutations no longer duplicate a potentially large snapshot; clients request Snapshot
   explicitly after using a bounded typed receipt when they need refreshed read state.
-- Workspace v8 is experimental until the M83 human gate passes. GitHub Pages is not updated before
-  that approval. Earlier nominations through F008/F009 source `b0de5af` are historical. F010
-  source `ee18dbd`, tree `889f730`, now passes fresh clean qualification, a no-rebuild freeze and
-  exact Tailscale verification; focused human UAT remains pending.
+- Workspace v8 was the experimental host envelope for this milestone. Later code
+  and saved-source formats have separate owners; see
+  [API compatibility](../API_COMPATIBILITY.md). M83's final implementation and
+  acceptance are recorded in [its UAT ledger](../M83_UAT.md).
 
 ## Rejected alternatives
 

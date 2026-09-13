@@ -4,7 +4,7 @@
 
 Implementation authorized on 2026-09-09 after the prototype review. This supersedes
 its fast-track limits; original handoffs remain historical evidence. M97 is accepted
-and closed; M98 supervising-user acceptance and milestone closure remain open.
+and closed; M98 maintainer acceptance and milestone closure remain open.
 
 The [approved collaboration amendment](M98_COLLABORATION.md) extends this baseline with
 concurrent editors and shared TypeScript authoring. The current [full toolbar candidate](M98_TOOL_PARITY.md)
@@ -71,25 +71,21 @@ The original single-editor implementation remains available alongside the opt-in
 - [x] Repair and qualify F041 cold corners, F042 interactive rendering and F043 dense typing;
   replace shared, folder and generator previews while preserving their source and histories.
 - [ ] Obtain human U02 recheck; retain its reported Fail until then.
-- [ ] Obtain supervising-user acceptance and close M98.
+- [ ] Obtain maintainer acceptance and close M98.
 
 The historical collaboration candidate `513463f` passed all 288 obligations in
 `20260910T204328-4a05c31a` (32 fresh, 256 authenticated reused; 44m4.890s).
 [Its qualification](M98_QUALIFICATION.md#qualified-multi-editor-collaboration) records
 signed evidence. Exact production and four archives are frozen and installed offline;
-the then-new static port 18110 and collaborative port 18111 passed exact served-byte and
-browser verification. The [current nomination](M98_QUALIFICATION.md#qualified-uat-repairs)
+static and collaborative previews passed exact served-byte and browser verification. The [current nomination](M98_QUALIFICATION.md#qualified-uat-repairs)
 supersedes that shared candidate: `b49e339`, 293/293 obligations in
 `20260913T020232-eaefaaaf` (44 fresh, 249 authenticated reused; 42m41.084s).
-All 49 ordinary and 17 collaboration browser workflows pass. Existing 18111/18112 shared
-documents and all UAT source, drafts, invitations and histories remain preserved.
-Static port 18110 retains the older artifact and is not the final toolbar UAT endpoint.
-The original manifold's seven authored files and preceding previews remain preserved.
+All 49 ordinary and 17 collaboration browser workflows pass. Delivery preserved
+source, drafts, invitations and personal histories.
 Human acceptance and milestone closure remain open.
 
 The preceding local-canvas candidate `d5f9e40` passed all 261 obligations in
-`20260910T022428-a1d7c652`. Its unchanged previews remain on ports 18106/18108, with
-historical delivery evidence in `target/m98/local-canvas-preview-verification.json`
+`20260910T022428-a1d7c652`. Historical delivery evidence remains in `target/m98/local-canvas-preview-verification.json`
 and `target/m98/local-canvas-static-preview-verification.json`.
 
 Stages may develop independently behind their explicit APIs, with focused verification before
@@ -151,16 +147,15 @@ nomination harness corrections. [Final qualification](M98_QUALIFICATION.md#quali
 records clean `b49e339` with all 293 obligations passing and preserved shared, folder,
 generator and launcher delivery. Source-derived branch transport, interactive raster work
 and native text ownership improvements retain strict authority and all original budgets.
-Supervising-user acceptance remains open. The early checkpoints below preserve historical
+Maintainer acceptance remains open. The early checkpoints below preserve historical
 baseline evidence.
 
 
 Merge `1584a5a` integrates M97 `3152f33` with the earlier M98 prototype. It resolves additive
 bridge modules, preserves folder draft tracking and M97 metadata controls, and imports accepted
-M97 docs. This is integration source, not new qualification. The accepted M97 artifact stays at
-`http://100.94.63.83:18105/` and is never rebuilt by this milestone.
+M97 docs. This is integration source, not new qualification. M97 acceptance remains recorded separately in [its closure](M97_CLOSURE.md).
 
-The checked implementation items have automated qualification, not supervising-user acceptance.
+The checked implementation items have automated qualification, not maintainer acceptance.
 [Engine implementation](M98_ENGINE_IMPLEMENTATION.md) records native/session/profile ownership.
 The [authoring quickstart](M98_AUTHORING_QUICKSTART.md) provides agent handoff/edit/retry,
 shared folder startup and a small generator host. The current package smoke installs all
@@ -168,4 +163,4 @@ four matching archives offline and runs a browser application using only the ins
 SDK/engine. [Baseline navigation](M98_NAVIGATION.md) and
 [collaboration evidence](M98_COLLABORATION.md) preserve their separate measurements.
 The [nomination](M98_QUALIFICATION.md) records current qualification and verified
-preview delivery, with supervising-user acceptance and closure unchecked.
+preview delivery, with maintainer acceptance and closure unchecked.

@@ -8,7 +8,7 @@ arguments, semantic references, groups, applications, parameters, metadata and n
 outputs. `defineGenerator` adds optional typed invocation inputs, defaults and validation.
 The existing managed compiler and its lexical/execution receipt validation remain strict.
 
-`scripts/workspace-loader.mjs` captures complete local TypeScript dependencies, manifest
+`packages/geosolve-cli/runtime/workspace-loader.mjs` captures complete local TypeScript dependencies, manifest
 and optional sidecar/input files. A terminable worker bundles only captured project bytes
 and the exact installed SDK. Editable mode compiles fresh local patch artifacts and pins;
 generator mode executes the default function with declared or host-supplied inputs. The
@@ -29,7 +29,7 @@ No React, DOM, workbench or preview server is needed to run the dedicated engine
 
 Focused development evidence:
 
-- Recorder agent: 50 SDK/runtime/compiler tests passed before the local module path
+- Recorder: 50 SDK/runtime/compiler tests passed before the local module path
   amendment. The actual manifold records 146 declarations, five patch applications,
   two named parameters and seven groups.
 - `node --test packages/geosolve-sketch-code/dist/test/patch-compiler.test.js`: 14/14
@@ -40,7 +40,7 @@ Focused development evidence:
   five wrapper/actual-WASM tests pass. Two independent circles from a loop export at
   radius 12 mm; structural count and radius changes export one 8 mm circle; rejected
   input and forged managed source retain prior accepted results.
-- The native agent built the initial dedicated release WASM with
+- The initial dedicated release WASM was built with
   `CARGO_BUILD_JOBS=2 nix-shell shell.nix --run 'node packages/geosolve-engine/scripts/build-wasm.mjs'`.
   That initial artifact predates full computed export and is development evidence only.
 
@@ -75,5 +75,6 @@ Focused commands executed in the M98 worktree:
 - `node packages/geosolve-engine/scripts/build.mjs` and wrapper tests pass.
 
 This component evidence is historical focused validation. [The final nomination](M98_QUALIFICATION.md)
-records the passing gate, frozen archives and served-byte/browser checks. Supervising-user
-acceptance remains required.
+records the passing gate, frozen archives and served-byte/browser checks.
+M98 human acceptance remains open. The [engine README](../packages/geosolve-engine/README.md)
+documents the current API after M99 consolidation.

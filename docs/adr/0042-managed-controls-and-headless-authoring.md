@@ -2,7 +2,8 @@
 
 # ADR 0042: Managed controls and headless authoring
 
-Status: accepted for M87 implementation.
+Status: accepted and implemented in M87. Current authoring and engine APIs are
+described in [Authoring](../AUTHORING.md) and [Architecture](../../ARCHITECTURE.md).
 
 ## Context
 

@@ -2,12 +2,12 @@
 
 # M98 shared toolbar parity
 
-The supervising user authorized completing the current React workbench's shared
+The maintainer authorized completing the current React workbench's shared
 authoring surface. The amendment is implemented, mechanically qualified and delivered
 from clean `b005b9e` in `20260911T164104-576e7789`;
 [qualification and exact delivery](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
 record 293 passing obligations and preserved existing documents, invitations and
-personal histories. M98 supervising-user acceptance and milestone closure remain open.
+personal histories. M98 maintainer acceptance and milestone closure remain open.
 
 | Existing native surface | Implemented shared route |
 | --- | --- |
@@ -145,5 +145,5 @@ Clean final product `b005b9e1bdb1a120ec9363d4c8684d1f8f5c3d00`, tree `5381978256
 authenticate optimized artifacts, [F031–F040 regressions](M98_HARDENING.md#m98-f031--generated-point-history-confused-semantic-and-allocated-addresses),
 exact browser paint/navigation, all current tool routes and preserved live documents/history.
 Earlier failed and interrupted nominations remain separate evidence. Installed previews use the exact
-frozen nomination without a rebuild. Supervising-user acceptance and M98 closure remain open.
+frozen nomination without a rebuild. Maintainer acceptance and M98 closure remain open.
 Authenticated qualification receipt: `target/release-gate/runs/20260911T164104-576e7789/qualification.json`.

@@ -6,8 +6,9 @@ M98 and the F041–F043 repairs are mechanically qualified and delivered from `b
 [the complete qualification and delivery record](M98_QUALIFICATION.md#qualified-uat-repairs)
 passes 293/293 obligations. U02 remains Fail pending human recheck; milestone acceptance
 and closure remain open. The records below preserve focused findings and earlier failed
-attempts separately from that final result. The hardening skill routes each defect to
-its owning Rust, interaction, persistence or presentation boundary.
+attempts separately from that final result. Each finding identifies its owning Rust, interaction, persistence or presentation
+boundary. Historical commands refer to the source layout at the time; current
+Node hosting lives in `packages/geosolve-cli/runtime`.
 
 ## M98-F001 — observed disk state authorized an undisplayed Undo
 
@@ -371,7 +372,7 @@ The complete clean-source gate passes on `6509e9c160a74c499668b63a5ef9bddefa5932
 browser synchronization, unchanged golden, native/WASM parity and performance. Frozen
 production and installed-folder previews pass fresh transport/readiness checks.
 [M98 qualification](M98_QUALIFICATION.md) records final authority, exact evidence and the
-separate transient preflight `/proc` harness race. Supervising-user acceptance remains open.
+separate transient preflight `/proc` harness race. Maintainer acceptance remains open.
 
 ## M98-F016 — asynchronous canvas navigation replayed stale input
 
@@ -751,7 +752,7 @@ The initial task-local delivery verifier expected standalone frame provenance
 covered by the native local-interaction owner. Correcting that ignored helper only
 allows the same qualified bytes to pass editor/viewer, three-WASM, independent-camera
 and source/model retention checks. Failed and passing receipts are retained. Both
-24-route Tailscale verifications pass and all seven original authored files, original
+24-route preview verifications pass and all seven original authored files, original
 authority and existing preview services remain unchanged. No new product defect,
 equation, tolerance, branch or golden change was introduced by this delivery.
 
@@ -967,15 +968,11 @@ First-use GPU latency remained an explicit limitation at this F028–F030 delive
 checkpoint. The generated-polyline Undo finding remained separate and open then;
 M98-F031 below records its subsequent repair.
 
-On 2026-09-11, both existing shared previews receive exact frozen/installed artifacts.
-Playground revision 6 and manifold revision 1, all 32/25 retained files, three users'
-histories per document, drafts, models and invitations compare unchanged before restart
-and after browser verification. Each service passes all 24 exact HTTP/MIME routes and
-two-editor readiness with the three exact nominated WASM files and zero page errors.
-Two ignored delivery-helper mistakes were corrected without changing the qualified
-product; their original failed observations remain recorded in the qualification report.
-Static 18110 and the original 18108 manifold remain preserved. M98 acceptance/closure
-remains open; F028–F030 implementation, mechanical qualification and delivery are complete.
+Exact frozen artifacts passed 24 HTTP/MIME routes and two-editor readiness with
+all three nominated WASM modules. Source, drafts, models, invitations and personal
+histories remained unchanged across restart and verification. Two delivery-helper
+mistakes were corrected without changing product bytes; their failed observations
+remain separate. M98 human acceptance and closure remain open.
 
 ### M98-F031 — Generated point history confused semantic and allocated addresses
 
@@ -1171,7 +1168,7 @@ pass in the frontend directory (39 tests). An isolated compiler-harness
 `node --test --test-concurrency=1 --test-name-pattern="shared circle dragging"
 scripts/collaboration-browser.test.mjs` passes on that artifact.
 `npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1` passes
-all four cases in 1.1 minutes with the exact isolated manifest and port 18120.
+all four cases in 1.1 minutes with the exact isolated manifest.
 Logs: `renderer-root-review-tests.log`, `renderer-poll-tests.log`,
 `browser-async-gpu-r4.log`, `browser-async-gpu-drag-r5.log` and
 `async-gpu-renderer-browser.log` in the coordination directory.
@@ -1231,7 +1228,8 @@ GEOSOLVE_BROWSER_COMPILER_HARNESS=1 GEOSOLVE_DIST=../../../target/m98/geosolve-s
 From the repository root,
 `GEOSOLVE_DIST=target/m98/geosolve-shader-ready-r1 GEOSOLVE_BROWSER_TRACE=1 node --test --test-name-pattern="^dense manifold|^shared circle dragging|^four real browser" scripts/collaboration-browser.test.mjs`
 passes 3/3 with no skips/retries. Renderer qualification uses
-`GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome GEOSOLVE_E2E_PORT=18120 GEOSOLVE_E2E_ARTIFACT_MANIFEST=/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/coordination/tool-parity/shader-ready-harness-r1.json npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1`
+`npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1`
+with the exact prepared harness manifest and pinned Chrome
 from the frontend directory and passes 4/4. Two preceding harness-only attempts
 failed before assertions: a relative manifest path and a bundled Chromium missing
 host libraries. The final attempt uses the same installed Chrome as collaboration
@@ -1246,7 +1244,7 @@ authenticate F031–F040, optimized artifacts, unchanged reviewed golden, all cu
 routes and exact browser paint/navigation. Both existing shared previews use the exact
 frozen artifacts without rebuilding and preserve current documents, drafts, invitations
 and personal histories. Earlier failed runs remain failed evidence. Qualification receipt:
-`target/release-gate/runs/20260911T164104-576e7789/qualification.json`. Supervising-user acceptance and M98 closure remain open.
+`target/release-gate/runs/20260911T164104-576e7789/qualification.json`. Maintainer acceptance and M98 closure remain open.
 
 
 ## M98-F041 — Free polyline corner rejected after valid drag preview
@@ -1254,7 +1252,7 @@ and personal histories. Earlier failed runs remain failed evidence. Qualificatio
 **Current disposition, 2026-09-13:** repaired, qualified and delivered in `b49e339`.
 The focused/pending checkpoints below are historical. See [final evidence](M98_QUALIFICATION.md#qualified-uat-repairs).
 
-The supervising user reported U02 failing in Shared playground on 2026-09-12:
+The maintainer reported U02 failing in Shared playground on 2026-09-12:
 interior corners snap back on release; moving the connected endpoint first permits
 the next corner drag. Source `f94b09a` serves qualified product `b005b9e`. Exact
 read-only capture of the live journal authenticates 31 records and 29 attachment
@@ -1458,7 +1456,7 @@ passes all four existing `canvas-renderer.spec.ts` browser workflows in 1.2 min,
 including the extended active/static pixel witness, the unchanged idle assertion,
 DPR/hidden layouts, exact picking and CSS displacement, context restoration and
 first-use shader-loss text/stroke pixels, and lost-capture recovery. The command
-uses the pinned Nix shell and Chrome, `GEOSOLVE_E2E_PORT=18126`,
+uses the pinned Nix shell and Chrome with an isolated test port,
 `GEOSOLVE_E2E_ARTIFACT_MANIFEST=…/interaction-raster-harness-r2.json`, and
 `npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1` with a fresh
 output directory. Full output and browser evidence are retained in
@@ -1638,7 +1636,7 @@ The final captured-bounds pixel helper and R7 artifact pass all four existing
 canvas workflows in 1.4 min, using the pinned Nix shell and Chrome:
 `python3 target/m98/coordination/corner-drag/measure-pixels-r7.py` invokes
 `npx playwright test tests/e2e/canvas-renderer.spec.ts --workers=1 --reporter=list,json`
-with the R7 harness manifest, port 18126 and fresh report/output paths.
+with the R7 harness manifest and fresh report/output paths.
 Active/static point pixels, exact pan displacement and unchanged source, DPR 2
 resize and picking, hidden layouts, genuine context restoration including
 first-use batch/blur losses, and lost-capture recovery all pass. The JSON report
@@ -1903,8 +1901,7 @@ personal Undo/Redo and exact reload. `browser-after-{client,server}.{json,png}` 
 observed DOM events, native gesture and accepted point; the client image was visually reviewed.
 The original fifteen exact native gestures remain their separate unrounded owning oracle.
 
-The four shared services, both folder services, generator website and launcher now serve the
-qualified replacement. Fresh preservation checks retain all current human work; exact
-HTTP/MIME and real-browser readiness pass. The old pristine profile export stays labelled
-as `b005b9e` evidence. The final report records every command and receipt. U02 remains
-**Fail pending human recheck** and M98 is open.
+Replacement delivery passed exact HTTP/MIME and actual-browser readiness while
+preserving source, working drafts and personal history. The pristine profile export
+remains identified with `b005b9e`. U02 remains **Fail pending human recheck** and
+M98 remains open.

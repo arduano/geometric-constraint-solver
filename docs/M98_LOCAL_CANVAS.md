@@ -4,8 +4,7 @@
 
 Status: mechanically qualified and delivered from `d5f9e40` in
 `20260910T022428-a1d7c652` (261/261 obligations; 23 fresh, 238 authenticated reused).
-The static and folder previews serve verified qualified artifacts; all seven existing
-manifold files are preserved. [Final qualification and delivery](M98_QUALIFICATION.md#qualified-local-canvas-boundary)
+Static and folder delivery verified qualified artifacts and preserved authored files. [Final qualification and delivery](M98_QUALIFICATION.md#qualified-local-canvas-boundary)
 records commands, measured responsiveness and remaining limits. M98 acceptance stays open.
 Development and failed-attempt records below remain historical evidence.
 
@@ -22,7 +21,7 @@ structured cloning/JSON. Every changed canvas frame consequently republishes sou
 Explorer and Inspector objects through React. The preceding correction removed backlog;
 it did not remove those architectural costs.
 
-A private-copy comparison against qualified `b1243a6` production confirms these paths.
+An isolated comparison against qualified `b1243a6` production confirms these paths.
 At simulated 100 ms latency / 512 KiB/s, twelve wheel samples produce twelve local frames
 versus three folder frames. Folder responses take 236–243 ms and its final frame arrives
 710 ms after input stops. The local worker incurs no HTTP input requests. Software-rendered
@@ -74,7 +73,7 @@ feedback continues after 500 ms of remote work while local browsing remains avai
 
 ## Focused development evidence
 
-All commands below use `nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source --run 'COMMAND'`.
+All commands below use `nix-shell shell.nix --run 'COMMAND'`.
 The retained source pins the same Rust, Deno and wasm-bindgen versions as the qualified
 baseline; the updated host default package set has different tool versions.
 
@@ -117,7 +116,7 @@ Six actual-browser collateral cases pass in
 `target/m98/local-canvas-browser-collateral-r1.log`: external rename and invalid-source
 retention, stale draft and Revert, legacy cold reopen, source/Inspector handoff, generator
 inputs, and complete manifold open/shared-channel edit/profile export. The manifold case
-uses a private fixture; the user's installed folder remains untouched.
+uses a disposable fixture.
 
 The real authoring followup also caught a tool activation handoff error: activating Polyline
 already arms the native draft, so its first pointer move must continue that draft instead of
@@ -130,7 +129,7 @@ mask an authored diagnostic or relax the server's source/lease/revision guards. 
 
 Final rebuilt development artifact `target/m98/local-canvas-browser-r2/geosolve-harness`
 passes both stalled-edit and slow external generator cases (2/2, 27.645 s):
-`GEOSOLVE_DIST=target/m98/local-canvas-browser-r2/geosolve-harness GEOSOLVE_BROWSER_EVIDENCE=target/m98/local-canvas-browser-evidence-r2 nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source --run 'node --test --test-name-pattern="M98-F016/F017|slow external generator" scripts/workspace-browser.test.mjs'`.
+`GEOSOLVE_DIST=target/m98/local-canvas-browser-r2/geosolve-harness GEOSOLVE_BROWSER_EVIDENCE=target/m98/local-canvas-browser-evidence-r2 nix-shell shell.nix --run 'node --test --test-name-pattern="M98-F016/F017|slow external generator" scripts/workspace-browser.test.mjs'`.
 The server is held 1,861.0 ms; local zoom is visible in 276.6 ms under concurrent build/browser
 host load, with all 20 wheel samples and zero navigation RPCs. Error diagnostics remain visible
 after rejected generator execution. Log: `target/m98/local-canvas-browser-final-r2.log`.
@@ -195,7 +194,7 @@ Executed command:
 ```bash
 GEOSOLVE_DIST=target/m98/local-canvas-browser-r3/geosolve-harness \
 GEOSOLVE_BROWSER_EVIDENCE=target/m98/local-canvas-browser-evidence-r3 \
-nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source \
+nix-shell shell.nix \
   --run 'node --test --test-name-pattern="M98-F016/F017|M98-F017 local folder|slow external generator" scripts/workspace-browser.test.mjs'
 ```
 
@@ -228,16 +227,9 @@ the workflow waits after both Apply and Revert. All existing status, exact accep
 single positioned Problem and export-rejection assertions remain unchanged. Focused replay
 passes (1/1, 21.5 s) on the original immutable gate harness:
 
-```bash
-GEOSOLVE_E2E_ARTIFACT_MANIFEST="$PWD/target/release-gate/prepared/decdf35058108f3c1a0d24e446208d1a797d2d6f070f86b3482b46934e8be135/browser/harness.json" \
-GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
-nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source \
-  --run 'cd crates/geosolve-demo-web/frontend && npx playwright test tests/e2e/workbench.spec.ts --grep "invalid source retains" --workers 1 --output ../../../target/m98/local-canvas-invalid-source-r2'
-```
-
-Log: `target/m98/local-canvas-invalid-source-r2.log`. Integrated replacement qualification
-and preview delivery remain pending.
-
+The focused invalid-source browser workflow passed 1/1 in 21.5 s against the
+original immutable gate artifact. Its log is
+`target/m98/local-canvas-invalid-source-r2.log`; replacement qualification follows.
 
 ## Qualified replacement and delivery
 
@@ -248,11 +240,9 @@ folder browser case measures local zoom at 133.4 ms during a 1,580.4 ms held edi
 navigation RPCs and exact final native camera/selection reconciliation. The original failed
 gate remains failed; its independent completed successes supplied authenticated reuse.
 
-The exact frozen production and offline packages are installed at static Tailscale port
-18106 and editable-folder port 18108. Served-byte and actual-WASM verification pass, including
-completed local zoom/pan/click on the preserved user manifold. Installed zoom/pan observations
-are 302.9/219.4 ms, including Playwright delivery/polling and software rendering; no 60 Hz
-claim is made. All seven files, current/accepted source hashes and editing authority remain
-unchanged during read-only verification. [The final report](M98_QUALIFICATION.md#qualified-local-canvas-boundary)
-records exact commands, artifacts, measurements and setup failures. Human acceptance and
-M98 closure remain open.
+Exact frozen production and offline packages passed HTTP/MIME and actual-WASM
+verification, including completed local zoom, pan and selection. Installed zoom/pan
+observations were 302.9/219.4 ms, including browser delivery/polling and software
+rendering. Read-only verification preserved source and editing authority.
+[The final report](M98_QUALIFICATION.md#qualified-local-canvas-boundary) records
+artifacts, measurements and limits. Human acceptance and M98 closure remain open.

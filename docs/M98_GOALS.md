@@ -2,14 +2,11 @@
 
 # M98 local plaintext sketch prototype
 
-Status: **approved real-world usability scope; implementation in progress**.
-[Current implementation plan](M98_IMPLEMENTATION_PLAN.md) supersedes the prototype-only
-limits below. The original prototype contract and evidence remain historical.
-The [2026-09-09 takeover review](M98_TAKEOVER.md) records completed M97 acceptance,
-the pending integration, current preview availability and next priorities.
-Implementation, commands and actual-browser evidence: [M98_HANDOFF.md](M98_HANDOFF.md).
-Authorized parallel exception, pinned to `d80bf22264f74b60870f2e99feb8cc6ccb9d0133`.
-M97 remains owned by the active primary checkout; its live metadata changes are absent here.
+Historical initial scope, later expanded and mechanically qualified through the
+[M98 implementation plan](M98_IMPLEMENTATION_PLAN.md). The initial prototype was
+based on `d80bf22`; its [review](M98_TAKEOVER.md) identified the hardening priorities.
+[Final qualification](M98_QUALIFICATION.md) supersedes the prototype-only limits
+below. Human U02 remains **Fail pending recheck** and M98 acceptance remains open.
 
 ## Happy path and short plan
 
@@ -65,4 +62,4 @@ Rust owns region authority, model-space curve subdivision and polygon validation
 No cache/last-good geometry is eligible when current disk source is invalid.
 The source scope remains the fixed manifest and single `sketch.ts` entry. Initial sampling
 supports lines/polyline spans, circles and circular arcs; computed features are deferred.
-MiniCAD import/solid validation is independently owned; there are no cross-checkout changes.
+Downstream import and solid validation belong to the consuming application.

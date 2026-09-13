@@ -2,7 +2,7 @@
 
 # Editable water manifold project
 
-The accepted 240 × 120 mm manifold is an ordinary local project. Its four water channels
+This 240 × 120 mm manifold is an ordinary local project. Its four water channels
 have a shared 12 mm full width, computed walls and tangent bends; the separate stair
 passage has two rounded ends. A 2.4 mm silicone seal groove surrounds the wet circuit.
 
@@ -16,18 +16,19 @@ Authored files are deliberately small in number:
 | `patches/point-to-point-channel.patch.ts` | A polyline passage with two rounded ends |
 | `patches/silicone-groove.patch.ts` | An enclosing groove around a closed polyline |
 
-The sketch and patch sources are copied from the accepted bundled sample. There are no
+The sketch and patch sources match the bundled manifold sample. There are no
 precompiled patch artifacts, sample-origin records or generated manifest descriptions.
 The local loader discovers and snapshots imports, compiles the three patch modules and
 binds their artifacts to the actual source bytes. Edit the files to author the project.
 
-From a prepared repository, first make a working copy:
+Follow [Getting started](../../docs/GETTING_STARTED.md) to prepare the repository,
+then make a working copy:
 
 ```bash
-mkdir -p target/m98
-cp -a examples/file-workspace-manifold target/m98/my-manifold
-node packages/geosolve-cli/bin/geosolve.mjs check target/m98/my-manifold
-node packages/geosolve-cli/bin/geosolve.mjs serve target/m98/my-manifold
+mkdir -p target/examples
+cp -a examples/file-workspace-manifold target/examples/my-manifold
+node packages/geosolve-cli/bin/geosolve.mjs check target/examples/my-manifold
+node packages/geosolve-cli/bin/geosolve.mjs serve target/examples/my-manifold
 # Open the exact URL printed by serve, including its session token.
 ```
 
@@ -36,9 +37,9 @@ to compile and independently validate it. While the bridge is running, `status` 
 current versus accepted revisions and diagnostics:
 
 ```bash
-node packages/geosolve-cli/bin/geosolve.mjs status target/m98/my-manifold
-node packages/geosolve-cli/bin/geosolve.mjs bake target/m98/my-manifold \
-  --out target/m98/manifold-profiles.json --chord-error-mm 0.02
+node packages/geosolve-cli/bin/geosolve.mjs status target/examples/my-manifold
+node packages/geosolve-cli/bin/geosolve.mjs bake target/examples/my-manifold \
+  --out target/examples/manifold-profiles.json --chord-error-mm 0.02
 ```
 
 The profile output belongs outside the project folder and contains model-space regions,

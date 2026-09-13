@@ -2,17 +2,18 @@
 
 # M100 — final cleanup and pause readiness
 
-**Prepared on 2026-09-13; implementation has not started.** The supervising user
-accepted and closed M99, then requested this final cleanup milestone before a
-temporary project pause. This document is the bounded implementation plan and
-acceptance contract. [M99 closure](M99_CLOSURE.md) and
-[qualification](M99_QUALIFICATION.md) remain the accepted baseline.
+**In progress.** Prepared on 2026-09-13 after M99 acceptance, then expanded to a
+repository-wide public documentation pass. This document owns the remaining
+maintenance work and acceptance contract. [M99 closure](M99_CLOSURE.md) and
+[qualification](M99_QUALIFICATION.md) remain the accepted product baseline.
+Documentation cleanup alone does not complete the code, tooling, retention or
+restart work below.
 
 ## Outcome and boundaries
 
 A returning maintainer should be able to identify the current product, build or
 install it, run focused and integrated checks, open the supported editor modes,
-and restore a saved project without reconstructing agent history or depending on
+and restore a saved project from maintained instructions or depending on
 untracked helper code. Keep the codebase, retained artifacts and active documents
 small enough to understand and maintain during a pause.
 
@@ -37,15 +38,15 @@ The preparation audit examined clean closeout `6408764` over qualified product
 
 | Item | Evidence and disposition |
 | --- | --- |
-| Stale current docs | Main `README.md` still calls M93 next; engine package README says M99 is in implementation. Replace current guidance, preserve linked historical records. |
+| Documentation | Current guides, API references and historical records are being consolidated for public use. Preserve math/contracts, attribution and genuine acceptance outcomes. |
 | Misplaced shared utility | `packages/geosolve-engine/src/point-gesture.ts` owns `decodePointValue`, imported by unrelated session/construction/tool modules. Move privately to a neutral owner. |
 | Repeated compiler mechanics | CLI `src/workspace-runtime.ts`, browser `pending-managed-mutation.ts` and CLI `runtime/collaboration-domain-worker.mjs` repeat source compilation and receipt assembly. Compare exact contracts before consolidating. |
 | Permanent tests named after M98 | `scripts/release_gate_m98.py` and `scripts/package-m98.test.mjs` are active host/package infrastructure. Make ownership discoverable; stable receipt/stage identities need no cosmetic rename. |
 | Untracked operational helpers | M99 final receipt verification, evidence summary and authenticated archive install use scripts under ignored `target/m98`/`target/m99`. Move the necessary reusable operations into maintained tooling. |
-| Evidence/build storage | Read-only `du` reports release store 279 GB, debug build 152 GB, release build 15 GB, M98 4.2 GB and M99 696 MB. These are inventory measurements, not promised reclaimable bytes. |
+| Evidence/build storage | Audit retained receipt dependencies, installed archives and project state before identifying disposable generated copies. Keep host-specific inventories in private local records. |
 | Tight WASM margin | Qualified demo WASM is 20,940,556 bytes, 30,964 bytes below 20 MiB. Inspect remaining duplicate reachability; preserve numerical optimization and all existing limits. |
 | Dense startup cost | Earlier focused manifold opening took 6.484 s. Preserve that limitation and the passing local-input budgets; profile cold initialization separately from navigation. |
-| Continuation lives in a worktree | Use `m98/file-workspace` at its existing path. The primary checkout and `/tmp/geosolve-m91-oracle` are preserved references, not cleanup targets. |
+| Multiple checkouts and retained references | Record branch/worktree reachability before cleanup. Never infer disposability from age, path or milestone number. |
 
 ## Ordered implementation
 
@@ -94,15 +95,16 @@ The preparation audit examined clean closeout `6408764` over qualified product
 
 ### 4. Simplify current docs and preserve restart state
 
-- [ ] Give the main README a concise product overview, supported entry points,
-  current limitations and links. Preserve milestone chronology in linked history.
-  Add a concise current architecture/API map and update package/example instructions.
-  Keep detailed mathematical contracts and acceptance history intact.
-- [ ] Write one restart handoff covering canonical branch/path, build/install/check
+- [x] Complete the repository-wide documentation pass: README product purpose and Pages
+  demo link; current build, authoring and architecture guides; package/example and
+  ADR navigation; consolidated milestone history. Remove private operational details
+  and stale current claims. Preserve detailed mathematics, regression IDs, licences
+  and acceptance truth; check links, commands and documentation consumers.
+- [ ] Write one restart handoff covering source/product identity, build/install/check
   commands, artifact identity, editor modes, state storage, backup/restore, safe
   service restart and deferred work. Generic procedures must live in tracked source;
   machine-specific paths and credentials remain private.
-- [ ] Preserve an explicit human-acceptance ledger. M99 is closed. M98 U02 remains
+- [x] Preserve an explicit human-acceptance ledger. M99 is closed. M98 U02 remains
   **Fail pending human recheck** and other unperformed human rows remain **Not run**;
   no automated replay can rewrite those outcomes. The ledger may carry these into
   the pause as unresolved, without blocking code cleanup or inventing signoff.
@@ -123,7 +125,7 @@ The preparation audit examined clean closeout `6408764` over qualified product
   format, Clippy, native/headless, optimized WASM, browser, package and performance
   obligations with their existing assertions.
 - [ ] Install the exact qualified archives offline and run the supported folder,
-  shared and generator startup checks plus both MiniCAD pipelines against that CLI.
+  shared and generator startup checks plus both downstream CAD pipelines against that CLI.
   Verify actual bytes/MIME/base paths/WASM readiness for any newly served endpoint.
 - [ ] Perform a bounded saved-project restart/recovery exercise using copies of
   real supported fixtures. Recheck source, accepted geometry, history and personal
@@ -139,10 +141,54 @@ M100 is ready for signoff when the frozen cleanup list is either implemented and
 qualified or explicitly justified as an intentional retained boundary; the documented
 fresh-source and installed workflows run without ignored helper scripts; exact
 state survives the restart exercise; removable artifact storage has a preservation
-audit; and the complete clean-source gate plus installed MiniCAD use pass.
+audit; and the complete clean-source gate plus installed downstream consumer use pass.
 
 No closure claim depends on a new five-second startup target or unmeasured scaling
 promise. No blanket type/tool reimplementation, mass test renumbering, format
 migration, branch-history rewrite, public push or preview replacement is implied by
 this preparation. M100 should end with a useful, honest resumption point for the
 project pause, not an expanding feature backlog.
+
+## Documentation pass — completed
+
+The public README now leads with the embeddable Rust/WASM solver, headless UI
+adapter, bidirectional TypeScript authoring, browser demo and local/shared server.
+The documentation index, Getting started, Authoring and Development guides provide
+current workflows. Root architecture/acceptance/roadmap/handoff guidance has been
+reduced from 17,643 lines to about 300, with detailed numerical contracts retained
+in references and a linked milestone index. Package/example guides and ADR navigation
+are updated. Historical machine details, private endpoints, process inventories,
+repeated artifact dumps and stale current-status claims have been removed or
+consolidated. Historical finding IDs and human-review dispositions remain intact.
+
+This slice changes Markdown only: no mathematical behavior, API implementation,
+solver tolerance, protocol, fixture oracle, live service or qualified artifact changed.
+Licences, attribution and the identified Rust-embedded/fixture Markdown remain
+byte-identical to the M99 closeout. Package READMEs and compatibility documentation
+will be new package inputs at the next product nomination.
+
+Validation:
+
+- Repository-wide audit of 274 Markdown documents: local links and heading fragments
+  resolve; private host/path/token and code-fence checks pass. Historical scenario
+  and finding identities remain discoverable in the retained documentation.
+- `git diff --check` passes.
+- `node packages/geosolve-cli/bin/geosolve.mjs check examples/file-workspace` passes
+  with independently validated hard residual zero in the prepared development shell.
+- The exact README TypeScript block was written to a disposable initialized folder.
+  `node packages/geosolve-cli/bin/geosolve.mjs inspect target/m100/readme-example`
+  and `node packages/geosolve-cli/bin/geosolve.mjs check target/m100/readme-example`
+  both pass, including independent hard validation and the expected single curve.
+- `curl -I -L --max-time 20 --silent --show-error https://arduano.github.io/geometric-constraint-solver/`
+  returns HTTP 200 for the linked demo. This verifies reachability, not a new deployment.
+- `./scripts/release-gate.sh --docs-only --since 5cc48b1` rejects this broader diff
+  as outside its reviewed prose set: package/example READMEs and CHANGELOG are not
+  admitted by that mode. Its rules were not changed. The independent documentation
+  checks above pass; no integrated product qualification is claimed for this slice.
+
+Build/startup commands were cross-checked against package scripts and CLI option
+handling, including the full-workspace Rust 1.90 requirement, SDK dependency setup,
+separate WASM builds and ordinary-folder `GEOSOLVE_DIST` versus shared `--artifact`.
+A full fresh-checkout build, newly packaged installed-product checks, final integrated
+qualification and the copied-state restart exercise remain in the worklist above.
+M99 stays accepted; M98 U02 remains Fail pending human recheck. M100 remains open.

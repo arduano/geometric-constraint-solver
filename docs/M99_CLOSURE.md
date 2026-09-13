@@ -2,11 +2,9 @@
 
 # M99 acceptance and closure — 2026-09-13
 
-**M99 is accepted and closed.** After the completion report, the supervising user
-stated, “I think it's safe to close it off here,” and requested preparation for
-M100 as the final cleanup before a temporary project pause. This is milestone-level
-acceptance of the delivered cleanup and documented limits; it does not claim a
-separately performed row-by-row human replay.
+**M99 is accepted and closed as of 2026-09-13.** The maintainer accepted the
+delivered cleanup and its documented limits, then requested M100 preparation.
+This milestone-level acceptance does not claim a separate row-by-row human replay.
 
 ## Accepted product and evidence
 
@@ -19,12 +17,12 @@ separately performed row-by-row human replay.
 | Implementation closeout | `6408764` |
 | Golden | 271 cases unchanged |
 | Offline installation | Four exact archives, 285 shipped files verified |
-| MiniCAD consumer migration | `46c2662`, qualified consumer sources at descendant `dde5665` |
+| downstream CAD consumer migration | `46c2662`, qualified consumer sources at descendant `dde5665` |
 
 [Qualification](M99_QUALIFICATION.md) records exact commands, receipts, archive and
 consumer proof hashes, browser readiness and measured limits.
 [The cleanup record](M99_CLEANUP.md) maps removed implementations to their surviving
-owners and coverage. Both final MiniCAD pipelines pass against the qualified CLI;
+owners and coverage. Both final downstream CAD pipelines pass against the qualified CLI;
 each case variant passes 111 STL inspections and 1707 geometry checks.
 
 M99 shares native authoring catalogs/receipts, source terminal validation,
@@ -35,11 +33,10 @@ primitive set, branch semantics, priority rules or golden expectations changed.
 
 ## Scope and continuation
 
-M99 has no remaining implementation or signoff blocker. Existing previews still
-serve their preserved artifacts; this closure does not replace services or publish
-new bytes. Dense startup remains a known cost (earlier focused manifold opening:
+M99 has no remaining implementation or signoff blocker. Qualification and deployment are separate; this closure did not deploy new
+artifacts. Dense startup remains a known cost (earlier focused manifold opening:
 6.484 s). Passing bounded browser measurements do not imply 60 Hz or unrestricted
-multi-client scale. MiniCAD case rendering and physical fit/thermal review were
+multi-client scale. downstream CAD case rendering and physical fit/thermal review were
 outside the consumer integration check.
 
 M98's separate human acceptance is unchanged: U02 remains **Fail pending human
@@ -56,6 +53,6 @@ git diff --check
 ./scripts/release-gate.sh --docs-only --since 6408764
 ```
 
-The command result is retained in `target/m100/preparation-docs.log`; the closure
-commit identifies the documentation descendant. M100 implementation is not started
-by this preparation record.
+The command passed; its historical result was recorded in
+`target/m100/preparation-docs.log`. [M100](M100_FINAL_CLEANUP.md) owns the subsequent
+cleanup status.

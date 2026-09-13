@@ -2,14 +2,15 @@
 
 # Accepted sketch profile export
 
-From the repository root, after preparing the dedicated engine WASM and TypeScript package:
+After following [Getting started](../../docs/GETTING_STARTED.md), run from the
+repository root:
 
 ```sh
-mkdir -p target/m98/bake
+mkdir -p target/examples/bake
 node packages/geosolve-cli/bin/geosolve.mjs bake examples/file-workspace-bake/pi-footprint \
-  --out target/m98/bake/pi-footprint.json --chord-error-mm 0.02
+  --out target/examples/bake/pi-footprint.json --chord-error-mm 0.02
 node packages/geosolve-cli/bin/geosolve.mjs bake examples/file-workspace-bake/circle-arc \
-  --out target/m98/bake/circle-arc.json --chord-error-mm 0.02
+  --out target/examples/bake/circle-arc.json --chord-error-mm 0.02
 ```
 
 The CLI captures the complete local source graph, then compiles, solves and independently
@@ -25,7 +26,7 @@ Successful bake atomically replaces an existing regular output file. Failure lea
 Production topology exports every bounded face: the board with four holes **and** the four
 interior disks. Select the board's region ID explicitly in the consumer; never extrude all five
 as the board. The checked fixture's board is **`region-4`**. IDs are file-local and may change
-after editing; the handoff records the source hash associated with this observed ID.
+after editing; the export records the source hash associated with that observed ID.
 
 `circle-arc` has an accepted radius-12 disk (source seed radius 10) and a radius-5 quarter arc
 closed by a straight chord using explicit endpoint `pointOnCurve` contacts. This exercises
@@ -40,6 +41,6 @@ without an accepted analytic profile projection fail explicitly. Sampling has fi
 precision targets that cannot be represented. The chord error bounds source-curve polygonization;
 it does not include later Boolean, STL or manufacturing error. No geometry equations run in Node.
 
-The [engine implementation](../../docs/M98_ENGINE_IMPLEMENTATION.md) records current APIs and
-focused evidence. [M98_BAKE_HANDOFF.md](../../docs/M98_BAKE_HANDOFF.md) preserves the historical
-prototype exports and their exact source identity.
+See the [engine API](../../packages/geosolve-engine/README.md) to evaluate and export
+profiles directly from TypeScript, or the
+[export contract](../../docs/M98_BAKE_CONTRACT.md) for the JSON fields and limits.

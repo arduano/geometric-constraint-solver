@@ -62,9 +62,10 @@ only original pending payloads. Reusing an ID for changed content is rejected.
 `authoringPreview(request, signal?)` is an ephemeral authenticated RPC for hosts that
 enable server prediction. It is abortable, never enters the outbox, and is never retried
 automatically. Its terminal is semantic intent for ordinary `submit`, not publication
-authority. Rendering, camera, selection and picking remain local. See the repository's
-`docs/M98_AUTHORING_PREVIEW.md` for messages and resource bounds, and
-`docs/M98_COLLABORATION.md` for the reference server contract and qualification status.
+authority. Rendering, camera, selection and picking remain local. See the [authoring-preview contract](../../docs/M98_AUTHORING_PREVIEW.md) for
+messages and resource bounds, and the
+[collaboration contract](../../docs/M98_COLLABORATION.md) for the reference server.
+The [CLI package](../geosolve-cli/README.md) provides the runnable host.
 
 Tests require the native parity fixture built with
 `cargo build --locked -p geosolve-collaboration --example text_fixture` before `npm test`.

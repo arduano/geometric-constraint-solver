@@ -84,7 +84,8 @@ npm --prefix packages/geosolve-collaboration test
 ```
 
 The dedicated package's tests exercise actual WASM and exchange native checkpoints in
-both directions. These focused checks do not establish integrated milestone acceptance.
+both directions. See [release qualification](../../docs/RELEASE_QUALIFICATION.md) for the complete
+repository checks.
 
 Authenticated text ingress refuses file lifecycle changes; the server orders those
 separately. Raw same-text splices retain new character identity. Oversized (>64 KiB)
@@ -94,8 +95,8 @@ The `authority` module supplies ordered durable request admission and opaque exa
 worker tickets; `journal` is the native append/sync reference. `targets` preserves object
 lifetimes and exact dependent-deletion intent. `source_patch` applies authenticated raw
 source splices and retains unfinished drafts when lexical ownership changes. These
-components do not themselves validate or publish sketch geometry. Host composition and
-collaborative workbench integration are in progress.
+components do not themselves validate or publish sketch geometry. The [CLI runtime](../../packages/geosolve-cli/README.md) supplies a reference
+server and collaborative workbench using these owners.
 
 ## Semantic personal history
 

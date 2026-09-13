@@ -7,7 +7,18 @@ The source owns geometry, dimensions, public parameters and their presentation.
 A compiler host executes the admitted authoring program; Rust validates the resulting
 IR and execution receipt before materializing and solving a candidate.
 
-## Author dimensions and public parameters
+Managed `sketch.ts` uses a reversible subset of TypeScript: the workbench can update
+supported declarations and values while preserving their source ownership. Reusable
+patches provide the ordinary TypeScript extension point for loops and helpers. A
+person and an AI agent can therefore edit the same project through code, canvas and
+Inspector. Arbitrary generator functions are also supported by the
+[headless engine](../geosolve-engine/README.md), with input-driven regeneration and
+no reverse source-editing authority.
+
+Start with the [authoring guide](../../docs/AUTHORING.md) for the full workflow and
+[Getting started](../../docs/GETTING_STARTED.md) for checkout/package preparation.
+
+## Author a sketch
 
 ```typescript
 "use geosolve sketch";

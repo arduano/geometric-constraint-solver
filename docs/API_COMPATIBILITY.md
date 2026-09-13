@@ -1,393 +1,82 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
 # API and persistence compatibility
 
-## Release line
+This document describes the current compatibility boundaries. For package selection,
+see [Architecture](../ARCHITECTURE.md); for executable examples, see
+[Getting started](GETTING_STARTED.md) and [Authoring](AUTHORING.md).
+[Architecture decisions](adr/README.md) retain the reasoning behind earlier APIs.
 
-GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. The
-nine library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
-`geosolve-linkage`, `geosolve-sketch-ops`, `geosolve-sketch-topology`,
-`geosolve-sketch-features`, `geosolve-sketch-intent` and `geosolve-constraint-editor`) version and
-release in lockstep. `geosolve-demo-web` is a non-published diagnostic consumer.
+## Versions and stability
 
-Before `1.0`, a minor version may contain source-breaking changes. Patch releases
-must remain source-compatible except where retaining behavior would preserve a
-soundness issue, false success, invalid accepted geometry or a security defect.
-After `1.0`, Rust API compatibility follows Cargo SemVer.
+The Rust workspace version is `0.2.0`. The TypeScript authoring SDK uses `0.2.0`;
+the engine, collaboration and CLI packages currently use `0.1.0`. Their manifests
+are the version authority. These numbers do not imply that every package has been
+published to a registry: the maintained Node installation workflow uses four
+matching local archives.
 
-M33 completes the production-embedding contract and baseline freeze without adding
-target APIs. M34 adds the retained-design lifecycle and M35 adds cooperative
-operation-control APIs; M36-M44 complete the current implementation transition. Cleanup
-M46-M53 preserves released v1-v4 wire compatibility and the accepted-state safety contract
-while evolving the new pre-1.0 editor/workbench surface. M61 closes the currently approved
-advanced-workbench scope, M62 closes approved CAD-style authoring and M63 closes approved canvas
-constraint presentation. Approved M64 adds only public alpha fixtures and an explicit
-interaction-request preference helper; it does not freeze a new schema. M65 completes approved
-predictable, bounded projected dragging without freezing a new persistence language or claiming
-final API/schema hardening. M66 completes the explicitly approved pre-1.0 computed-Fillet feature
-and authoring cut without changing the canonical sketch language. Its new
-`SketchDocument::certify_line_curve_fillet_branch_cell` query is an additive pre-1.0 API backed by
-private outward-rounded curve-piece intervals; it returns only the existing
-`ContactNeighborhood::Local` type plus a typed error. M66 authoring currently accepts
-affine/affine and affine/non-affine parent pairs and types two non-affine parents unsupported until
-pairwise continuation exists. That authoring limitation does not narrow or deprecate M28's public
-all-family generic Fillet request, association, residual or validation APIs. The doc-hidden
-`geosolve_core::AcceptedStatePatch` export exists only as a narrow cross-crate domain integration
-boundary for freshly certifying derived accepted coordinates; it is not a supported host API and
-may be narrowed or replaced before `1.0`. The
-withdrawn M66-only Offset/Mirror authoring surface and M66-only line-offset request APIs were never
-released. Their last three-tool candidate is preserved at
-`origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). This withdrawal does not alter the
-completed M25 offset constraints or the M58 exact supported-family Mirror operation-companion API.
-The unreleased ADR 0030 editor-side `OperationAuthoring*` facade, its coordinator preview/replay
-DTOs and the editor's direct dependency on `geosolve-sketch-ops` were introduced after the
-published `0.2.0` baseline and removed before another release once ADR 0031 superseded ordinary
-Fillet routing. This source-breaking cleanup affects no released API. It does not remove M27/M28
-Fillet equations, associations, trim views, persistence or migrations; M58
-`SketchOperationRequest::AssociativeFillet`; M25 Offset constraints; M58 Mirror; or the branch-cell
-query above. Current grouped Fillet authoring is the separate computed-feature path under ADR 0031.
-The unreleased M61
-`DocumentSolveRequest::stability_target` field and helper were withdrawn before the next
-published minor release because a sample-selected second Temporary target conflicts with M65's
-sample-agnostic locality contract; neither API was part of the published `0.2.0` surface. Any
-draft-v5 representation remains explicitly unsupported until a future schema-freeze milestone is
-deliberately scoped, qualified and approved, and must not be treated as a released wire language.
+Before `1.0`, a minor release may contain source-breaking changes. Patch releases
+remain source-compatible except where retaining behavior would preserve unsoundness,
+false success, invalid accepted geometry or a security defect. After `1.0`, Rust
+API compatibility follows Cargo SemVer. The workbench and its private browser
+protocol are example-host interfaces, not a stable application SDK.
 
-M67 removed the doc-hidden `M40QualificationCaseResult`, `M40QualificationReport`,
-`m40_qualification_corpus`, `run_m40_qualification` and
-`validate_m40_qualification_matrix` evidence API after replacing every retained claim with direct
-owning-layer tests. That frozen browser-evidence surface was introduced after published `0.2.0`,
-had no runtime consumer and was explicitly not a product API. M67 did not remove any supported
-domain API or v1-v4 persistence reader. Removing raw topology/lifecycle/redundancy cards from the
-non-published demo does not narrow the corresponding reusable domain contracts.
+The workspace baseline is Rust `1.89`; the collaboration crates require Rust
+`1.90` for their pinned Automerge dependency. Raising a crate's minimum supported
+Rust version requires a minor release before `1.0`, a major release afterward,
+and a changelog entry.
 
-M70 adds pre-1.0 headless drafting-inference and atomic construction-plan APIs to
-`geosolve-constraint-editor`, including typed policy/input/output DTOs, exact accepted-input/token
-authentication and relation-indexed publication results. These are additive to the current
-unreleased editor surface; they do not add a residual, persistent relation kind or browser-owned
-geometric policy. Public document/revision/stamp fields do not confer publication authority: only
-a scene authenticated from the retained session's exact current accepted input may emit an
-inferred commit plan. A private exact seal covers every inference-visible public scene semantic;
-mutation before binding rejects authentication and mutation after binding revokes publication.
-Compatibility/render-only scenes remain useful for inference presentation but are deliberately
-non-publishing. M70 also adds field-opaque, checkpoint-serializable
-`SketchPersistentIdentityHighWater` retention plus exact-current-input restore and controlled
-transaction seams to `geosolve-sketch`. Hosts may serialize, deserialize, inspect the owning
-document identity and merge the DTO through its validated API; allocator cursor fields remain
-private. Application workspace v5 stores that value, validates its namespace and graph coverage,
-and strictly migrates v1-v4. These APIs change no frozen sketch v1-v4 bytes and do not make
-draft-v5 supported.
-The `M70-F001` amendment extends that unreleased DTO surface with an explicit Circle
-circumference subject and reverse-incidence candidate. Its durable result is the existing
-PointOnCurve relation; it adds no sketch constraint, residual or persistence variant.
-M70 implementation, focused direct qualification, integrated release gate and frozen-candidate
-publication are complete on replacement source `3d157896c87eaf647abee1192c838100ce359ce9`.
-Circle-authoring finding `M70-F001` is resolved and the supervising human approved M70 on
-2026-08-10.
+## API layers
 
-M70B adds a small versioned codec surface to the non-published `geosolve-demo-web` diagnostic
-consumer: `GEOSOLVE_REPRO_V1`, bounded encode/decode functions and typed transport failures. Its
-payload is compressed text around the existing private application-workspace v5 encoding, not a
-new `geosolve-sketch` persistence version, supported domain schema or accepted-state shortcut.
-The companion `geosolve-repro` stdin/stdout binary decodes transport for diagnosis only and cannot
-validate or publish a coordinator.
-V1 text is generated deterministically with canonical fields and strict unpadded base64url; a
-future incompatible transport must use a new header rather than silently reinterpret V1. The
-FNV-1a field detects accidental corruption only and conveys no authenticity. Successful transport
-decode still requires strict `WorkspaceSnapshot` validation and complete coordinator
-reconstruction before publication. No library crate API, frozen sketch v1-v4 bytes or draft-v5
-support status changes. Qualification and frozen publication pass on source
-`6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`. Subsequent F001-F005 repairs and close qualification
-change no additional public library API; closing source `48e3cc3` keeps the 198/198 golden and
-release bytes unchanged and closes M70B under the requested scoped sign-off. ADR 0035 subsequently
-activated M71's six ordinary retained definitions. They extend the in-memory document/editor API
-and unsupported draft-v5 side section while canonical sketch v1-v4 remain frozen; clean
-F005/F006 replacement qualification and byte-verified publication pass on source
-`f8a45ae7b355ab9874bf268c9950e369814e8432`; scoped human UAT and explicit M71 approval pass on
-2026-08-14. These later lifecycle additions do not alter the frozen sketch v1-v4 wire contract.
+| Layer | Intended entry points |
+| --- | --- |
+| Sketch domain | `SketchDocument`, accepted-only `SketchDocumentSession`, and `RetainedSketchDocumentSession` for separate design, attempt and accepted views |
+| Linkage domain | `PlanarLinkageDocument`/`PlanarLinkageSession` and `SpatialAssemblyDocument`/`SpatialAssemblyDocumentSession` |
+| Geometry operations | `geosolve-sketch-ops` prepared proposals, `geosolve-sketch-topology` accepted profiles, and `geosolve-sketch-features` computed-feature intent |
+| Headless UI | `geosolve-constraint-editor` scenes, normalized input, selection, drafts, dimensions and typed effects |
+| Authored source | `geosolve-sketch-intent`, `geosolve-sketch-code` and `@geosolve/sketch-code` for typed declarations, source preparation and authenticated compilation |
+| Embedding engine | `geosolve-sketch-engine` and `@geosolve/engine` for accepted evaluations, editable sessions, replayable authoring and profile export |
+| Collaboration | `geosolve-collaboration` and its dedicated WASM/TypeScript bindings for shared text, ordered authority and personal contribution history |
+| Reference hosts | The React workbench, `@geosolve/cli` local/shared server and `geosolve-headless` rendering tools |
 
-M73 completed a pre-release cleanup inside `geosolve-constraint-editor`. Public `ConstraintKind`
-and `ConstraintEditor::{available_constraints, constraint_edit}`, together with the dependent
-`EditorError::IncompatibleConstraint` variant, were introduced after the published `0.2.0`
-baseline and duplicated only part of the later contextual authoring path. The public direct entry
-points had no non-test caller; the retained coordinator's internal `ConstraintKind` use was only a
-duplicate simple-definition lowering seam. M73 removed that complete direct compatibility surface
-before the next published minor release, without a deprecation interval for supported APIs. Hosts
-use `ConstraintIntent`,
-`ResolvedConstraintKind`, `AuthoringState` and
-`RetainedEditorCoordinator::{resolved_constraint, apply_authoring}` instead. This decision does not
-remove or deprecate `SketchConstraintKind`, `DocumentConstraintDefinition`, direct sketch builders,
-any contextual authoring DTO or any persisted relation. All 20 contextual resolved families remain
-available through the retained authoring route, and no wire language changed.
+Legacy direct `Sketch`, `Linkage` and `SpatialAssembly` builders remain
+compatibility facades in the `0.2` line. Intent, authored source, engine and
+collaboration are evolving pre-1.0 companion APIs. Applications can use the sketch
+and headless editor without depending on TypeScript execution or a browser host.
 
-M74 is a completed additive pre-1.0 extension. `SketchDatum`, the four datum-backed document
-definitions, datum selection/scene DTOs, reference visibility, contextual resolved kinds and the
-typed protected-datum failure expose immutable Origin/X/Y operands without giving those datums a
-document ID, variable, allocator entry or persistent identity. Scene-clipped axis endpoints are
-presentation data and must not be serialized as datum identity. Ordinary relations that refer to a
-datum own normal constraint IDs and lifecycle. Canonical sketch v1-v4 remains frozen: encoding a
-datum relation as v4 returns `UnsupportedM74State`, and its representation only in draft-v5 side
-records does not make v5 a supported input or canonical output language. This compatibility
-disposition is accepted under the 2026-08-16 scoped M74 close decision; no supported `0.2.0` API or
-wire reader is removed. Deferred hands-on UAT does not make the compatibility contract
-provisional. M74-F001 adds `SymmetricAboutDatumAxis` to the in-memory document/runtime
-enums, `Sketch::add_symmetric_about_datum_axis` and the matching contextual resolved kind. It uses
-the same unsupported draft-v5 side section and exact canonical-v4 rejection; no datum identity,
-hidden line or frozen-wire syntax is introduced.
+Compiler products, runtime ID maps, direct `geosolve-core` reports, fixture builders
+and performance builders are explicitly unstable diagnostic surfaces before `1.0`.
+Use persistent domain IDs and domain-owned views for application identity. A public
+DTO, serialized scene or copied success field does not confer accepted-state or
+publication authority; the owning engine independently validates candidates.
 
-M75 is an additive pre-1.0 interaction correction in `geosolve-constraint-editor`. The existing
-pointer-move entry points remain source-compatible wrappers, while
-`ConstraintEditor::{pointer_move_with_problem_items,
-pointer_move_with_problem_items_and_draft_inference}` let a host supply the same current
-problem-forced annotation visibility already accepted by pointer-down. Select hover and primary
-pointer-down then share one private target resolver. Finding M75-F001 adds
-`RetainedEditorCoordinator::{pointer_move_authoring, pointer_move_feature_authoring}` so ordinary
-relation/dimension and grouped-Fillet hosts can request the exact compatible item that the
-unchanged domain-aware press resolver would consume. These methods reuse existing authoring,
-scene, pointer, tolerance, selection and effect DTOs. A feature-authoring painted item is only an
-intent hint: current candidate, retained preview, accepted/design/computed provenance, policy and
-headless radius proximity are independently validated before it can produce a computed-corner
-hover. Candidate enumeration and precedence remain private. Existing pointer-leave, cancellation
-and retained-state paths revoke proximity state when a host remaps the camera, scene or input
-owner. M75-F002 changes only the private web translation of that hint: during uncaptured Fillet
-authoring, the complete SVG paint stack is reconciled with the exact headless radius owner so an
-overlying native item cannot hide the grip, rail or spoke; final authentication remains in the
-coordinator. No general public hit-test hierarchy is introduced. This changes no supported `0.2.0`
-domain API, solver behavior, hit tolerance, constraint or dimension kind, canonical sketch v1-v4
-bytes, unsupported draft-v5 disposition or persistence schema. This compatibility disposition is
-accepted under the supervising caller's 2026-08-16 scoped M75 close decision against exact product
-source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
-`83df4efb99ca66cf0cebc0caec4515b61afd33cf`. That decision accepts the candidate, focused
-F001/F002 hover recheck and U1-U12 without claiming an individually logged replay of every UAT
-step. Documentation-only approval descendant `f80235978fbcdccd58c45a08bccf3969a20110c9`
-subsequently passes Pages run `31939764951`, artifact `9261974799` and deployment `5929879555`.
-The exact public bytes and M72/M74/M75 browser contracts verify, completing this additive pre-1.0
-interaction correction without changing the accepted compatibility boundary.
-
-M76 is an additive pre-1.0 presentation extension in `geosolve-constraint-editor`.
-`AnnotationLayoutKey`, `AnnotationPlacement`, `AnnotationLayoutEntry` and
-`AnnotationLayoutState` expose bounded semantic placement state, while exact scene-annotation
-geometry publishes the baselines, witnesses, leaders, arcs, arrowheads, label bounds and glyph
-bounds shared by painting and picking. These DTOs add no equation, variable, residual, branch or
-accepted-sketch mutation. The workbench's workspace-v6 annotation cache is demo-local, optional,
-self-versioned and fail-soft; canonical sketch v1-v4, unsupported draft-v5, `GEOSOLVE_REPRO_V1`
-and every accepted document/reproduction contract remain unchanged. A malformed or stale cache is
-discarded while valid sketch state restores and deterministic automatic layout recomputes.
-Shared-endpoint angle wedge selection and omission of the redundant Origin canvas marker are
-presentation refinements only: the accepted oriented-angle value/branch and all intrinsic-Origin
-picking, authoring, protection, tree and inspector semantics are unchanged. This additive
-disposition is accepted under the caller's scoped M76 close decision without claiming a separate
-post-refinement UAT replay. Final source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
-`248cba4509a992aeff7a02dd6d57a1a2481380a4`, passes GitHub Pages run `31961652265`, artifact
-`9267811418` and deployment `5933831093`; root and all seven hosted files byte-match the artifact's
-ordered-manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`
-at their expected media types. The separately built Tailscale candidate remains qualification
-evidence rather than a claim of Pages byte identity. M76 is complete without changing the accepted
-compatibility boundary.
-
-M77 is an additive pre-1.0 curve-control and presentation extension. `DocumentCurveControlId`,
-`DocumentCurveControlKind`, `DocumentCurveControlTarget`, `DocumentCurveControlAvailability`,
-`DocumentCurveControlWithholdingReason`, `DocumentCurveControl`,
-`DocumentCurveControlProjection` and `DocumentCurveControlError` expose a closed accepted-domain
-control catalog and typed inverse projection. `DocumentRationalConicControlMode` and
-`DocumentRationalConicControl` give nonzero Euclidean `P1` and zero-weight projective `Qh`
-unambiguous state; `DocumentEdit::SetRationalConicControl` is the atomic numeric/mode edit, while
-spatial movement retains the existing `SetConicWeightedMiddle` lowering. `PreparedSketchPreview`
-adds only immutable candidate views to the existing opaque exact-CAS patch.
-
-`SceneCurveControl*`, `CurvePropertyFamily`, `CurveNumericPropertyKind`,
-`CurveNumericPropertyMetadata`, `SelectedCurvePropertyMetadata` and the corresponding
-`ConstraintEditor`/`RetainedEditorCoordinator` population, preview, commit and property-setter
-methods are presentation-independent host APIs. They add selected-only transient identities and
-finite paint/hit geometry; they do not create persistent sketch points or constraint operands.
-`DocumentTrimProjectionError::CrossesOppositeEndpoint` makes the existing non-periodic directed-
-trim invariant explicit at projection time. Callers that exhaustively match these pre-1.0 enums
-must handle the additive variants under the documented minor-release policy.
-
-M77 changes no solver equation, residual, constraint or dimension kind, hard/soft priority,
-rank/DOF rule, automatic branch policy, canonical sketch v1-v4 bytes, unsupported draft-v5
-disposition, workspace/reproduction schema or annotation cache. Curve-control cages are recomputed
-from accepted geometry and selection. Exact source
-`cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
-`3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate and immutable Tailscale
-nomination. The supervising caller accepts U1-U6 and requests closure. Publication descendant
-`66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`; root
-plus all seven hosted paths exact-verify at aggregate
-`872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is complete. This
-approval and publication change no compatibility boundary.
-
-M78 is an additive pre-1.0 authoring extension in `geosolve-constraint-editor`.
-`GeometryToolFamily` and `GeometryToolVariant` provide stable exact catalog keys, family membership
-and coarse `EditorTool` compatibility projection; `DraftAuthoringInput` keeps ambient-inference
-suppression independent from recipe regularization, while typed draft status/issues, construction
-operands and relation provenance keep stage, branch, correction and transaction meaning headless.
-Existing `EditorTool` activation remains source-compatible and selects the corresponding family
-default. Callers that exhaustively match the new non-exhaustive enums must retain a wildcard under
-the documented pre-1.0 additive policy.
-
-M78-F011 clarifies that `DocumentDragLocalityPlan::passive_degrees_of_freedom` counts passive
-freedom observable through persistent points; scalar-only curve/contact freedom cannot demand an
-impossible point anchor. Fixed coordinate bounds remain equality-active in both secondary-solve
-backends even when their projected normals are dependent. This correction adds no residual,
-Jacobian, tolerance, priority or branch change. M78 as a whole adds no curve/constraint/dimension
-kind, canonical sketch-v1-v4 syntax, supported draft-v5 language, workspace/reproduction schema or
-browser geometry authority. Exact source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
-`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate and immutable Tailscale
-nomination. The supervising caller accepts U1-U8 plus the focused F011 recheck and requests closure;
-documentation-only approval descendant `a6d504e` passes Pages run `32096209036`, artifact
-`9310104202`, deployment `5955688918` and exact hosted-byte aggregate
-`bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. It does not replace or
-requalify product source `793e9de`. M78 is complete. This approval and publication change no
-compatibility boundary.
-
-M79 adds one source-compatible pre-1.0 convenience method,
-`DraftInferenceResolution::next_cycle_candidate_id()`, over the already public ordered candidate
-publication. It returns a candidate only for a complete resolved or ambiguous cohort containing at
-least two entries; stale, suppressed, resource-limited, empty, singleton and malformed resolved
-output remains non-cycleable. The engine's exact stationary cohort is private ephemeral state and
-is neither serialized nor exposed as a second candidate API. Existing
-`DraftInferenceInput::preferred_candidate` and `DraftInferenceStatus::StalePreferredCandidate`
-shapes remain unchanged.
-
-M79 also changes only the private token-authenticated editor/coordinator path for one mixed
-publication case. After the exact displayed plan is trialled, independently proven fully redundant
-auto directions may be omitted only when private authenticated metadata shows that their candidate
-also retained stronger positional intent; the effective plan remains subject to the ordinary
-accepted-state and redundancy checks. Public `apply_construction_plan` and its controlled variant
-retain exact generic rejection, and the public `ConstructionCommitPlan`/effect/result shapes do not
-change. No solver residual, constraint kind, canonical sketch-v1-v4 syntax, draft-v5 support,
-workspace schema or browser geometry authority is added. Exact product source `6874aa1` passes the
-complete clean gate and immutable served-byte verification; human UAT accepts U1-U5. The
-documentation-only approval descendant `2560ca5`, tree `bad5662`, passes Pages run `32116835502`,
-artifact `9317131695`, deployment `5959116526` and exact hosted-byte aggregate
-`5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. It does not replace or
-requalify exact product source `6874aa1`. M79 is complete. Approval, publication and closeout
-change no compatibility boundary.
-
-M80's grouped Profile Offset and explicit native-profile Fillet publication are additive pre-1.0
-domain/editor behavior under ADR 0037; canonical sketch v4 still rejects Profile Offset state and
-the private draft-v5/workspace-v6 bridge remains unsupported as a domain schema. M81 changes none
-of those surfaces. It moves only private implementation bodies behind the same crate roots and
-freezes the ordered public declarations plus locked package metadata before and after the cut.
-M81-F001 changes rejected-mutation side effects only: a failed durable computed-feature mutation
-no longer consumes a revision-local output allocator value. No public type, signature, error text,
-wire format, crate dependency or successful publication result changes.
-
-M83 is an unreleased pre-1.0 projectional-authoring extension and remains experimental until its
-human gate passes. It adds the equation-free `geosolve-sketch-intent` crate, projectional
-materialization/read DTOs in `geosolve-constraint-editor`, the demo-local workspace-v8 envelope and
-the `@geosolve/intent` TypeScript package. These surfaces do not change canonical sketch v1-v4,
-the native solver equation/priority catalog or the accepted M81 Pages product. M83-F001 through
-M83-F010 are implemented, but nominations through F008/F009 source `b0de5af` are historical
-because architecture hardening and later findings supersede them. The committed F010 replacement
-supersedes those bytes; exact clean-gate, immutable-candidate and UAT authority is recorded in the
-M83 implementation/UAT ledgers. Public GitHub Pages continues to serve M81 until explicit human
-approval.
-
-Canonical intent graph/session output is wire v2 and uses SHA-256 for component/content identity.
-The importer accepts canonical experimental v1 only after its FNV-1a-derived outer and nested
-identities, accepted evidence, current/Undo/Redo checkpoint structure and exact retained-failed
-reservation-ledger provenance validate; it then migrates and emits v2. This preserves deterministic
-migration of the experimental M83 data rather than promoting FNV to a security guarantee: the
-legacy digest is not cryptographically secure. Ordinary session and semantic identity reads are
-cached, but import, mutation publication and explicit validation independently rehash and reject a
-stale cache or malformed nested authority.
-
-`IntentDeclarationDescriptor` is the central additive schema/edit metadata contract. It publishes
-typed field defaults and choices, output identity/native reservation state and edit classification
-for Inspector, graph/RPC snapshots and typed code clients. `IntentGraphSnapshot` is a bounded
-data-only query; opaque bootstrap payloads are represented by kind, codec, byte length and SHA-256
-rather than copied into every read. Structured Source now emits a TypeScript-shaped data-only
-`IntentSourceSnapshot`, not an executable callback or source-of-truth program.
-
-The DOM-free RPC and `IntentClient` are closed, typed, resource-bounded experimental APIs. Only an
-explicit Snapshot returns graph, workbench and accepted-validation state. Patch/source-edit
-mutations return identity/disposition/alias receipts, Undo/Redo return identity/moved receipts and
-Inspector returns its identity-stamped projection. A patch whose success receipt could exceed 16
-MiB rejects before planning/publication; structured and JSON responses share a 64 MiB ceiling.
-The TypeScript decoder validates exact fields, closed enums, integer fidelity, response bounds and
-session branding. Computed-Fillet/Profile-Offset Apply
-and accepted radius/distance drops now publish their exact already validated prepared transaction;
-that is a publication/atomicity correction, not a new public solver API or constraint type.
-
-The demo-local workspace-v8 envelope is admitted only within the 64 MiB reproduction-workspace
-limit, and its disposable annotation-layout string is capped at 4 MiB. These host resource bounds
-may reject oversized experimental M83 snapshots which the earlier provisional decoder attempted
-to parse; canonical sketch v1-v4 and accepted M81 persistence are unchanged.
-
-M83-F008 changes only the non-published demo host integration around the existing
-`GEOSOLVE_REPRO_V1` envelope. Copy encodes the complete already-authenticated workspace-v8
-projectional snapshot, including its unified intent history; Load decodes, bounds and validates the
-complete snapshot before atomically replacing live authority. Annotation layout remains omitted as
-disposable presentation state, and existing flat-coordinator transport remains source-compatible.
-M83-F009 is likewise an owner/presentation correction: a suppressed computed Fillet no longer
-participates in active native-parent hiding, while a non-empty projectional scene-composition
-failure is surfaced for one frame instead of being collapsed into legitimate absent authority.
-M83-F010 adds bounded `IntentProjectionPath` field/index arrays to the experimental projection DTOs
-and TypeScript decoder. Structured Source and Inspector use meaningful named fields plus genuine
-arrays with sparse `null` holes; canonical slots, fields, selectors, ports and leaves remain exact
-persistence and mutation authority. Neither correction adds a solver equation, constraint,
-persistence version or supported wire promise.
-
-The minimum supported Rust version is `1.89`. Raising it requires a minor release
-before `1.0`, a major release after `1.0`, and a changelog entry.
-
-## API tiers
-
-The supported domain entry points are:
-
-- `SketchDocument` and accepted-only `SketchDocumentSession` for persistent sketches;
-- `RetainedSketchDocumentSession` for separate retained design, attempt and accepted views;
-- `PlanarLinkageDocument` and `PlanarLinkageSession` for planar kinematics;
-- `SpatialAssemblyDocument` and `SpatialAssemblyDocumentSession` for spatial
-  kinematics;
-- immutable geometry and accepted domain result/audit types returned by those
-  workflows;
-- `geosolve-sketch-ops` immutable snapshots, controlled prepared proposals and exact-input
-  application for equation-free sketch operations;
-- `geosolve-sketch-topology` complete accepted-input production-wire and region profiles; and
-- `geosolve-sketch-features` persistent computed-feature intent plus independently validated,
-  exact-stamped revision-local output; and
-- `geosolve-constraint-editor` state, scene, normalized input and typed effect APIs for
-  presentation-independent constraint, dimension and computed-feature authoring over those sketch
-  workflows.
-
-M83's not-yet-accepted experimental tier additionally includes `geosolve-sketch-intent` typed
-declarations, exact-CAS patches, canonical wire and bounded composite history plus the projectional
-editor/RPC and TypeScript surfaces described above. They do not become supported release APIs
-until the M83 human gate passes.
-
-Legacy direct `Sketch`, `Linkage` and `SpatialAssembly` builders remain supported
-compatibility facades in the `0.2` line.
-
-Compiler products, runtime ID maps, direct `geosolve-core` reports and fixture or
-performance builders are public for advanced diagnostics and verification, but are
-explicitly unstable before `1.0`. They must not be persisted or used as application
-identity. M29 has reviewed these exports and retains them intentionally because the
-diagnostic consumer and independent audit tooling inspect the same validated report;
-new application APIs should prefer persistent domain IDs and domain-owned views.
-
-Public error and status enums may gain variants. Callers should include a wildcard
-arm unless an enum is documented as closed. Public structs intended as reports may
-gain fields in a minor `0.x` release. Request and persisted document types are not
-extended silently within a schema version.
+Public error/status enums may gain variants. Include a wildcard arm unless an enum
+is documented as closed. Report structs may gain fields in a minor `0.x` release.
+Request and persisted-document languages are never extended silently within a
+released schema version.
 
 ## Deprecation
 
-A supported domain API is deprecated before planned removal. Deprecation includes:
+A supported domain API is deprecated before planned removal, with:
 
-1. a Rust `#[deprecated]` annotation with a replacement and target release;
+1. a Rust `#[deprecated]` annotation naming a replacement and target release;
 2. an entry under `Unreleased` in `CHANGELOG.md`;
-3. at least one minor release before removal in the `0.x` line;
-4. removal only in a later minor release before `1.0`, or a major release after
-   `1.0`.
+3. at least one minor release before removal in the `0.x` line; and
+4. removal only in a later minor release before `1.0`, or a major release afterward.
 
 Immediate removal is reserved for unsoundness, false-success paths or security
-defects and must be called out prominently in the changelog.
+defects and must be called out in the changelog. Unreleased experimental facades
+may be retired without becoming supported APIs. For example,
+[ADR 0030](adr/0030-headless-sketch-operation-authoring.md) was superseded by the
+computed-feature authoring path; the underlying supported Fillet, Offset and
+Mirror domain operations remain separately owned.
 
-## Persistence
+## Domain persistence
 
-Schema versions are independent from crate versions. Import always validates size,
-syntax, IDs, references, finite values, geometry, branch state and the solved
-candidate before publication. Unknown future versions reject atomically.
+Schema versions are independent of crate versions. Import validates size, syntax,
+IDs, references, finite values, geometry and explicit branch state. A reconstructed
+candidate must pass independent validation before publication. Unknown future
+versions reject atomically.
 
 | Domain | Accepted input | Canonical output | Migration |
 | --- | --- | --- | --- |
@@ -396,84 +85,91 @@ candidate before publication. Unknown future versions reject atomically.
 | Spatial assembly | v1 | v1 | None required |
 
 Canonical output is byte-stable for the same accepted document and schema version.
-Runtime generational IDs never form persisted identity. A schema language is never
-expanded after release; new fields or variants require a new schema version and a
-frozen reader for each retained old version.
+Runtime generational IDs never form persisted identity. A released schema language
+is frozen: new fields or variants require a new version and retained readers for
+supported old versions.
 
-Any future sketch v5 transition must retain direct deterministic migration from v1-v4
-and uses separately versioned host-parameter, immutable external-snapshot and desktop-
-workspace envelopes. Host expressions, PDM keys, projection callbacks and application
-undo are not added to canonical sketch equations. The current table remains the supported
-contract until a future explicitly scoped schema milestone updates it.
+The private sketch draft-v5 representation is **not a supported domain schema**.
+Some newer computed-feature, Profile Offset and datum relations cannot be encoded
+in canonical sketch v4; encoding must reject unsupported state rather than lose it.
+Use the owning source/project/workspace codec when saving a complete authored
+project. A host workspace version does not release a new sketch-domain language.
 
-The project supports reading every schema listed above throughout the `0.2` line.
-Dropping an input schema requires a minor release before `1.0`, a major release
-after `1.0`, a changelog entry and an external migration path. A migration that
-cannot preserve explicit branch or ownership state must reject or retain the old
-semantics; it must not infer a different branch from coordinates.
+The `0.2` line retains every domain input schema listed above. Dropping one requires
+a minor release before `1.0`, a major release afterward, a changelog entry and an
+external migration path. A migration must preserve explicit branches and ownership
+or reject; it cannot select a new branch from coordinates. Planar and spatial v1
+in-memory records retain their frozen language until a future private wire DTO
+separates new model fields from the old reader.
 
-Planar and spatial v1 in-memory records are the frozen v1 language for `0.1.0`.
-Before either model gains a new persisted field or variant, it must first be split
-behind a private v1 wire DTO in the same manner as sketch persistence.
+## Source, workspace and host formats
 
-## Features and platform support
+These formats have separate owners and lifetimes:
 
-The release has no optional Cargo feature contract. Native Linux x86-64 and
-`wasm32-unknown-unknown` are release-gated. Other Rust-supported targets are
-best-effort unless added to a future release matrix. Linux, Windows and macOS release expansion is
-not currently scheduled. No C ABI is in the currently approved roadmap. The WASM workbench is
-not a separate product API and does not define document semantics; cleanup qualification
-uses direct Rust/WASM tests rather than browser E2E, and there is no mobile or responsive
-support contract.
+- **Intent graph/session:** canonical wire v2 uses SHA-256 identities. The bounded
+  experimental v1 reader validates its original canonical fields, nested state and
+  integrity fingerprints before deterministic migration; legacy FNV-1a is not a
+  cryptographic authentication primitive.
+- **Managed compiler envelope:** current source compilation emits V4 IR/execution
+  receipts. The bounded V3 reader preserves existing source and history on load;
+  the first authenticated edit recompiles a V4 candidate. V1/V2 are unsupported.
+  The [authoring SDK](../packages/geosolve-sketch-code/README.md) documents the source
+  metadata and compiler entry points.
+- **Saved source/native history:** the source codec reads its v4/v5 workspace
+  envelopes, including unfinished text and native Current/Undo/Redo checkpoints.
+  Restoration independently validates current and historical authority. The engine
+  can opt into complete persistable history; a semantic design sidecar alone is
+  not a complete Undo/Redo archive.
+- **Local folders:** new projects use `geosolve-folder-v2` with editable or generator
+  mode. The retained v1 reader covers the original single-file fixture. Source,
+  semantic design, input values, recovery data and personal presentation have
+  distinct owners; see the [storage contract](M98_WORKSPACE_STORAGE.md).
+- **Reproduction transport:** `GEOSOLVE_REPRO_V1` wraps bounded compressed workspace
+  text. Its corruption check is not publication authority. Successful decoding
+  still requires the appropriate complete workspace decoder and reconstruction.
+- **Collaboration:** native text checkpoints and the ordered host journal retain
+  their versioned identities and checked contribution ownership. Durable recovery
+  reconstructs and validates accepted source/model state before serving edits.
+  [Collaboration APIs](../packages/geosolve-collaboration/README.md) describe the
+  trusted completion and persistence boundaries.
 
-## Publication
+M99 consolidated these codecs and native services under reusable owners without
+introducing a new wire version. Malformed nested history, stale source receipts,
+foreign session tokens and unsupported future formats continue to reject.
 
-The publishable crates are released in dependency order:
+## Transient interaction and rendering
 
-1. `geosolve-geometry` and `geosolve-sketch-intent`, which has no GeoSolve crate dependency;
-2. `geosolve-core` after the matching geometry version is visible;
-3. `geosolve-sketch` and `geosolve-linkage` after the matching core version is
-   visible;
-4. `geosolve-sketch-ops`, `geosolve-sketch-topology` and `geosolve-sketch-features` after the
-   matching sketch version is visible;
-5. `geosolve-constraint-editor` after the matching sketch, sketch-features and sketch-intent
-   versions are visible.
+The workbench request/reply protocol is v2. Numeric `geosolve-draw-frame-v1` frames
+replace the old SVG browser payload; native SVG and PNG export remain available.
+JS and WASM consumers ship together, and incompatible request versions reject.
 
-Cargo cannot create a registry-ready dependent archive before its path dependency
-version exists in the registry. The pre-publication gate therefore checks the exact
-archive file list for all nine crates and builds every workspace target from path
-dependencies. Each package includes `LICENSE` and `README.md`. Registry publication
-itself remains a maintainer action after a repository URL and release tag exist.
+Detached scene JSON retains native analytic curves, explicit computed geometry,
+annotations and camera context for local navigation and picking. Import creates
+presentation data, never an accepted session, solver certificate or prepared edit.
+Exact scene identity, source correspondence and server/session revision checks
+remain mandatory when converting local selection into an authored operation.
 
-## M94 transient drawing protocol
+Personal camera, selection, visibility, annotation placement and dimension pins do
+not change source, constraints or accepted geometry. `isKeyConstraint`,
+`isKeyParameter` and document dimension defaults are authored metadata with normal
+source/history validation; they do not change hard/soft solver priority.
 
-The browser WorkbenchHandle request/reply protocol is v2. Its snapshot frame contains a versioned
-`geosolve-draw-frame-v1` numeric drawing payload instead of SVG markup. JS and WASM consumers ship
-atomically and older request versions reject. This presentation change does not migrate the
-persisted workbench/project, document, history or reproduction contents. Tool catalogs and the
-intent/code-control RPCs retain their separately owned protocols. geosolve-sketch-render exposes
-finite presentation-only draw-frame types while preserving native SVG and PNG export interfaces.
+## Platforms, packaging and qualification
 
+All solving is pure Rust. The project has no solver FFI, C ABI or optional Cargo
+feature compatibility contract. Native Linux x86-64 and `wasm32-unknown-unknown`
+are release-gated; other Rust targets are best-effort. The full offline CLI requires
+Node 22 or later and Linux `flock`; its archive includes an esbuild binary for its
+recorded CPU architecture. Browser/Node engine WASM packages are independent of
+that CLI binary.
 
-## M98 detached canvas interaction
+The desktop workbench targets layouts of at least 1024 × 720. It demonstrates
+embedding and collaboration, with bounded tested workloads rather than a mobile,
+arbitrary-document-size or production service-capacity promise.
 
-`EditorScene::to_detached_json`, `from_detached_json` and `replace_detached_json` transport
-presentation data for hosts with remote sketch editing. The bounded format retains native
-analytic curves and explicit computed geometry, plus annotations and camera context. Import
-never creates an accepted session, prepared input, solver certificate or publication authority;
-the detached marker survives reprojection and prohibits upgrading the scene through session
-binding. It is a transient versioned transport, not a persisted project or document format.
-
-`ConstraintEditor::select_at` shares ordinary Select picking without starting a drag.
-`SelectionPresentationState` retains ordered semantic selection and exact curve pick
-parameters/origins; restore validates membership and visible occurrence against the current
-scene before publication. `ProjectionalEditorSession::restore_selection_presentation` also
-checks scene authority and projects selected declaration ownership. The shared
-`dimension_hover_target` retains geometry-to-label movement under the existing 12 CSS px rule.
-
-The application-only WASM `InteractionHandle` runs detached navigation in a dedicated worker;
-`WorkbenchHandle.interactionSnapshot` and `interactionApply` connect it to server-owned
-edits. JS/WASM ship together. Folder requests opt into `localInteraction: true`; existing
-clients retain their current protocol. Local view state binds the installed scene identity,
-and server source, epoch, lease and revision guards remain mandatory. No persisted schema,
-solver equations, branch state or hard/soft priority semantics change.
+The release gate checks Rust package file lists, native and WASM behavior, golden
+scenarios, browser workflows, performance limits and installed Node packages.
+Packages retain the project license and required third-party notices. Registry
+publication and website deployment are separate release actions; building or
+qualifying local archives performs neither. See
+[Release qualification](RELEASE_QUALIFICATION.md) for exact commands and evidence.

@@ -4,7 +4,7 @@
 
 Status: accepted and completed for M70; implementation, focused direct qualification, integrated
 release qualification, frozen replacement-candidate publication, served-byte verification and
-scoped supervising-human UAT are complete. Circle-authoring finding `M70-F001` is resolved
+scoped human UAT are complete. Circle-authoring finding `M70-F001` is resolved
 
 ## Context
 

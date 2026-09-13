@@ -4,13 +4,12 @@
 
 Implementation was authorized after the local canvas delivery. This amendment extends M98
 with a reusable Rust collaboration core and the existing workbench as its reference host.
-The full current [toolbar amendment](M98_TOOL_PARITY.md) is qualified from clean
-`b005b9e` in `20260911T164104-576e7789` and delivered to the existing shared previews on
-ports 18112/18111. [Final qualification and preview evidence](M98_QUALIFICATION.md#qualified-shared-toolbar-parity)
-record the exact artifacts and measured limits. The initial `513463f` nomination and
-subsequent dragging repair below are historical evidence. Static 18110, the single-editor
-preview and original manifold remain preserved. M98 supervising-user acceptance and
-closure remain open.
+The full [toolbar amendment](M98_TOOL_PARITY.md) and subsequent F041–F043 repairs
+are mechanically qualified. [Final qualification](M98_QUALIFICATION.md#qualified-uat-repairs)
+records exact artifacts, recovery coverage and bounded measurements. Earlier
+implementation checkpoints below are historical; M98 human acceptance and closure
+remain open. Current host setup is in the
+[CLI README](../packages/geosolve-cli/README.md).
 
 ## Product contract
 
@@ -92,7 +91,7 @@ are a stretch; full offline semantic reconciliation is deferred if substantially
 - [x] Dedicated WASM/TypeScript package and provisional authoring session.
 - [x] Opt-in workbench collaboration, separate client contexts and prediction worker.
 - [x] Fault, parity, browser and load qualification; verified replacement preview.
-- [ ] Supervising-user acceptance and milestone closure.
+- [ ] maintainer acceptance and milestone closure.
 
 The initial collaboration gate passed 288/288 obligations (32 fresh, 256 authenticated
 reused; 44m4.890s), including eight collaboration browser/fault/load scenarios. Its two
@@ -156,7 +155,7 @@ checks beyond value CAS to make per-user Undo safe.
 Focused commands run in the pinned Nix shell:
 
 ```bash
-nix-shell shell.nix -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source --run 'COMMAND'
+nix-shell shell.nix --run 'COMMAND'
 ```
 
 Passing Rust checks include `cargo fmt --all -- --check`,
@@ -250,7 +249,7 @@ Still required: actual compiler/solver workers in the reference document host, f
 semantic/lifecycle history, durable text Undo, external file/CLI mirror reconciliation,
 construction prediction, collaborative workbench UI, browser/load/fault qualification,
 release-gate registration and integrated clean nomination. The qualified preview remains
-unchanged, and supervising-user acceptance remains open.
+unchanged, and maintainer acceptance remains open.
 
 ## Runtime and collaboration client checkpoint
 
@@ -313,7 +312,7 @@ Focused commands used the pinned Nix shell already documented above:
 No integrated nomination or preview replacement has occurred. Durable text history,
 structural compiler replay, external mirrors/CLI, the complete collaborative UI and
 prediction workers, four-browser and 32-client load/fault qualification remain required.
-The milestone and supervising-user acceptance remain open.
+The milestone and maintainer acceptance remain open.
 
 ## Latest-model replay and browser integration checkpoint
 
@@ -393,14 +392,12 @@ The optional [server authoring preview](M98_AUTHORING_PREVIEW.md) uses the same
 retained native semantics in bounded workers. Six actual-WASM owner tests and two
 HTTP/runtime cases pass; browser fallback integration remains underway.
 
-Development-r3 contains22files/14JS/1CSS/3WASM and passes artifact validation. Actual
-manifold width12→11 and Gridfinity41.5→41 edits publish and retain source/model
-invariants. Their dense text ACK and manifold navigation measurements still exceed
-the unchanged500ms budget. The four-editor,32-client and stalled-TCP cases passed
-the preceding focused run. Native source/history performance work, remaining
-workbench routes, browser fault/concurrency proof, clean integrated nomination and
-replacement preview verification remain open. No supervising acceptance or milestone
-closure is implied.
+The historical development-r3 artifact contained 22 files: 14 JS, one CSS and
+three WASM modules. Manifold width 12→11 mm and Gridfinity 41.5→41 mm edits retained
+source/model invariants, but dense typing and manifold navigation still exceeded
+the unchanged 500 ms budget. Four-editor, 32-client and stalled-TCP checks had passed
+the preceding focused run. Later qualified repairs supersede this incomplete
+checkpoint; it did not establish release qualification or human acceptance.
 
 
 ### Personal visibility and source suppression (implementation)
@@ -481,4 +478,4 @@ from `513463f` in `20260910T204328-4a05c31a`; [the nomination](M98_QUALIFICATION
 records exact evidence. That initial nomination covered the four native construction
 tools documented above; the subsequent [qualified toolbar amendment](M98_TOOL_PARITY.md)
 supersedes its GUI scope. The preceding preview is preserved.
-Supervising-user acceptance and milestone closure remain open.
+Maintainer acceptance and milestone closure remain open.

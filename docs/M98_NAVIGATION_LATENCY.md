@@ -11,9 +11,8 @@ owner and exact queue contract. No mathematical or persisted format changes are 
 
 ## Reproduction
 
-Private Chromium reproduction runs use previously installed `a68fffa` and preceding `6509e9c`
-with a copy of the user's manifold. They preserve source and accepted design; the actual
-editable preview is not taken over. CDP simulates network latency/throughput. These are
+Isolated Chromium reproductions use previously installed `a68fffa` and preceding `6509e9c`
+with a copied manifold, preserving source and accepted design. CDP simulates network latency/throughput. These are
 controlled browser measurements, not a claim about the user's actual connection or
 hardware latency. Local standalone current-build navigation was also profiled; its
 individual hover/wheel/deferred dimension calls completed in tens of milliseconds.
@@ -155,56 +154,18 @@ the 256-moving-body crossover at 114.81 seconds. Qualification evidence is
 `target/m98/latency-final-qualification.json`; the log is
 `target/m98/latency-release-gate-response.log`.
 
-```bash
-nix-shell shell.nix \
-  -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source \
-  --run './scripts/release-gate.sh --resume 20260909T213304-b37d7894'
-python3 target/m98/verify-qualification.py 20260909T221531-9189674e
-python3 target/m98/freeze-preview.py 20260909T221531-9189674e
-python3 target/m98/install-preview.py 20260909T221531-9189674e
-python3 target/m98/upgrade-latency-preview.py
-node target/m98/verify-latency-preview.mjs
-```
-
-The qualified production is served at `http://100.94.63.83:18106/` and the editable
-manifold at Tailscale port 18108. Both previews pass all 13 served-route byte checks
-and actual WASM/WebGL2 readiness. The folder preview shows 364 finite scene items,
-working SSE and no browser errors. Its authenticated response shrinks from
-**628,107 bytes to 59,826 bytes** with exact decoded-byte equality. The existing
-plain-HTTP secure-random UUID shim remains explicitly accounted for in route verification.
-
-All seven authored manifold files are preserved in the original folder
-`target/m98/installed-preview-20260909T144235-377abb33/manifold`. Current and accepted
-source retain hash `01fe512c5221bccbc1a032eb32480101005c9ca3571f99e504a1619647b3d59a`.
-Restart creates a new token and authority epoch; verification leaves the new editor
-lease unclaimed and preserves authority, source and write state within that session.
-The current folder URL is recorded in `target/m98/latency-preview-verification.json`;
-static verification is in `target/m98/latency-static-preview-verification.json`.
-M97 and its preview are outside this replacement.
-
-Static verification ran from `crates/geosolve-demo-web/frontend` with absolute paths:
+The final command was:
 
 ```bash
-GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm run verify:artifact -- \
-  --manifest /home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/preview-20260909T221531-9189674e/production.json \
-  --directory /home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/preview-20260909T221531-9189674e/geosolve-production \
-  --url http://100.94.63.83:18106/ \
-  --receipt /home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/latency-static-preview-verification.json
+nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260909T213304-b37d7894'
 ```
 
-Final private browser probes consume the exact installed qualified CLI runtime and
-production distribution, preserving the live session and original manifold files:
-
-```bash
-env -u GEOSOLVE_DIST \
-  GEOSOLVE_PROBE_LABEL=qualified-20260909T221531-9189674e \
-  GEOSOLVE_PROBE_RUNTIME=/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/installed-preview-20260909T221531-9189674e/node_modules/@geosolve/cli/runtime/scripts/file-workspace.mjs \
-  node target/m98/probe-folder-wheel-latency.mjs 20260909T221531-9189674e
-env -u GEOSOLVE_DIST \
-  GEOSOLVE_PROBE_LABEL=qualified-20260909T221531-9189674e \
-  GEOSOLVE_PROBE_RUNTIME=/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m98/installed-preview-20260909T221531-9189674e/node_modules/@geosolve/cli/runtime/scripts/file-workspace.mjs \
-  node target/m98/probe-folder-navigation-latency.mjs 20260909T221531-9189674e
-```
+Exact-byte/MIME and actual WASM/WebGL2 readiness passed. A representative folder
+response shrank from **628,107 bytes to 59,826 bytes**, with exact decoded equality.
+The historical HTTP preview's explicit UUID compatibility insertion was accounted
+for separately; it did not alter the qualified JS/CSS/WASM. Source and accepted
+state were retained across restart. Isolated probes used the exact installed CLI
+and distribution, with these controlled network observations:
 
 | Input | Conditions | Qualified installed product |
 |---|---|---|

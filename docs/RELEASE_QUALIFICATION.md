@@ -2,18 +2,21 @@
 
 # Proportional release qualification
 
-M93 implements one local gate with explicit stage inputs, immutable preparation outputs,
-bounded execution and authenticated reuse. It preserves the sequential reference and all
-existing solver, golden, native, WASM, package, browser and performance assertions.
-Completed functional qualification and measured timing limits are recorded separately in
-[M93_QUALIFICATION.md](M93_QUALIFICATION.md). The supervising user accepted and closed M93 on
-2026-09-07 with edit/prune latency above target and the historical four-entry replay unperformed.
-That acceptance preserves the measured limitations and the evidence requirements below.
+The local release gate records explicit stage inputs, immutable preparation outputs,
+bounded execution and authenticated reuse. It covers solver, golden, native/WASM,
+package, browser and performance assertions. Use focused checks during development
+and the complete gate for a product nomination. See [Development](DEVELOPMENT.md)
+for check routing and [Getting started](GETTING_STARTED.md) for prerequisites.
+
+The latest accepted baseline is [M99](M99_QUALIFICATION.md). M100 documentation
+maintenance does not replace that qualified product. The original runner's design
+and measured timing limits remain in [M93 qualification](M93_QUALIFICATION.md).
 
 ## Commands
 
-Run in the repository Nix shell so Rust, Deno, Node, wasm-bindgen and wasm-opt match the
-pinned environment. The default is three stage workers and two libtest threads per native
+Run in a compatible repository development environment; record the exact Rust,
+Deno, Node, wasm-bindgen and wasm-opt identities. `shell.nix` uses the configured
+`nixpkgs`, so a plain shell invocation alone does not pin those versions. The default is three stage workers and two libtest threads per native
 stage. Up to two memory-marked stages can overlap within that total; Playwright retains one slot
 for its large sample cases. One build lock serializes Cargo writers independently of memory
 admission. Protected tests start after their own preparation and can overlap later builds. Prepared frontend
@@ -24,8 +27,7 @@ generation finish during preflight, before this pipeline starts.
 Measured performance remains fully exclusive. The collaboration browser suite also runs
 exclusively because it includes mandatory event-to-paint, peer-publication and navigation
 latency budgets; other browser and build stages must finish before those measurements. Cargo compilation uses four jobs by default, with an explicit `CARGO_BUILD_JOBS`
-override recorded in the manifest. The recorded host has 64 GiB RAM; integrated qualification records the actual overlap
-and resource costs. `--jobs 1` also reduces the memory-stage limit to one.
+override recorded in the manifest. Integrated qualification records actual overlap and resource costs for its host. `--jobs 1` also reduces the memory-stage limit to one.
 
 ```bash
 nix-shell shell.nix --run './scripts/release-gate.sh --plan'

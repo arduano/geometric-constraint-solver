@@ -2,6 +2,10 @@
 
 These canonical scenarios are shared by domain tests and `geosolve-demo-web`. Their constructors belong in reusable domain test support; the web crate must not duplicate equations.
 
+Scenario contracts and numerical thresholds remain authoritative. Milestone results and
+artifact names below record historical qualification; they are not preview startup
+instructions. Current procedures are in [Release qualification](RELEASE_QUALIFICATION.md).
+
 All lengths below are model units. Each scenario should also run under uniform scales `1e-6` and `1e6` where specified by `ACCEPTANCE.md`.
 
 ## S1 — Underconstrained triangle with drag target
@@ -1276,7 +1280,7 @@ purpose-based sample library and M65 completes approved predictable, bounded pro
 M66 completes the explicitly approved computed-feature cut for ordinary multi-corner 2D Fillets;
 M67 completed the approved cleanup cut and added no new scenario fixture. Its focused UAT used the
 ordinary editable Samples catalog to prove the surviving workbench after removal of developer-only
-cards and frozen harnesses. M68 completed and received supervising-human approval under ADR 0032
+cards and frozen harnesses. M68 completed and received maintainer approval under ADR 0032
 for the Fillet direct-manipulation scenarios below: branch-preserving radius rails, explicit local
 branch/contact/
 retention actions, Current-only interaction history, pointer capture and separate friendly/fold
@@ -1307,11 +1311,11 @@ source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` and is retained as
 historical release evidence. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937`
 passes that complete gate, including its 198-row clean oracle and 152.49-second 256-moving-body
-sparse crossover. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was
-served at `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched, with ordered-
+sparse crossover. Its immutable seven-file snapshot `geosolve-m70b-f005-uat.Q5c9Wi` was
+served at the archived preview for M70B; every file and `/` byte-matched, with ordered-
 manifest aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`.
 That server has since retired. The focused F005
-movement behavior was subsequently reported fixed by the supervising human, who requested sign-off
+movement behavior was subsequently reported fixed by the maintainer, who requested sign-off
 once the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with the two-previously-Current transaction and CircularArc transport/domain
 regressions; the golden and release bytes remain unchanged. M70B is closed under that scoped
@@ -1324,7 +1328,7 @@ correction, M71-F004's endpoint-axis/direction composition, M71-F005's distinct-
 orthogonal point-axis intersection and M71-F006's tighter default capture envelope remain in
 focused owner regressions rather than adding systemic golden dimensions. Clean post-F005/F006
 qualification and byte-verified replacement publication pass; F003/F004 evidence remains
-historical. The supervising human accepted the scoped U1-U5 review and explicitly closed M71 on
+historical. The maintainer accepted the scoped U1-U5 review and explicitly closed M71 on
 2026-08-14.
 Every new fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1337,7 +1341,7 @@ are recorded at completed M40.7, M53 and M61-M77. M72's scoped UAT and exact fin
 verification complete its direct automated qualification. Completed M73 qualified its F001-F003
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
-immutable Tailscale UAT snapshot, received focused supervising-human approval and exact-verified
+immutable preview UAT snapshot, received focused maintainer approval and exact-verified
 the final GitHub Pages artifact. M73 adds no new editable sample or browser scenario mode. M74 has
 explicit scoped closure approval on its clean-qualified, byte-verified F001 replacement. Its
 hands-on intrinsic-datum and desktop-polish scorecard is intentionally deferred into the next
@@ -1345,13 +1349,13 @@ bug-fixing/UAT follow-up milestone rather than claimed as completed human eviden
 M74 Pages publication passes. That follow-up became M75: its initial immutable nomination was
 withdrawn after M75-F001, the F001 replacement passed the complete clean gate and immutable
 nomination, and M75-F002 then withdrew it after browser paint order hid a valid computed-radius
-owner. The F002 correction now passes the complete clean replacement gate, immutable Tailscale
-nomination and exact served-byte checks. On 2026-08-16 the supervising caller accepted the exact
+owner. The F002 correction now passes the complete clean replacement gate, immutable preview
+nomination and exact served-byte checks. On 2026-08-16 the maintainer accepted the exact
 post-F002 candidate, focused F001/F002 hover recheck and U1-U12 for scoped closure. The detailed
 UAT steps were not individually logged, so this is not a claimed step-by-step replay. Exact Pages
 run `31939764951`, artifact `9261974799` and deployment `5929879555` now pass public-byte and
 M72/M74/M75 browser verification, completing M75. M76 implementation and its final angle/Origin
-feature refinements pass complete clean qualification and immutable byte-verified Tailscale
+feature refinements pass complete clean qualification and immutable byte-verified preview
 replacement publication. The caller accepts U1-U4 for scoped closure and explicitly waives a
 separate post-refinement replay; that disposition does not invent individual observations. Exact
 GitHub Pages publication, the unchanged retained M72 browser verification and M76-adapted retained
@@ -1359,9 +1363,9 @@ M74/M75 browser verification now pass, completing M76. M77 subsequently complete
 any completed M76 evidence. M78 is complete under ADR 0036 with an exact nine-family/
 25-variant headless geometry authoring catalog. Initial candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete clean qualification plus immutable
-Tailscale nomination but is withdrawn from current UAT by M78-F011. Replacement source
+preview nomination but is withdrawn from current UAT by M78-F011. Replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete clean qualification plus immutable,
-byte-verified Tailscale nomination. Human UAT and closeout approval pass. Approval descendant
+byte-verified preview nomination. Human UAT and closeout approval pass. Approval descendant
 `a6d504e` passes Pages run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact
 hosted-byte aggregate `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`
 without replacing qualified product source `793e9de`.
@@ -1410,7 +1414,7 @@ selection, standard constraints, driving/reference dimensions, projected drag,
 redundancy, conflict, deletion and history. The prepared 30-45 minute review judges
 discoverability, manipulation intent and whether accepted, solved-preview, unsolved
 and rejected states are unmistakable. Automation proves all numerical facts.
-The supervising human approved this gate on 2026-07-26 after the mechanically
+The maintainer approved this gate on 2026-07-26 after the mechanically
 requalified UAT-C1-F4 and UAT-C1-F5 targeted rechecks.
 
 ### UAT-C1-F4 - Constrained release preserves the accepted preview branch
@@ -1552,7 +1556,7 @@ commutative operands, retained parent edits, lifecycle, draft-v5 round trips, fr
 inference ranking and exact publication authority. Human review follows `docs/M71_UAT.md` for
 discoverability, annotation clarity, predictable authoring/inference and recovery. The clean,
 byte-verified F005/F006 replacement is the approved M71 closing product; the scoped review and
-explicit supervising-human approval pass.
+explicit maintainer approval pass.
 
 ### M71-F003 - Native midpoint axis alignment is durable
 
@@ -1781,13 +1785,13 @@ Clean replacement qualification/publication (2026-08-15): exact product source
 325/325 plus integrations, public M73 3/3, unchanged golden 234/234, native/WASM parity, the full
 workspace/documentation/package/performance matrix, 135.18-second 256-body sparse crossover and
 Trunk 0.21.14 success. Its exact seven-file read-only snapshot
-`/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
+`geosolve-m73-uat.JKAWtJ`, aggregate
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, was served only on
-Tailscale at `http://100.94.63.83:8080/` and byte-verified file-by-file plus `/`. It was current UAT
+the nominated preview and byte-verified file-by-file plus `/`. It was current UAT
 authority at that nomination checkpoint. The old server exited while its historical snapshot
 remains. M73 remained open only for focused human UAT and explicit approval then.
 
-Scoped closure (2026-08-15): the supervising caller confirmed that the focused behavior works and
+Scoped closure (2026-08-15): the maintainer confirmed that the focused behavior works and
 requested milestone closure. M73-U1 through M73-U4 are accepted for the recorded scope; direct
 owner regressions remain authoritative for semantic permutations not manually replayed. M73 is
 complete.
@@ -1801,7 +1805,7 @@ artifact `9245585021`. Its downloaded inner tar SHA-256 is
 manifest aggregate is `4e562280bc0656f9bd7358057d62739ba02e74a5f76b0328c5e45bf18640031c`.
 The public root and all seven paths return HTTP 200 and match the artifact byte-for-byte; `/`
 equals `index.html`, application URLs use `/geometric-constraint-solver/`, and JavaScript/WASM/CSS
-media types are correct. The separate Tailscale bytes remain UAT-snapshot evidence, not the public
+media types are correct. The separate preview bytes remain UAT-snapshot evidence, not the public
 publication authority.
 
 ### M74-RG1 - Intrinsic datum relations remain identity-free
@@ -1880,7 +1884,7 @@ dialog-owned targets; Ctrl+Command, Alt-modified and editing chords do nothing t
 Pointer start, hover, double-click and wheel input in SVG letterbox bands are inert, while input in
 the mapped sketch plane and existing captured-gesture completion remain unchanged. Direct Rust/WASM
 presentation tests own translation; `docs/M74_UAT.md` preserves the hands-on feel scorecard. Clean
-qualification and immutable Tailscale nomination pass. The supervising caller approved scoped M74
+qualification and immutable preview nomination pass. The maintainer approved scoped M74
 closure on 2026-08-16 without a separate hands-on pass; that scorecard and any findings are
 deferred into the subsequently completed M75 bug-fixing/UAT follow-up milestone.
 
@@ -1893,7 +1897,7 @@ artifact `9257602997` through deployment `5927348343`. Its downloaded inner tar 
 aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`. The public root
 and all seven paths return HTTP 200 and match the artifact byte-for-byte; `/` equals `index.html`,
 application URLs are repository-prefixed, media types are correct, and both public two-size
-Chromium checks pass. The separate Tailscale bytes remain frozen-candidate evidence, not public
+Chromium checks pass. The separate preview bytes remain frozen-candidate evidence, not public
 publication authority. U1-U8 transferred into M75 and are accepted under its scoped close decision.
 
 ### M75-H1 - Select hover predicts the primary pointer-down owner
@@ -1990,9 +1994,9 @@ with the latest coalesced pointer coordinate; captured gestures remain editor-ow
 Exact F001 replacement source `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`, tree
 `7bff59c5d4d36d1acb687a93d78707b32e323d65`, passes the complete gate with native/WASM M75 11/11,
 demo-web 116/116, unchanged 270-row golden evidence and a 143.27-second sparse crossover. Its
-read-only snapshot `/tmp/geosolve-m75-f001-uat.2Ju7gq`, aggregate
+read-only snapshot `geosolve-m75-f001-uat.2Ju7gq`, aggregate
 `9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`, is byte-verified at the
-Tailscale endpoint. M75-F002 supersedes it before any human evidence.
+preview endpoint. M75-F002 supersedes it before any human evidence.
 
 ### M75-F002 - Computed-radius owner survives browser paint overlap
 
@@ -2022,7 +2026,7 @@ and spoke, while presentation coverage freezes all three pointer-active surfaces
 
 Focused evidence passes demo-web 117/117, native/WASM M75 11/11, warnings-denied Clippy, demo-web
 WASM, formatting, diff and unchanged 270-row golden checks. Chromium script
-`/tmp/m75_f001_browser_check.mjs`, SHA-256
+`m75_f001_browser_check.mjs`, SHA-256
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes all 6/6 cases on a
 provisional corrected local build, including the overlapped grip and visible spoke/rail
 hover/capture/release paths.
@@ -2030,14 +2034,14 @@ hover/capture/release paths.
 Exact post-F002 source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
 `83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes the complete 480.94-second release gate with
 demo-web 117/117, native/WASM M75 11/11, unchanged 270/270 golden, the 141.82-second sparse
-crossover and Trunk. Its no-rebuild read-only snapshot `/tmp/geosolve-m75-f002-uat.hlSQYT`,
-aggregate `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is byte-verified and
-was served by PID `37152` at `http://100.94.63.83:8080/`; old PID `4026985` was already retired.
-PID `37152` was subsequently retired before M76 took the shared endpoint. HTTP evidence is
-retained at `/tmp/geosolve-m75-f002-http-verify.1nRxtz`. Tailscale M72/M74 checks pass at both sizes,
+crossover and Trunk. The no-rebuild read-only artifact aggregate
+`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`
+passed exact served-byte verification.
+ HTTP evidence is
+retained at `geosolve-m75-f002-http-verify.1nRxtz`. preview M72/M74 checks pass at both sizes,
 and M75 script hash `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`
 passes 6/6 on the frozen bytes. This was current mechanical UAT authority at nomination. Automated
-evidence alone disposed no human item. The supervising caller subsequently accepted this exact
+evidence alone disposed no human item. The maintainer subsequently accepted this exact
 candidate, the focused F001/F002 recheck and U1-U12 for scoped closure on 2026-08-16 without
 claiming an individually logged execution of every detailed step. Documentation-only approval
 descendant `f80235978fbcdccd58c45a08bccf3969a20110c9` passes Pages run `31939764951`, artifact
@@ -2049,7 +2053,7 @@ the public M72/M74/M75 browser matrices verify, completing M75.
 
 ### M75-U1 - Deferred M74 review and hover accessibility matrix
 
-Status: accepted for scoped closure under the supervising caller's 2026-08-16 approval. U1-U12
+Status: accepted for scoped closure under the maintainer's 2026-08-16 approval. U1-U12
 were not individually logged, so this status records the explicit closing disposition rather than
 a separate step-by-step execution transcript.
 
@@ -2066,7 +2070,7 @@ must remain visible without synthesizing pointer hover, accessible names remain 
 hover never steals focus, and overlay ownership clears canvas hover. Selected/related/problem and
 primary-hover states retain non-colour visual distinctions. The prepared matrix remains the
 reference for any future focused regression. For M75 closure, M74-U1/M75-U1 through M75-U12 are
-accepted under the scoped approval above; that disposition comes from the supervising caller
+accepted under the scoped approval above; that disposition comes from the maintainer
 rather than automation and does not invent individual observations.
 
 ### M76-A1 - Seven-family dimension annotation sampler
@@ -2115,7 +2119,7 @@ unchanged.
 
 M76 closure uses exact clean-qualified source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`,
 tree `248cba4509a992aeff7a02dd6d57a1a2481380a4`, and no-rebuild snapshot
-`/tmp/geosolve-m76-final-uat.65Y8J1`, aggregate
+`geosolve-m76-final-uat.65Y8J1`, aggregate
 `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`.
 U1-U4 are accepted for scoped closure under the caller's 2026-08-17 approval; the individual
 steps were not separately logged and a post-refinement replay was intentionally not required. The
@@ -2133,7 +2137,7 @@ both desktop sizes. M76-adapted copies of the retained M74 and M75 checks replac
 obsolete Origin-canvas expectations with the approved two-axis intersection contract; hashes
 `4aff982c6a9e10702d7b0179c17682c6904bb6c28362ebefe967705a984c3355` and
 `161e96d541dbcc189dbbc23c47da672e3080b7c7646e45c11ef458a5e521a067` pass M74 at both sizes and
-M75 6/6. Pages is final public-byte authority; the Tailscale snapshot is separately frozen
+M75 6/6. Pages is final public-byte authority; the preview snapshot is separately frozen
 candidate evidence and no cross-build byte identity is claimed. M76 is complete.
 
 ### M77-A1 - Selected curve control inventory and owner parity
@@ -2217,12 +2221,12 @@ M77 is approved for closeout. Implementation and direct coverage for every A1-A6
 resolved findings `M77-F008` through `M77-F016` add no golden row. Source `f53934f` contains the
 replacement corrections. Exact product source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its no-rebuild snapshot
-`/tmp/geosolve-m77-uat.ARrQFw`, aggregate
+`geosolve-m77-uat.ARrQFw`, aggregate
 `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`, is immutably frozen and
-byte-verified on Tailscale. Exact source `51a3b95`, tree `8d154a1`, snapshot
-`/tmp/geosolve-m77-uat.1mDjQv` and aggregate
+byte-verified on preview. Exact source `51a3b95`, tree `8d154a1`, snapshot
+`geosolve-m77-uat.1mDjQv` and aggregate
 `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b` are superseded historical
-evidence only. On 2026-08-17 the supervising caller explicitly approved the current replacement and
+evidence only. On 2026-08-17 the maintainer explicitly approved the current replacement and
 requested closure; U1-U6 pass under that scoped disposition. Approval descendant `66a89b7` passes
 Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`. Root plus all seven
 hosted paths byte-match exact ordered-manifest aggregate
@@ -2444,10 +2448,10 @@ Replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
 through 11:19:06 AEST with 1,734 passing locked all-feature workspace tests, three intentional
 ignores, unchanged 270/270 golden authority, warnings-denied Clippy/Rustdoc, native/WASM parity,
 performance/licence/package checks, the 149.39-second sparse crossover and Trunk 0.21.14. Its exact
-seven-file output is frozen without rebuilding at `/tmp/geosolve-m78-f011-uat.MOsOFy`, ordered-
+seven-file output is frozen without rebuilding at `geosolve-m78-f011-uat.MOsOFy`, ordered-
 manifest aggregate
 `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`, and byte-verified at
-`http://100.94.63.83:8080/` for root plus every file. On 2026-08-18 the supervising caller accepts
+the archived preview for root plus every file. On 2026-08-18 the maintainer accepts
 U1-U8, reports the focused F011 replacement behaving correctly and requests closure.
 Documentation-only approval descendant `a6d504e1d15ddcdd7e4cb02190b0ef83de814be0`, tree
 `ca50d013fe4a6ac040336344056a1d142c5629fa`, passes Pages run `32096209036`, artifact
@@ -2502,8 +2506,8 @@ redundancy, redundant positional intent and direction-only candidates retain fai
 `RedundantInferredConstruction` behavior.
 
 M79 product source `6874aa1` passes focused native/WASM, demo, workspace and clean release
-qualification plus unchanged 270-row golden authority. Its immutable Tailscale candidate is byte-
-verified and supervising-human UAT accepts U1-U5 without a new finding. Documentation-only
+qualification plus unchanged 270-row golden authority. Its immutable preview candidate is byte-
+verified and maintainer UAT accepts U1-U5 without a new finding. Documentation-only
 approval descendant `2560ca5`, tree `bad5662`, passes Pages run `32116835502`, artifact
 `9317131695` and deployment `5959116526`. Root plus all seven hosted paths byte-match ordered-
 manifest aggregate `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`.
@@ -2627,7 +2631,7 @@ failure preserve identity non-reuse and one-step transaction semantics.
 
 Status: implemented; focused, broad and clean-nomination mechanical evidence passes.
 
-### M80-O8 - Headless authoring, preview and Tailscale UAT
+### M80-O8 - Headless authoring, preview and UAT
 
 The shared scene resolver returns whole-face or eligible ordered-edge ownership consistently for
 hover and pointer-down. A separate Offset authoring state owns Distance, Flip, collection, exact
@@ -2656,20 +2660,19 @@ disposable cache and recomputes safely after cache loss.
 Workspace-v6 retains a compatible placement, while reproduction copy omits it and reproduction
 load ignores any legacy cache row so placement is recomputed.
 Focused native/WASM/presentation tests and the complete clean gate precede a no-rebuild read-only
-snapshot kept byte-verified on `http://100.94.63.83:8080/` through `docs/M80_UAT.md`. Human UAT and
+snapshot kept byte-verified on the archived preview through `docs/M80_UAT.md`. Human UAT and
 exact Pages publication now pass; the listener is retired and M80 is closed.
 
 Historical pre-amendment source `b83dad2`, tree `440d66e`, snapshot
-`/tmp/geosolve-m80-uat.hggNdd` and ordered-manifest aggregate
+`geosolve-m80-uat.hggNdd` and ordered-manifest aggregate
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37` pass the complete gate,
-temporary-port verification and final byte verification at `http://100.94.63.83:8080/`. The former
+temporary-port verification and final byte verification at the archived preview. The former
 `949c3db` snapshot is withdrawn and no longer served. The native-Fillet scope amendment withdraws
 `b83dad2` from acceptance; its recorded server has exited and the snapshot is no longer served.
 Status: F016 replacement source `29d8e41`, tree `44ecb95`, snapshot
-`/tmp/geosolve-m80-uat.CPuVgx` and ordered-manifest aggregate
+`geosolve-m80-uat.CPuVgx` and ordered-manifest aggregate
 `75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997` pass the clean replacement
-gate, immutable freeze and exact temporary/final HTTP verification. Retired PID `1031421` served
-those bytes at `http://100.94.63.83:8080/` through accepted human UAT. Approval descendant
+gate, immutable freeze and exact temporary/final HTTP verification. Those exact bytes were retained through accepted human UAT. Approval descendant
 `ece6c3c`, Pages run `32262792440` and artifact `9369119336` pass exact hosted-byte verification. The
 former `05b8b3b` nomination is withdrawn and no longer served.
 
@@ -2935,7 +2938,7 @@ native Fillet remains ordinary shortened lines, one circular arc, two tangencies
 residual, Fillet-specific relation, inferred branch or persistence format is allowed.
 
 Status: fixed and mechanically passing through replacement clean source `29d8e41`, tree `44ecb95`,
-and its exact Tailscale nomination; human UAT and exact Pages publication pass. The former
+and its exact preview nomination; human UAT and exact Pages publication pass. The former
 `05b8b3b` nomination is withdrawn from current UAT.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
@@ -3289,9 +3292,9 @@ Later human UAT opened `M70B-F003` outside the matrix's constraint/dimension and
 scope; no reproduction payload was needed because the exact topology is compactly constructed
 through public Rust APIs. `docs/M70B_HARDENING.md` owns the full readable checklist,
 commands, seed and limitations. This does not replace the exact M70B-F001/F002 payload regressions,
-the broader M55/M62 family-by-primitive coverage or the supervising-human M70B close record. Clean
+the broader M55/M62 family-by-primitive coverage or the maintainer M70B close record. Clean
 source `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` also passes the complete release gate and its fresh
-seven-file Tailscale snapshot is byte-verified.
+seven-file preview snapshot is byte-verified.
 
 ### M70B-H2 - Canonical golden defect workflow
 
@@ -3346,8 +3349,8 @@ byte-identical, so the F003/F004 repair checkpoint was 197/197 `PASS` at SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Its focused and complete
 workspace qualification passed. Clean source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate. Its immutable
-seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` was served at
-`http://100.94.63.83:8080/` for that historical checkpoint; every file and `/` byte-matched the
+seven-file snapshot `geosolve-m70b-f003-f004-uat.lKC2xY` was served at
+the archived preview for that historical checkpoint; every file and `/` byte-matched the
 snapshot, whose ordered-manifest aggregate was
 `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. F005 superseded that
 publication.
@@ -3358,10 +3361,10 @@ F005 preserves all 197 records and appends the source-rotation row at fingerprin
 aggregate golden, formatting, warnings-denied all-workspace Clippy, locked all-feature workspace
 tests and the relevant WASM check pass. Clean source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate. Its immutable
-seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served and byte-verified at
-`http://100.94.63.83:8080/` for M70B, with ordered-manifest aggregate
+seven-file snapshot `geosolve-m70b-f005-uat.Q5c9Wi` was served and byte-verified at
+the archived preview for M70B, with ordered-manifest aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`; that server has since
-retired. The supervising human later
+retired. The maintainer later
 reported the F005 movement behavior fixed and requested sign-off once the closing regressions were
 satisfactory. Clean source `48e3cc3` passes the complete release gate after adding the focused
 two-previously-Current retained-coordinator transaction and finite CircularArc/affine transport/
@@ -3707,7 +3710,7 @@ complete production regions, intentionally open/incomplete topology, cancellatio
 recovery. The 60-90 minute replacement review judges local predictability, branch clarity,
 coherent associated motion, topology trust and perceived desktop responsiveness.
 `docs/M61_UAT.md` owns the scorecard; objective facts remain directly qualified and the
-supervising human approved M61 for its recorded scope on 2026-07-29.
+maintainer approved M61 for its recorded scope on 2026-07-29.
 
 ### M62-F001 - Accepted acute line-angle authoring
 
@@ -3796,7 +3799,7 @@ diagnostics from public APIs; a
 human may attach an OS screenshot for a visual finding. Objective defects receive direct
 owning-layer regressions. A targeted human recheck is preferred; a full checkpoint repeats
 only after a material API, schema or primary-workflow change. Completed M40.7, M53, M61, M62 and M63
-required explicit supervising-human sign-off; future milestones require the same explicit closure.
+required explicit maintainer sign-off; future milestones require the same explicit closure.
 
 ### M63-C1 - Geometry-anchored constraint annotations
 
@@ -4053,7 +4056,7 @@ gesture and a Shift-modified press. Foreign/stale intent and the second press re
 mutating authoring, preview, selection or durable identities; the original gesture still
 moves/releases. Modifiers cannot toggle the explicit radius owner away, while ordinary selection
 modifier behavior remains unchanged. `M66-PF004` is mechanically closed by direct regressions on
-`ac31791`; the historical Tailscale candidate was HTTP-verified, but no separate human retest is
+`ac31791`; the historical preview candidate was HTTP-verified, but no separate human retest is
 claimed by the scoped M66 close decision.
 
 ### M66-KL001 - Radius-drag and branch-choice interaction
@@ -4069,7 +4072,7 @@ At M66 close the potential follow-up was deliberately unassigned. Completed M68 
 headless one-dimensional radius rail, frozen absolute branch intent, typed contact metadata and its
 internal continuation seam, retention/continuation actions, bounded local-alternative previews and
 a friendlier specimen while retaining the fold as a regression fixture. None of it was assigned to
-M67; the M68 gate and focused UAT now pass. The supervising human accepted this limitation when
+M67; the M68 gate and focused UAT now pass. The maintainer accepted this limitation when
 explicitly closing M66's
 mechanically qualified computed-Fillet scope on 2026-08-08; that close does not claim a complete
 post-PF004 replay of every scripted UAT step.
@@ -4197,10 +4200,10 @@ overlay inside the canvas panel. Entering or leaving invalidity cannot add a wor
 resize the viewport or change pointer-to-model mapping during the captured gesture.
 Thin Rust/WASM presentation tests own event translation, pointer capture, overlay layout,
 accessibility and browser-default suppression. No browser E2E is restored. Human interaction feel
-is accepted through the approved `docs/M68_UAT.md` Tailscale scorecard.
+is accepted through the approved `docs/M68_UAT.md` preview scorecard.
 
 Status: mechanically implemented and directly presentation-qualified; clean release qualification
-is complete, and the distribution was published and byte-verified through Tailscale. Explicit human
+is complete, and the distribution was published and byte-verified through preview. Explicit human
 UAT is complete.
 
 ### M68-DM7 - Affine source edits preserve grouped-Fillet manipulation
@@ -4235,7 +4238,7 @@ and remain eligible for valid retained-direction actions. The distinction follow
 topology, not a hard-coded circle/ellipse family list.
 
 Status: mechanically implemented and directly feature/editor-qualified by `M68-F004` on
-`a1ed6ff`; release Trunk and all seven Tailscale asset checks pass, and the resolved finding is
+`a1ed6ff`; release Trunk and all seven preview asset checks pass, and the resolved finding is
 accepted under the explicit M68 close decision.
 
 ### Archived solver-owned M66 scenario record
@@ -4273,10 +4276,10 @@ coordinator transactional regression:
 The stable authoring/scene golden remains exactly 271 rows. M81-F001 is an isolated owner
 regression rather than a new systemic family/lifecycle dimension, so no golden input or authority
 byte changes. Exact source `e4eca327fc69c92f95b1722142289302ba4f67bc` passes the clean release
-gate and its no-rebuild seven-file snapshot is byte-verified at the retained Tailscale endpoint;
-the supervising caller accepts the qualified behavior-preservation scorecard and requests closure
+gate and its no-rebuild seven-file snapshot is byte-verified at the retained preview endpoint;
+the maintainer accepts the qualified behavior-preservation scorecard and requests closure
 without opening a new finding. Approval descendant `b582b82` passes Pages run `32328472125`,
-artifact `9392295853` and exact hosted-byte verification; the Tailscale listener is retired and M81
+artifact `9392295853` and exact hosted-byte verification; the preview listener is retired and M81
 is closed.
 
 ## M82 withdrawal and preservation scenarios
@@ -4295,7 +4298,7 @@ M82 is closed by explicit deferral and adds no accepted geometry scenario. Its c
   and retains the complete unaccepted design for future study.
 
 The rejected frozen candidate and its seven M82 findings are historical archive evidence only.
-Former UAT PID `3024723` was retired and port `8080` was free at M82 closeout. No M82 feature UAT or
+ No M82 feature UAT or
 Pages publication is claimed; existing accepted M81 Pages bytes remain public authority. See
 `docs/M82_DEFERRED.md`.
 
@@ -4308,7 +4311,7 @@ M83-F001 through M83-F010. Initial nomination `232b83a` plus sources `a621cdd`, 
 `1e70f3f` and `b0de5af` are superseded historical evidence. F010 source
 `ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`, tree
 `889f730e033ce5c728fddbac345263d8c26b8b93`, passes clean replacement qualification and immutable
-Tailscale nomination. The supervising user's 2026-08-25 milestone-level approval accepts the
+preview nomination. The maintainer's 2026-08-25 milestone-level approval accepts the
 U1-U10/F001-F010 disposition without claiming a separate row-by-row replay. Approval descendant
 `2006c86`, Pages run `32817232564`, exact hosted-byte verification and service retirement pass;
 Pages is final public-byte authority and M83 is closed.
@@ -4506,37 +4509,31 @@ paths continue to pass. The complete demo library must pass on the ordinary test
 `RUST_MIN_STACK` override may hide a multi-fixture test overflow.
 
 The superseded post-F007 no-rebuild release output is frozen at
-`/tmp/geosolve-m83-f007-uat.52r7H7`, aggregate
+`geosolve-m83-f007-uat.52r7H7`, aggregate
 `bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`. The existing 3/3 frozen
 browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Both served-
 byte ledgers have SHA-256
-`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. Historical retained service
-PID `4006665` is retired; its immutable snapshot remains historical evidence.
+`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. The immutable snapshot remains historical evidence.
 
 Source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
 `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, and its post-hardening snapshot remain superseded
 historical evidence after F008/F009. The superseded F008/F009 source
 `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
 `ff0b29dee074bc67a136c23feb5ee56c99deeba1`, passes the fresh clean gate. Its exact no-rebuild
-snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` has aggregate
+snapshot `geosolve-m83-f008-f009-uat.zLfB22EK` has aggregate
 `f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`; the existing 3/3, focused
 F006/F007 2/2 and focused F008/F009 2/2 suites pass locally, and both focused suites pass on
-temporary and retained Tailscale listeners. Both temporary/final eight-path byte ledgers have
-SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. Those historical bytes
-were retired with PID `3376452` only after F010 replacement verification; the immutable snapshot
-remains preserved. Accepted F010 authority is the exact seven-file no-rebuild snapshot
-`/tmp/geosolve-m83-f010-uat.Qmrz2R36`, aggregate
-`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`, formerly served at
-`http://100.94.63.83:8080/` by retired PID `276377`. Its 9/9 browser set passes locally, on a
-temporary Tailscale listener and on the retained listener; both temporary/final HTTP ledgers have
+temporary and retained preview listeners. Both temporary/final eight-path byte ledgers have
+SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. F010 superseded those historical bytes after replacement verification. Accepted F010 authority is the exact seven-file no-rebuild artifact with aggregate
+`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. Its 9/9 browser set passes locally, on a
+temporary preview listener and on the retained listener; both temporary/final HTTP ledgers have
 SHA-256
 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`.
 Approval descendant `2006c86b936c3522cc48fbf26cf78664d5e31e90`, tree `c4a59d2`, passes Pages
 run `32817232564`. Downloaded artifact SHA-256 is
 `06bce15ddea6d21048a25e3630a368ebe0ba883be98ee296869f77c47b86218b`, its seven-file aggregate is
 `75234fd6ff4349e4b75c858b90e90630002a7dd9b9171e47dfe28bc253cf23fc`, and hosted-results SHA-256
-is `bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`. PID `276377` is retired,
-the endpoint refuses connections and the snapshot remains. `docs/M83_UAT.md` owns the accepted
+is `bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`.  `docs/M83_UAT.md` owns the accepted
 scorecard and exact closeout evidence.
 
 ### M83-F001 — deterministic accepted drag identity and exact-once terminal capture
@@ -4671,11 +4668,10 @@ Clean product source `ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`, tree
 `889f730e033ce5c728fddbac345263d8c26b8b93`, passes the complete release gate. The 5,683-line,
 385,323-byte log has SHA-256
 `71495557ca5638000cfec265d9b97c0b0e71c72d3cbdfbbd09dbea8518484f9a`. Its exact no-rebuild
-seven-file snapshot `/tmp/geosolve-m83-f010-uat.Qmrz2R36` is frozen at directory/file modes
+seven-file snapshot `geosolve-m83-f010-uat.Qmrz2R36` is frozen at directory/file modes
 `0555`/`0444` with aggregate
-`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. The same 9/9 browser
-checks pass locally, on temporary Tailscale and on retained PID `276377`; both served-byte ledgers
-have SHA-256 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`.
+`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. The same 9/9 browser checks pass on local and nominated previews; both served-byte
+ledgers have SHA-256 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`.
 This mechanical qualification plus the milestone-level acceptance and exact Pages closeout above
 complete the F010 disposition without claiming a separate row-by-row replay.
 
@@ -4685,23 +4681,23 @@ M84 adds no residual equation and does not reinterpret the 271-row milestone-neu
 separate reviewed ledger owns managed-source parsing, data-artifact expansion, typed references,
 keyed reconciliation, unified history and code-project persistence. ADR 0041 and
 `docs/M84_GOALS.md` are authoritative. The F001-F004 fixtures below are historical implemented
-coverage. The former complete clean candidate and clean-qualified F003/F004 local/Tailscale
+coverage. The former complete clean candidate and clean-qualified F003/F004 local/preview
 nominations remain withdrawn historical evidence. M84-F005 also withdraws the direct-authoring
 `41e65a4` nomination. Collaborative overlay and semantic interaction authority plus F006 audit
 hardening are implemented and focused-qualified. F007 then withdraws combined source `ff2e142` and
 its frozen candidate after reproducing false terminal conflicts on multi-frame producer drags.
 F007 source `cc2f05e`, tree `6b8fc41`, is historical mechanical evidence. The eight-demo creative-
 catalog amendment and M84-F008/F009 corrections were clean-qualified and frozen at source
-`c74651c`, tree `a904584`, snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws
+`c74651c`, tree `a904584`, snapshot `geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws
 that nomination after a Compass Rose center release durably selected another valid solution.
 Coupled semantic-terminal durability is implemented, clean-qualified and frozen without rebuild at
-source `cf463838`, tree `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. M84-F011
+source `cf463838`, tree `992e587`, snapshot `geosolve-m84-f010-uat.7R5eXQoz`. M84-F011
 withdraws that nomination. Exact F011 source `e28721a`, tree `0152097`, snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` passes replacement clean qualification, immutable freeze,
+`geosolve-m84-f011-uat.ps736NLh` passes replacement clean qualification, immutable freeze,
 exact temporary/retained byte verification and focused frozen manifold/PNG/authority 1/1 on both
 endpoints. M84-F012 withdraws F011 from current nomination while annotation paint/pick visibility
 and WYSIWYG provisional-clean export become the clean-qualified immutable replacement. Exact F012
-source `84dd768`, tree `429ed56`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` passes exact
+source `84dd768`, tree `429ed56`, snapshot `geosolve-m84-f012-uat.nMOymIIM` passes exact
 temporary/retained byte verification and focused browser checks 1/1 on both endpoints. F011 remains
 historical rollback evidence. U1-U16 pass under milestone-level approval without claiming a
 separate row-by-row replay. Approval descendant `e6e960d`, Pages run `33068058169`, artifact
@@ -4903,7 +4899,7 @@ passes 270/270, including real no-motion, exact stored-session mismatch, mutatio
 generic-save preservation regressions; the sketch-code suites and focused warnings-denied
 Clippy/WASM checks pass. The frozen `ff2e142` candidate is withdrawn. Exact replacement source
 `cc2f05e`, tree `6b8fc41`, then passes the complete clean gate, immutable freeze, retained
-Tailscale `:8080` publication and refreshed 14/14 browser matrix on both endpoints. UAT remains
+preview `:8080` publication and refreshed 14/14 browser matrix on both endpoints. UAT remains
 pending.
 
 ### M84-F008 — fitted installed scenes and visible sample Fillets
@@ -4968,7 +4964,7 @@ tolerance or branch state changes.
 
 Exact source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`, passes the complete clean gate and is frozen without
-rebuild at `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, modes `0555`/`0444`, aggregate
+rebuild at `geosolve-m84-f010-uat.7R5eXQoz`, modes `0555`/`0444`, aggregate
 `ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`. Focused Compass 1/1 and
 the carried 14/14 browser matrix pass against exact temporary and retained bytes. The focused case
 performs six drags, samples each release at +50/+250/+500/+1000 ms, retains all four spoke
@@ -5116,47 +5112,42 @@ milestone-neutral golden. Focused format, warnings-denied Clippy/Rustdoc, locked
 actual-WASM, TypeScript and package-closure checks pass. Withdrawn historical source `79078ec`,
 tree `05aefb0`, passed Trunk and the complete clean gate (log SHA-256
 `0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`). The no-rebuild
-snapshot `/tmp/geosolve-m84-uat.aHw5ePSW`, aggregate
+snapshot `geosolve-m84-uat.aHw5ePSW`, aggregate
 `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, passes exact local and
-retained-Tailscale HTTP verification plus focused browser 4/4 on each endpoint. Those bytes are
-defect evidence only; old PID `2426265` was retired after the replacement passed temporary
-verification.
+retained preview HTTP verification plus focused browser 4/4 on each endpoint. Those bytes are historical defect evidence only.
 
 Replacement source `b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
 `7062806695e1e134c339cfa47903145d321f6350`, passes the complete clean gate from 00:24:02 through
 00:46:20.940662 AEST on 2026-08-26, exit 0. Its 6,192-line, 414,397-byte log
-`/tmp/geosolve-m84-f003b-release-gate.log` has SHA-256
+`geosolve-m84-f003b-release-gate.log` has SHA-256
 `eb05d3c1e460f5cb7be410dc44d0af0c4b4eaf4fd775423b676c77a84a433f90`. The unchanged 271-row
 golden has SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and the separate
 M84 ledger remains `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
-The exact no-rebuild snapshot `/tmp/geosolve-m84-f003-uat.mO67NI`, directory/files `0555`/`0444`,
+The exact no-rebuild snapshot `geosolve-m84-f003-uat.mO67NI`, directory/files `0555`/`0444`,
 has seven regular non-symlink files and aggregate
 `38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`; source, copied and frozen
 manifests match. Temporary and retained eight-path HTTP ledgers match at
-`438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`, existing browser 4/4 and
-F003 1/1 pass on both, and retained service PID `3736900` served the snapshot at
-`http://100.94.63.83:8080/`. M84-F004 withdrew those F003 bytes from current UAT and PID `3736900`
-is retired. At that historical checkpoint M84 remained active with U1-U12 pending and no F004
+`438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`;
+existing browser 4/4 and F003 1/1 pass on both. M84-F004 withdrew those F003 bytes from UAT. At that historical checkpoint M84 remained active with U1-U12 pending and no F004
 replacement nomination was claimed.
 
 Historical F004 replacement source `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
 `94a178699f9b2e8bd2a6497c9b0334d43cad2b20`, passes the clean Nix release gate from
 12:37:30.923 through 12:55:14.714 AEST on 2026-08-26, exit 0 in 1,064 seconds. Its 6,118-line,
-412,411-byte log `/tmp/geosolve-m84-f004b-release-gate.log` has SHA-256
+412,411-byte log `geosolve-m84-f004b-release-gate.log` has SHA-256
 `f4c005912392c11cab6600706876c37dab855f0a59c0b7c06565c242b014d6fd`. The unchanged 271-row
 golden remains `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; the separate M84
 ledger remains `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
 
 The exact no-rebuild seven-file output is frozen at
-`/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` with directory/file modes `0555`/`0444`, ordered-manifest
+`geosolve-m84-f004-hv-uat.FF5RFBZe` with directory/file modes `0555`/`0444`, ordered-manifest
 aggregate `f34c46ee5876c4bdb458863cc90c6c6b25281cc8e44f89c8d00eba0f16ca5bbc`, and complete evidence
-at `/tmp/geosolve-m84-f004-hv-freeze-evidence.FiCfIvir`. Temporary and retained eight-path HTTP
+at `geosolve-m84-f004-hv-freeze-evidence.FiCfIvir`. Temporary and retained eight-path HTTP
 ledgers are byte-identical at SHA-256
 `54efcd30699a8632b868d753af88b1f17433c284201688834f7a0f35e2598153`: every path returns 200,
 zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
 `index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both endpoints.
-Historical service PID `3316682` served those immutable bytes at
-`http://100.94.63.83:8080/`; it and the temporary/obsolete pre-axis F004 services are retired. The
+ The
 later direct-authoring amendment withdraws those bytes from current nomination solely because they
 predate amended scope; the qualified replacement below owned the retained endpoint at that
 historical checkpoint.
@@ -5168,24 +5159,21 @@ Apply, retained-invalid persistence, complete source replacement, exact Undo/Red
 origin rejection. The complete clean release gate passes with log SHA-256
 `34bf408f6a565dec5705745f916eb628397a549b4a7002d865269e8d167e179f`; the four-demo M84 ledger and
 271-row golden remain unchanged. The exact no-rebuild snapshot
-`/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`, aggregate
+`geosolve-m84-authored-uat.ZYQQyBQQ`, aggregate
 `6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, passes byte-identical
 temporary/final eight-path HTTP verification and direct 3/3, baseline 4/4, F003 1/1 and F004 2/2
-browser suites on each endpoint. The PID `4081080` service record and complete evidence under
-`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ` are historical only. M84-F005 withdraws this
+browser suites on each endpoint. The direct-authoring candidate and its complete evidence are historical only. M84-F005 withdraws this
 nomination because it predates collaborative draft overlay and semantic drag/deletion authority.
 F007 also withdraws the later frozen `ff2e142` candidate. M84 remains active and unaccepted with
 refreshed U1-U14 pending. Historical F007 product source
 `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
 `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the clean gate; its no-rebuild snapshot
-`/tmp/geosolve-m84-f007-uat.KgW8fpLf` has aggregate
+`geosolve-m84-f007-uat.KgW8fpLf` has aggregate
 `8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`. Temporary and retained
 eight-path ledgers match at
 `efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
-PID `62376` served the exact frozen bytes at `http://100.94.63.83:8080/`; complete evidence is at
-`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. The F009 replacement supersedes it and PID
-`62376` is retired.
+The frozen bytes passed independent preview verification. The F009 replacement supersedes that candidate.
 
 Withdrawn F009 source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
 `a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean gate. Its 6,218-line,
@@ -5194,62 +5182,59 @@ Withdrawn F009 source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
 golden and expanded eight-demo M84 ledger have SHA-256
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
 `bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`. The exact no-rebuild
-snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, directory/files `0555`/`0444`, has ordered-
+snapshot `geosolve-m84-f009-uat.q8cKIN3v`, directory/files `0555`/`0444`, has ordered-
 manifest aggregate `23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`; complete evidence is
-at `/tmp/geosolve-m84-f009-freeze-evidence.3FoVTQ6m`.
+at `geosolve-m84-f009-freeze-evidence.3FoVTQ6m`.
 
 Temporary and retained eight-path ledgers are byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
-Temporary PID `3943194` and F007 PID `62376` are retired. M84-F010 withdraws these bytes;
-historical retained PID `3965271` is retired and the immutable F009 snapshot remains preserved.
+ M84-F010 withdraws these bytes; the immutable F009 snapshot remains historical evidence.
 
 Historical F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`, passes the clean release gate from
 15:58:23.055857854 through 16:17:18.303733569 AEST on 2026-08-27, exit 0. The 6,209-line,
-420,425-byte log `/tmp/geosolve-m84-f010-gate.9NvAi3z5/release-gate.log` has SHA-256
+420,425-byte log `geosolve-m84-f010-gate.9NvAi3z5/release-gate.log` has SHA-256
 `bf57345266005a85b6da20f1105c3cf126d2492ba91e413ef0f07c5d38d3b28a` and final Trunk success.
 The unchanged golden and eight-demo M84 ledger retain SHA-256
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
 `bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
 
 The exact seven-file output is frozen without rebuild at
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`geosolve-m84-f010-uat.7R5eXQoz`, directory/files `0555`/`0444`, ordered-manifest aggregate
 `ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`, with evidence at
-`/tmp/geosolve-m84-f010-freeze-evidence.sXWXNG0Z`. Temporary `:18091` and retained `:8080`
+`geosolve-m84-f010-freeze-evidence.sXWXNG0Z`. Temporary `:18091` and retained `:8080`
 eight-path ledgers are byte-identical at SHA-256
 `57f2f4c2b47a11db8fc76a7f6a2e3d30555cb36e96b191081454a4c47fb85cbe`; all eight paths have exact
 bytes and MIME. Focused Compass 1/1 and the carried 14/14 browser matrix pass on both. The focused
 spec and config have SHA-256 `4b97f570d5122a353b4ee104b26ea46427ca1c3b79aa5a8d35fee7875302dab0`
 and `c0900c1132352ed9471321a2cf5727baf2c004d8eebf1a1bcd8a43146289df9c`.
 
-Historical F010 PID `650971` and temporary F010 PIDs `238809`/`621532` are retired. M84-F011
+ M84-F011
 withdraws this nomination; its snapshot remains rollback evidence.
 
 Historical F011 rollback source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate. Its immutable
-no-rebuild snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh`, aggregate
+no-rebuild snapshot `geosolve-m84-f011-uat.ps736NLh`, aggregate
 `056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`, passes byte-identical
 temporary/retained HTTP verification at ledger SHA-256
 `9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`. Focused frozen
 manifold/PNG/authority checks pass 1/1 on both endpoints and preserve lifecycle, history length,
-project title and viewport markup authority. Retained `geosolve-m84-uat.service`, PID `1485656`,
-served only this immutable snapshot at `http://100.94.63.83:8080/`. M84-F012 withdraws this
-nomination; PID `1485656` is retired and the snapshot remains historical rollback evidence.
+project title and viewport markup authority.  M84-F012 withdraws this nomination; the snapshot remains historical rollback evidence.
 
 Current F012 source `84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`, tree
 `429ed56d2a5b3988d6604079d19e1002f9049d64`, passes the complete clean gate from
 20:36:27.840305756 through 21:01:30.826307821 AEST, exit 0. Its 6,274-line, 424,393-byte log
-`/tmp/geosolve-m84-f012-gate.PmjeGNUa/release-gate.log` has SHA-256
+`geosolve-m84-f012-gate.PmjeGNUa/release-gate.log` has SHA-256
 `04e35c73fe92ca3e089b87bd13b5221c60835b72c9eeba5ed38916b51150004a` and final Trunk success.
-Its immutable seven-file, zero-symlink no-rebuild snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM`,
+Its immutable seven-file, zero-symlink no-rebuild snapshot `geosolve-m84-f012-uat.nMOymIIM`,
 modes `0555`/`0444`, aggregate `166abc1298220090ba4c8b0a37a176fb4f945cceae68771efbd601acc1970169`,
-has complete evidence at `/tmp/geosolve-m84-f012-freeze-evidence.qua6ci1b`. Temporary/retained
+has complete evidence at `geosolve-m84-f012-freeze-evidence.qua6ci1b`. Temporary/retained
 eight-path ledgers are byte-identical at SHA-256
 `66fcd4c852baab5290605066ec856239af7c4f033cef55a4dfd5fb86058645ba`.
 
 Focused annotation paint/pick, underlying-target, authority-neutrality, exact-restoration and
-WYSIWYG PNG checks pass 1/1 on both endpoints. The supervising user accepts U1-U16 at milestone
+WYSIWYG PNG checks pass 1/1 on both endpoints. The maintainer accepts U1-U16 at milestone
 level without claiming a separate row-by-row replay. Approval descendant
 `e6e960d7ac297eb099ba80c19148393e46427606`, tree
 `173c65d5c39c9cb371869fccf22d5b41ddec6ceb`, passes Pages run `33068058169`, build/deploy jobs
@@ -5257,9 +5242,7 @@ level without claiming a separate row-by-row replay. Approval descendant
 15,032,320-byte tar has SHA-256
 `da43ee8d85f81461d579cafa24b9e884451c97a58909955ae188ef9281f7412e`; seven-file aggregate is
 `1f2228abcb163e09ff50db2f19d79b13d9c74e638731d6cd26d5ade324b27835`, and exact hosted ledger
-SHA-256 is `8930c71b3d7bb9b454653ebcb24c58b594f4750a433f745333cf56c01e4c33fb`. Former retained
-`geosolve-m84-uat.service` PID `2241323` is retired, its endpoint refuses connections and the
-immutable F012 snapshot remains preserved. M84 is closed and Pages is final public-byte authority.
+SHA-256 is `8930c71b3d7bb9b454653ebcb24c58b594f4750a433f745333cf56c01e4c33fb`.  M84 is closed and Pages is final public-byte authority.
 
 ## M85 retained presentation performance fixtures
 
@@ -5327,7 +5310,7 @@ for at least three warmed bursts and 120 samples per action class. Camera callba
 at most `33.3 ms` and 30 fps. No task exceeds `50 ms` during a two-second burst. The hidden-
 annotation manifold is diagnostic only and cannot replace the visible result.
 
-The real timing trace runs against local/frozen Tailscale candidate bytes at nomination, not broad
+The real timing trace runs against local/frozen preview candidate bytes at nomination, not broad
 PR CI. Deterministic queue/work/parity regressions remain ordinary native tests.
 
 ### M85-P5 — Hover, drag and exact terminal
@@ -5390,11 +5373,11 @@ ownership, not new geometry or solver semantics.
 
 Format, warnings-denied Clippy, workspace tests, release performance owners, WASM/Trunk, unchanged
 clean golden and the complete clean release gate pass. Freeze without rebuild, exact-verify local
-and retained Tailscale bytes, then complete hands-on M85-U1-U9/U11-U12 and final-source native
+and retained preview bytes, then complete hands-on M85-U1-U9/U11-U12 and final-source native
 flat-adapter M85-U10 evidence. Persisted v1-v6 workspaces normalize into projectional authority and
 the flat retained-coordinator adapter has no normal browser bootstrap; qualification therefore uses
 its direct compatibility/parity owners rather than an artificial UAT fixture. Only explicit
-supervising-user approval authorizes Pages publication, exact hosted-byte verification, service
+maintainer approval authorizes Pages publication, exact hosted-byte verification, service
 retirement and closure. Those post-approval gates now pass.
 
 Committed implementation checkpoint `fd2c560c5c61338a96f145ecb87106af49e93749`, tree
@@ -5415,11 +5398,11 @@ none of the final qualification below is inferred from it.
 Exact qualified source `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
 `b55d012443f4dbf7551e30041da2912e666de9db`, passes the clean release gate from
 `06:40:49` through `07:13:16` AEST with exit `0`. The 6,993-line, 456,580-byte log is
-`/tmp/geosolve-m85-gate.8vK5wDu4/release-gate.log`, SHA-256
+`geosolve-m85-gate.8vK5wDu4/release-gate.log`, SHA-256
 `0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`. Without rebuilding, its
-exact seven-regular-file, zero-symlink output is frozen at `/tmp/geosolve-m85-uat.QX8fU3Q6` with
+exact seven-regular-file, zero-symlink output is frozen at `geosolve-m85-uat.QX8fU3Q6` with
 directory/file modes `0555`/`0444` and ordered-manifest aggregate
-`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and Tailscale
+`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and preview
 eight-path HTTP ledgers are byte-identical at SHA-256
 `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
 
@@ -5434,14 +5417,14 @@ Worst drag preview/terminal pairs are ordinary `5.4 ms`/`87.23 ms`, Compass Rose
 `8.7 ms`/`175.50 ms` and Rounded Polyline `6.6 ms`/`184.93 ms`; all retain preview/terminal parity,
 one exact save per release and no delayed movement.
 
-Final-source M85-U10 evidence at `/tmp/geosolve-m85-u10-final.D1auvz5d` passes all 19 direct
+Final-source M85-U10 evidence at `geosolve-m85-u10-final.D1auvz5d` passes all 19 direct
 compatibility/parity cases without changing source, tree or frozen distribution. Its command and
 result ledgers have SHA-256
 `5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545` and
 `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`; the evidence manifest file
 has SHA-256 `ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`.
 The same immutable candidate was served at `http://127.0.0.1:18100/` and
-`http://100.94.63.83:8080/`. On 2026-08-28 the supervising user approved M85 and requested closeout;
+the archived preview. On 2026-08-28 the maintainer approved M85 and requested closeout;
 that milestone-level decision accepts M85-U1 through M85-U12 without claiming a separately logged
 row-by-row replay. Approval head `e8dfec3467424a9051533658df34c5b406bf3743` then passes Pages
 run `33128387637`, assemble/deploy jobs `98711889276`/`98713212444`, deployment `6133200015` with
@@ -5452,25 +5435,23 @@ The extracted artifact has exactly seven regular files, zero symlinks/non-regula
 ordered-manifest aggregate `8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`.
 Public `/` and all seven paths return HTTP 200 with no redirects, exact MIME, `Content-Length` and
 artifact bytes, no `Location`/`Content-Encoding`, and root equal to `index.html`; hosted results
-`/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` have SHA-256
+`geosolve-m85-pages-verify.39FJNL/results.tsv` have SHA-256
 `206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`. The Pages artifact is a
 fresh repo-prefixed build and is not byte-identical to the frozen UAT snapshot; that snapshot
 remains historical evidence. Product source `5c265e2` is an ancestor of the approval head with only
-the eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0`
-and both endpoints refuse connections. Pages is final M85 public-byte authority and M85 is closed.
+the eight closeout documents changed.  Pages is final M85 public-byte authority and M85 is closed.
 
 ## M86 focused bug-fix fixtures
 
 M86-F001 adds no residual equation and does not reinterpret or expand the milestone-neutral golden.
 Its focused optional code-project regressions and thin browser-Inspector adapter proof pass;
-complete clean qualification, unchanged-golden confirmation and exact no-rebuild local/Tailscale
-nomination also pass. The supervising user's scoped “Looks good” assessment accepts F001 without
+complete clean qualification, unchanged-golden confirmation and exact no-rebuild local/preview
+nomination also pass. The maintainer's scoped “Looks good” assessment accepts F001 without
 claiming a separately logged row-by-row replay. Expanded M86-F002 adds only focused headless
 picking rows, and M86-F003 adds a focused retained code-terminal regression; neither broadens the
 golden. The pre-expansion F002 nomination is withdrawn. The exact saved combined patch passes the
 complete provisional dirty-worktree gate and its trace-enabled descendant passes bounded trace,
-demo-web 316/316, WASM, release-build, golden and exact dual-endpoint byte checks. The supervising
-user's 2026-08-29 close decision accepts M86-U1-U8 without claiming a separately logged row-by-row
+demo-web 316/316, WASM, release-build, golden and exact dual-endpoint byte checks. The maintainer's 2026-08-29 close decision accepts M86-U1-U8 without claiming a separately logged row-by-row
 replay. Accepted source `88d1b5e` / tree `09018e5` is clean-qualified and its exact no-rebuild
 output passes isolated HTTP verification. Approval head `ccf791f` passes exact Pages publication;
 both M86 services are retired and M86 is complete.
@@ -5523,9 +5504,9 @@ regressions remain collateral authority.
 Source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
 `65e092540dab82618d1129229b566a2e791aa40c`, passes the complete clean Nix release gate and
 unchanged 271-case golden. Its exact seven-file Trunk output is frozen without rebuild at
-`/tmp/geosolve-m86-uat.vdEFAxsF`, ordered-manifest aggregate
+`geosolve-m86-uat.vdEFAxsF`, ordered-manifest aggregate
 `1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`. The former local and
-retained Tailscale processes served only that snapshot; all eight paths were exact and their
+retained preview processes served only that snapshot; all eight paths were exact and their
 byte-identical ledgers have SHA-256
 `b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This is historical F001
 evidence, not public authority; Pages remained M85 until M86 publication and exact hosted-byte
@@ -5573,12 +5554,12 @@ exactly. No new golden row, residual/Jacobian test or browser-specific hit rule 
 Historical source `dbe94daf152515169b78a310cf2286f9ea04c80b`, tree
 `77f86c0a198af12e10537dc4d6d7d90066ba48e8`, passes the complete clean gate from 13:46:55 through
 14:20:45 AEST. Its exact seven-file output is frozen without rebuild at
-`/tmp/geosolve-m86-f002-uat.CPfe9QD8`, aggregate
+`geosolve-m86-f002-uat.CPfe9QD8`, aggregate
 `e3f9581a05a8cbf5731b33625fa63f2b35e62f4ebcfdacb6d75a4486f80fc850`. Temporary-local, final
-local and Tailscale eight-path verification are identical at SHA-256
+local and preview eight-path verification are identical at SHA-256
 `e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`. The remote-endpoint escape
 withdraws that pre-expansion nomination; preserve its snapshot and evidence without presenting its
-post-reboot listeners as current candidate identity.
+old preview processes as current candidate identity.
 
 ### M86-C6 — Typed Panel terminal-derived roundoff
 
@@ -5613,14 +5594,10 @@ served-build patch and do not alter the frozen seven-file candidate.
 
 The complete provisional dirty-worktree gate exits `0`; its 6,582-line, 441,920-byte log has
 SHA-256 `93b645c2a2f1850f589b406943f3618da4fc833a42ff6066884602ec3e31ddb6`. The exact no-rebuild
-snapshot `/tmp/geosolve-m86-f002-f003-uat.yGY3Nvly` has ordered-manifest aggregate
+snapshot `geosolve-m86-f002-f003-uat.yGY3Nvly` has ordered-manifest aggregate
 `8f5a4ffcd96819b986ba81a9467d0c83a64365b2d21338cd134e164fa4444ce4`. Temporary, local and
-Tailscale eight-path ledgers are byte-identical at SHA-256
-`dca3e6eeba66e12c873ba4b5ba9b6cadd489060f0e4c7d5ce1070ed3344ec96f`. Temporary PID/invocation
-`965128`/`a06c89f580744568b0d39677ee776da1` passed on `127.0.0.1:18102` and is stopped. Local
-PID/invocation `969297`/`c1681e5beb234ce487dbf9b639cbd9dd` and Tailscale PID/invocation
-`973390`/`c77a5b3abbe94752b864af9bda53c355` subsequently served only that snapshot before the
-trace-enabled services below replaced them. This is provisional dirty-worktree UAT evidence,
+preview eight-path ledgers are byte-identical at SHA-256
+`dca3e6eeba66e12c873ba4b5ba9b6cadd489060f0e4c7d5ce1070ed3344ec96f`.   This is provisional dirty-worktree UAT evidence,
 never clean-source nomination or public authority.
 
 ### M86-C8 — Bounded managed gesture trace
@@ -5640,10 +5617,10 @@ workspaces keep the command disabled.
 Focused bound/sanitization/overflow tests, forced 9-ULP mismatch and full traced rejection tests,
 the real three-release Typed Panel causal stage regression, full demo-web 316/316, warnings-denied
 Clippy, formatting, locked WASM check, release Trunk build, browser smoke and unchanged golden
-`--check` pass. The exact seven-file snapshot `/tmp/geosolve-m86-trace-uat.U1C0QPSf` has aggregate
-`f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`; local/Tailscale `/` and
-every file match it. Evidence `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
-`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The supervising user's
+`--check` pass. The exact seven-file snapshot `geosolve-m86-trace-uat.U1C0QPSf` has aggregate
+`f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`; local/preview `/` and
+every file match it. Evidence `geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
+`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The maintainer's
 final close decision accepts this descendant as UAT authority. The separate clean committed-source
 nomination below passes.
 
@@ -5654,18 +5631,14 @@ Accepted source `88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
 13:35:50 AEST with pipeline `0 0`, identical empty pre/post status, unchanged 271-row golden,
 native/WASM F002 18/18, demo-web 316/316, TypeScript, licences, Rustdoc, package, benchmark,
 release-performance and final Trunk checks. The 6,573-line, 438,432-byte log at
-`/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
+`geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
 `e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`.
 
-Without rebuilding, the gate output was frozen at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`. It contains
+Without rebuilding, the gate output was frozen at `geosolve-m86-clean-uat.d7DF9hcM`. It contains
 exactly seven top-level regular files, zero symlinks/nested entries, directory/files `0555`/`0444`
 and ordered-manifest aggregate
-`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated temporary HTTP
-PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` at `127.0.0.1:18104` returned
-exact bytes for `/` and every file; results SHA-256 was
-`cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, with evidence at
-`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The temporary verifier is retired and refuses
-connections. Pages and retained-service retirement then pass in M86-C10.
+`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated HTTP verification returned exact bytes for `/` and every file; the results
+SHA-256 was `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`. Public verification and closeout are recorded in M86-C10.
 
 ### M86-C10 — Exact public authority and service retirement
 
@@ -5681,22 +5654,18 @@ regular files, zero symlinks/non-regular entries and manifest aggregate
 At `https://arduano.github.io/geometric-constraint-solver/`, `/` plus all seven artifact paths
 must return HTTP 200, zero redirects, exact MIME, `Content-Length` and artifact bytes, no
 `Location`/`Content-Encoding`, and root equal to artifact `index.html`. Results
-`/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` have SHA-256
+`geosolve-m86-pages-verify.NfnpNi/results.tsv` have SHA-256
 `9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`. The Pages artifact is a
-fresh repository-prefixed build and final public authority. Both M86 user services are
-inactive/dead with `MainPID=0`, no exact listener remains, and both endpoints refuse with curl exit
-`7`/HTTP `000`; evidence is `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`. M86 is closed.
+fresh repository-prefixed build and final public authority. M86 is closed.
 
 ## M87 managed-control and browser-free authoring fixtures
 
 Status: **COMPLETE and accepted on 2026-08-31**. These fixtures retain M87's focused owner and
 crossover evidence for managed controls, browser-free authoring, the twelve-project catalog, shared
 rendering and full-detail retained-camera recovery; the entire adaptive-detail/LOD prototype remains
-deleted. The supervising user's close decision accepts M87-U9/U10 at milestone level without a
+deleted. The maintainer's close decision accepts M87-U9/U10 at milestone level without a
 separate row-by-row replay.
-Exact source `32c7289`, tree `38f7175`, passes the complete clean release gate. No immutable
-candidate, public deployment or service-retirement result is claimed; the mutable Tailscale
-listener remains development infrastructure. M87 adds no milestone-neutral golden row. M88
+Exact source `32c7289`, tree `38f7175`, passes the complete clean release gate. No immutable public deployment is claimed for this milestone. M87 adds no milestone-neutral golden row. M88
 followed and is now complete.
 
 ### M87-C1 — One shared Typed Panel radius, complete fan-out
@@ -5860,7 +5829,7 @@ passed for their exact historical pre-F003 slices. The then-current dirty-worktr
 passed at exit `0` on 2026-08-30 with:
 
 ```bash
-TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'
+TMPDIR=target GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=target ./scripts/release-gate.sh'
 ```
 
 The current post-F003 reviewed twelve-row code-project ledger has SHA-256
@@ -5871,14 +5840,14 @@ both TypeScript packages, licence checks, release Trunk assembly and unchanged g
 inside that explicitly dirty mechanical gate. The gate is not a clean source/tree, immutable no-
 rebuild freeze, nomination or publication result.
 
-The supervising user's earlier 2026-08-30 scoped disposition remains historical acceptance of
+The maintainer's earlier 2026-08-30 scoped disposition remains historical acceptance of
 U1-U8 without a separate row-by-row replay after complete LOD removal and the graphics audit. The
 later CNC/Gridfinity amendment adds automated evidence. Exact source
 `32c72892772ee09f8b904153484b02fd9923dc25` and tree
-`38f7175f93c87d11422f5de00e78208f8cf315bb` passed the clean release gate. The supervising user's
+`38f7175f93c87d11422f5de00e78208f8cf315bb` passed the clean release gate. The maintainer's
 2026-08-31 milestone-level close decision accepts U9/U10 without claiming a separate row-by-row
-visual replay. The bundles under `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` and
-`/tmp/geosolve-m87-post-f003.FPHP3b/` remain mutable historical evidence, not an immutable freeze or
+visual replay. The bundles under `geosolve-m87-manufacturing-uat.K7YRaV/` and
+`geosolve-m87-post-f003.FPHP3b/` remain mutable historical evidence, not an immutable freeze or
 published candidate. No clean nomination, publication or service retirement is inferred from the
 close decision. `docs/M87_UAT.md` records that accepted boundary.
 
@@ -6030,8 +5999,7 @@ dirty-worktree gate are retained pre-F003 mechanical evidence only. For the revi
 separately reviewed twelve-row ledger, focused owner suite, native composition and all-demo
 headless/deterministic products pass. Exact source `32c7289`, tree `38f7175`, then passes the
 complete clean release gate. The user's milestone-level close decision accepts U9/U10 without
-inventing a separately replayed visual session. No immutable freeze, publication or service
-retirement is inferred; the mutable Tailscale listener remains development infrastructure.
+inventing a separately replayed visual session. No immutable public deployment is claimed for this milestone.
 
 Final post-F003 qualification: the focused manufacturing owner suite passes 3/3, native composition
 passes 13/13, the exact reviewed-ledger check passes 1/1 and all-demo headless/deterministic
@@ -6039,11 +6007,10 @@ products pass 10/10. Fresh mutable CNC/Gridfinity review bundles remain preserve
 
 ## M88 workflow-led workbench fixtures
 
-Status: **complete and accepted on 2026-09-01**. The immutable M88-F004 React replacement remains
-live as the accepted UAT identity. The supervising user's milestone-level close decision accepts
+Status: **complete and accepted on 2026-09-01**. The immutable M88-F004 React replacement is the accepted milestone artifact. The maintainer's milestone-level close decision accepts
 M88-C1 through M88-C5 and M88-U1 through M88-U10 without claiming a separately logged row replay.
-The frozen Rust-DOM snapshot formerly served on port `8080` remains untouched rollback evidence
-after reboot and is not proof of the current React presentation. These scenarios do not add solver
+The frozen Rust-DOM snapshot remains historical rollback evidence and does not qualify
+the React replacement. These scenarios do not add solver
 equations or replace the owning-layer regressions required for the carried Gridfinity stack/
 performance defect.
 
@@ -6053,15 +6020,15 @@ work and guarded browser-local persistence. Middle-button pan bypasses semantic 
 and the bounded Recent section stores canonical sample identities only. The initial full checkpoint
 passed bridge `11/11`, renderer `25/25`, frontend `17/17`, actual-WASM `4/4`, real-WASM Playwright
 `6/6` and the complete mechanical gate. Its no-rebuild eight-file candidate at
-`/tmp/geosolve-m88-react-uat.TAMXyz`, aggregate
+`geosolve-m88-react-uat.TAMXyz`, aggregate
 `91c3a2349f1466a64720cb1cfba8a4f7d18aed0be03e9eec256ccf8c4eb0f9de`, WASM SHA-256
 `9032a07bc6ac465816b3b3f3bb44c3881f815f290e39eece88890589f2cdfe5f`, passes exact local/frozen/
 current-dist manifest equality and historical all-file plus root/index served-byte verification at
-`http://100.94.63.83:18088/`. M88-F001 preserves but supersedes those bytes for UAT. Historical
-M88-F001 replacement `/tmp/geosolve-m88-react-uat.nGkL4i`, aggregate
+the archived preview. M88-F001 preserves but supersedes those bytes for UAT. Historical
+M88-F001 replacement `geosolve-m88-react-uat.nGkL4i`, aggregate
 `0bd35f3dba50c592c6eea34ed18afed1b6f908803d75feb9ca3bbb620a1572c4`, WASM SHA-256
 `beb76d47889055f9d8344ac4cdc8a01fc06a1dbd797979f636927031d3383996`, passes exact dist/frozen/
-historical served verification at `http://100.94.63.83:18089/`. M88-F002's post-reboot identity is
+historical served verification at the archived preview. M88-F002's replacement identity is
 recorded below and is now the frozen M88-F003 reproduction target, not a continuing-UAT candidate.
 The final close decision accepts M88-C1–C5 at milestone scope without inventing separate replay
 observations.
@@ -6135,9 +6102,8 @@ Historical pre-React evidence: the one-MiB native proxy, full-row-rank core owne
 open/edit regressions passed. Five optimized Chrome 151 processes measured cold-open median/max
 `1561.9/1795.7` ms and edit median/max `897.1/1314.3` ms. Final open/edit maximum normalized Hard
 residuals were `2.8866e-15` and `4.8486e-12`; accepted numeric state was finite and no browser trap
-or runtime error occurred. Read-only snapshot `/tmp/geosolve-m88-uat.nmhcRj`, aggregate
-`6c4af7e96e30687654d691b577954c22b051fb3ad37e9472c51e16c9c002a274`, remains preserved after its
-transient `http://100.94.63.83:8080/` listener disappeared on reboot. The React replacement's
+or runtime error occurred. Read-only snapshot `geosolve-m88-uat.nmhcRj`, aggregate
+`6c4af7e96e30687654d691b577954c22b051fb3ad37e9472c51e16c9c002a274`, remains historical evidence. The React replacement's
 actual-WASM contract now
 passes mechanically and its frozen browser/build identity is recorded above; candidate-specific
 timing exercise and human execution of M88-C1–C5 through `docs/M88_UAT.md` were still pending at
@@ -6168,17 +6134,17 @@ The canvas view toolbar stays inside the canvas with 12 px top/right insets at b
 Owning bridge regressions pass 14/14 and prove the static catalog is complete/bounded/absent from
 hot snapshots plus canvas-action active-tool neutrality. Complete demo-web passes 386/386,
 frontend passes 18/18 and final real release-WASM Playwright passes 7/7 with no runtime, console or
-network errors. The exact post-reboot snapshot `/tmp/geosolve-m88-react-uat.kdSCUU`, aggregate
-`d328fdded4ae963230eef2c64c5fb22459dec7a55467e0a7c051bed739b2cd47`, release-WASM SHA-256
-`7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0`, is served by
-`geosolve-m88-react-uat-current.service` at `http://100.94.63.83:18088/`. Root/index/all eight
+network errors. The replacement snapshot has aggregate
+`d328fdded4ae963230eef2c64c5fb22459dec7a55467e0a7c051bed739b2cd47`
+and release-WASM SHA-256
+`7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0`. Root/index/all eight
 paths byte-match with HTTP 200 and a frozen-endpoint browser smoke passes. Human M88-C1–C5 and UAT
 were still pending at that historical F002 checkpoint. M88-F003 below subsequently withdraws this
 snapshot from continuing UAT.
 
 ### M88-F003 — Ordinary click-click geometry authoring survives capture release
 
-Reproduce in frozen release-WASM snapshot `/tmp/geosolve-m88-react-uat.kdSCUU`, WASM SHA-256
+Reproduce in frozen release-WASM snapshot `geosolve-m88-react-uat.kdSCUU`, WASM SHA-256
 `7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0`, based on source
 `71a51ee534f034e2328a07e0d80f9a9ee5e0fc62`. Activate Segment and click two distinct canvas
 positions without dragging; repeat with Center–Radius Circle. Before repair, the browser paints a
@@ -6204,17 +6170,16 @@ accepted status and zero Problems. Post-repair qualification passes bridge `19/1
 `391/391`, frontend `19/19` and Playwright `8/8`; `npm run check`, focused all-feature demo-web
 Clippy, formatting, the locked WASM check and distribution validation pass.
 
-The exact eight-file replacement is `/tmp/geosolve-m88-react-uat.QkVU1k`, aggregate
+The exact eight-file replacement is `geosolve-m88-react-uat.QkVU1k`, aggregate
 `e44bd8c22ccb67e542a8c73b58f62ed8ab236ab728b2d1bc2ae1aff1895ac167`, optimized release-WASM
 SHA-256 `5f49f49a880dd8529982bfbcf68a3f1a92c79ee96f256ed56931254ca884b22a`. It has zero symlinks,
-read-only modes and exact final-dist/frozen/local-HTTP/Tailscale-HTTP parity. User service PID
-`518679` serves it at `http://100.94.63.83:18088/`; every path is HTTP 200 and the frozen-endpoint
-Chrome scenario commits Segment and Center–Radius Circle with zero runtime errors. M88-C1–C5 and
+read-only modes and exact final-dist/frozen/local-HTTP/preview HTTP parity. Every served path is HTTP 200, and the frozen-artifact Chrome scenario commits
+Segment and Center–Radius Circle with zero runtime errors. M88-C1–C5 and
 all human UAT rows were still pending at that historical F003 checkpoint.
 
 ### M88-F004 — Truthful canvas chrome and adjacent affordances
 
-Reproduce against frozen F003 release-WASM snapshot `/tmp/geosolve-m88-react-uat.QkVU1k`, aggregate
+Reproduce against frozen F003 release-WASM snapshot `geosolve-m88-react-uat.QkVU1k`, aggregate
 `e44bd8c22ccb67e542a8c73b58f62ed8ab236ab728b2d1bc2ae1aff1895ac167`. In Select, observe an
 apparently actionable Profile/Construction control with no contextual effect. Activate Profile
 Offset in an unavailable context and observe the error row move the canvas vertically. Activate
@@ -6239,15 +6204,13 @@ browser context route remains unprevented.
 The exact regressions pass bridge `23/23`, full demo-web `395/395`, frontend `26/26` and real
 release-WASM Playwright `10/10`. Focused warnings-denied Clippy, locked WASM check, release build,
 distribution validation, formatting and diff hygiene pass. Immutable eight-file snapshot
-`/tmp/geosolve-m88-react-uat.KGhA7s`, aggregate
+`geosolve-m88-react-uat.KGhA7s`, aggregate
 `700ebae4aec13ce20ab8786b63254e2c5b6239204c38bdc6e9d35f11c4159071`, WASM SHA-256
 `22944f00ddf8c327e943d055a8224a1948efce42ec2896c9326891a45bfdf2ff`, is exact across build,
-frozen, staged and live HTTP. PID `1021511` serves it at `http://100.94.63.83:18088/`; the live
-Chrome smoke proves secondary-click neutrality and Polyline Finish readiness with zero runtime
-error. The user's 2026-09-01 close decision accepts this F004 identity, M88-C1–C5 and M88-U1–U10
+frozen, staged and live HTTP. The real-browser smoke proves secondary-click neutrality and Polyline Finish
+readiness with zero runtime errors. The user's 2026-09-01 close decision accepts this F004 identity, M88-C1–C5 and M88-U1–U10
 at milestone scope without a separately logged replay. The obsolete Rust-DOM compatibility host is
-retired from source; the accepted Tailscale service stays live and no public deployment or service
-retirement is inferred.
+retired from source. No public deployment is claimed for this milestone.
 
 ## M89 executed, reversible managed-sketch fixtures
 
@@ -6366,12 +6329,10 @@ demo-web `357/357`,
 frontend `54/54`, warnings-denied Clippy, locked WASM check, unchanged clean golden
 survey/check/require-clean, optimized release-WASM Playwright `13/13` and the complete provisional
 dirty-tree release gate. The exact gate-produced nine-file output is frozen without rebuilding at
-`/tmp/geosolve-m89-f001-replacement-uat.IwvrBh8x`, ordered-manifest aggregate
+`geosolve-m89-f001-replacement-uat.IwvrBh8x`, ordered-manifest aggregate
 `7d40c31c0eba5aae0d1b6e7febf16a0b5fa44a541c82a9ddbbb0125cd8707424`, release-WASM SHA-256
-`a2b2fd4ec4852e3d16b10ab0fa41eb8e4d64b52db430447bdbf28bb8d82f3241`. Strict byte verification
-and the exact no-build Compass regression pass first at temporary `:18189` and then at
-`http://100.94.63.83:18089/`; unit `geosolve-m89-react-uat-current.service`, PID `1589113`,
-invocation `d05d85152a4547f7b32e316b6a3d4b9a`, historically served only the frozen snapshot until F002.
+`a2b2fd4ec4852e3d16b10ab0fa41eb8e4d64b52db430447bdbf28bb8d82f3241`. Strict byte verification and the exact no-build Compass regression pass on both
+staging and nominated previews.
 The withdrawn snapshot remains preserved as defect evidence and M88 remains unchanged. Human UAT
 is not inferred.
 
@@ -6432,16 +6393,14 @@ mutation validation first exposed open-Polyline result overpublication and termi
 the staged-source/pre-source-GUI alias split. One shared exact result-leaf reconstruction now owns
 cold and prepared validation, and the authenticated prepared declaration-label projection bridges
 only that canvas publication seam; ordinary code drags still require the exact expansion alias.
-The final optimized release-WASM no-build regression passes `1/1` against both frozen staging
-`:18189` and live `http://100.94.63.83:18089/`. The isolated source is `24` lines/`722` bytes; the
+The final optimized release-WASM no-build regression passes `1/1` against both staging and nominated frozen artifacts. The isolated source is `24` lines/`722` bytes; the
 complete normalized Compass source is `64` lines/`1,841` bytes (`65`/`1,842` with the CodeMirror
 trailing blank). The post-audit optimized release-WASM run passes `13/13`, and the frozen normal
-product passes `12/12` without rebuilding. Snapshot `/tmp/geosolve-m89-f002-uat.bSM6Nn59`, aggregate
+product passes `12/12` without rebuilding. Snapshot `geosolve-m89-f002-uat.bSM6Nn59`, aggregate
 `0b9a4ed357a452edd79953679e5bbb68c0cb5b1261a8ba5478a1dbaa597ab433`, release-WASM SHA-256
 `77e5739cb81565d5a0bc400507e1a35f2f63ba22c1d821442b16baedcb24b72a` and evidence
-`/tmp/geosolve-m89-f002-freeze-evidence.Xs977S3o` own the superseded F002 candidate. The pre-audit
-`/tmp/geosolve-m89-f002-uat.Taocj5bI` bytes remain preserved but withdrawn. The F002 service has
-been replaced after exact F003 staging proof; these bytes are not F003 acceptance authority.
+`geosolve-m89-f002-freeze-evidence.Xs977S3o` own the superseded F002 candidate. The pre-audit
+`geosolve-m89-f002-uat.Taocj5bI` bytes remain preserved but withdrawn. F003 supersedes those bytes after exact staging proof.
 
 ### M89-F003 — compact semantic source for all geometry variants
 
@@ -6495,16 +6454,12 @@ Focused regressions and ceilings are:
 Final qualification passes demo-web `357/357`, formatting, affected warnings-denied Clippy, the
 locked WASM check, optimized nine-file distribution validation and release-WASM Playwright
 `14/14`. The unchanged normal product passes `13/13` before freezing and on frozen staging and live
-endpoints. Frozen path `/tmp/geosolve-m89-f003-uat.uF6Yjsc3`, aggregate
+endpoints. Frozen path `geosolve-m89-f003-uat.uF6Yjsc3`, aggregate
 `c37d832a6dc076982e3fda8f2ffbcc8b2f26ed99ad6ffd0da0b7ba4f96d705ed`, optimized release-WASM
 SHA-256 `99eeaa5668276282201cb1971b042d3d0904a13b7a75d40e2357ce08a34c748a` and evidence
-`/tmp/geosolve-m89-f003-freeze-evidence.5TcRPlem` own the historical F003 candidate. Its
-staging/live ten-route HTTP
-ledgers are identical at SHA-256
-`c5efab20409773cc7f43cecdd9c6fca5b961402611d073f6bf0e8f40cca0ce1e`; unit
-`geosolve-m89-react-uat-current.service`, PID `3637680`, invocation
-`73bdb82cf2a64436ab6f65fe76b08ccf`, served it at the historical checkpoint and has since been
-replaced by F005 at `http://100.94.63.83:18089/`. F003 remains rollback evidence; human scorecard
+`geosolve-m89-f003-freeze-evidence.5TcRPlem` own the historical F003 candidate. Its staging and nominated ten-route HTTP ledgers are identical at SHA-256
+`c5efab20409773cc7f43cecdd9c6fca5b961402611d073f6bf0e8f40cca0ce1e`.
+F005 subsequently replaced that candidate. F003 remains rollback evidence; human scorecard
 acceptance was not inferred.
 
 ### M89-F004 — compact semantic source for persistent constraints
@@ -6562,16 +6517,16 @@ introduce no broader Offset acceptance claim.
 Final F004/F005 mechanical scenario qualification uses exact gate
 `nix-shell shell.nix --run 'GEOSOLVE_ALLOW_DIRTY=1 ./scripts/release-gate.sh'`. The ambient attempt
 successfully built through workspace and golden checks, then its first WASM parity leg returned
-`HARNESS_ERROR` only because `wasm-bindgen-test-runner` was absent after reboot. The pinned shell
+`HARNESS_ERROR` only because `wasm-bindgen-test-runner` was absent from the ambient environment. The pinned shell
 with runner `0.2.121` passed the complete gate; this was a harness/environment failure, not a
 product defect. Final counts are sketch-code unit `114`, compact geometry `4/4`, constraint matrix
 `1/1`, direct Fillet `7/7`, `m89_editor_insertion` `19/19`, demo-web `358/358`, TypeScript runtime
 `28/28`, mutation `19/19`, pinned-Deno parity `2/2` and frontend `55/55`. Historical F003 counts
 above remain unchanged.
 
-Historical immutable M89 F005 scenario authority is snapshot `/tmp/geosolve-m89-f005-uat.hzNuDxF0`,
-manifest `/tmp/geosolve-m89-f005-uat.hzNuDxF0.sha256`, evidence directory
-`/tmp/geosolve-m89-f005-freeze-evidence.VAoQDl8n` and aggregate
+Historical immutable M89 F005 scenario authority is snapshot `geosolve-m89-f005-uat.hzNuDxF0`,
+manifest `geosolve-m89-f005-uat.hzNuDxF0.sha256`, evidence directory
+`geosolve-m89-f005-freeze-evidence.VAoQDl8n` and aggregate
 `fb488ad2bf29e8897cf9811c002b748693e5d211bae4bb54c83ed060db5db668`. Its nine-file distribution
 contains three JavaScript files, one CSS and one `16,333,537`-byte WASM, and has two directories
 and no symlinks/other entries;
@@ -6582,21 +6537,17 @@ route ledgers are byte-identical at SHA-256
 passes `1/1` and normal frozen product `15/15` on each endpoint. The normal product intentionally
 excludes the compiler-parity-only harness test.
 
-Unit `geosolve-m89-react-uat-current.service`, PID `1007459`, invocation
-`a3fea6dddb59438795e52c6a8fab136f`, started `Wed 2026-09-02 20:21:15 AEST` with the F005 snapshot
-as `WorkingDirectory` and was recorded serving it at `http://100.94.63.83:18089/`. Staging PID `995137`,
-invocation `efe4de2264774f68bf5852284fa69887`, is retired. This is provisional dirty-tree M89
+  This is provisional dirty-tree M89
 evidence, not clean-source qualification or row-by-row human acceptance. The Compass retest,
 targeted preflight and M89-U1 through M89-U8 were not run and are not retrospectively passed or
 waived. M90's closed clean break supersedes this compatibility-stage nomination.
 
 ## M90 typed executed sketch clean-break fixtures
 
-Status: **Closed by explicit scoped supervising-user approval on 2026-09-04. M90-F005/F006 repairs,
+Status: **Closed by explicit scoped maintainer approval on 2026-09-04. M90-F005/F006 repairs,
 collateral qualification, the complete dirty-tree release gate, optimized release-WASM build and
-immutable Tailscale nomination pass. M90-U1 through M90-U10 transfer/defer, without passing or
-waiver, into M91's composite UAT. The exact closing candidate remains Tailscale-only at
-`http://100.94.63.83:18090/`; no GitHub Pages deployment or public push was authorized or made.**
+immutable preview nomination pass. M90-U1 through M90-U10 transfer/defer, without passing or
+waiver, into M91's composite UAT. The closing candidate was privately reviewed; no public deployment was made for this milestone.**
 These scenarios define the qualified contract and do not claim that a human row passed.
 `docs/M90_GOALS.md`, `docs/M90_IMPLEMENTATION.md` and `docs/M90_UAT.md` own the current product and
 interaction contract. The M89 section above remains a historical compatibility-stage record.
@@ -6604,18 +6555,15 @@ interaction contract. The M89 section above remains a historical compatibility-s
 The historical pre-F001 pinned dirty-tree release gate exited `0`; its log has SHA-256
 `2dd3663430c730eea84303954598f3a0696868aa4d433f3e32836a42024b250b`. The unchanged 271-row
 milestone-neutral golden passes `--survey`, `--check` and `--require-clean`; that is not clean-source
-qualification. Historical snapshot `/tmp/geosolve-m90-uat.vuI7sBKt`, manifest
-`/tmp/geosolve-m90-uat.vuI7sBKt.sha256` and aggregate
+qualification. Historical snapshot `geosolve-m90-uat.vuI7sBKt`, manifest
+`geosolve-m90-uat.vuI7sBKt.sha256` and aggregate
 `b5bae1aca28787f026a11100c94e425d1c5e057ce3539170f4399b7cd8b05dc2` preserve the withdrawn
 immutable release-WASM nomination. Its `20,007,307`-byte
 `assets/geosolve_demo_web_bg-BAUG7n7P.wasm` has SHA-256
-`51fc04d4129dd73791afb20b4403efe1f4fb95af6d607037b2a95956865fe7f5`. Local and Tailscale HTTP
+`51fc04d4129dd73791afb20b4403efe1f4fb95af6d607037b2a95956865fe7f5`. Local and preview HTTP
 ledgers matched at SHA-256 `17477e87e897b5ac080547df41b528bc16c252d4c67a4634ad21a384f4ccd29b`.
-Historical unit `geosolve-m90-uat-18090.service`, PID `2747435`, invocation
-`767e65048ece4573834acf8f580f87bc`, served that working-directory snapshot at
-`http://100.94.63.83:18090/`. M90-F001 withdraws the nomination from continuing UAT while retaining
-all identities and hashes above as exact reproduction evidence. The unit is inactive/dead with no
-PID; the endpoint is now reused only by the replacement identity below. At that historical
+ M90-F001 withdraws the nomination from continuing UAT while retaining
+all identities and hashes above as exact reproduction evidence.  At that historical
 checkpoint no M90-UAT row had been accepted and M90 was not closed.
 
 ### M90-C1 — one directive and one reproducible V3 authority
@@ -6697,9 +6645,9 @@ file or accepted project.
 
 Only a fresh byte-verified release-WASM candidate recorded in `PLAN.md` may enter M90 UAT. Execute
 the ten rows in `docs/M90_UAT.md`, recording each as pass, fail or explicit waiver, or retain them
-as unexecuted and transfer/defer them only under explicit scoped supervising-user approval. Automated
+as unexecuted and transfer/defer them only under explicit scoped maintainer approval. Automated
 catalog, native, TypeScript, frontend, WASM, golden or release-gate evidence may nominate that
-candidate but accepts no human row. M90 closes only after the supervising human explicitly
+candidate but accepts no human row. M90 closes only after the maintainer explicitly
 disposes the scorecard and approves the milestone.
 
 ### M90-F001 — code-owned point drag must not compile managed source
@@ -6739,19 +6687,16 @@ monolithic dirty release gate ended by harness termination at exit `143` and is 
 normal release-gate completion and all human UAT remain pending; no milestone closure is asserted.
 
 The historical pre-F002 provisional dirty-tree replacement is frozen at
-`/tmp/geosolve-m90-uat.xk0AGnz0`,
-external manifest `/tmp/geosolve-m90-uat.xk0AGnz0.sha256`, aggregate
+`geosolve-m90-uat.xk0AGnz0`,
+external manifest `geosolve-m90-uat.xk0AGnz0.sha256`, aggregate
 `030e9f4aa98690b8cd35cdbb51a29220674f1bfcfba310192afc467f5afc38a4`, with nine mode-`0444`
 files, two mode-`0555` directories and zero symlinks. The `19,958,913`-byte
 `assets/geosolve_demo_web_bg-B6mOdH7K.wasm` has SHA-256
 `9607cfd48f1ec23b2c29e120704277bbb70247bdbed6a67945c5cc64b7af8761`. Evidence is
-`/tmp/geosolve-m90-f001-replacement-freeze-evidence.UpMqFyrm`. All ten staging/live routes are
+`geosolve-m90-f001-replacement-freeze-evidence.UpMqFyrm`. All ten staging/live routes are
 byte-identical with correct MIME, no redirects/compression and ledger SHA-256
 `56a5aff7b23000e1b009f2eb479b9545fcfb17dbe5d1a4f9721f7c3951a761ae`; optimized release-WASM
-two-consecutive-drag Compass passes `1/1` against each endpoint. Tailscale-only
-`geosolve-m90-f001-replacement-uat-18090.service` historically served that snapshot with PID
-`3332035`, invocation `258e6d4da4b14661bd6d8e44856c64a5`, on `100.94.63.83` at
-`http://100.94.63.83:18090/`; M90-F002 subsequently retired it.
+two-consecutive-drag Compass passes `1/1` against each endpoint. M90-F002 subsequently superseded the F001 artifact.
 
 This is immutable provisional dirty-tree replacement evidence only. The terminated exit-`143`
 monolithic gate is not promoted to a pass. At that historical checkpoint the replacement gate
@@ -6790,26 +6735,23 @@ Require no pending mutation, an immediately usable complete pointer gesture and 
 byte-exact starter. Repeat this contract through optimized release-WASM Chromium before nominating
 new bytes.
 
-M90-F003 withdraws the post-F002 snapshot `/tmp/geosolve-m90-uat.TN2NP9eF` from continuing UAT;
-its exact hashes and service identity remain historical evidence in `PLAN.md` and
+M90-F003 withdraws the post-F002 snapshot `geosolve-m90-uat.TN2NP9eF` from continuing UAT;
+its exact hashes remain historical evidence in `PLAN.md` and
 `docs/M90_UAT.md`. TypeScript package checks pass with `34` runtime tests; Rust prepared-mutation
 passes `34/34`, all-feature sketch-code and the exact retained bridge pass; frontend Vitest passes
 `73/73`; format, warnings-denied Clippy, diff hygiene, golden `--check`/`--require-clean`, frontend
 build checks and distribution validation pass. Optimized release-WASM F003 and carried F001/F002
 browser rows pass `1/1` each on staging and live.
 
-The post-F003 provisional snapshot is `/tmp/geosolve-m90-uat.yIPVNICT`, with external manifest
-`/tmp/geosolve-m90-uat.yIPVNICT.sha256`, aggregate
+The post-F003 provisional snapshot is `geosolve-m90-uat.yIPVNICT`, with external manifest
+`geosolve-m90-uat.yIPVNICT.sha256`, aggregate
 `d31e311c4e0e69974690d299819df6a33b7ae13b7eff5d037406e602c033f33a`, and freeze evidence
-`/tmp/geosolve-m90-f003-freeze-evidence.Y4jLQxD3`. Its `19,967,322`-byte
+`geosolve-m90-f003-freeze-evidence.Y4jLQxD3`. Its `19,967,322`-byte
 `assets/geosolve_demo_web_bg-DuuevZyx.wasm` has SHA-256
 `c3160d7f8f6fc49db6294588cedd38ba5b520a80743d3977039957074fa8ca31`; staging/live ten-route
 ledgers byte-match at SHA-256
-`47a0229dbf46ea0549f4e424a6ce7ccd452810eb24161db61c4cb33436107726`. Historical Tailscale-only
-`geosolve-m90-f003-replacement-uat-18090.service`, PID `305121`, invocation
-`f456b1c8cea044638bae1119709b94d9`, served only that snapshot at
-`http://100.94.63.83:18090/`. M90-F004 withdraws it from continuing UAT; the service is inactive/
-dead and the immutable snapshot remains historical pre-F004 evidence. No human row was accepted.
+`47a0229dbf46ea0549f4e424a6ce7ccd452810eb24161db61c4cb33436107726`. M90-F004 withdraws it from continuing UAT; the immutable snapshot remains historical
+pre-F004 evidence. No human row was accepted.
 
 ### M90-F004 — simultaneous Point-on-Curve declarations retain native ownership
 
@@ -6836,16 +6778,14 @@ TypeScript runtime `34`, frontend Vitest `74/74`, format/diff/warnings-denied Cl
 release-WASM build and browser bundle pass. The 271-row golden remains byte-identical because this
 focused ownership/lifecycle defect exposes no missing systemic matrix dimension.
 
-Historical provisional snapshot `/tmp/geosolve-m90-uat.O4xZJBxg`, manifest
-`/tmp/geosolve-m90-uat.O4xZJBxg.sha256`, aggregate
+Historical provisional snapshot `geosolve-m90-uat.O4xZJBxg`, manifest
+`geosolve-m90-uat.O4xZJBxg.sha256`, aggregate
 `fd0a4635edcc6bd24d36eeca831a57bbb62cdf1d67589c6245af9e7b88bf52be`, and freeze evidence
-`/tmp/geosolve-m90-f004-freeze-evidence.F0HdfUMF` preserve the immutable post-F004 candidate. Its
+`geosolve-m90-f004-freeze-evidence.F0HdfUMF` preserve the immutable post-F004 candidate. Its
 `19,987,485`-byte `assets/geosolve_demo_web_bg-CoONmEL1.wasm` has SHA-256
 `e61ff5e9183883c1872293ad5d4c38c06175bc12575668f3f770282387bcf457`; staging/live HTTP ledger
 SHA-256 is `47589602797db38fb23a70da0d1cc31c7b032b7ab0907f3688d2a39886ebe921`.
-Tailscale-only `geosolve-m90-f004-replacement-uat-18090.service` historically served it with PID
-`792138`, invocation `ff367dd5f5bb4f24a8661dd83a26168b`, at
-`http://100.94.63.83:18090/`. The supervising user's reboot stopped that unit, and M90-F005
+ M90-F005
 withdraws the bytes from continuing UAT. At that post-F004 checkpoint no current candidate remained
 live. The normal monolithic release gate, M90-U1 through M90-U10 and explicit closure remained
 pending; M90 stayed open.
@@ -6853,7 +6793,7 @@ pending; M90 stayed open.
 ### M90-F005 — accepted contact-workspace terminal must not snap back
 
 Restore the exact user-supplied native workspace from
-`/home/arduano/Downloads/project (1).json`, `956,305` bytes at SHA-256
+`supplied-project.json`, `956,305` bytes at SHA-256
 `c5f748d31c90f8fd575ab2acaddfb8b7d20bbc9f31189dc0716995ad05a46ee7`. Its checked-in bounded
 capsule is `crates/geosolve-demo-web/tests/fixtures/m90_f005_native_drag_repro.txt`, `86,736` bytes
 at SHA-256 `1b1dba9d039ee8756030174731ab3a03e7f77a8554853a96c29e4b10f8c49cf7`; require ordinary capsule
@@ -6922,18 +6862,15 @@ unchanged, so this is `HARNESS_ERROR`, not a product finding. Fitting both prese
 the comparison deterministic; the corrected persistence row passes `5/5` repeated and retains its
 persistence and Undo checks. The separate Rust F005 owner regression proves both Undo and Redo.
 
-Current immutable optimized snapshot `/tmp/geosolve-m90-uat.EtWyWQlt`, external manifest
-`/tmp/geosolve-m90-uat.EtWyWQlt.sha256` and freeze evidence
-`/tmp/geosolve-m90-f006-freeze-evidence.HqyaA7Qp` have ordered aggregate
+Current immutable optimized snapshot `geosolve-m90-uat.EtWyWQlt`, external manifest
+`geosolve-m90-uat.EtWyWQlt.sha256` and freeze evidence
+`geosolve-m90-f006-freeze-evidence.HqyaA7Qp` have ordered aggregate
 `b3fd72b9ec98d318d7bfa7bf8c09d0fcbd3856ea0723d81e01e64945e301debe`, nine mode-`0444` regular
 files, two mode-`0555` directories and no symlinks. Its `19,990,463`-byte
 `assets/geosolve_demo_web_bg-Dc5MH04n.wasm` has SHA-256
 `bad16242c2ec0fa0c6c0ba6882428372c1bf0b7dd1a70235467b5febdfc80712`. Staging/live HTTP ledgers
 match at SHA-256 `41d11e1c56bad8dcc57edf229f0bfec20d8f5e602b3c385e5e68d54dd42c816a`; optimized release-WASM
-browser rows pass `4/4` against both endpoints. Tailscale-only unit
-`geosolve-m90-f006-replacement-uat-18090.service`, PID `462021`, invocation
-`4a17e69e926446eba21439ac4dd6f4e6`, exact-serves only that snapshot at
-`http://100.94.63.83:18090/`.
+browser rows pass `4/4` against both endpoints.
 
 ### M90-C9 — full gate and scoped closeout
 
@@ -6941,24 +6878,24 @@ The final full dirty-tree gate command
 `env GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
 ran from `23:20:45` through `23:47:22 AEST` on 2026-09-03, exited `0` after `1,596,726 ms`, and
 wrote the `573,421`-byte log
-`/tmp/geosolve-m90-f006-full-gate.hKSTh4/release-gate.log` with SHA-256
+`geosolve-m90-f006-full-gate.hKSTh4/release-gate.log` with SHA-256
 `bda7f5f92f15a5f0a0cf26ed93cb514943d9a9d1ad49bf0ba0e148c9239b205d`. The reviewed 271-row
 golden remained unchanged, the release-only 256-moving-body performance row passed in `137.82 s`,
 frontend Vitest passed `74/74`, and the optimized distribution validated nine files. This is
 complete dirty-tree qualification, not clean-source qualification.
 
-The supervising user explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
+The maintainer explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
 remain unexecuted and transfer/defer—not pass or waive—into M91's single composite UAT. Automated
-evidence accepts no human row. The immutable F006 snapshot and service above remain the exact
-Tailscale-only closing publication; no GitHub Pages deployment or public push was authorized or made.
+evidence accepts no human row. The immutable F006 snapshot remains the exact
+closing artifact; no public deployment was made for this milestone.
 M90 is closed.
 
 ## M91 cohesive code-driven-authoring fixtures
 
-Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit maintainer approval.**
 
 These fixtures mechanically qualify the five integrated workstreams; they do not substitute for
-human acceptance. The supervising user's blanket/composite approval accepts M91-U1 through M91-U14
+human acceptance. The maintainer's blanket/composite approval accepts M91-U1 through M91-U14
 as Pass at milestone level without claiming a separately logged row-by-row replay.
 
 ### M91-C1 — authored contact range reconciles from accepted continuation
@@ -7078,23 +7015,20 @@ From one clean commit run formatting, warnings-denied all-target/all-feature Cli
 all-feature workspace tests, TypeScript/package/frontend/declaration checks, the complete 271-row
 golden survey/check/clean sequence and full release gate. Freeze the already-built distribution
 without rebuilding, make regular files mode `0444` and directories `0555`, reject symlinks, write an
-external sorted SHA-256 manifest, verify local/live bytes plus MIME/redirect/compression behavior and
-serve only through a distinct transient M91 Tailscale service. Do not modify/restart M90 or publish
-GitHub Pages.
+external sorted SHA-256 manifest and verify served bytes plus MIME, redirect and
+compression behavior against those immutable artifacts.
 
 The nominated source is `6d0155151133ba2540fd1dc4b2b071f141b86064`, tree
 `972ad507c2cdfad2c9cd664e49feaf79ae381c81`. Clean release log
-`/home/arduano/m91-gate.t8TTq0Bj/release-gate.log` is `706,478` bytes at SHA-256
+`m91-release-gate.log` is `706,478` bytes at SHA-256
 `cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`. The exact gate output is
-frozen without rebuilding at `/tmp/geosolve-m91-uat.17Q5LnSg`; manifest
-`/tmp/geosolve-m91-uat.17Q5LnSg.sha256` has ordered aggregate
+frozen without rebuilding at `geosolve-m91-uat.17Q5LnSg`; manifest
+`geosolve-m91-uat.17Q5LnSg.sha256` has ordered aggregate
 `b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`. Release WASM
 `assets/geosolve_demo_web_bg-tvc8MGYX.wasm` is `18,368,160` bytes at SHA-256
 `6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`. Staging/live HTTP ledgers
 match at SHA-256 `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`, and both frozen
-endpoints pass Chromium `20/20`. Unit `geosolve-m91-uat-18091.service`, PID `2142854`, invocation
-`bf93a3f5dab84809a24fdc2db6f23f4f`, serves only that snapshot at
-`http://100.94.63.83:18091/`. M90 remained byte-identical; no GitHub Pages deployment or public push
+endpoints pass Chromium `20/20`. M90 remained byte-identical; no GitHub Pages deployment or public push
 was made at nomination. Automated evidence did not execute, pass or waive a human UAT row. Human
 acceptance now passes separately. GitHub Actions run `33878060784` published artifact `9938976843`
 as deployment `6265455733` from descendant
@@ -7102,11 +7036,11 @@ as deployment `6265455733` from descendant
 `7dd107d94b22c1f364fbcd824980170cf9ce33f80b6cbefd6118967101b3783d` reconstructs the exact
 ten-file aggregate `a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`.
 All eleven public routes exact-match with HTTP 200 and correct transport metadata; public Chromium
-passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M91 is closed.
+passes 20/20. M91 is closed.
 
 ## M92 advanced showcase fixtures
 
-Status: **accepted and closed on 2026-09-06** under the [scoped user sign-off](M92_UAT.md#supervising-user-closure--2026-09-06).
+Status: **accepted and closed on 2026-09-06** under the [scoped user sign-off](M92_UAT.md#maintainer-closure--2026-09-06).
 U1–U8 are accepted collectively without a separate exhaustive replay; GitHub Pages is unchanged.
 
 See [pruned qualification and nomination](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
@@ -7292,7 +7226,7 @@ in `docs/M92_VISUAL_AUDIT.md`; complete clean qualification and nomination subse
 
 ## M93 release-gate optimization scenarios — accepted and closed
 
-The runner has focused input/reuse, timeout, failure and concurrency regressions, completed corrected-source serial/parallel fresh parity and repeated real-workload measurements. [M93_QUALIFICATION.md](M93_QUALIFICATION.md) records the passing functional evidence and supervising-user closure on 2026-09-07 with the edit/prune timing misses accepted. The historical four-entry replay below remains unperformed and is an accepted scope limitation; measured prune repetitions remove one current entry each.
+The runner has focused input/reuse, timeout, failure and concurrency regressions, completed corrected-source serial/parallel fresh parity and repeated real-workload measurements. [M93_QUALIFICATION.md](M93_QUALIFICATION.md) records the passing functional evidence and maintainer closure on 2026-09-07 with the edit/prune timing misses accepted. The historical four-entry replay below remains unperformed and is an accepted scope limitation; measured prune repetitions remove one current entry each.
 [M93_GOALS.md](M93_GOALS.md) owns the exact policy and performance targets.
 
 - Documentation-only sign-off preserves qualified product bytes without solver/browser reruns;
@@ -7336,7 +7270,7 @@ M94-F004 loses context during the first actual batch-shader compilation, restore
 line-interior and X/Y text pixels alongside existing idle, resize/DPR and capture lifecycle cases.
 
 Final `7727cbf` qualification passes the complete native/golden/browser obligations and exact
-served-byte verification. [M94_CLOSURE.md](M94_CLOSURE.md) records supervising-user acceptance,
+served-byte verification. [M94_CLOSURE.md](M94_CLOSURE.md) records maintainer acceptance,
 final audit and the remaining dense performance limits; no additional human replay is inferred.
 
 ## Frozen near-singular fixtures
@@ -7375,7 +7309,7 @@ The detailed L3 fixture above demonstrates that geometric alignment does not its
 ## M96 finite-width manifold scenarios — accepted and closed on 2026-09-08
 
 Clean-source run `20260908T090848-ddc447b8` accounts for all 243 integrated obligations.
-[M96_CLOSURE.md](M96_CLOSURE.md) records supervising-user acceptance and the accepted
+[M96_CLOSURE.md](M96_CLOSURE.md) records maintainer acceptance and the accepted
 product identity; scenario coverage does not imply an unrecorded exhaustive human replay.
 
 - Offset one keyed L-shaped polyline by 3 mm on each side, fillet the walls at
@@ -7414,9 +7348,9 @@ product identity; scenario coverage does not imply an unrecorded exhaustive huma
 The preceding clean-source amendment run `20260908T172035-7255b491` passes all
 243 obligations, including authenticated successes for all three M97 browser workflows and the
 unchanged 271-case golden. [Amendment qualification](M97_PRIORITY_DIMENSIONS.md)
-records that scope and preserved preview at `http://100.94.63.83:18104/`.
+records that scope and its verified artifact identity.
 The source-native replacement below is now qualified and served at port 18105.
-[M97 closure](M97_CLOSURE.md) records supervising-user acceptance; these checks do
+[M97 closure](M97_CLOSURE.md) records maintainer acceptance; these checks do
 not imply an unrecorded human replay.
 
 - Open the manifold in Focused mode: curated envelope/reservoir and representative
@@ -7460,9 +7394,9 @@ coverage and clean-source gate `20260908T235146-b387d273` on
 `e26270cb89e5849092145b329d0cf95821a81b27`: 244/244 obligations pass, with 17/17
 prefix and 48/48 full browser workflows and the unchanged 271-case golden.
 All 16 samples receive fresh full workflows, with no retries, skips or failures.
-The frozen preview at `http://100.94.63.83:18105/` passes served-byte and actual-WASM
+The frozen artifact passes served-byte and actual-WASM
 verification. These results qualify the accepted amendment; [M97 closure](M97_CLOSURE.md)
-records the supervising-user sign-off and preserved limitations.
+records the maintainer sign-off and preserved limitations.
 
 - Toggle Show in overview on an authored driving and reference measurement; inspect
   the exact local `isKeyConstraint` source edit. Reset to a true document default, then explicitly
@@ -7539,7 +7473,6 @@ These checks qualify the authorized current-workbench parity amendment. Integrat
 qualification and delivery are recorded separately in `M98_TOOL_PARITY.md`; scenario
 inventory alone does not imply a passing or human-accepted milestone.
 
-
 ## M98-F041 — Free polyline corner crosses a dormant reference hemisphere
 
 In the unconstrained Shared playground, move an interior corner `[-25,-20]`
@@ -7573,8 +7506,12 @@ comparisons, cold restoration and imported multiscalar operations. Public native
 operation IDs may defer cursor encoding until changed spans and anchors are
 retained; imported representations keep the established full cursor path.
 Authentication, source limits, personal history, failure retention and durable
-publication remain unchanged. Qualification and delivery remain pending.
-
+publication remain unchanged. Qualification and delivery passed at clean source `b49e339` in run
+`20260913T020232-eaefaaaf`: **293/293 obligations**, including the original 500 ms
+navigation and durable text-ACK budgets. The manifold held-solve case measured
+296.8 ms navigation p95 and 314.6 ms durable typing ACK. These are mechanical results;
+M98 human acceptance remains open, and U02 remains Fail pending human recheck.
+See [M98 qualification](M98_QUALIFICATION.md#qualified-uat-repairs).
 
 ## M100 — planned pause-readiness scenarios
 
@@ -7585,7 +7522,7 @@ M99's accepted product and scenarios remain qualified under
 - Start from a clean checkout using tracked instructions and pinned tools; build,
   inspect an example and run the owning checks without copying milestone helpers.
 - Install exact qualified local archives in an empty offline consumer; start folder,
-  shared and generator modes, then run both MiniCAD pipelines through installed CLI.
+  shared and generator modes, then run both downstream CAD pipelines through installed CLI.
 - Restore copied standalone/folder/shared state, including unfinished text, accepted
   native authority, personal history and pending retry data. Compare exact state
   and existing recovery behavior before/after restart without touching live projects.

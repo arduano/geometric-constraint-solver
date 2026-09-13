@@ -9,7 +9,7 @@ obligations in run `20260913T155413-41e9f715`: 32 fresh stages and 265 authentic
 reused successes, 2704.185 s wall time. Every signed stage receipt authenticates;
 source remained unchanged. This completes the [M99 plan](M99_CLEANUP.md), without
 recording human acceptance at qualification time or closing M98's outstanding UAT.
-The supervising user's subsequent M99 acceptance and closure are recorded in
+The maintainer's subsequent M99 acceptance and closure are recorded in
 [M99_CLOSURE.md](M99_CLOSURE.md); these qualified product bytes remain unchanged.
 
 ## Files, APIs and ownership
@@ -27,8 +27,8 @@ The supervising user's subsequent M99 acceptance and closure are recorded in
   `WorkbenchSession`. Browser and Node worker helpers share lifetime mechanics;
   hosts retain their distinct storage, text, publication and history policies.
 - `packages/geosolve-cli/runtime` and its ordinary build/package assets own Node
-  hosting. The old demo execution copy and private milestone runtime paths are
-  removed. MiniCAD's two consumers use installed `geosolve bake` and retain complete
+  hosting. The old demo execution copy and milestone-specific runtime paths are
+  removed. the downstream CAD project's two consumers use installed `geosolve bake` and retain complete
   package/input provenance, including bundled compiler dependencies.
 
 No equations, primitives, constraints, priority semantics or solver algorithms are
@@ -38,18 +38,15 @@ and coverage mapping is preserved in [the implementation record](M99_CLEANUP.md)
 
 ## Commands and integrated evidence
 
-Commands below ran from the M98/M99 worktree in the pinned environment:
+Commands below ran from the repository checkout in the pinned environment.
+The `target/` helpers are historical evidence tooling, not fresh-checkout prerequisites:
 
 ```bash
-nix-shell shell.nix \
-  -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source \
-  --run './scripts/release-gate.sh --resume 20260913T152300-cc3b4efc'
+nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260913T152300-cc3b4efc'
 python3 target/m98/verify-qualification.py 20260913T155413-41e9f715
 python3 target/m98/coordination/tool-parity/extract-final-evidence.py \
   20260913T155413-41e9f715 target/m99/final-summary-20260913T155413-41e9f715.json
-nix-shell shell.nix \
-  -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source \
-  --run 'python3 target/m99/install-qualified.py 20260913T155413-41e9f715'
+nix-shell shell.nix --run 'python3 target/m99/install-qualified.py 20260913T155413-41e9f715'
 ```
 
 All exit 0. The integrated runner accounts for format, strict Clippy, 247 workspace
@@ -109,7 +106,7 @@ final artifact. Only the demo adapter uses Rust `z`; shared numerical crates
 retain level 3. The qualified package also verifies installed folder/shared/
 generator startup. Existing preview services remain unchanged.
 
-The offline installer uses a fresh private empty npm cache and clears inherited
+The offline installer uses a fresh empty npm cache and clears inherited
 module/distribution overrides. It authenticates all four qualified archives and
 byte-checks **285 installed files** under
 `target/m99/installed-20260913T155413-41e9f715/`.
@@ -121,12 +118,12 @@ byte-checks **285 installed files** under
 | `geosolve-collaboration-0.1.0.tgz` | `a12df28646f54c1bcb7d00da45a519e514b666c582d5afa2bd38fea9efed3da6` |
 | `geosolve-cli-0.1.0.tgz` | `9090627cca8d658d49272dc39c86a5ba5aa73240af95f4ab972fdb4f62026001` |
 
-Both final consumer commands ran from `/home/arduano/programming/minicad`:
+Both final commands ran in the external downstream CAD consumer checkout with
+`GEOSOLVE_CLI` set to the absolute executable path in the verified installation:
 
 ```bash
-GEOSOLVE_CLI=/home/arduano/programming/geometric-constraint-solver-worktrees/m98-file-workspace/target/m99/installed-20260913T155413-41e9f715/node_modules/.bin/geosolve \
-  nix-shell -I nixpkgs=/nix/store/6z7xnswwnq9dw8vvi7gb9cj3szdgasf6-source --run \
-  'python3 scripts/real_bridge_demo.py --output-dir output/bridge-m99 && python3 scripts/pi_case_demo.py --no-render --output-dir output/pi-case-m99'
+python3 scripts/real_bridge_demo.py --output-dir output/bridge-m99
+python3 scripts/pi_case_demo.py --no-render --output-dir output/pi-case-m99
 ```
 
 Exit 0. Widths 85/90 mm bake/import/model and pass independent geometry/port
@@ -137,15 +134,14 @@ The baked-profile contract remains v1, mm, 0.02 mm chord error and explicit
 package bytes, including two npm-generated internal executable links (287 captured
 file entries). Eight focused Python receipt/provenance tests pass.
 
-- `/home/arduano/programming/minicad/output/bridge-m99/proof.json`:
+- `../minicad/output/bridge-m99/proof.json`:
   `aeee2f844d430c9dbb997c9869b61b711be412aab393627c5c1eeed97e47601d`.
-- `/home/arduano/programming/minicad/output/pi-case-m99/proof.json`:
+- `../minicad/output/pi-case-m99/proof.json`:
   `1da7408077a350913da51e8a0fe41a9dfc2629681dffc5a88840f6d467157e4c`.
 
-Consumer migration commit is `46c2662`. The actual consumer HEAD recorded by the
-case proof is `dde5665`, after an independent NAS commit; every executed consumer
-source hash was checked against both the migration commit and current files.
-Unrelated NAS work and historical consumer outputs are preserved.
+Consumer migration commit is `46c2662`. The consumer HEAD recorded by the case proof is
+`dde5665`; every executed consumer source hash was checked against both the
+migration commit and current files.
 
 Full command logs, authenticated stage summaries, installation manifest and
 consumer proof comparison are retained in `target/m99/` as
