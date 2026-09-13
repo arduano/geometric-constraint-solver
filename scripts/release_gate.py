@@ -14,7 +14,6 @@ import argparse
 import concurrent.futures
 import dataclasses
 import fnmatch
-import fcntl
 import hashlib
 import hmac
 import json
@@ -321,6 +320,8 @@ class Runner:
         self.artifact_hashes = {}
         self.input_maps = {}
         self.deferred_groups = {}
+        self.storage_limits = None
+        self.storage_lock_fd = None
         try:
             self.revision = {"commit": capture(["git", "rev-parse", "HEAD"], root),
                              "tree": capture(["git", "rev-parse", "HEAD^{tree}"], root)}
@@ -406,6 +407,9 @@ class Runner:
         return "run", "no verifiable successful result for these inputs", None
 
     def execute(self, stage, ready_at):
+        if self.storage_limits is not None:
+            import release_storage
+            release_storage.free_guard(self.root, self.storage_limits)
         decision, reason, previous = self.decision(stage)
         if previous:
             return {"stage": stage.id, "key": self.keys[stage.id], "status": "passed", "decision": decision,
@@ -453,11 +457,27 @@ class Runner:
                 resource_file = directory / f"resource-{index}.json"
                 timed = [shutil.which("time"), "-f", '{"user_seconds":%U,"system_seconds":%S,"peak_rss_kib":%M}',
                          "-o", str(resource_file), *command] if shutil.which("time") else command
+                inherited = ()
+                if self.storage_lock_fd is not None and stage.id.startswith("prepare."):
+                    inherited = (self.storage_lock_fd,)
+                    env["GEOSOLVE_RELEASE_LOCK_FD"] = str(self.storage_lock_fd)
                 process = subprocess.Popen(timed, cwd=self.root / stage.cwd, env=env,
-                                           stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+                                           stdout=output, stderr=subprocess.STDOUT, start_new_session=True,
+                                           pass_fds=inherited)
+                disk_checked = time.monotonic()
                 while process.poll() is None:
-                    if self.stop.wait(0.1) or time.monotonic() - began > stage.timeout:
-                        status = "interrupted" if self.stop.is_set() else "timed_out"
+                    disk_error = None
+                    if self.storage_limits is not None and time.monotonic() - disk_checked >= 1:
+                        import release_storage
+                        disk_checked = time.monotonic()
+                        try:
+                            release_storage.free_guard(self.root, self.storage_limits)
+                        except (ValueError, OSError) as error:
+                            disk_error = str(error)
+                            self.stop.set()
+                            output.write((disk_error + "\n").encode())
+                    if disk_error or self.stop.wait(0.1) or time.monotonic() - began > stage.timeout:
+                        status = "storage_exhausted" if disk_error else "interrupted" if self.stop.is_set() else "timed_out"
                         try:
                             os.killpg(process.pid, signal.SIGTERM)
                             process.wait(timeout=7)
@@ -515,6 +535,24 @@ class Runner:
                 with log.open("a") as output:
                     output.write(str(error) + "\n")
                 status = "failed"
+        # Abrupt parent termination can bypass a child finally during staging.
+        # The process tree is stopped above; clean only this stage's private runtime
+        # before sealing any surviving proof/log/screenshot files as evidence.
+        for command in stage.commands:
+            if "--run-m98" in command and "--output" in command:
+                import release_gate_m98
+                destination = command[command.index("--output") + 1]
+                destination = Path(destination.replace("{scratch}", str(scratch)).replace("{stage_dir}", str(directory)))
+                if not destination.is_absolute():
+                    destination = self.root / destination
+                if not destination.is_relative_to(directory):
+                    raise ValueError("M98 runtime cleanup escapes its stage")
+                try:
+                    release_gate_m98.cleanup_runtime(destination)
+                except (OSError, ValueError) as error:
+                    status = "harness_error"
+                    with log.open("a") as output:
+                        output.write(f"runtime cleanup failed: {error}\n")
         evidence = {str(path): file_hash(path) for path in directory.rglob("*") if path.is_file()}
         receipt = {"schema": SCHEMA, "run": self.run_id, "stage": stage.id, "key": key,
                    "receipt_path": str(directory / "receipt.json"),
@@ -1403,33 +1441,13 @@ def main():
     if args.check_packages:
         check_packages()
         return 0
-    if args.prepare_native:
-        import release_gate_native as native
-        selection = native.WORKSPACE_ARGS if args.prepare_native == "workspace" else ["-p", "geosolve-headless", *[v for n in native.HEADLESS_TARGETS for v in ("--test", n)]]
-        prepare_output(args.output, lambda out: native.prepare(ROOT, selection, out))
-        return 0
-    if args.prepare_lifecycle:
-        import release_gate_wasm
-        prepare_output(args.output, lambda out: release_gate_wasm.prepare(ROOT, out))
-        return 0
-    if args.prepare_wasm:
-        def build_wasm(out):
-            subprocess.run(["npm", "run", "wasm:release"], cwd=ROOT / FRONTEND, check=True)
-            shutil.copytree(ROOT / FRONTEND / "src/generated", out)
-        prepare_output(args.output, build_wasm)
-        return 0
-    if args.prepare_m98:
-        import release_gate_m98
-        prepare_output(args.output, lambda out: release_gate_m98.prepare(ROOT, args.wasm_package.resolve(), out))
-        return 0
+    if args.prepare_native or args.prepare_lifecycle or args.prepare_wasm or args.prepare_m98 or args.prepare_browser:
+        import release_storage
+        with release_storage.preparation_lock(ROOT):
+            return perform_preparation(args)
     if args.run_m98:
         import release_gate_m98
         release_gate_m98.run(ROOT, args.run_m98, args.m98_group, args.output, args.browser_package)
-        return 0
-    if args.prepare_browser:
-        wasm_args = ["--wasm-package", str(args.wasm_package.resolve())] if args.wasm_package else []
-        prepare_output(args.output, lambda out: subprocess.run(["node", "scripts/build-release-artifacts.mjs", "--out", str(out), *wasm_args],
-                                                              cwd=ROOT / FRONTEND, check=True))
         return 0
     if args.native_run:
         import release_gate_native as native
@@ -1484,7 +1502,51 @@ def main():
         original = store.unseal(store.path / "runs" / args.resume / "qualification.json")
         if not original:
             raise ValueError("resume run is missing or unauthenticated")
+    import release_storage
+    if args.plan:
+        return run_qualification(args, policy, store, original if args.resume else None)
+    with release_storage.locked(store) as lock:
+        retained = (args.resume,) if args.resume else ()
+        cleanup = release_storage.maintain(ROOT, store, extra_runs=retained)
+        print(f"storage: {cleanup['reclaimable_bytes'] / release_storage.GIB:.2f} GiB disposable; "
+              f"{cleanup['actual_target_bytes'] / release_storage.GIB:.2f} GiB retained", flush=True)
+        release_storage.guard(ROOT, release_storage.policy(ROOT))
+        return run_qualification(args, policy, store, original if args.resume else None, lock.fileno())
+
+
+def perform_preparation(args):
+    if args.prepare_native:
+        import release_gate_native as native
+        selection = native.WORKSPACE_ARGS if args.prepare_native == "workspace" else ["-p", "geosolve-headless", *[v for n in native.HEADLESS_TARGETS for v in ("--test", n)]]
+        prepare_output(args.output, lambda out: native.prepare(ROOT, selection, out))
+        return 0
+    if args.prepare_lifecycle:
+        import release_gate_wasm
+        prepare_output(args.output, lambda out: release_gate_wasm.prepare(ROOT, out))
+        return 0
+    if args.prepare_wasm:
+        def build_wasm(out):
+            subprocess.run(["npm", "run", "wasm:release"], cwd=ROOT / FRONTEND, check=True)
+            shutil.copytree(ROOT / FRONTEND / "src/generated", out)
+        prepare_output(args.output, build_wasm)
+        return 0
+    if args.prepare_m98:
+        import release_gate_m98
+        prepare_output(args.output, lambda out: release_gate_m98.prepare(ROOT, args.wasm_package.resolve(), out))
+        return 0
+    if args.prepare_browser:
+        wasm_args = ["--wasm-package", str(args.wasm_package.resolve())] if args.wasm_package else []
+        prepare_output(args.output, lambda out: subprocess.run(["node", "scripts/build-release-artifacts.mjs", "--out", str(out), *wasm_args],
+                                                              cwd=ROOT / FRONTEND, check=True))
+        return 0
+
+
+def run_qualification(args, policy, store, original=None, lock_fd=None):
     runner = Runner(ROOT, store, source_snapshot(ROOT), policy, tool_identity(ROOT), args.jobs, args.fresh)
+    if not args.plan:
+        import release_storage
+        runner.storage_limits = release_storage.policy(ROOT)
+        runner.storage_lock_fd = lock_fd
     stages = preflight_stages(include_clippy=not args.preflight)
     preparations, prepared = preparation_stages(runner, preparation_modes(args.stage))
     if not args.preflight:
@@ -1513,12 +1575,6 @@ def main():
                 else:
                     print(f"run   {identity}: exact case inventory pending authenticated preparation")
         return 0
-    lock_file = (store.path / "runner.lock").open("a")
-    try:
-        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as error:
-        lock_file.close()
-        raise ValueError("another gate owns this checkout's mutable build/install state") from error
     previous = {sig: signal.signal(sig, lambda *_: runner.stop.set()) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
         if args.resume and original["source"] == runner.snapshot:
@@ -1549,10 +1605,11 @@ def main():
                 expanded = [stage for stage in expanded if stage.id in selected]
         scope = "preflight" if args.preflight else "preparation" if args.prepare else "targeted" if args.stage else "release"
         report = runner.report(final=True, scope=scope)
+        release_storage.maintain(ROOT, store, extra_runs=(runner.run_id,))
+        release_storage.guard(ROOT, runner.storage_limits)
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
-        lock_file.close()
     print(f"receipt: {runner.run_dir / 'qualification.json'}")
     return 0 if result and report["complete"] else 1
 

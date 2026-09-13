@@ -1,0 +1,8 @@
+{
+  "store_gib": 128,
+  "target_gib": 160,
+  "free_gib": 32,
+  "recent_runs": 1,
+  "qualified_runs": 1,
+  "orphan_hours": 24
+}

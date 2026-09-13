@@ -21,6 +21,7 @@ its purpose and links the [browser demo](https://arduano.github.io/geometric-con
 | Export or render without a browser | [Headless CLI](../crates/geosolve-headless) |
 | Contribute or investigate a failure | [Development](DEVELOPMENT.md), [agent instructions](../AGENTS.md) and [scenarios](SCENARIOS.md) |
 | Qualify a release | [Release qualification](RELEASE_QUALIFICATION.md) and [acceptance](../ACCEPTANCE.md) |
+| Inspect or reclaim acceptance storage | [Release storage](RELEASE_STORAGE.md) |
 | Understand current work | [Roadmap](../PLAN.md) and [M100](M100_FINAL_CLEANUP.md) |
 
 ## Examples

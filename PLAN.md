@@ -18,6 +18,7 @@ IDs, licences and genuine acceptance outcomes remain preserved.
 
 - [x] Audit maintenance seams and prepare the implementation/acceptance plan.
 - [x] Complete and validate the repository-wide public documentation pass.
+- [x] Bound acceptance storage, preserve delivery evidence and reclaim disposable caches.
 - [ ] Freeze the remaining ownership, preservation inventory and focused check routing.
 - [ ] Finish shared decoding/compiler mechanics and proven redundant adapter cleanup.
 - [ ] Make qualification, exact offline installation and source/installed startup reproducible.
@@ -28,6 +29,11 @@ IDs, licences and genuine acceptance outcomes remain preserved.
 Keep M99's accepted owners and distinct host policies. No new mathematics, tool
 families, durable formats or protocol redesign is scoped. The completed documentation pass
 alone does not close M100 or qualify new product archives.
+
+The [storage slice](docs/M100_FINAL_CLEANUP.md#acceptance-storage--implementation-and-cleanup)
+reduced target allocation from 472.5 to 115.5 GiB and recovered 196.3 GiB of
+filesystem space. Automatic retention, disposable scratch cleanup and explicit
+budgets now preserve accepted evidence without accumulating every old build.
 
 ## Accepted baseline and outstanding review
 

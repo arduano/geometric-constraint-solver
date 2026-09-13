@@ -13,7 +13,7 @@ restart work below.
 
 A returning maintainer should be able to identify the current product, build or
 install it, run focused and integrated checks, open the supported editor modes,
-and restore a saved project from maintained instructions or depending on
+and restore a saved project from maintained instructions without depending on
 untracked helper code. Keep the codebase, retained artifacts and active documents
 small enough to understand and maintain during a pause.
 
@@ -108,7 +108,7 @@ The preparation audit examined clean closeout `6408764` over qualified product
   **Fail pending human recheck** and other unperformed human rows remain **Not run**;
   no automated replay can rewrite those outcomes. The ledger may carry these into
   the pause as unresolved, without blocking code cleanup or inventing signoff.
-- [ ] Inventory artifact retention with a dry run. Preserve accepted archives,
+- [x] Inventory artifact retention with a dry run. Preserve accepted archives,
   current installation, required signed receipts/key and their evidence closure,
   live preview assets/data, source/journals/history and unique branch commits.
   Prune only enumerated disposable build/cache/scratch copies after checking those
@@ -192,3 +192,75 @@ separate WASM builds and ordinary-folder `GEOSOLVE_DIST` versus shared `--artifa
 A full fresh-checkout build, newly packaged installed-product checks, final integrated
 qualification and the copied-state restart exercise remain in the worklist above.
 M99 stays accepted; M98 U02 remains Fail pending human recheck. M100 remains open.
+
+## Acceptance storage — implementation and cleanup
+
+`scripts/release_storage.py` now owns dry-run audits, explicit pruning, signed
+whole-run and delivery-stage pins, and retained-evidence verification. Its
+checkout-local policy is in `scripts/release_storage_policy.json`; the
+[storage guide](RELEASE_STORAGE.md) documents operation and retirement. The
+release gate shares its lock with cleanup and internal preparation, prunes
+before/after qualification, enforces admission/post-run budgets and monitors
+the filesystem reserve during stage execution. The storage program, policy and
+tests are qualification inputs; reviewed equivalence pins were not weakened.
+
+New golden observations dispose of private compiler caches. Package/host
+execution disposes of copied repositories and npm caches even on failure,
+timeout or handled interruption, retaining diagnostics and proof first. The
+parent cleans stopped private runtimes before sealing evidence. These are
+test-infrastructure changes: no solver equations, public domain APIs,
+tolerances, protocol, golden rows or acceptance assertions changed.
+
+The applied audit retained complete M98 UAT and accepted M99 qualification
+dependencies, including cross-run donors, browser provenance and captured
+symlink targets. Delivery-stage pins retain package/browser evidence for nine
+offline deliveries. Source, project state, installed products and live previews
+were excluded from deletion candidates. The cleanup removed 71 unreferenced
+preparation payloads, 2,478 old stage payloads and six known Cargo cache trees.
+
+| Measurement | Before | After |
+| --- | --- | --- |
+| Checkout `target` allocation | 472.496 GiB | 115.493 GiB |
+| Acceptance store allocation | 278.763 GiB | 98.260 GiB |
+| Filesystem free space | 360.040 GiB | 556.356 GiB |
+
+The observed filesystem gain is 196.316 GiB. Shared extents/hard links mean
+directory allocation, projected reclamation and actual free-space gain differ.
+The retained store contains 605 stage payloads and 38 preparation payloads;
+its old signed scratch remains part of immutable evidence. Automatic limits
+are 128 GiB for the store, 160 GiB for target, and a 32 GiB filesystem reserve.
+Size limits apply before/after a run, not as hard runtime quotas. Pins are
+never silently retired to meet a budget.
+
+Validation for this slice:
+
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p 'test_*.py'`
+  passes 210 tests in 89.113 s, including 19 destructive-boundary/retention tests,
+  host-stage failure/timeout cleanup and the existing release harness.
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/golden_oracle_test.py` passes 13
+  harness tests; the reviewed 271-row golden is unchanged.
+- `python3 scripts/release_gate.py --check-inventory` passes.
+- `nix-shell shell.nix --run './scripts/release-gate.sh --plan --preflight'`
+  passes in the recorded development environment, retaining all five preflight
+  obligations. This is a read-only plan, not product qualification.
+- `python3 scripts/release_storage.py audit --build-cache --json` produced the
+  reviewed candidate list; `python3 scripts/release_storage.py verify` passed
+  before deletion: 607 authenticated receipts, 20,557 evidence files and 20
+  captured output trees. `python3 scripts/release_storage.py prune --build-cache --apply --json`
+  applied a newly computed plan under the exclusive lock and recorded the
+  measurements above. The same verification command passed after deletion with
+  all 607 receipts, 20,557 evidence files and 20 output trees still valid.
+  A final audit has no remaining deletion candidates and passes all three
+  store/target/free-space budgets.
+- Independent before/after hashes match for all 17 frozen delivery trees.
+  All eight inventoried Node preview/server processes retain the same PID and
+  exact command arguments. Local inventory paths and process details remain
+  in ignored private records.
+- `python3 -m py_compile scripts/release_storage.py scripts/release_gate.py scripts/release_gate_m98.py scripts/golden_oracle.py`
+  and `git diff --check` pass. The documentation audit covers 275 Markdown
+  files and more than 1,200 local links with no broken paths/fragments or private host details.
+
+This focused infrastructure slice does not nominate new product bytes. Final
+clean-source format/Clippy/native/WASM/browser/package/performance qualification,
+the maintained installer and copied-state restart exercise remain M100 work.
+M99 remains accepted; M98 U02 remains Fail pending human recheck.

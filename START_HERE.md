@@ -10,8 +10,9 @@ Start with the [README](README.md) for the product overview or the
 ## Current work
 
 [M99 is accepted and closed](docs/M99_CLOSURE.md). [M100](docs/M100_FINAL_CLEANUP.md)
-is the final maintenance milestone before a project pause. Its documentation pass
-is complete; the remaining code, tooling, retention and restart work is tracked in
+is the final maintenance milestone before a project pause. Its documentation and
+acceptance-storage cleanup are complete. Remaining code, operational tooling and
+restart work is tracked in
 [PLAN.md](PLAN.md). Historical handoffs describe their original checkpoints and
 are not current startup instructions.
 

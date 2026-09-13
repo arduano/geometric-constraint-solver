@@ -46,7 +46,10 @@
     "scripts/tests/test_release_pipeline.py",
     "scripts/tests/test_release_runtime.py",
     "scripts/release_gate_m98.py",
-    "scripts/tests/test_release_m98.py"
+    "scripts/tests/test_release_m98.py",
+    "scripts/release_storage.py",
+    "scripts/release_storage_policy.json",
+    "scripts/tests/test_release_storage.py"
   ],
   "owned": [
     "crates/*/src/**",

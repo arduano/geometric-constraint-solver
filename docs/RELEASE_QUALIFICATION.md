@@ -11,6 +11,8 @@ for check routing and [Getting started](GETTING_STARTED.md) for prerequisites.
 The latest accepted baseline is [M99](M99_QUALIFICATION.md). M100 documentation
 maintenance does not replace that qualified product. The original runner's design
 and measured timing limits remain in [M93 qualification](M93_QUALIFICATION.md).
+The [storage guide](RELEASE_STORAGE.md) covers automatic retention, budgets,
+accepted-product pins, temporary caches and explicit cleanup commands.
 
 ## Commands
 

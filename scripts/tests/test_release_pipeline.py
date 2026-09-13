@@ -301,7 +301,7 @@ class PipelineTests(unittest.TestCase):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 before = gate.hash_output(store.path)
                 with patch.object(gate.Store, 'save') as save:
-                    with self.assertRaisesRegex(ValueError, 'another gate owns'):
+                    with self.assertRaisesRegex(ValueError, 'runner or storage cleanup is active'):
                         gate.main()
                 save.assert_not_called()
                 self.assertEqual(gate.hash_output(store.path), before)
