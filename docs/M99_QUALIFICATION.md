@@ -8,7 +8,9 @@ Clean product `eb4d2e06933a7ed5e02533f0359abff28040991a`, tree
 obligations in run `20260913T155413-41e9f715`: 32 fresh stages and 265 authenticated
 reused successes, 2704.185 s wall time. Every signed stage receipt authenticates;
 source remained unchanged. This completes the [M99 plan](M99_CLEANUP.md), without
-recording new human acceptance or closing M98's outstanding UAT.
+recording human acceptance at qualification time or closing M98's outstanding UAT.
+The supervising user's subsequent M99 acceptance and closure are recorded in
+[M99_CLOSURE.md](M99_CLOSURE.md); these qualified product bytes remain unchanged.
 
 ## Files, APIs and ownership
 

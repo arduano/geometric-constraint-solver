@@ -5,12 +5,13 @@
 The supervising user approved this cleanup for implementation on 2026-09-13,
 including coordinated clean breaks to experimental Rust/TypeScript APIs. M98's
 human U02 recheck and acceptance remain open; this authorization does not record
-those outcomes. Work continues in the existing `m98/file-workspace` checkout.
+those outcomes. Implementation used the existing `m98/file-workspace` checkout.
 
-**Implementation and mechanical qualification complete on 2026-09-13.**
+**Accepted and closed on 2026-09-13:** [supervising-user signoff](M99_CLOSURE.md).
 [Final qualification](M99_QUALIFICATION.md) records clean product `eb4d2e0`,
 297/297 integrated obligations, exact offline installation and both final
 MiniCAD consumer runs. This does not close M98's outstanding human acceptance.
+[M100](M100_FINAL_CLEANUP.md) is the prepared next milestone.
 
 ## Contract
 

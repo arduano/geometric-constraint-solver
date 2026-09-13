@@ -3093,8 +3093,9 @@ by the headless engine and standalone workbench and adds no protocol authority.
 The [completed cleanup](docs/M99_CLEANUP.md) preserves the M98 protocol and
 all durable project, sidecar, history and recovery formats. Standalone, folder
 and collaborative consumers use the consolidated experimental APIs.
-[Mechanical qualification](docs/M99_QUALIFICATION.md) and supervising-user
-acceptance remain separate records; M98 human acceptance is unchanged.
+[Mechanical qualification](docs/M99_QUALIFICATION.md) and
+[supervising-user acceptance/closure](docs/M99_CLOSURE.md) are complete and remain
+separate records; M98 human acceptance is unchanged.
 
 Native construction receipts retain defining samples, operands, branches and
 created declaration correspondence. `geosolve-sketch-code` owns source names,
@@ -3128,3 +3129,12 @@ package and source provenance. Worker lifecycle helpers share correlation,
 stale-generation fencing, settlement and teardown mechanics. Their callers retain
 the different ordered editing, coalesced presentation, text admission and
 durable-callback drain policies.
+
+## M100 preparation boundary
+
+[M100](docs/M100_FINAL_CLEANUP.md) is prepared as a final maintenance and pause
+readiness pass over this accepted architecture. Shared native JSON decoding and
+compiler receipt mechanics, permanent qualification tooling, current documentation
+and restart/artifact retention are the bounded audit targets. The plan preserves
+distinct host policies and durable compatibility; it introduces no mathematical,
+protocol or public API change merely by being recorded here.

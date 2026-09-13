@@ -8594,7 +8594,7 @@ or production release qualification is included.
 
 ## M99 — shared authoring and host infrastructure
 
-Status: **implementation and mechanical qualification complete**. The supervising
+Status: **accepted and closed on 2026-09-13**. The supervising
 user approved the [cleanup contract and ordered implementation](docs/M99_CLEANUP.md), including
 coordinated clean breaks to experimental APIs. This cleanup adds no primitives
 and does not imply M98 human acceptance or close its outstanding U02 recheck.
@@ -8606,6 +8606,7 @@ and does not imply M98 human acceptance or close its outstanding U02 recheck.
 - [x] Package production Node hosting independently of the demo/frontend runtime.
 - [x] Migrate MiniCAD and remove superseded code/documentation coupling.
 - [x] Complete integrated qualification and installed-product verification.
+- [x] Record supervising-user acceptance and milestone closure.
 
 [Final qualification](docs/M99_QUALIFICATION.md) passes 297/297 obligations
 (32 fresh, 265 authenticated reused) for product `eb4d2e06933a7ed5e02533f0359abff28040991a`,
@@ -8615,7 +8616,30 @@ bridge and case pipelines against those installed bytes at descendant `dde56658`
 its exact owned source hashes are retained. Results occupy `output/bridge-m99` and
 `output/pi-case-m99`. All host migrations are complete; no new mathematics or
 golden changes were introduced. Existing previews and M98 human acceptance remain
-unchanged. This records mechanical completion, without supervising-user signoff.
+unchanged. The supervising user subsequently stated “I think it's safe to close it
+off here”; [M99 closure](docs/M99_CLOSURE.md) records milestone-level acceptance
+without inventing a separate human replay or changing M98's human dispositions.
+
+## M100 — final cleanup and pause readiness
+
+Status: **prepared; implementation not started**. After closing M99, the
+supervising user requested a final cleanup milestone before temporarily pausing
+the project. [The bounded plan](docs/M100_FINAL_CLEANUP.md) owns the audited
+worklist, preservation rules and completion criteria. No new mathematics, tool
+families, durable formats or protocol redesign is scoped.
+
+- [x] Audit remaining maintenance seams and prepare the implementation/acceptance plan.
+- [ ] Freeze ownership, preservation inventory and focused check routing.
+- [ ] Finish shared decoding/compiler mechanics and proven redundant adapter cleanup.
+- [ ] Make qualification, exact installation and source/installed startup reproducible.
+- [ ] Refresh current docs, prepare restart guidance and audit artifact retention.
+- [ ] Pass clean-source qualification, offline installed consumers and copied-state restart.
+- [ ] Record final evidence, remaining human dispositions and pause handoff for signoff.
+
+Keep M99's accepted owners and distinct host policies. Preserve M98 U02 **Fail
+pending human recheck** and other unperformed human rows. Current continuation
+remains the existing `m98/file-workspace` checkout; primary/oracle worktrees and
+live services are preserved. Preparation changes documentation only.
 
 ## Explicit non-goals
 

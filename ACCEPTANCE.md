@@ -5698,3 +5698,38 @@ branches, independent residual validation, equations, tolerances and wire/schema
 - [x] F041–F043 owning regressions, complete qualification and preserved preview delivery.
 - [ ] Human U02 recheck; retain the reported Fail until the supervising user records a result.
 - [ ] Supervising-user acceptance and M98 closure.
+
+
+## M99 — accepted cleanup and qualification
+
+The supervising user accepted and closed M99 on 2026-09-13 after its implementation
+and qualification report. [Closure](docs/M99_CLOSURE.md) records that milestone-level
+acceptance; [qualification](docs/M99_QUALIFICATION.md) retains product `eb4d2e0`,
+297/297 obligations, the unchanged 271-case golden, exact offline installation and
+both final MiniCAD consumers. No separately performed human replay is asserted.
+M98's human U02 and acceptance dispositions above remain unchanged.
+
+- [x] Shared authoring, terminal validation, engine transactions, browsing, interaction
+  and persistence preserve the existing host and native behavioral inventory.
+- [x] Production Node hosting and installed consumers are independent of the demo
+  execution runtime and private milestone runtime paths.
+- [x] Integrated clean-source and installed-product/consumer qualification pass.
+- [x] Supervising-user acceptance and M99 closure.
+
+## M100 — planned final cleanup acceptance
+
+[The M100 contract](docs/M100_FINAL_CLEANUP.md) is prepared; no implementation or
+acceptance result is claimed. Complete its bounded worklist before signoff:
+
+- [ ] Shared-mechanics cleanup preserves exact native/source/receipt/failure/history
+  behavior; intentional policy and compatibility paths remain explicit.
+- [ ] Maintained build, qualification, receipt verification and offline installation
+  commands work without ignored helper scripts or repository runtime imports.
+- [ ] Current docs and the restart handoff identify product/API boundaries, toolchain,
+  storage, recovery and known limits without reconstructing milestone chronology.
+- [ ] Audited retention preserves accepted evidence and all live/durable user state;
+  only independently identified disposable artifacts are pruned.
+- [ ] Clean-source integrated checks, exact installed host/MiniCAD use and copied-state
+  restart pass with unchanged golden, size, latency and residual requirements.
+- [ ] Final evidence and the pause handoff record outstanding human dispositions
+  truthfully; supervising-user signoff is recorded separately.

@@ -7574,3 +7574,24 @@ operation IDs may defer cursor encoding until changed spans and anchors are
 retained; imported representations keep the established full cursor path.
 Authentication, source limits, personal history, failure retention and durable
 publication remain unchanged. Qualification and delivery remain pending.
+
+
+## M100 — planned pause-readiness scenarios
+
+These are planned checks in [M100](M100_FINAL_CLEANUP.md), not executed results.
+M99's accepted product and scenarios remain qualified under
+[M99 qualification](M99_QUALIFICATION.md).
+
+- Start from a clean checkout using tracked instructions and pinned tools; build,
+  inspect an example and run the owning checks without copying milestone helpers.
+- Install exact qualified local archives in an empty offline consumer; start folder,
+  shared and generator modes, then run both MiniCAD pipelines through installed CLI.
+- Restore copied standalone/folder/shared state, including unfinished text, accepted
+  native authority, personal history and pending retry data. Compare exact state
+  and existing recovery behavior before/after restart without touching live projects.
+- Reject incomplete or tampered release/package evidence through maintained tools.
+  Audit disposable artifact candidates against retained receipts, installations,
+  live-service paths and unique branch commits before deleting generated copies.
+- Recheck local input while authoring is held, zero drag reversals and the unchanged
+  native/scene golden. Report cold startup separately; retain unperformed or failed
+  human UAT dispositions in the final restart handoff.
