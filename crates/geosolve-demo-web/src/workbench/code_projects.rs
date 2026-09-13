@@ -4222,31 +4222,48 @@ mod tests {
         let workbench = persistence_history_workbench();
         let persisted = workbench.to_persistence_json().unwrap();
         let mut wire: serde_json::Value = serde_json::from_str(&persisted).unwrap();
-        let canonical_session = workbench
-            .session
-            .source_session()
-            .to_canonical_json()
-            .unwrap();
-        for path in ["/snapshot", "/undo/0/snapshot", "/redo/0/snapshot"] {
-            let mut session: serde_json::Value = serde_json::from_str(&canonical_session).unwrap();
-            let snapshot = session
-                .pointer_mut(path)
-                .expect("populated historical snapshot");
-            let mut checkpoint: serde_json::Value =
-                serde_json::from_str(snapshot["accepted_editor_checkpoint"].as_str().unwrap())
-                    .unwrap();
-            let digest = checkpoint["digest"].as_str().unwrap();
-            checkpoint["digest"] = format!(
-                "{}{}",
-                if digest.starts_with('0') { '1' } else { '0' },
-                &digest[1..]
-            )
-            .into();
-            // Keep current/accepted checkpoint equality and a valid transport
-            // checksum, so the delegated native authority validator must reject.
-            snapshot["editor_checkpoint"] = checkpoint.to_string().into();
-            snapshot["accepted_editor_checkpoint"] = snapshot["editor_checkpoint"].clone();
-            let session = session.to_string();
+        let source = workbench.session.source_session();
+        let original = source.snapshot().accepted_editor_checkpoint.clone();
+        let mut checkpoint: serde_json::Value =
+            serde_json::from_str(original.as_str().unwrap()).unwrap();
+        let digest = checkpoint["digest"].as_str().unwrap();
+        checkpoint["digest"] = format!(
+            "{}{}",
+            if digest.starts_with('0') { '1' } else { '0' },
+            &digest[1..]
+        )
+        .into();
+        let publish = |history: &mut SketchCodeSession, checkpoint| {
+            let prepared = history
+                .prepare_delegated_editor_publication(
+                    history.identity(),
+                    checkpoint,
+                    "nested authority fixture",
+                )
+                .unwrap();
+            history.apply_prepared(prepared).unwrap();
+        };
+        for direction in ["current", "undo", "redo"] {
+            let mut history = source.clone();
+            publish(&mut history, checkpoint.to_string().into());
+            match direction {
+                "undo" => publish(&mut history, original.clone()),
+                "redo" => {
+                    history.undo().unwrap().expect("populated Redo");
+                }
+                _ => {}
+            }
+            // The source owner treats delegated checkpoints as opaque. Use its
+            // publication/history APIs to authenticate the complete outer wire,
+            // so only independent native checkpoint validation can reject it.
+            let session = history.to_canonical_json().unwrap();
+            assert_eq!(
+                SketchCodeSession::from_json(&session)
+                    .unwrap()
+                    .to_canonical_json()
+                    .unwrap(),
+                session
+            );
             let payload =
                 geosolve_constraint_editor::reproduction::encode_workspace(&session).unwrap();
             assert_eq!(
@@ -4256,8 +4273,8 @@ mod tests {
             wire["session"] = payload.into();
             let error = CodeProjectWorkbench::from_persistence_json(&wire.to_string())
                 .err()
-                .unwrap_or_else(|| panic!("tampered {path} native authority must reject"));
-            assert!(error.contains("digest"), "{path}: {error}");
+                .unwrap_or_else(|| panic!("tampered {direction} native authority must reject"));
+            assert!(error.contains("digest"), "{direction}: {error}");
         }
         assert_eq!(workbench.to_persistence_json().unwrap(), persisted);
     }

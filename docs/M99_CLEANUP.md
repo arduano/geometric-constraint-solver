@@ -450,3 +450,17 @@ its stricter rejection. Adapter 4/4 passes in `adapter-export-regression-final-r
 its subsequent exact-float Clippy finding is fixed with bitwise coordinate equality,
 and strict all-target WASM-adapter Clippy passes in `adapter-export-clippy-r4.log`.
 These are test corrections; no product decoding or acceptance rules changed.
+
+Integrated resume `20260913T140239-57faf2df` passed 80 stage obligations before
+its 310-case native workbench suite reported 308 passes, one fixture generator
+ignored and one failing corruption diagnostic assertion. The shared decoder
+correctly authenticates enclosing source history before nested native authority;
+the historical M92 fixture had invalidated both digests and therefore stopped at
+the earlier source check. The revised fixture uses the public opaque checkpoint
+publication and Undo APIs to produce valid enclosing history, proves that source
+history independently decodes, then retains the original native `digest` rejection
+assertion for Current, Undo and Redo. Complete original persistence remains exact.
+The focused regression passes in `history-native-auth-r3.log` (1/1, 8.83 s).
+This corrects the fixture without changing product decoding, diagnostics, formats
+or acceptance assertions. The failed integrated attempt remains failed; its
+independently successful stages are eligible only for authenticated runner reuse.
