@@ -482,3 +482,26 @@ The ordinary size-adjusted WASM command and both browser distributions pass in
 production 24 files (16 JS, one CSS, three WASM). Existing per-module, complete
 asset, license and distribution limits pass. This is focused artifact preparation;
 full browser, package, golden and performance qualification remains outstanding.
+
+Resume `20260913T150410-00ccee54` authenticates the native/headless evidence and
+passes the size-adjusted browser preparation plus engine Node checks. Folder Node
+execution finds five remaining tests reading the retired server workbench fields;
+the other 118 pass. Browser opening witnesses pass for all 16 samples, but the
+catalog row times out because the session UI refactor omitted the hidden import
+input. M99-F003 restores that existing input and ref/handler wiring. The unchanged
+catalog test then passes in 12.1 s, native contact import/drag in 8.2 s and complete
+manifold reproduction import in 42.5 s (`import-browser-final-r2.log`, 3/3). The
+first focused browser invocation used a cached browser missing `libglib`; selecting
+the pinned gate Chrome fixes that harness startup without changing artifact bytes.
+No timeout, import rejection, persistence or geometry assertion is relaxed.
+
+All five migrated folder tests pass in `folder-test-migration-final.log`
+(80.222 s). Actor recovery retains real loss/crash/timeout injection and exact
+source, persisted checkpoint and whole-profile equality. It establishes the
+saved checkpoint's evaluation basis before fault injection, preserving full
+result/input provenance instead of discarding those fields. The lost-response
+case now completes a real 10→12 mm source edit before losing its accepted reply.
+Manifold metadata comes from the native browser's read projection and publishes
+through the current semantic mutation API; all 18 regions, area tolerance,
+failed external patch retention, Undo/Redo and restart assertions remain exact.
+No production recovery change or timeout increase was required.

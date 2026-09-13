@@ -7,6 +7,7 @@ import { Worker } from "node:worker_threads";
 import { createWorkspaceWorkbench } from "../packages/geosolve-cli/runtime/workspace-workbench.mjs";
 
 const timeoutMs = 1500;
+const source = readFileSync(new URL("../examples/file-workspace/sketch.ts", import.meta.url), "utf8");
 
 async function fixture(t) {
   const workers = new Set();
@@ -40,17 +41,29 @@ async function fixture(t) {
   await actor.construct({ version: 2 });
   await actor.dispatch({ version: 2, command: "project.new-code" });
   const accepted = await actor.dispatch({ version: 2, command: "source.prepare", payload: {
-    path: "sketch.ts", contents: readFileSync(new URL("../examples/file-workspace/sketch.ts", import.meta.url), "utf8"),
+    path: "sketch.ts", contents: source,
   } });
-  assert.equal(accepted.project.status, "accepted");
+  assert.equal(accepted.format, "geosolve-folder-model-v1");
+  assert.equal(accepted.status, "accepted");
   const checkpoint = (await actor.persistProject()).contents;
+  // Native profile envelopes identify their evaluation, including history basis.
+  // Establish the saved checkpoint's evaluation before comparing full exports
+  // across worker replacement; source and native geometry must also stay exact.
+  const saved = await actor.construct({ version: 2, persistedProject: checkpoint });
+  assert.equal(saved.status, "accepted");
+  assert.deepEqual(saved.source, accepted.source);
+  assert.deepEqual(saved.result.geometry, accepted.result.geometry);
+  assert.equal((await actor.persistProject()).contents, checkpoint);
   const profiles = await actor.bakeProfile(0.02);
+  assert.deepEqual(profiles.evaluation, {
+    result_id: saved.result.result_id, input_digest: saved.result.input_digest,
+  });
   assert.equal(profiles.regions.length, 1);
   assert.ok(profiles.regions[0].outer.length > 8);
   assert.ok(profiles.regions[0].outer.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y) && Math.abs(Math.hypot(x, y) - 10) < 1e-7));
   const assertRestored = async () => {
     const restored = await actor.snapshot();
-    assert.equal(restored.project.status, "accepted");
+    assert.equal(restored.status, "accepted");
     assert.deepEqual(restored.source, accepted.source);
     assert.equal((await actor.persistProject()).contents, checkpoint);
     assert.deepEqual(await actor.bakeProfile(0.02), profiles);
@@ -63,10 +76,16 @@ async function fixture(t) {
 
 test("actor restores its exact saved native project after a lost mutation response", { timeout: 15000 }, async (t) => {
   const f = await fixture(t);
+  const changed = source.replace("value: mm(10)", "value: mm(12)");
+  assert.notEqual(changed, source);
   f.lose(1);
-  await assert.rejects(f.actor.dispatch({ version: 2, command: "project.new" }), /Workbench operation exceeded/);
+  await assert.rejects(f.actor.dispatch({ version: 2, command: "source.prepare", payload: {
+    path: "sketch.ts", contents: changed,
+  } }), /Workbench operation exceeded/);
   assert.equal(f.dropped.length, 1);
   assert.equal(f.dropped[0].ok, true, "the native mutation actually completed before its response was lost");
+  assert.equal(f.dropped[0].result.status, "accepted");
+  assert.match(f.dropped[0].result.source.files[0].contents, /value: mm\(12\)/);
   await f.assertRestored();
   assert.equal(f.workers.size, 2, "one replacement worker restores the saved project");
 });

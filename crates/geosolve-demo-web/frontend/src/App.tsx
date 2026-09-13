@@ -437,6 +437,7 @@ export default function App({ session }: AppProps) {
   return (
     <AuthoringEditContext.Provider value={session.authoringEdits}><div className="flex h-dvh min-h-[720px] min-w-[1024px] flex-col overflow-hidden bg-canvas text-foreground">
       {session.banner && <SessionStatus banner={session.banner} onError={reportError} />}
+      <input ref={importInputRef} type="file" accept=".json,.txt,application/json,text/plain" hidden onChange={(event) => importSelectedFile(event.currentTarget.files?.[0])} />
       <header className="relative z-50 flex h-11 shrink-0 items-center border-b border-border bg-surface px-2">
         <div className="relative flex items-center gap-1">
           <Button ref={fileButtonRef} aria-label="File menu" aria-haspopup="menu" aria-expanded={transient.active === "file"} size="compact" variant="ghost" onClick={(event) => transient.toggle("file", event.currentTarget)}><Menu className="size-4" />File<ChevronDown className="size-3" /></Button>

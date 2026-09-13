@@ -8,6 +8,13 @@ import { openProject } from "../packages/geosolve-cli/runtime/file-workspace.mjs
 import { acquireWorkspaceLock, createWorkspaceStorage } from "../packages/geosolve-cli/runtime/workspace-storage.mjs";
 import { readWorkspaceSnapshot } from "../packages/geosolve-cli/runtime/workspace-loader.mjs";
 import { evaluateProjectSnapshot } from "../packages/geosolve-cli/runtime/workspace-evaluation.mjs";
+import { describedMutation, nativeBrowsing } from "./workspace-native-test.mjs";
+
+async function parameters(folderModel) {
+  const local = await nativeBrowsing(folderModel);
+  try { return local.initial.snapshot.parameters; }
+  finally { local.dispose(); }
+}
 
 test("manifold external patch and source metadata edits retain profiles and reversible dependency history", { timeout: 300000 }, async (t) => {
   const folder = mkdtempSync(resolve(tmpdir(), "geosolve-m98-manifold-workflow-"));
@@ -17,22 +24,27 @@ test("manifold external patch and source metadata edits retain profiles and reve
   t.after(async () => { await project.dispose(); lock.release(); rmSync(folder, { recursive: true, force: true }); });
   const clientId = "manifold-workflow";
   const join = () => project.request("session.join", undefined, undefined, { clientId });
-  const command = async (command, payload) => {
+  const request = async (method, input) => {
     const started = performance.now();
     const basis = project.state(clientId);
-    const result = await project.request("dispatch", { version: 2, command, payload }, basis.currentHash, { clientId, authority: basis.authority });
-    t.diagnostic(`${command}: ${(performance.now() - started).toFixed(1)} ms`);
+    const result = await project.request(method, input, basis.currentHash, { clientId, authority: basis.authority });
+    t.diagnostic(`${input.command ?? method}: ${(performance.now() - started).toFixed(1)} ms`);
     return result;
   };
+  const command = (command, payload) => request("dispatch", { version: 2, command, payload });
   let snapshot = await join();
-  const parameter = snapshot.parameters.find((item) => item.label === "Channel width");
-  assert.ok(parameter?.metadata?.editable);
+  let parameter;
+  const mutation = await describedMutation(snapshot, "authoring.metadata.set", (chrome) => {
+    parameter = chrome.parameters.find((item) => item.label === "Channel width");
+    assert.ok(parameter?.metadata?.editable);
+    return { authority: parameter.metadata.authority,
+      target: parameter.metadata.target, changes: { label: "Passage width" } };
+  });
   const sourcePath = resolve(folder, "sketch.ts");
-  snapshot = await command("authoring.metadata.set", { authority: parameter.metadata.authority,
-    target: parameter.metadata.target, changes: { label: "Passage width" } });
+  snapshot = await request("authoring.mutation", { mutation });
   assert.equal(project.state(clientId).ok, true);
   assert.match(readFileSync(sourcePath, "utf8"), /Passage width/);
-  assert.equal(snapshot.parameters.find((item) => item.id === parameter.id)?.label, "Passage width");
+  assert.equal((await parameters(snapshot)).find((item) => item.id === parameter.id)?.label, "Passage width");
   const patchPath = resolve(folder, "patches/water-channel.patch.ts");
   const original = readFileSync(patchPath, "utf8");
   const edited = original.replace("Full width across the water passage.", "Full cross-section width in millimetres.");
@@ -61,6 +73,6 @@ test("manifold external patch and source metadata edits retain profiles and reve
   await project.saveDerived(); await project.dispose();
   project = await openProject(folder, { storage }); snapshot = await join();
   assert.equal(project.state(clientId).ok, true, JSON.stringify(project.state(clientId)));
-  assert.equal(snapshot.parameters.find((item) => item.id === parameter.id)?.label, "Passage width");
+  assert.equal((await parameters(snapshot)).find((item) => item.id === parameter.id)?.label, "Passage width");
   assert.equal(readFileSync(patchPath, "utf8"), edited);
 });
