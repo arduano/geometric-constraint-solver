@@ -1,0 +1,49 @@
+[package]
+name = "fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+# Shared survey core + the domains under test. Path-only: this is a standalone
+# project, not a workspace member, so it does not inherit the workspace
+# `unsafe_code = forbid` lint (the libFuzzer ABI needs `unsafe`).
+geosolve-survey = { path = "../crates/geosolve-survey" }
+geosolve-constraint-editor = { path = "../crates/geosolve-constraint-editor" }
+geosolve-sketch = { path = "../crates/geosolve-sketch" }
+geosolve-core = { path = "../crates/geosolve-core" }
+# libFuzzer. The crates.io index mirror here only serves up to 0.4.13 (no 0.13.x),
+# so pin 0.4; verified to build + run with the Nix clang/llvm-config toolchain.
+libfuzzer-sys = "0.4"
+
+# Fallback in-process harness (AGENTS.md §"in-process proptest fallback").
+# Optional so it is not pulled into the default libFuzzer build.
+proptest = { version = "1.11.0", optional = true }
+
+# cargo-fuzz 0.13.2 invokes `cargo build --bin <name>` for each discovered
+# target. cargo does not auto-discover `fuzz/fuzz_targets/*.rs` (it is not a
+# cargo-standard bin location), so the four fuzz targets must be declared here
+# explicitly. cargo-fuzz's own directory scan still finds the names by reading
+# the files, so this does not duplicate discovery — it only makes cargo aware
+# of the bins.
+[[bin]]
+name = "01_authoring_survey"
+path = "fuzz_targets/01_authoring_survey.rs"
+
+[[bin]]
+name = "02_fixture_perturbation"
+path = "fuzz_targets/02_fixture_perturbation.rs"
+
+[[bin]]
+name = "03_core_solver"
+path = "fuzz_targets/03_core_solver.rs"
+
+[[bin]]
+name = "04_fillet"
+path = "fuzz_targets/04_fillet.rs"
+
+[workspace]

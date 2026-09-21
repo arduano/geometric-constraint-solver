@@ -1,0 +1,15 @@
+# Minimal cargo-fuzz configuration for the geosolve fuzzing corpus.
+# Targets live in fuzz/targets/ and decode a FuzzInput record via fuzz::model.
+#
+# The build uses the Nix clang/LLVM toolchain (clang-wrapper-22 + llvm-21),
+# which cargo-fuzz detects via the CC/CXX/LLVM_CONFIG env vars.
+[profile.release]
+opt-level = 3
+debug = 1
+max-level = 3
+overflow-checks = true
+lto = false
+
+[settings]
+# corpus/ is where the seed corpus and crash artifacts live.
+artifact_prefix = "./corpus/"

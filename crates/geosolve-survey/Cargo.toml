@@ -1,0 +1,26 @@
+[package]
+name = "geosolve-survey"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Shared input model and residual-checked survey harness for GeoSolve core authoring"
+documentation = "https://docs.rs/geosolve-survey/0.2.0"
+keywords = ["cad", "constraints", "solver", "fuzzing", "survey"]
+categories = ["algorithms", "graphics"]
+
+[dependencies]
+geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
+
+[dev-dependencies]
+# Pin to the golden oracle's exact version so the seeded-case RNG draw (ChaCha
+# + strategy consumption) reproduces the golden fingerprints bit-for-bit.
+proptest = "1.11.0"
+
+[lints]
+workspace = true
