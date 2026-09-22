@@ -3,5 +3,6 @@
 /target/
 corpus/
 artifacts/
+crash-*
 *.profraw
 *.profdata

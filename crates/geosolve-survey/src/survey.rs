@@ -307,3 +307,122 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod oracle_check_tests {
+    use super::*;
+
+    /// A fully-accepted, all-good outcome: [`SurveyOutcome::check`] must return
+    /// `Ok`. Each negative test below clones this and flips exactly one gate.
+    fn accepted() -> SurveyOutcome {
+        SurveyOutcome {
+            family: crate::FAMILIES[0],
+            variant: FuzzVariant::DETERMINISTIC,
+            accepted: true,
+            hard_validity: Some(SketchHardValidity::Valid),
+            hard_residuals_validated: true,
+            max_residual: Some(1.0e-12),
+            max_coordinate: Some(1.0),
+            geometry_finite: true,
+            accepted_current: true,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn accepted_and_all_good_passes() {
+        assert!(accepted().check().is_ok());
+    }
+
+    #[test]
+    fn max_residual_at_bound_passes() {
+        let mut o = accepted();
+        o.max_residual = Some(1.0e-9); // `<= 1e-9` is the gate
+        assert!(o.check().is_ok());
+    }
+
+    #[test]
+    fn max_coordinate_at_bound_passes() {
+        let mut o = accepted();
+        o.max_coordinate = Some(1.0e300); // `> 1e300` is the gate
+        assert!(o.check().is_ok());
+    }
+
+    #[test]
+    fn rejected_but_bad_is_ok() {
+        // A rejected input is a valid outcome, not a defect, even when every
+        // other field looks wrong.
+        let mut o = accepted();
+        o.accepted = false;
+        o.geometry_finite = false;
+        o.hard_validity = None;
+        o.hard_residuals_validated = false;
+        o.max_residual = Some(2.0e-9);
+        o.accepted_current = false;
+        assert!(o.check().is_ok());
+    }
+
+    #[test]
+    fn error_always_fails_even_when_rejected() {
+        let mut o = accepted();
+        o.accepted = false;
+        o.error = Some("authoring failed".to_string());
+        assert!(o.check().is_err());
+    }
+
+    #[test]
+    fn non_finite_geometry_fails() {
+        let mut o = accepted();
+        o.geometry_finite = false;
+        assert!(o.check().is_err());
+    }
+
+    #[test]
+    fn overlarge_coordinate_fails() {
+        let mut o = accepted();
+        o.max_coordinate = Some(1.0e301);
+        assert!(o.check().is_err());
+    }
+
+    #[test]
+    fn hard_validity_missing_fails() {
+        let mut o = accepted();
+        o.hard_validity = None; // != Some(Valid)
+        assert!(o.check().is_err());
+    }
+
+    #[test]
+    fn residuals_not_validated_fails() {
+        let mut o = accepted();
+        o.hard_residuals_validated = false;
+        assert!(o.check().is_err());
+    }
+
+    #[test]
+    fn max_residual_missing_fails() {
+        let mut o = accepted();
+        o.max_residual = None;
+        assert!(o.check().is_err());
+    }
+
+    #[test]
+    fn max_residual_nan_fails() {
+        let mut o = accepted();
+        o.max_residual = Some(f64::NAN);
+        assert!(o.check().is_err());
+    }
+
+    #[test]
+    fn max_residual_over_bound_fails() {
+        let mut o = accepted();
+        o.max_residual = Some(2.0e-9); // `> 1e-9`
+        assert!(o.check().is_err());
+    }
+
+    #[test]
+    fn accepted_state_not_current_fails() {
+        let mut o = accepted();
+        o.accepted_current = false;
+        assert!(o.check().is_err());
+    }
+}

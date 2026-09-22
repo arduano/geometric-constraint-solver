@@ -6,5 +6,6 @@
 //! `use fuzz::{model, harness};`.
 pub mod harness;
 pub mod model;
+pub mod random_doc;
 
 pub use model::FuzzInput;
