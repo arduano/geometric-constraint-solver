@@ -1,0 +1,7 @@
+# Pinned toolchain for the fuzzing campaign and local `cargo fuzz` work.
+# Matches the nightly used to build and run the libFuzzer targets.
+[toolchain]
+channel = "nightly-2026-08-27"
+profile = "minimal"
+components = ["rust-src", "rustfmt", "clippy"]
+targets = ["x86_64-unknown-linux-gnu"]
