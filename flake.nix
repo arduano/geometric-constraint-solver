@@ -51,14 +51,23 @@
       cp ${self}/rust-toolchain.toml "$out/" 2>/dev/null || true
 
       cat > "$out/bin/fuzz-campaign" <<'EOF'
-      #!/bin/bash
+      #!${pkgs.bash}/bin/bash
       set -euo pipefail
-      export PATH="${pkgs.llvmPackages.clang}/bin:${rustc}/bin:${cargo}/bin:${rustfmt}/bin:${clippy}/bin:${pkgs.cargo-fuzz}/bin:${pkgs.util-linux}/bin:${pkgs.coreutils}/bin:${pkgs.procps}/bin:$PATH"
+      # Include the Nix store bash first so `bash` resolves deterministically
+      # (e.g. the campaign script's unqualified `setsid bash`), and so the
+      # interpreter is always a real executable -- `/bin/bash` does not exist
+      # inside the Nix store, which is what this wrapper is built for.
+      export PATH="${pkgs.bash}/bin:${pkgs.llvmPackages.clang}/bin:${rustc}/bin:${cargo}/bin:${rustfmt}/bin:${clippy}/bin:${pkgs.cargo-fuzz}/bin:${pkgs.util-linux}/bin:${pkgs.coreutils}/bin:${pkgs.procps}/bin:$PATH"
       export CC="${pkgs.llvmPackages.clang}/bin/clang"
       export CXX="${pkgs.llvmPackages.clang}/bin/clang++"
       export LLVM_CONFIG="${pkgs.llvmPackages.llvm}/bin/llvm-config"
       export RUST_BACKTRACE=1
-      exec "$0.sh" "$@"
+      # Invoke the campaign script with the store bash explicitly rather than
+      # `exec "$0.sh"`: that would re-read fuzz-campaign.sh's shebang
+      # (#!/usr/bin/env bash) and exec `/usr/bin/env`, which is not guaranteed
+      # to exist in the store. Running it as a script argument skips the
+      # shebang entirely.
+      exec "${pkgs.bash}/bin/bash" "$0.sh" "$@"
       EOF
       chmod +x "$out/bin/fuzz-campaign"
     '';
