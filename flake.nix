@@ -72,6 +72,30 @@
       chmod +x "$out/bin/fuzz-campaign"
     '';
 
+    # Bundle a campaign's receipts (crash artifacts, corpus, run logs and the
+    # fuzz crate source) into a zip for offline analysis. Unlike the campaign
+    # runner, this package ships only the script: the script reads the whole
+    # campaign output from OUT_ROOT in the current directory, so the store
+    # package needs nothing else. The wrapper installs just coreutils, findutils
+    # and zip.
+    bundle = pkgs.runCommand "fuzz-bundle-runner" { } ''
+      mkdir -p "$out/bin"
+      cp ${self}/scripts/fuzz-bundle.sh "$out/bin/"
+
+      cat > "$out/bin/fuzz-bundle" <<'EOF'
+      #!${pkgs.bash}/bin/bash
+      set -euo pipefail
+      export PATH="${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.findutils}/bin:${pkgs.zip}/bin:$PATH"
+      exec "${pkgs.bash}/bin/bash" "$0.sh" "$@"
+      EOF
+      chmod +x "$out/bin/fuzz-bundle"
+    '';
+
+    bundleApp = {
+      type = "app";
+      program = "${bundle}/bin/fuzz-bundle";
+    };
+
     campaignApp = {
       type = "app";
       program = "${campaign}/bin/fuzz-campaign";
@@ -104,11 +128,13 @@
     apps.${system} = {
       default = campaignApp;
       "fuzz-campaign" = campaignApp;
+      "fuzz-bundle" = bundleApp;
     };
 
     packages.${system} = {
       default = campaign;
       "fuzz-campaign" = campaign;
+      "fuzz-bundle" = bundle;
     };
 
     devShells.${system} = {
