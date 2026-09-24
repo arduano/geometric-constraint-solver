@@ -35,7 +35,8 @@ Options:
   -h, --help   show this help
 
 Environment:
-  FUZZ_OUT_ROOT         campaign output dir (default: results)
+  FUZZ_OUT_DIR         campaign output dir (default: results)
+                       (FUZZ_OUT_ROOT also accepted)
   FUZZ_BUNDLE_TARGETS   space-separated target names (default: all present)
   FUZZ_BUNDLE_INCLUDE   comma list: artifacts,corpus,logs,fuzz_src
                         (+ build_cache,crates)
@@ -44,7 +45,9 @@ Environment:
 EOF
 }
 
-OUT_ROOT="${FUZZ_OUT_ROOT:-results}"
+# Output root: FUZZ_OUT_DIR (natural name) or FUZZ_OUT_ROOT both accepted;
+# defaults to results, matching fuzz-campaign.sh's output root.
+OUT_ROOT="${FUZZ_OUT_DIR:-${FUZZ_OUT_ROOT:-results}}"
 FUZZ_BUNDLE_TARGETS="${FUZZ_BUNDLE_TARGETS:-}"
 FUZZ_BUNDLE_INCLUDE="${FUZZ_BUNDLE_INCLUDE:-artifacts,corpus,logs,fuzz_src}"
 OUT_DIR="${FUZZ_BUNDLE_OUT:-$(pwd)}"
@@ -64,7 +67,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-[ -d "$OUT_ROOT" ] || die "OUT_ROOT '$OUT_ROOT' not found in $(pwd); run the campaign first (set FUZZ_OUT_ROOT if elsewhere)."
+[ -d "$OUT_ROOT" ] || die "OUT_ROOT '$OUT_ROOT' not found in $(pwd); run the campaign first (set FUZZ_OUT_DIR or FUZZ_OUT_ROOT if elsewhere)."
 command -v zip >/dev/null 2>&1 || die "required tool 'zip' not found on PATH (install 'zip')."
 
 has_part() { case ",$FUZZ_BUNDLE_INCLUDE," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
@@ -84,7 +87,12 @@ fi
 # Stage the bundle, then zip its contents so the archive root holds the summary
 # and per-target trees (no outer staging prefix).
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/geosolve-fuzz-bundle.XXXXXX")" || die "mktemp failed"
-trap 'rm -rf "$STAGE"' EXIT
+# Staged files are copied with cp -a, so read-only source directories (e.g. a
+# read-only git checkout or Nix-store copy) stay read-only. chmod the staged
+# tree writable before zipping so the archive is portable across read-only or
+# strict mounts, and so this EXIT cleanup can unlink the files instead of
+# spewing "Permission denied" and leaving temp dirs behind.
+trap 'chmod -R u+rwX "$STAGE" 2>/dev/null; rm -rf "$STAGE" 2>/dev/null; true' EXIT
 mkdir -p "$OUT_DIR"
 
 SUMMARY="$STAGE/SUMMARY.md"
@@ -158,6 +166,9 @@ done
   ( cd "$STAGE" && find . -type f ! -name SUMMARY.md ! -name MANIFEST.txt -printf '%P\t%s\n' 2>/dev/null | sort )
 } >"$STAGE/MANIFEST.txt"
 
+# Make staged files/dirs writable so the archive is portable across
+# read-only/strict mounts and the EXIT trap can clean up.
+chmod -R u+rwX "$STAGE" 2>/dev/null || true
 ( cd "$STAGE" && zip -r -q "$ZIP_PATH" . ) || die "zip failed"
 
 size="$(du -h "$ZIP_PATH" 2>/dev/null | cut -f1)"
