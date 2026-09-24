@@ -6,6 +6,13 @@
 # via `taskset`, and writes all results (per-target corpus, crash artifacts,
 # build cache and run logs) under <out-root>/ in the CURRENT WORKING DIRECTORY.
 #
+# OUT_ROOT is persistent and the run is resumable: interrupt and re-run to
+# continue from the discovered corpus instead of restarting from the golden
+# seeds (see FUZZ_FORCE_FRESH below to force a clean start). cp propagates
+# read-only-ness of Nix-store source dirs onto OUT_ROOT, so the working tree is
+# chmod'd writable after each source refresh and before any rm -rf, keeping the
+# resume/refresh path robust against read-only sources.
+#
 # Usage:
 #   scripts/fuzz-campaign.sh [OUT_ROOT]
 #
@@ -17,6 +24,7 @@
 #   FUZZ_RUNS_<target>   -runs budget for one target          (default: unlimited)
 #   FUZZ_DURATION_<target> wall clock for one target          (default: $FUZZ_DURATION)
 #   FUZZ_FORKS_<target>  worker count for one target          (default: see CAMPAIGN)
+#   FUZZ_FORCE_FRESH     1 = wipe OUT_ROOT and re-seed on start (default: resume)
 #
 # Examples:
 #   # 12h per target on the default core split
@@ -167,8 +175,19 @@ launch_target() {
 
 # --------------------------------------------------------------------------
 # Launch everything.
+#
+# Resumable: the persistent state (each target's discovered corpus, crash
+# artifacts and the cargo build cache at $crate/target/) lives under OUT_ROOT
+# and is preserved across runs, so interrupting and re-running resumes instead
+# of restarting from the golden seeds. The folder layout below is unchanged.
+# FUZZ_FORCE_FRESH=1 wipes OUT_ROOT for a clean start.
 # --------------------------------------------------------------------------
-rm -rf "$OUT_ROOT"
+if [ "${FUZZ_FORCE_FRESH:-0}" = "1" ]; then
+  # Nix-store source dirs are read-only and cp propagates that onto OUT_ROOT;
+  # rm -rf cannot unlink files inside a read-only dir, so make it writable first.
+  chmod -R u+rwX "$OUT_ROOT" 2>/dev/null || true
+  rm -rf "$OUT_ROOT"
+fi
 mkdir -p "$OUT_ROOT"
 
 core_cursor=0
@@ -185,8 +204,8 @@ for i in "${!names[@]}"; do
 
   # The fuzz crate resolves its geosolve deps via `path = "../crates/*"`, so the
   # domain crates must sit beside it (results/<target>/crates/), not inside the
-  # fuzz crate. Copy them once per target; keep the build cache at $crate/target/
-  # across runs.
+  # fuzz crate. Refresh source only; keep the build cache at $crate/target/
+  # across runs (it is never removed, so it survives interrupt/re-run).
   cp -rf "$CRATES_DIR" "$work/"
 
   # The domain crates inherit `edition`, lints and `[workspace.dependencies]`
@@ -198,12 +217,27 @@ for i in "${!names[@]}"; do
   cp -f "$FUZZ_DIR/Cargo.toml" "$FUZZ_DIR/Cargo.lock" "$FUZZ_DIR/fuzz.toml" "$FUZZ_DIR/.gitignore" "$crate/" 2>/dev/null
   cp -rf "$FUZZ_DIR/src" "$FUZZ_DIR/fuzz_targets" "$FUZZ_DIR/tests" "$crate/"
 
-  # Fresh corpus + artifacts each run. libFuzzer (esp. in -fork mode) requires the
-  # `-artifact_prefix` directory to already exist, so create it or every fork worker
-  # fails to start with "The required directory ... does not exist".
-  rm -rf "$crate/corpus" "$crate/artifacts" "$work/artifacts"
-  mkdir -p "$crate/corpus" "$work/artifacts"
-  seed_corpus "$name" "$crate"
+  # cp propagates read-only-ness of Nix-store source dirs onto the destination,
+  # which would break this run's corpus writes and the next run's refresh. Make
+  # the working tree writable so resume and FUZZ_FORCE_FRESH can refresh sources.
+  chmod -R u+rwX "$work" 2>/dev/null || true
+
+  # libFuzzer loads whatever is already in the corpus directory at startup, so a
+  # preserved corpus continues the previous run instead of restarting. Resume
+  # when this target already has a non-empty corpus (and FUZZ_FORCE_FRESH is not
+  # set); otherwise seed from the golden seeds. Either way libFuzzer needs the
+  # `-artifact_prefix` directory to exist, so create it without wiping previously
+  # found crashes on resume.
+  corpus_dir="$crate/corpus/$name"
+  if [ "${FUZZ_FORCE_FRESH:-0}" != "1" ] && [ -d "$corpus_dir" ] && [ -n "$(ls -A "$corpus_dir" 2>/dev/null)" ]; then
+    echo "  resume $name from existing corpus ($(find "$corpus_dir" -type f 2>/dev/null | wc -l) files)"
+    mkdir -p "$corpus_dir" "$work/artifacts"
+  else
+    echo "  $name starting fresh corpus"
+    rm -rf "$crate/corpus" "$crate/artifacts" "$work/artifacts"
+    mkdir -p "$crate/corpus" "$work/artifacts"
+    seed_corpus "$name" "$crate"
+  fi
 
   runs_var="FUZZ_RUNS_$name"
   duration_var="FUZZ_DURATION_$name"
@@ -217,6 +251,7 @@ echo "  log:      $OUT_ROOT/<target>/run.log"
 echo "  corpus:   $OUT_ROOT/<target>/fuzz/corpus/<target>/"
 echo "  artifacts: $OUT_ROOT/<target>/artifacts/"
 echo "  build cache: $OUT_ROOT/<target>/fuzz/target/  (persisted between runs)"
+echo "Resumes from an existing corpus on re-run; set FUZZ_FORCE_FRESH=1 to start over."
 echo "Ctrl-C to stop early."
 
 wait
